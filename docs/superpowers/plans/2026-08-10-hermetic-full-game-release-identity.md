@@ -689,6 +689,18 @@ Independent reviews must explicitly verify v1 byte compatibility, v2 offsets/siz
 
 ### Task 5: Compose the sourceboot identity-v2 spec from sealed inputs
 
+**Execution status (2026-08-10):** `source-complete` from dispatch base
+`b0c7fa03437e54019803581f5652d099e85029b4`; the behavior commit is pending
+below. TDD replaced the recursive repository-root contract with eight focused
+identity-v2 composition tests. The bootstrap now rehashes validated source
+closure, resolved-profile, package-class/package-set, and toolchain descriptors;
+requires Make configuration to equal the selected profile; maps the nine legacy
+package classes one-to-one while leaving texture aggregate-only; and validates
+all fixed sibling outputs before atomic spec replacement. The exact host suites
+pass 8 + 21 + 11 = 40 tests and scoped diff checks are clean. Independent
+specification/code-quality review, target build, reproducibility, audit v4,
+complete-package, 20,100-frame smoke, visual, and manual-play gates remain open.
+
 **Files:**
 - Modify: `tools/saturn/bootstrap_sourceboot_identity_spec.py`
 - Modify: `tools/saturn/test_sourceboot_identity_spec_bootstrap.py`
@@ -701,7 +713,7 @@ Independent reviews must explicitly verify v1 byte compatibility, v2 offsets/siz
 - Produces: `write_spec(root: Path, output: Path, config: Mapping[str, int], profile_path: Path, source_closure_path: Path, toolchain_attestation_path: Path, mode: Literal['development', 'release']) -> None`.
 - Produces: v2 spec descriptors for all existing artifact fields plus `target_profile`, `package_set`, and `toolchain_attestation`.
 
-- [ ] **Step 1: Replace broad-root expectations with failing hermetic tests**
+- [x] **Step 1: Replace broad-root expectations with failing hermetic tests**
 
 ```python
 def test_capture_tool_and_evidence_changes_do_not_reseal_v2_spec(self) -> None:
@@ -740,7 +752,7 @@ def test_bootstrap_rejects_stale_declared_manifest_without_overwriting_spec(self
 
 Also assert `SOURCE_CLOSURE_ROOTS` is absent, identity version is 2, profile config matches Make-provided config, release-disabled full profile fails, the nine legacy-mapped package classes map one-to-one to the existing artifact fields, and the texture class remains covered by the aggregate package-set root.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_identity_spec_bootstrap.py
@@ -748,7 +760,7 @@ Also assert `SOURCE_CLOSURE_ROOTS` is absent, identity version is 2, profile con
 
 Expected: the old broad-root bootstrap changes identity for unselected tooling and lacks v2 arguments.
 
-- [ ] **Step 3: Implement v2 composition and remove recursive repository hashing**
+- [x] **Step 3: Implement v2 composition and remove recursive repository hashing**
 
 Construct the spec only from validated manifest descriptors:
 
@@ -776,7 +788,7 @@ Delete `SOURCE_CLOSURE_ROOTS`, `_source_closure_inputs()`, and any test that req
 `saturn-package-manifests/`. It writes the identity spec only after every one
 of those outputs validates and its declared digest matches current bytes.
 
-- [ ] **Step 4: Add CLI profile, closure, toolchain, and mode arguments**
+- [x] **Step 4: Add CLI profile, closure, toolchain, and mode arguments**
 
 Required arguments are `--profile`, `--source-closure`, `--toolchain-attestation`, `--mode development|release`, existing repeated `--set`, `--root`, and `--output`. No default may fall back to a stale broad-root spec.
 
@@ -791,7 +803,7 @@ write_spec(
 )
 ```
 
-- [ ] **Step 5: Run bootstrap and identity regressions**
+- [x] **Step 5: Run bootstrap and identity regressions**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_identity_spec_bootstrap.py

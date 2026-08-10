@@ -1,215 +1,33 @@
 #!/usr/bin/env python3
-"""Materialize the sourceboot identity spec from canonical build inputs.
-
-The identity generator deliberately validates byte hashes, but a clean source
-tree has no checked-in generated spec to validate.  This small bootstrap owns
-that first-build boundary: it records the canonical provenance of each logical
-artifact in deterministic manifests, then writes the generator's input spec.
-"""
+"""Compose sourceboot identity v2 from sealed hermetic build inputs."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Literal, Mapping
 
 import gen_build_identity as identity
-import prepare_sourceboot_assets
+import gen_source_closure
+import gen_toolchain_attestation
+from hermetic_manifest import canonical_json_bytes, sha256_file, write_if_changed
+import target_profile
 
 
-# All source roots that can contribute to sourceboot's SH-2 closure.  Hashing a
-# conservative superset is intentional: an unrelated source edit may reseal a
-# build, but an ELF-affecting source/header/linker/tool edit can never escape
-# its identity. Generated payloads are deliberately *not* listed here; their
-# exact bytes own the package-named fields below.
-SOURCE_CLOSURE_ROOTS = (
-    "src", "include", "actors", "levels", "lib/src", "data", "bin", "tools/saturn",
-    "textures", "assets",
-)
-SOURCE_CLOSURE_FILES = (
-    "Makefile.saturn.mk", "src/port/saturn/sourceboot/Makefile",
-    "src/port/saturn/sourceboot/sourceboot.specs",
-    "src/port/saturn/sourceboot/sourceboot-cart.x",
-    "tools/mario_anims_converter.py",
-    "tools/saturn/bootstrap_sourceboot_identity_spec.py",
-    "tools/saturn/gen_build_identity.py",
-)
-
-# Non-package execution/input artifacts. Package-named fields below name and
-# hash their actual available payload bytes, never compiler recipes.
-STATIC_INPUTS: dict[str, tuple[str, ...]] = {
-    "input_artifact_hash": (
-        "src/port/saturn/sourceboot/source_demo_data.c",
-        "src/port/saturn/controller/controller_saturn.c",
-    ),
-    "camera_artifact_hash": (
-        "src/port/saturn/runtime/saturn_camera_role.c",
-        "src/port/saturn/runtime/saturn_camera_fixed.c",
-    ),
-    "cart_profile_hash": (
-        "src/port/saturn/sourceboot/source_cart.c",
-        "src/port/saturn/sourceboot/source_cart.h",
-        "tools/saturn/launch_ymir_desktop.py",
-    ),
+# Identity v1's nine package-named fields remain ABI-visible in v2. Texture has
+# no legacy field and is deliberately represented only by the package-set root.
+PACKAGE_IDENTITY_FIELDS = {
+    "route": "route_artifact_hash",
+    "input": "input_artifact_hash",
+    "camera": "camera_artifact_hash",
+    "cart": "cart_profile_hash",
+    "level": "scene_package_hash",
+    "shared-data": "scene_dependency_set_hash",
+    "actor": "actor_package_hash",
+    "animation": "animation_package_hash",
+    "audio": "audio_package_hash",
 }
-
-SCENE_PAYLOAD = "build/saturn/sourceboot/generated/bob_area1_compiled.json"
-SCENE_DEPENDENCY_PAYLOAD = "build/saturn/sourceboot/generated/bob_area1_bsp_report.json"
-ACTOR_PAYLOAD = "build/saturn/actors/mario/mario.s64b"
-ANIMATION_PAYLOAD = "build/saturn/sourceboot/generated/mario_anim_data.c"
-ACTOR_BANK_C_PAYLOAD = "build/saturn/sourceboot/generated/mario_actor_bank.c"
-GENERATED_IMAGE_INPUTS = (
-    "build/saturn/sourceboot/generated/bob_area1_compiled.json",
-    "build/saturn/sourceboot/generated/bob_area1_bsp_report.json",
-    "build/saturn/sourceboot/generated/bob_scene.h",
-    "build/saturn/sourceboot/generated/bob_bsp.h",
-    "build/saturn/sourceboot/generated/bob_bsp_fragments.h",
-    "build/saturn/sourceboot/generated/bob_tiles_clut16.bin",
-    "build/saturn/sourceboot/generated/bob_tiles_clut16.pal",
-    "build/saturn/sourceboot/generated/bob_bsp_fragments_clut16.bin",
-    "build/saturn/sourceboot/generated/bob_bsp_fragments_clut16.pal",
-    "build/saturn/sourceboot/generated/bob_sky_rgb1555.bin",
-    "build/saturn/sourceboot/generated/saturn_quad_map.c",
-    "build/saturn/sourceboot/generated/saturn_quad_map.h",
-    "build/saturn/sourceboot/generated/mario_anim_data.c",
-    "build/saturn/sourceboot/generated/sourceboot_collision_catalog.inc",
-    "build/saturn/marioturntable/generated/mario_eye_uv_tiles.h",
-    "build/us_pc/bin/water_skybox.c",
-)
-SOURCEBOOT_ASSET_FIXED_SOURCES = (
-    "src/goddard/renderer.c", "levels/bob/script.c", "levels/bob/geo.c",
-    "levels/bob/leveldata.c", "levels/menu/leveldata.c",
-    "levels/castle_grounds/leveldata.c", "levels/ttc/leveldata.c",
-)
-
-
-def _route_input(camera_route: int) -> str:
-    return ("tools/saturn/routes/bob_default_camera_v1.json"
-            if camera_route == 1 else "tools/saturn/routes/bob_parity_v1.json")
-
-
-def _audio_inputs(semantic_audio: int) -> tuple[str, ...]:
-    if semantic_audio:
-        raise ValueError(
-            "audio_package_hash requires a staged S64A/AUDIO.DAT and sound-CPU image; "
-            "semantic_audio=1 is blocked until Task 21/22 integrates exact payloads"
-        )
-    return ("src/port/saturn/sourceboot/source_audio_stub.c",)
-
-
-def _animation_inputs(root: Path) -> tuple[str, ...]:
-    animations = sorted(path.relative_to(root).as_posix()
-                        for path in (root / "assets/anims").glob("*.inc.c"))
-    if not animations:
-        raise ValueError("animation_package_hash has no canonical animation inputs")
-    return ("tools/saturn/extract_mario_actor.py", "tools/mario_anims_converter.py",
-            *animations)
-
-
-def _source_closure_inputs(root: Path) -> tuple[str, ...]:
-    paths: set[str] = set()
-    for relative_root in SOURCE_CLOSURE_ROOTS:
-        directory = root / relative_root
-        if not directory.is_dir():
-            raise ValueError(f"source_hash closure root is missing: {relative_root}")
-        for path in directory.rglob("*"):
-            if path.is_file():
-                # Python bytecode caches are derived from .py files that are
-                # already in this closure, and their bytes embed the source
-                # mtime; any interpreter merely importing a tool rewrites
-                # them. Hashing them adds no source coverage and made the
-                # identity drift between computations within one build.
-                if "__pycache__" in path.parts or path.suffix in (".pyc", ".pyo"):
-                    continue
-                paths.add(path.relative_to(root).as_posix())
-    for relative in SOURCE_CLOSURE_FILES:
-        if not (root / relative).is_file():
-            raise ValueError(f"source_hash closure input is not a file: {relative}")
-        paths.add(relative)
-    for relative in GENERATED_IMAGE_INPUTS:
-        if not (root / relative).is_file():
-            raise ValueError(
-                f"source_hash generated image input is not a file: {relative}; "
-                "run sourceboot identity-assets before sealing"
-            )
-        paths.add(relative)
-    return tuple(sorted(paths))
-
-
-def _sourceboot_asset_sources(root: Path) -> list[Path]:
-    relative = [
-        *(path.relative_to(root) for path in sorted((root / "bin").glob("*.c"))),
-        *(Path(path) for path in SOURCEBOOT_ASSET_FIXED_SOURCES[:1]),
-        *(path.relative_to(root) for path in sorted((root / "actors").glob("*.c"))),
-        *(Path(path) for path in SOURCEBOOT_ASSET_FIXED_SOURCES[1:]),
-    ]
-    return [root / path for path in relative]
-
-
-def _sourceboot_generated_asset_inputs(root: Path) -> tuple[str, ...]:
-    """Use the same traversal/source roots as sourceboot's asset Make recipe."""
-    targets = prepare_sourceboot_assets.collect_targets(
-        root, _sourceboot_asset_sources(root), "build/us_pc", {"VERSION_US", "VERSION_JP_US"}
-    )
-    targets.append("build/us_pc/include/text_strings.h")
-    pending = [Path(relative) for relative in targets]
-    closure: set[str] = set()
-    generated_root = (root / "build/us_pc").resolve()
-    while pending:
-        relative = pending.pop()
-        path = root / relative
-        if not (root / relative).is_file():
-            raise ValueError(
-                f"source_hash generated source asset is not a file: {relative}; "
-                "run sourceboot identity-assets before sealing"
-            )
-        rendered = relative.as_posix()
-        if rendered in closure:
-            continue
-        closure.add(rendered)
-        for line in path.read_text(encoding="utf-8").splitlines():
-            match = prepare_sourceboot_assets.INCLUDE.match(line)
-            if match is None:
-                continue
-            candidate = path.parent / match.group(1)
-            if generated_root in candidate.resolve().parents:
-                if not candidate.is_file():
-                    raise ValueError(
-                        f"source_hash generated source asset is not a file: "
-                        f"{candidate.relative_to(root).as_posix()}; "
-                        "run sourceboot identity-assets before sealing"
-                    )
-                pending.append(candidate.relative_to(root))
-    return tuple(sorted(closure))
-
-
-def all_input_paths() -> tuple[str, ...]:
-    """Return every possible canonical input so isolated tests can seed a repo."""
-    paths = {path for values in STATIC_INPUTS.values() for path in values}
-    paths.update(SOURCE_CLOSURE_FILES)
-    paths.update(SOURCEBOOT_ASSET_FIXED_SOURCES)
-    paths.update((
-        "src/port/saturn/sourceboot/main.c",
-        "src/port/saturn/gfx/saturn_actor_instance.c",
-        "textures/skyboxes/water.png",
-        SCENE_PAYLOAD, SCENE_DEPENDENCY_PAYLOAD, ACTOR_PAYLOAD, ANIMATION_PAYLOAD,
-        ACTOR_BANK_C_PAYLOAD, "build/us_pc/include/text_strings.h",
-        *GENERATED_IMAGE_INPUTS,
-    ))
-    paths.update((_route_input(0), _route_input(1)))
-    paths.update(_audio_inputs(0))
-    return tuple(sorted(paths))
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _integer_config(config: Mapping[str, int]) -> dict[str, int]:
@@ -224,80 +42,183 @@ def _integer_config(config: Mapping[str, int]) -> dict[str, int]:
     return dict(config)
 
 
-def _artifact_inputs(root: Path, config: Mapping[str, int]) -> dict[str, tuple[str, ...]]:
-    inputs = dict(STATIC_INPUTS)
-    source_inputs = set(_source_closure_inputs(root))
-    source_inputs.update(_sourceboot_generated_asset_inputs(root))
-    if config["features.complete_mario_animation"]:
-        actor_bank_c = root / ACTOR_BANK_C_PAYLOAD
-        if not actor_bank_c.is_file():
-            raise ValueError(
-                "source_hash feature-selected actor bank is not a file: "
-                f"{ACTOR_BANK_C_PAYLOAD}; run sourceboot identity-assets before sealing"
-            )
-        source_inputs.add(ACTOR_BANK_C_PAYLOAD)
-    inputs["source_hash"] = tuple(sorted(source_inputs))
-    inputs["route_artifact_hash"] = (_route_input(config["camera_route"]),)
-    # These are exact byte payloads currently consumed by the feature-off
-    # sourceboot comparator. Task 22 alone replaces them with final S64P roots
-    # and dependency packs. Missing payloads fail before label/build.
-    inputs["scene_package_hash"] = (SCENE_PAYLOAD,)
-    inputs["scene_dependency_set_hash"] = (SCENE_DEPENDENCY_PAYLOAD,)
-    inputs["actor_package_hash"] = (ACTOR_PAYLOAD,)
-    inputs["animation_package_hash"] = (ANIMATION_PAYLOAD,)
-    inputs["audio_package_hash"] = _audio_inputs(config["features.semantic_audio"])
-    return inputs
+def _input_path(root: Path, path: Path) -> Path:
+    return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-def _write_if_changed(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.is_file() and path.read_bytes() == data:
-        return
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_bytes(data)
-    os.replace(temporary, path)
+def _descriptor(path: Path, label: str, expected_sha256: str | None = None) -> dict[str, str]:
+    if not path.is_file():
+        raise ValueError(f"{label} is not a file: {path}")
+    digest = sha256_file(path)
+    if expected_sha256 is not None and digest != expected_sha256:
+        raise ValueError(f"{label} is stale")
+    return {"path": str(path.resolve()), "sha256": digest}
 
 
-def _manifest(root: Path, field: str, relative_paths: tuple[str, ...]) -> bytes:
-    inputs = []
-    for relative in relative_paths:
-        path = root / relative
-        if not path.is_file():
-            raise ValueError(f"{field} canonical input is not a file: {relative}")
-        inputs.append({"path": relative.replace("\\", "/"), "sha256": _sha256(path)})
-    document = {
-        "schema": "sm64-saturn-identity-provenance-v1",
-        "artifact": field,
-        "inputs": inputs,
+def _source_closure_descriptor(root: Path, path: Path) -> dict[str, str]:
+    try:
+        document = gen_source_closure._load_sealed_closure(path)
+        rows = gen_source_closure._sealed_rows(root, document)
+    except ValueError as error:
+        raise ValueError(f"source closure is stale or invalid: {error}") from error
+    for row in rows.values():
+        source = root / row["path"]
+        if not source.is_file() or sha256_file(source) != row["sha256"]:
+            raise ValueError(f"source closure input is stale: {row['path']}")
+    return _descriptor(path, "source closure")
+
+
+def _toolchain_descriptor(path: Path) -> dict[str, str]:
+    try:
+        _raw, document = gen_toolchain_attestation._load_sealed_attestation(path)
+        gen_toolchain_attestation._validate_attestation_document(document)
+    except ValueError as error:
+        raise ValueError(f"toolchain attestation is stale or invalid: {error}") from error
+    return _descriptor(path, "toolchain attestation")
+
+
+def _canonical_object(path: Path, label: str) -> tuple[bytes, dict[str, Any]]:
+    if not path.is_file():
+        raise ValueError(f"{label} is not a file: {path}")
+    raw = path.read_bytes()
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is stale or invalid") from error
+    if not isinstance(document, dict) or canonical_json_bytes(document) != raw:
+        raise ValueError(f"{label} is stale or invalid")
+    return raw, document
+
+
+def _validate_resolved_profile(path: Path, expected: bytes, values: Mapping[str, int]) -> None:
+    raw, document = _canonical_object(path, "resolved target profile")
+    if raw != expected:
+        raise ValueError("resolved target profile is stale")
+    expected_keys = {
+        "schema", "profile_id", "release_enabled", "effective_config",
+        "package_manifests", "output_names",
     }
-    return (json.dumps(document, sort_keys=True, separators=(",", ":"),
-                       ensure_ascii=True) + "\n").encode("ascii")
+    if (set(document) != expected_keys
+            or document.get("schema") != "sm64-saturn-resolved-target-profile-v1"
+            or document.get("effective_config") != dict(values)):
+        raise ValueError("resolved target profile is stale or invalid")
 
 
-def write_spec(root: Path, output: Path, config: Mapping[str, int]) -> None:
-    """Write a complete hash-checked spec, refusing invalid/stale source inputs."""
+def _validate_class_manifest(path: Path, package_class: str, expected_sha256: str) -> None:
+    _raw, document = _canonical_object(path, f"{package_class} package class manifest")
+    if (set(document) != {"schema", "package_class", "packages"}
+            or document.get("schema") != "sm64-saturn-package-class-manifest-v1"
+            or document.get("package_class") != package_class
+            or not isinstance(document.get("packages"), list)):
+        raise ValueError(f"{package_class} package class manifest is stale or invalid")
+    _descriptor(path, f"{package_class} package class manifest", expected_sha256)
+
+
+def _validate_package_set(
+    path: Path,
+    expected: bytes,
+    class_descriptors: Mapping[str, Mapping[str, str]],
+) -> None:
+    raw, document = _canonical_object(path, "package set")
+    if raw != expected:
+        raise ValueError("package set is stale")
+    hashes = document.get("package_class_hashes")
+    if (set(document) != {"schema", "profile_id", "packages", "package_class_hashes"}
+            or document.get("schema") != "sm64-saturn-package-set-v2"
+            or not isinstance(document.get("packages"), list)
+            or not isinstance(hashes, dict)
+            or set(hashes) != set(target_profile.PACKAGE_CLASSES)):
+        raise ValueError("package set is stale or invalid")
+    for package_class, descriptor in class_descriptors.items():
+        if hashes[package_class] != descriptor["sha256"]:
+            raise ValueError(f"package set {package_class} class hash is stale")
+
+
+def _revalidate_descriptors(spec: Mapping[str, Any]) -> None:
+    descriptors = list(spec["artifacts"].items())
+    descriptors.extend((field, spec[field]) for field in identity.V2_ROOT_DESCRIPTOR_FIELDS)
+    for label, descriptor in descriptors:
+        current = _descriptor(Path(descriptor["path"]), label)
+        if current["sha256"] != descriptor["sha256"]:
+            raise ValueError(f"{label} descriptor is stale")
+
+
+def write_spec(
+    root: Path,
+    output: Path,
+    config: Mapping[str, int],
+    profile_path: Path,
+    source_closure_path: Path,
+    toolchain_attestation_path: Path,
+    mode: Literal["development", "release"],
+) -> None:
+    """Atomically publish identity v2 after every consumed descriptor validates."""
     root = root.resolve()
+    output = output.resolve()
     values = _integer_config(config)
-    artifacts: dict[str, dict[str, str]] = {}
-    manifest_dir = output.parent / "saturn_build_identity_inputs"
-    for field, relative_paths in _artifact_inputs(root, values).items():
-        manifest_path = manifest_dir / f"{field}.json"
-        _write_if_changed(manifest_path, _manifest(root, field, relative_paths))
-        artifacts[field] = {"path": str(manifest_path.resolve()),
-                            "sha256": _sha256(manifest_path)}
+    source_closure_path = _input_path(root, source_closure_path)
+    toolchain_attestation_path = _input_path(root, toolchain_attestation_path)
+
+    source_descriptor = _source_closure_descriptor(root, source_closure_path)
+    toolchain_descriptor = _toolchain_descriptor(toolchain_attestation_path)
+
+    profile_document, relative_profile = target_profile._profile(root, profile_path)
+    if mode == "release" and not profile_document["release_enabled"]:
+        raise ValueError(f"{profile_document['profile_id']} is not release-enabled")
+    if profile_document["release_config"] != values:
+        raise ValueError("Make-provided config must exactly match target profile release_config")
+    profile_source = root / relative_profile
+    profile_source_sha256 = sha256_file(profile_source)
+
+    manifest_dir = output.parent / "saturn-package-manifests"
+    resolved = target_profile.resolve_target_profile(
+        root, profile_source, values, manifest_dir, mode
+    )
+    if sha256_file(profile_source) != profile_source_sha256:
+        raise ValueError("target profile changed during identity composition")
+
+    resolved_profile_path = output.parent / "saturn-target-profile-v1.json"
+    package_set_path = output.parent / "saturn-package-set-v1.json"
+    write_if_changed(resolved_profile_path, resolved.canonical)
+    write_if_changed(package_set_path, resolved.package_set_canonical)
+
+    class_descriptors: dict[str, dict[str, str]] = {}
+    for package_class in target_profile.PACKAGE_CLASSES:
+        path = resolved.package_class_manifests[package_class]
+        expected = resolved.package_class_hashes[package_class]
+        _validate_class_manifest(path, package_class, expected)
+        class_descriptors[package_class] = _descriptor(
+            path, f"{package_class} package class manifest", expected
+        )
+    _validate_resolved_profile(resolved_profile_path, resolved.canonical, values)
+    _validate_package_set(package_set_path, resolved.package_set_canonical, class_descriptors)
+
+    artifacts = {"source_hash": source_descriptor}
+    artifacts.update({
+        artifact_field: class_descriptors[package_class]
+        for package_class, artifact_field in PACKAGE_IDENTITY_FIELDS.items()
+    })
     spec = {
-        "features": {feature: values[f"features.{feature}"]
-                     for feature in identity.FEATURE_BITS},
+        "identity_version": identity.IDENTITY_V2_VERSION,
+        "features": {
+            name: values[f"features.{name}"] for name in identity.FEATURE_BITS
+        },
         **{field: values[field] for field in identity.SCALAR_FIELDS},
         **{field: values[field] for field in identity.COMPILER_CONFIG_FIELDS},
         "artifacts": artifacts,
+        "target_profile": _descriptor(
+            resolved_profile_path, "resolved target profile", resolved.sha256
+        ),
+        "package_set": _descriptor(
+            package_set_path, "package set", resolved.package_set_sha256
+        ),
+        "toolchain_attestation": toolchain_descriptor,
     }
-    # The same validation used by the target generator makes bootstrap failure
-    # fatal before Make can select a label or compile against stale identity C.
     identity.build_identity(spec)
-    _write_if_changed(
+    _revalidate_descriptors(spec)
+    write_if_changed(
         output,
-        (json.dumps(spec, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("utf-8"),
+        (json.dumps(spec, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("ascii"),
     )
 
 
@@ -318,9 +239,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--profile", required=True, type=Path)
+    parser.add_argument("--source-closure", required=True, type=Path)
+    parser.add_argument("--toolchain-attestation", required=True, type=Path)
+    parser.add_argument("--mode", choices=("development", "release"), required=True)
     parser.add_argument("--set", action="append", default=[], metavar="NAME=INTEGER")
     args = parser.parse_args()
-    write_spec(args.root, args.output, _parse_settings(args.set))
+    write_spec(
+        args.root, args.output, _parse_settings(args.set), args.profile,
+        args.source_closure, args.toolchain_attestation, args.mode,
+    )
     return 0
 
 

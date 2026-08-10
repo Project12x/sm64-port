@@ -4,6 +4,15 @@
 
 ### Added
 
+- Composed sourceboot build identity v2 exclusively from the validated target
+  profile/package manifests, compiler-derived source closure, toolchain
+  attestation, and exact Make configuration. The bootstrap no longer hashes
+  broad repository roots, so unrelated capture, test, and evidence edits do
+  not reseal a build; stale descriptors, profile/config drift, or generated
+  sibling-manifest drift now fail before atomic spec replacement. The nine
+  legacy package fields retain their one-to-one class mapping while texture
+  remains covered by the aggregate package-set root, preserving v1 parsing.
+
 - Added backward-compatible Saturn build identity v2. New target identities
   preserve the exact 404-byte v1 binary layout as their prefix and append
   target-profile, package-set, and toolchain-attestation roots for a 500-byte
