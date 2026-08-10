@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -290,10 +291,12 @@ class SourceClosureTests(unittest.TestCase):
             cwd=self.root, check=True,
         )
 
+        header.write_bytes(b"sdk-v1\r\n")
         sealed = self.write_sealed_closure()
-        verify_source_closure(
-            self.root, sealed, self.depfiles, (), self.derived, (), (), True
-        )
+        with mock.patch.dict(os.environ, {"GIT_CONFIG_NOSYSTEM": "1"}):
+            verify_source_closure(
+                self.root, sealed, self.depfiles, (), self.derived, (), (), True
+            )
 
         header.write_text("dirty-sdk\n", encoding="utf-8")
         sealed = self.write_sealed_closure()

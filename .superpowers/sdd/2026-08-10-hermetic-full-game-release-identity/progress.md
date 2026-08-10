@@ -1287,6 +1287,21 @@
   semantics; no external source, copied bytes, license, or notice change.
   Candidate A must restart from the resulting common commit; release and
   reproducibility gates remain open.
+- Candidate A from `8912faeb` published identity v2 tag
+  `id-2644d689b9eb77c6`, completed compile/link/package and external equality,
+  then nested cleanliness reported all three relevant libyaul recipes dirty.
+  Host Windows Git showed exact pinned HEAD and clean status; target-PATH MSYS
+  Git showed only CRLF/LF differences (`--ignore-space-at-eol` clean) because
+  it lacks Windows Git's checkout `core.autocrlf=true`. No release manifest or
+  reproducibility gate is claimed.
+- Windows Git-normalization correction: cleanliness commands bind
+  `core.autocrlf=true` on Windows rather than inheriting PATH-specific system
+  config. Exact working bytes are still closure-hashed before status, so
+  semantic dirt/unpinned commits remain rejected. A system-config-disabled
+  CRLF fixture was RED 0/1 and GREEN 1/1; dirty-file and unpinned-HEAD cases
+  remain GREEN. Combined closure/Make/attestation coverage remains 55/55 with
+  one existing case-filesystem skip. Candidate A must restart from the common
+  resulting commit; release/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

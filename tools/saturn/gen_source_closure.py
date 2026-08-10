@@ -583,7 +583,7 @@ def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str]
     submodule_inputs: dict[str, list[str]] = {}
     for path in checked_in:
         tracked = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", "--", path],
+            [*_git_cleanliness_command(), "ls-files", "--error-unmatch", "--", path],
             cwd=root,
             check=False,
             capture_output=True,
@@ -606,7 +606,7 @@ def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str]
         _verify_submodule_inputs(root, gitlink, gitlinks[gitlink], paths)
     status_paths = sorted(set(direct_paths) | set(submodule_inputs))
     result = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all",
+        [*_git_cleanliness_command(), "status", "--porcelain=v1", "--untracked-files=all",
          "--ignore-submodules=dirty", "--", *status_paths],
         cwd=root,
         check=False,
@@ -619,7 +619,7 @@ def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str]
 
 def _indexed_gitlinks(root: Path) -> dict[str, str]:
     result = subprocess.run(
-        ["git", "ls-files", "--stage"], cwd=root, check=False,
+        [*_git_cleanliness_command(), "ls-files", "--stage"], cwd=root, check=False,
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -636,6 +636,19 @@ def _indexed_gitlinks(root: Path) -> dict[str, str]:
     return gitlinks
 
 
+def _git_cleanliness_command() -> list[str]:
+    """Bind Git's checkout normalization instead of inheriting PATH defaults."""
+    command = ["git"]
+    if os.name == "nt":
+        # Candidate prerequisites are materialized by Windows Git, whose
+        # standard checkout uses CRLF normalization. The MSYS Git found during
+        # target builds has a different system config and otherwise reports
+        # those byte-identical tracked checkouts dirty. Semantic bytes are
+        # still closure-hashed before this status-only comparison.
+        command.extend(("-c", "core.autocrlf=true"))
+    return command
+
+
 def _verify_submodule_inputs(
     root: Path, gitlink: str, expected_commit: str, paths: Sequence[str]
 ) -> None:
@@ -647,7 +660,7 @@ def _verify_submodule_inputs(
     if not submodule.is_dir():
         raise ValueError(f"release closure submodule is missing: {gitlink}")
     command = [
-        "git", "-c", f"safe.directory={submodule.as_posix()}",
+        *_git_cleanliness_command(), "-c", f"safe.directory={submodule.as_posix()}",
         "-C", str(submodule),
     ]
     head = subprocess.run(

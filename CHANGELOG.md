@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Bound Windows release-cleanliness checks to the checkout's CRLF
+  normalization instead of whichever Git happens to lead the target-build
+  `PATH`. MSYS Git lacks Windows Git's system `core.autocrlf=true` setting and
+  falsely marked the clean libyaul recipe checkout modified; cleanliness now
+  supplies that status-only normalization explicitly on Windows. Closure
+  hashes still cover the exact working bytes, so semantic changes remain
+  rejected while tool-selection differences cannot invent dirt.
+
 - Made release cleanliness understand tracked Git submodule inputs without
   exempting `third_party`. For every relevant nested path it now requires an
   enclosing mode-160000 superproject index entry, an initialized checkout at

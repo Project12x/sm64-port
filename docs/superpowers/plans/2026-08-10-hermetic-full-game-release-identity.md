@@ -2049,6 +2049,24 @@ no external source, copied bytes, license, or notice change. Candidate A must
 restart at the resulting common source commit; release/reproducibility remain
 open.
 
+Candidate A from `8912faeb` published identity tag
+`id-2644d689b9eb77c6`, completed compile/link/package and external equality,
+then the new nested check reported the three relevant libyaul recipes dirty.
+Immediate diagnosis proved exact HEAD `6012f79f`, an empty host-Windows-Git
+status, and an MSYS-Git status showing all three modified; its diff was
+line-ending-only and `--ignore-space-at-eol` clean. The target-build `PATH`
+selects MSYS Git, whose system config lacks the Windows Git
+`core.autocrlf=true` used to materialize the checkout. No release manifest or
+reproducibility gate is claimed. On Windows, release-cleanliness Git commands
+now bind `core.autocrlf=true` locally, including the submodule check; exact
+working bytes remain closure-hashed before this status-only normalization, so
+semantic changes and unpinned commits still fail. A CRLF checkout fixture with
+system Git config disabled was RED 0/1 and GREEN 1/1; the semantic dirty-file
+and unpinned-HEAD cases remain GREEN. Combined closure/Make/attestation
+coverage remains 55/55 with one existing case-filesystem skip. Candidate A
+must restart from the resulting common source commit; release/reproducibility
+remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
