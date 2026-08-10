@@ -76,7 +76,7 @@
 
 - [ ] **Step 1: Create the SDD ledger and record the reconciled starting point**
 
-Record HEAD `69c83a3f`, the pre-existing blocked Task 3 plan annotations, the unrelated dirty paths, Task 1 status `active`, and every open target gate. Do not stage another campaign's SDD files.
+Record design commit `69c83a3f`, implementation-plan commit `15289cd6`, the actual Task 1 implementation base at dispatch, the pre-existing blocked Task 3 plan annotations, the unrelated dirty paths, Task 1 status `active`, and every open target gate. Do not stage another campaign's SDD files.
 
 - [ ] **Step 2: Write failing canonicalization, path, profile, and package tests**
 
