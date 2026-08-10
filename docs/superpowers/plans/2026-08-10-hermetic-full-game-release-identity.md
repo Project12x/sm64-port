@@ -691,14 +691,23 @@ Independent reviews must explicitly verify v1 byte compatibility, v2 offsets/siz
 
 **Execution status (2026-08-10):** `source-complete` from dispatch base
 `b0c7fa03437e54019803581f5652d099e85029b4`; behavior commit `992bfa7d`
-records the implementation below. TDD replaced the recursive repository-root
-contract with eight focused identity-v2 composition tests. The bootstrap now
-rehashes validated source
-closure, resolved-profile, package-class/package-set, and toolchain descriptors;
+records the implementation below. The first independent combined review
+returned `Needs fixes`: consume validated source/profile/toolchain snapshots,
+publish the sibling manifest set transactionally, emit repository-relative
+canonical descriptors/spec bytes, and isolate mutation tests. Focused repair/
+rereview is active; both review gates remain open. The review's request to
+remeasure live compiler/header bytes here was withdrawn: Task 5 validates and
+rehashes the exact attestation document snapshot, while Task 6 owns the Task 3
+live verifier after link. Repair round 1 is `source-complete` with its commit
+pending below: 12 focused tests plus the 21 identity and 11 target-profile
+regressions pass (44 total). TDD replaced the recursive repository-root
+contract with focused identity-v2 composition tests. The bootstrap now rehashes
+validated source closure, resolved-profile, package-class/package-set, and toolchain descriptors;
 requires Make configuration to equal the selected profile; maps the nine legacy
 package classes one-to-one while leaving texture aggregate-only; and validates
-all fixed sibling outputs before atomic spec replacement. The exact host suites
-pass 8 + 21 + 11 = 40 tests and scoped diff checks are clean. Independent
+all fixed sibling outputs before rollback-safe transactional replacement. The
+spec uses canonical bytes and repository-relative paths, and the isolated
+mutation contract checks the full root vector. Independent rereview,
 specification/code-quality review, target build, reproducibility, audit v4,
 complete-package, 20,100-frame smoke, visual, and manual-play gates remain open.
 

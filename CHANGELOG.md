@@ -48,6 +48,15 @@
 
 ### Fixed
 
+- Hardened sourceboot identity-v2 composition after review. Source closure,
+  target profile, and toolchain-attestation documents are now validated and
+  hashed from one immutable byte snapshot, then rechecked with every selected
+  source/package input immediately before publication. Generated manifests and
+  the canonical repository-relative spec are built in staging and published as
+  one rollback-safe set, so validation or replacement failure cannot corrupt
+  files referenced by a prior valid spec, while identical repositories at
+  different host paths now emit identical spec bytes.
+
 - Hardened Saturn identity v2 after review. ELF identity probes now resolve
   symbol metadata and extract PT_LOAD bytes from one immutable file snapshot,
   v2 root descriptors and recursive CLI JSON reject unknown, duplicate, or
