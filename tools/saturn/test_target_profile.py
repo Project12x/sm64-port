@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -105,6 +106,24 @@ class TargetProfileTests(unittest.TestCase):
         self.assertEqual(
             canonical_json_bytes({"z": 1, "a": "é"}),
             b'{"a":"\\u00e9","z":1}\n',
+        )
+
+    def test_checked_in_json_is_checked_out_with_canonical_line_endings(self) -> None:
+        paths = (
+            "tools/saturn/profiles/sourceboot-bob-demo-v1.json",
+            "tools/saturn/profiles/sm64-saturn-full-v1.json",
+            "tools/saturn/manifests/route-bob-demo-v1.json",
+        )
+        completed = subprocess.run(
+            ["git", "check-attr", "eol", "--", *paths],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            completed.stdout.splitlines(),
+            [f"{path}: eol: lf" for path in paths],
         )
 
     def test_normalize_repo_path_rejects_escape_and_case_collision(self) -> None:

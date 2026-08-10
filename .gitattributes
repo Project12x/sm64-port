@@ -13,7 +13,10 @@
 *.ld text
 *.inc text
 *.txt text
-*.json text
+# JSON participates in several byte-for-byte release identities. Pin LF even
+# when a Windows checkout enables core.autocrlf so canonical JSON stays
+# canonical in the working tree as well as in the Git object database.
+*.json text eol=lf
 *.yaml text
 
 # Same for binary

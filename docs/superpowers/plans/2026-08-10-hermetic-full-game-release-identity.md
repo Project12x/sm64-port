@@ -1807,6 +1807,20 @@ Reference record: close-port reuse of `HOST_EXEEXT` in the in-tree
 `Makefile.saturn.mk` at `a35c2a93`; no external source or license/notice change.
 Atomic discovery publication and downstream target/release gates remain open.
 
+Candidate A from `1dea5fad` completed all 228 dependency scans and atomically
+published the source closure, external-dependency handoff, and toolchain
+attestation. Seal-stage bootstrap then rejected the checked-in target profile
+before compilation because the candidate creator's Windows `core.autocrlf`
+setting had checked its canonical LF Git blob out as CRLF. The byte-strict
+rejection was correct; accepting either spelling would make release identity
+host-dependent. Tracked JSON is now explicitly `eol=lf` in `.gitattributes`,
+covering profiles, descriptors, routes, and every other JSON identity input.
+Focused TDD was RED at 11/12 target-profile tests (`eol: unspecified`) and
+GREEN at 12/12, with identity-bootstrap regression GREEN at 15/15. Candidate
+checkouts must be refreshed at the resulting commit so the attribute takes
+effect; closure, compile, link, seal, and release gates remain open until the
+exact candidate rerun succeeds.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

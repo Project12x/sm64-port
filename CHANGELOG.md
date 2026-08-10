@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Pinned every tracked JSON checkout to LF in `.gitattributes`. Git's Windows
+  `core.autocrlf` conversion had changed otherwise-canonical target-profile
+  bytes to CRLF in fresh Task 9 worktrees, so identity bootstrap correctly
+  rejected the selected profile before compilation. Fresh checkouts now retain
+  the canonical bytes stored in Git on every host; the profile, package, and
+  release identity semantics are unchanged.
+
 - Bound sourceboot's custom SH inspection-tool paths to the host executable
   suffix. MSYS can launch an extensionless `sh-elf-readelf` command on Windows,
   but the attestation deliberately measures a concrete file and correctly

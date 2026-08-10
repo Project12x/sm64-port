@@ -1068,6 +1068,20 @@
   10/11; GREEN is 11/11. Reference: close-port reuse of in-tree
   `Makefile.saturn.mk` `HOST_EXEEXT` at `a35c2a93`; no external source or
   license/notice change. Candidate A remains open pending exact rerun.
+- Candidate A from `1dea5fad` completed all 228 dependency scans and atomically
+  published the source closure, external-dependency handoff, and toolchain
+  attestation. Seal-stage bootstrap then rejected the selected checked-in
+  profile before compilation: its canonical LF Git blob had been checked out
+  with CRLF by Windows `core.autocrlf`. No compile, link, seal, or release gate
+  is claimed.
+- Canonical-checkout correction: `.gitattributes` now pins every tracked JSON
+  file to `eol=lf`; the strict canonical parser remains unchanged and continues
+  to reject noncanonical raw bytes. This applies uniformly to profiles,
+  package descriptors, routes, and later JSON release inputs without changing
+  their semantics. TDD RED was target-profile 11/12 with `eol: unspecified`;
+  GREEN is 12/12 plus identity-bootstrap 15/15. Candidate worktrees must be
+  refreshed at the behavior commit before the next exact run. Candidate A and
+  all downstream target/release gates remain open.
 
 ## Task 5 review repair round 2
 
