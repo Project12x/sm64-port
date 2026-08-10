@@ -689,7 +689,7 @@ Independent reviews must explicitly verify v1 byte compatibility, v2 offsets/siz
 
 ### Task 5: Compose the sourceboot identity-v2 spec from sealed inputs
 
-**Execution status (2026-08-10):** `source-complete` from dispatch base
+**Execution status (2026-08-10):** `complete` from dispatch base
 `b0c7fa03437e54019803581f5652d099e85029b4`; behavior commit `992bfa7d`
 records the implementation below. The first independent combined review
 returned `Needs fixes`: consume validated source/profile/toolchain snapshots,
@@ -697,9 +697,10 @@ publish the sibling manifest set transactionally, emit repository-relative
 canonical descriptors/spec bytes, and isolate mutation tests. Focused repair/
 rereview is active; round 1 cleared portability and mutation isolation but kept
 staged-profile revalidation plus exception-preserving, `.tmp`-clean rollback
-open. Repair round 2 is `source-complete` in commit `c1612fd8`; 14
-focused tests plus 21 identity and 11 target-profile regressions pass (46
-total). Both review gates remain open. The review's request to
+open. Repair round 2 in commits `c1612fd8` / `727c4075` passed 14
+focused tests plus 21 identity and 11 target-profile regressions (46
+total); scoped rereview found both remaining findings addressed with no new
+breakage, clearing both review gates. The review's request to
 remeasure live compiler/header bytes here was withdrawn: Task 5 validates and
 rehashes the exact attestation document snapshot, while Task 6 owns the Task 3
 live verifier after link. Repair round 1 is recorded in `ec546de2`. TDD replaced the recursive repository-root
@@ -709,8 +710,7 @@ requires Make configuration to equal the selected profile; maps the nine legacy
 package classes one-to-one while leaving texture aggregate-only; and validates
 all fixed sibling outputs before rollback-safe transactional replacement. The
 spec uses canonical bytes and repository-relative paths, and the isolated
-mutation contract checks the full root vector. Independent rereview,
-specification/code-quality review, target build, reproducibility, audit v4,
+mutation contract checks the full root vector. Target build, reproducibility, audit v4,
 complete-package, 20,100-frame smoke, visual, and manual-play gates remain open.
 
 **Files:**
@@ -823,7 +823,7 @@ write_spec(
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_target_profile.py
 ```
 
-- [ ] **Step 6: Update docs, commit, and clear both reviews**
+- [x] **Step 6: Update docs, commit, and clear both reviews**
 
 ```powershell
 git add CHANGELOG.md docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md tools/saturn/bootstrap_sourceboot_identity_spec.py tools/saturn/test_sourceboot_identity_spec_bootstrap.py
