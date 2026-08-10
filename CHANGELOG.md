@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Restored transitive generated-header sealing for the Saturn source-asset
+  inventory. The direct target list included `text_strings.h` but not its
+  generated `text_menu_strings.h` child, leaving the compiler-discovered child
+  as an untracked generic header at release cleanliness. Verified inventory
+  publication now follows quoted includes only while they remain under the
+  bounded `build/us_pc` root, fails closed on a missing child, and hashes every
+  resulting byte without broadening the generated-input cleanliness rule.
+
 - Made the canonical `build/us_pc` inventory the sole explicit owner of its
   required `water_skybox.c` and `text_strings.h` rows. Those two paths had
   remained in the legacy static generated-input list, so Windows/MSYS path

@@ -1241,6 +1241,22 @@
   and source-closure coverage remains GREEN 38/38 with one existing case-
   filesystem skip. Candidate A must restart at the resulting common commit;
   release/reproducibility gates remain open.
+- Candidate A from `3df2ec4a` published identity v2 tag
+  `id-c7c5e79df283e6a5`, completed compile/link/package and external equality,
+  then failed release cleanliness only on
+  `build/us_pc/include/text_menu_strings.h`. The direct 1,021-row inventory
+  sealed its `text_strings.h` parent but not this quoted generated child. No
+  release manifest or reproducibility gate is claimed.
+- Transitive generated-header correction: verified inventory publication now
+  follows quoted includes only within the bounded `build/us_pc` root and fails
+  closed on missing children there or escaping direct targets, producing the
+  exact observed 1,022-row
+  compiler-relevant set. TDD RED was 0/1 and GREEN 1/1; combined Make/source-
+  closure coverage is GREEN 38/38 with one existing case-filesystem skip.
+  Reference: close-port of same-repository, independently reviewed commit
+  `46162df5` identity-v1 generated-header traversal into source-closure v2; no
+  external source, copied notice, or license change. Candidate A must restart
+  from the resulting common commit; release/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

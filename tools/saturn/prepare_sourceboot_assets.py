@@ -154,6 +154,59 @@ def verify_existing_targets(root: Path, targets: list[str]) -> None:
             ) from exc
 
 
+def collect_verified_target_closure(
+    root: Path, targets: list[str], build_prefix: str
+) -> list[str]:
+    """Follow quoted includes that stay inside the verified generated root.
+
+    This is the source-closure equivalent of the transitive generated-header
+    walk previously used by identity v1. It runs only after the direct targets
+    exist, so development-mode target discovery can still ask root Make to
+    materialize those targets first.
+    """
+    verify_existing_targets(root, targets)
+    generated_root = (root / build_prefix).resolve()
+    pending = [root / target for target in targets]
+    closure: set[str] = set()
+
+    while pending:
+        path = pending.pop()
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"required generated source asset is missing: "
+                f"{path.relative_to(root).as_posix()}"
+            )
+        resolved = path.resolve(strict=True)
+        try:
+            resolved.relative_to(generated_root)
+            relative = resolved.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise ValueError(
+                f"required generated source asset escapes root: {path}"
+            ) from exc
+        if relative in closure:
+            continue
+        closure.add(relative)
+
+        for line in resolved.read_text(encoding="utf-8").splitlines():
+            match = INCLUDE.match(line)
+            if match is None:
+                continue
+            candidate = resolved.parent / match.group(1)
+            try:
+                candidate.resolve().relative_to(generated_root)
+            except ValueError:
+                continue
+            if not candidate.is_file():
+                missing = candidate.relative_to(root).as_posix()
+                raise FileNotFoundError(
+                    f"required generated source asset is missing: {missing}"
+                )
+            pending.append(candidate)
+
+    return sorted(closure)
+
+
 def write_path_list(path: Path, root: Path, targets: list[str]) -> None:
     """Publish the verified target inventory in the closure's strict format."""
     values = [(root / target).resolve(strict=True).as_posix() for target in targets]
@@ -193,7 +246,9 @@ def main() -> int:
                         set(args.define)) + args.required
     ))
     if args.verify_existing:
-        verify_existing_targets(root, targets)
+        targets = collect_verified_target_closure(
+            root, targets, args.build_prefix.rstrip("/")
+        )
     if args.path_list is not None:
         write_path_list(args.path_list, root, targets)
     print(" ".join(targets))

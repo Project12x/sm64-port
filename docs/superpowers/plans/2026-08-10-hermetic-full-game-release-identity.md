@@ -1997,6 +1997,24 @@ filesystem skip. No identity, compile, release manifest, or reproducibility
 gate is claimed from the failed run. Candidate A must restart at the resulting
 common source commit.
 
+Candidate A from `3df2ec4a` published identity tag
+`id-c7c5e79df283e6a5`, completed compile/link/package and external closure
+equality, then release cleanliness rejected the sole remaining generic
+`build/us_pc` header: `include/text_menu_strings.h`. The 1,021-row direct
+inventory included `text_strings.h`, whose quoted generated child was visible
+to the compiler but not the inventory. No release manifest or reproducibility
+gate is claimed. The verified inventory walk now follows quoted includes only
+when their resolved paths stay within the bounded `build/us_pc` root, rejects
+missing children there or escaping direct targets, and publishes the resulting
+1,022 exact inputs
+as generated-input rows. This restores the already independently reviewed
+identity-v1 rule from commit `46162df5` at the source-closure-v2 boundary;
+reuse mode is close-port from the same GPL-compatible repository and no
+external source, copied notice, or license change is involved. Focused TDD was
+RED 0/1 and GREEN 1/1; combined Make/source-closure coverage is GREEN 38/38
+with one existing case-filesystem skip. Candidate A must restart from the
+resulting common source commit; release and reproducibility remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

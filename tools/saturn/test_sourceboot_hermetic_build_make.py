@@ -257,10 +257,12 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         root = Path(self.temporary.name) / "asset-root"
         target = root / "build/us_pc/actors/test/texture.rgba16.inc.c"
         required = root / "build/us_pc/include/text_strings.h"
+        transitive = root / "build/us_pc/include/text_menu_strings.h"
         target.parent.mkdir(parents=True)
         required.parent.mkdir(parents=True)
         target.write_text("texture-bytes\n", encoding="utf-8")
-        required.write_text("text-bytes\n", encoding="utf-8")
+        required.write_text('#include "text_menu_strings.h"\n', encoding="utf-8")
+        transitive.write_text("menu-text-bytes\n", encoding="utf-8")
         source = root / "actor.c"
         source.write_text(
             '#include "actors/test/texture.rgba16.inc.c"\n', encoding="utf-8"
@@ -283,6 +285,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             verified.stdout.split(),
             [
                 "build/us_pc/actors/test/texture.rgba16.inc.c",
+                "build/us_pc/include/text_menu_strings.h",
                 "build/us_pc/include/text_strings.h",
             ],
         )
@@ -291,9 +294,18 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             (
                 "sm64-saturn-path-list-v1\n"
                 f"{target.resolve().as_posix()}\n"
+                f"{transitive.resolve().as_posix()}\n"
                 f"{required.resolve().as_posix()}\n"
             ).encode("utf-8"),
         )
+
+        transitive.unlink()
+        missing_transitive = subprocess.run(
+            [os.sys.executable, *command], check=False, capture_output=True, text=True
+        )
+        self.assertNotEqual(missing_transitive.returncode, 0, missing_transitive.stdout)
+        self.assertIn("text_menu_strings.h", missing_transitive.stderr)
+        transitive.write_text("menu-text-bytes\n", encoding="utf-8")
 
         required.unlink()
         missing = subprocess.run(
