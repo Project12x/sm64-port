@@ -92,12 +92,21 @@
 
 ### Fixed
 
+- Bound GCC's compiler, assembler, and linker helper lookup to the exact
+  `sh-elf-` tool family with an explicit `-B` prefix, and attest the concrete
+  `sh-elf-as` and `sh-elf-ld` files. Pinned Yaul prepends `/mingw64/bin` after
+  the outer wrapper starts, so PATH order alone still selected host binutils.
+  The binding now survives that nested Make boundary and applies equally to
+  dependency discovery, C/C++, preprocessed assembly, and final link.
+
 - Put Yaul's selected cross-tool `bin` directory ahead of MSYS host programs
   in the Windows toolchain wrapper. The SH GCC driver locates its unprefixed
   assembler helper through `PATH`; previously the wrapper selected MSYS's host
   `as.exe`, which rejected SH-2's `-big` option on the first target object.
   MSYS runtime directories still precede inherited PATH, preserving required
-  DLL discovery while binding compilation to the attested cross assembler.
+  DLL discovery and establishing the correct top-level tool environment; the
+  sourceboot GCC `-B` binding below additionally survives Yaul's nested PATH
+  rewrite.
 
 - Made sourceboot invoke the build-identity generator from the repository root.
   Identity-v2 specs intentionally carry repository-relative sealed-artifact

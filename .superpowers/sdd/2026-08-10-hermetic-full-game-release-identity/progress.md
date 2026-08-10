@@ -1124,6 +1124,21 @@
   close-port of the Yaul helper-path setup in
   `test_camera_acceptance_route.py` at `7a8271b8`; no external source or notice
   change. Candidate A compile/link/seal/release gates remain open.
+- The exact `7cee9a12` rerun retained identity tag
+  `id-d4082ee7fde66135` but failed on the same first object. Root cause refined:
+  pinned Yaul `share/build.pre.mk:66` prepends `/mingw64/bin` inside the nested
+  Make parse, after the wrapper's environment order. Wrapper PATH alone cannot
+  bind GCC's unprefixed helper lookup.
+- Actual-invocation correction: `-B$(YAUL_INSTALL_ROOT)/bin/`
+  `$(YAUL_PROG_SH_PREFIX)-` is present in C, C++, and link flags. Under a
+  deliberately host-first PATH, verbose GCC output invoked exact
+  `sh-elf-as.exe` and `-print-prog-name=ld` resolved exact `sh-elf-ld.exe`.
+  Attestation now measures those two concrete invoked binaries, while GCC is
+  independently measured as driver. TDD RED was Make 12/13; GREEN is Make
+  13/13, attestation 16/16, and wrapper 3/3. Every disposable probe was removed
+  before resealing. Reference: close-port of in-tree GCC `-B` usage and pinned
+  Yaul helper naming at `7cee9a12`; no external source or notice change.
+  Candidate A compile/link/seal/release gates remain open.
 
 ## Task 5 review repair round 2
 

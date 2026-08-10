@@ -336,6 +336,27 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         )
         self.assertEqual(makefile.count("$(SOURCEBOOT_IDENTITY_GENERATOR)"), 3)
 
+    def test_gcc_driver_uses_exact_attested_cross_tool_helpers(self) -> None:
+        makefile = self.sourceboot_makefile()
+        self.assertIn(
+            "SOURCEBOOT_GCC_TOOL_PREFIX := "
+            "-B$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-",
+            makefile,
+        )
+        for flags in ("SH_CFLAGS", "SH_CXXFLAGS", "SH_LDFLAGS"):
+            self.assertIn(f"{flags} += $(SOURCEBOOT_GCC_TOOL_PREFIX)", makefile)
+        self.assertIn(
+            "SOURCEBOOT_SH_AS := $(YAUL_INSTALL_ROOT)/bin/"
+            "$(YAUL_PROG_SH_PREFIX)-as$(SOURCEBOOT_SH_EXEEXT)",
+            makefile,
+        )
+        self.assertIn(
+            "SOURCEBOOT_SH_LD := $(YAUL_INSTALL_ROOT)/bin/"
+            "$(YAUL_PROG_SH_PREFIX)-ld$(SOURCEBOOT_SH_EXEEXT)",
+            makefile,
+        )
+        self.assertIn('--as "$(SOURCEBOOT_SH_AS)" --ld "$(SOURCEBOOT_SH_LD)"', makefile)
+
     def test_discovery_stage_cannot_build_or_reuse_identity(self) -> None:
         self.assert_stage_rejected("discover", "all")
         self.assert_stage_rejected("assets", "identity-discovery")

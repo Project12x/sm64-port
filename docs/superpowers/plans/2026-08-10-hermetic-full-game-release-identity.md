@@ -1863,6 +1863,22 @@ resealing. Reference record: same-repository close-port of the existing
 external source, license, or notice change. Compile completion, link, seal, and
 release gates remain open pending the exact rerun from the behavior commit.
 
+The exact rerun from `7cee9a12` kept identity tag `id-d4082ee7fde66135` but
+proved the wrapper-level order was insufficient: pinned Yaul
+`share/build.pre.mk:66` prepends `/mingw64/bin` after the wrapper starts, so the
+first object again found host `as`. GCC's own `-B` program prefix is now bound
+to `$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-` for C, C++, preprocessed
+assembly, and link flags. A verbose compile under deliberately host-first PATH
+showed the concrete invoked helper was `sh-elf-as.exe`; `-print-prog-name=ld`
+resolved `sh-elf-ld.exe`. Toolchain attestation now measures those exact
+assembler and linker files while GCC remains independently measured as the
+link driver. TDD was RED at 12/13 hermetic Make tests and GREEN at 13/13, with
+attestation 16/16 and wrapper 3/3. All disposable objects and the temporary
+source fixture were removed before resealing. Reference record: close-port of
+GCC's existing in-tree `-B` link-search pattern and pinned Yaul helper naming at
+commit `7cee9a12`; no external source, license, or notice change. Compile, link,
+seal, and release gates remain open pending the exact rerun.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

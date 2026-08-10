@@ -60,6 +60,8 @@ SOURCEBOOT_SH_EXEEXT :=
 ifeq ($(OS),Windows_NT)
 SOURCEBOOT_SH_EXEEXT := .exe
 endif
+SOURCEBOOT_SH_AS := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-as$(SOURCEBOOT_SH_EXEEXT)
+SOURCEBOOT_SH_LD := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-ld$(SOURCEBOOT_SH_EXEEXT)
 SOURCEBOOT_SH_OBJDUMP := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-objdump$(SOURCEBOOT_SH_EXEEXT)
 SOURCEBOOT_SH_READELF := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf$(SOURCEBOOT_SH_EXEEXT)
 SOURCEBOOT_SH_ADDR2LINE := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-addr2line$(SOURCEBOOT_SH_EXEEXT)
@@ -549,6 +551,13 @@ export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
 
+# Pinned Yaul prepends /mingw64/bin for runtime DLL discovery, but this GCC
+# driver also searches PATH for unprefixed helpers. Bind compiler, assembler,
+# and linker subprocess lookup to the exact attested sh-elf tool family.
+SOURCEBOOT_GCC_TOOL_PREFIX := -B$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-
+SH_CFLAGS += $(SOURCEBOOT_GCC_TOOL_PREFIX)
+SH_CXXFLAGS += $(SOURCEBOOT_GCC_TOOL_PREFIX)
+SH_LDFLAGS += $(SOURCEBOOT_GCC_TOOL_PREFIX)
 
 # Keep the default Yaul binary image contiguous in work RAM.  The source data
 # bank is exported separately from the final ELF and copied into the cart at
@@ -1033,7 +1042,7 @@ SOURCEBOOT_DERIVED_OUTPUTS := \
 SOURCEBOOT_TOOLCHAIN_ARGS = \
   --yaul-root "$(YAUL_INSTALL_ROOT)" --yaul-version 0.3.1 \
   --yaul-commit 6012f79f237773378c8014e70d8998ad95a38d98 \
-  --gcc "$(SH_CC)" --as "$(SH_AS)" --ld "$(SH_LD)" --nm "$(SH_NM)" \
+  --gcc "$(SH_CC)" --as "$(SOURCEBOOT_SH_AS)" --ld "$(SOURCEBOOT_SH_LD)" --nm "$(SH_NM)" \
   --objcopy "$(SOURCEBOOT_RAW_OBJCOPY)" --objdump "$(SH_OBJDUMP)" \
   --readelf "$(SOURCEBOOT_SH_READELF)" --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)"
 
