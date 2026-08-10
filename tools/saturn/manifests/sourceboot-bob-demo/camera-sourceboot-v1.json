@@ -1,0 +1,1 @@
+{"inputs":[{"path":"src/port/saturn/runtime/saturn_camera_role.c"},{"path":"src/port/saturn/runtime/saturn_camera_fixed.c"}],"package_class":"camera","package_id":"sourceboot","schema":"sm64-saturn-package-descriptor-v1"}

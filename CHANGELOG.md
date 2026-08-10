@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added deterministic Saturn target profiles, strict canonical package
+  descriptors, per-class aggregate manifests, and a package-set v2 root. This
+  lets the playable BOB demo identify only its selected measured payloads while
+  reserving an explicitly non-release-enabled full-game profile; malformed,
+  duplicate, escaping, case-colliding, or missing package inputs now fail
+  closed instead of reusing a stale seal.
+
 ### Docs
 
 - Wrote the memory residency campaign plan

@@ -1,0 +1,1 @@
+{"inputs":[{"path":"src/port/saturn/sourceboot/source_cart.c"},{"path":"src/port/saturn/sourceboot/source_cart.h"}],"package_class":"cart","package_id":"sourceboot-32mbit","schema":"sm64-saturn-package-descriptor-v1"}

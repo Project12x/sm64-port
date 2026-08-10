@@ -1,0 +1,1 @@
+{"inputs":[{"path":"src/port/saturn/sourceboot/source_demo_data.c"},{"path":"src/port/saturn/controller/controller_saturn.c"}],"package_class":"input","package_id":"sourceboot","schema":"sm64-saturn-package-descriptor-v1"}

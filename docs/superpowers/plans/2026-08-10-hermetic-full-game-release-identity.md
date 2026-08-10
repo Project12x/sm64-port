@@ -48,6 +48,17 @@
 
 ### Task 1: Canonical manifests, target profiles, and package-set aggregation
 
+**Execution status (2026-08-10):** `source-complete` at Task 1 dispatch base
+`da15bd4857691fde83d0808400aca2c6ea715144`; focused host contract passed with
+`.\\.venv-saturn-tools\\Scripts\\python.exe tools\\saturn\\test_target_profile.py`
+(8 tests) and scoped `git diff --check`. The canonical profile binds only
+descriptor-selected measured payloads; the BOB profile carries the accepted
+Task 5 flag tuple, while `sm64-saturn-full` declares every class but is
+intentionally non-release-enabled with no invented game-inventory assertion.
+Independent specification and code-quality reviews, target build,
+reproducibility, audit, complete package, 20,100-frame smoke, visual, and
+manual-play gates remain open.
+
 **Files:**
 - Create: `tools/saturn/hermetic_manifest.py`
 - Create: `tools/saturn/target_profile.py`
