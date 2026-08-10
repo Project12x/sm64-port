@@ -361,6 +361,22 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         )
         self.assertIn('--as "$(SOURCEBOOT_SH_AS)" --ld "$(SOURCEBOOT_SH_LD)"', makefile)
 
+    def test_yaul_packaging_uses_candidate_local_temporary_directory(self) -> None:
+        makefile = self.sourceboot_makefile()
+        self.assertIn(
+            "SOURCEBOOT_TOOL_TMPDIR := $(SH_BUILD_DIR)/tmp",
+            makefile,
+        )
+        self.assertIn("export TMPDIR := $(SOURCEBOOT_TOOL_TMPDIR)", makefile)
+        self.assertIn(
+            "$(SH_BUILD_PATH)/IP.BIN: | $(SOURCEBOOT_TOOL_TMPDIR)",
+            makefile,
+        )
+        self.assertIn(
+            '$(SOURCEBOOT_TOOL_TMPDIR):\n\t@mkdir -p "$@"',
+            makefile,
+        )
+
     def test_discovery_stage_cannot_build_or_reuse_identity(self) -> None:
         self.assert_stage_rejected("discover", "all")
         self.assert_stage_rejected("assets", "identity-discovery")

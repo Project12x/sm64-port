@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Gave pinned Yaul packaging helpers a writable candidate-local temporary
+  directory. `wrap-error` otherwise fell back to `/tmp`, which is unwritable
+  when the build runs under a restricted identity, after the entire ELF had
+  compiled and linked. The directory is created under the ignored,
+  identity-tagged object tree before `make-ip` and inherited by ISO/CUE hook
+  sub-makes; temporary paths and captured stderr stay outside canonical
+  identity while the recipe and every semantic package byte remain sealed.
+
 - Bound GCC's compiler, assembler, and linker helper lookup to the exact
   `sh-elf-` tool family with an explicit `-B` prefix, and attest the concrete
   `sh-elf-as` and `sh-elf-ld` files. Pinned Yaul prepends `/mingw64/bin` after

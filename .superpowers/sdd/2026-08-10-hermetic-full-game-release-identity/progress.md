@@ -1155,6 +1155,25 @@
   external source, copied bytes, license, or notice change. Candidate A must
   restart from the resulting common source commit; compile/link/seal/release/
   reproducibility gates remain open.
+- Candidate A from `47ab8135` published identity v2 tag
+  `id-8a95684a4575e95c`, passed closure/attestation/bootstrap and geo depth
+  172/192, compiled all main and software-float objects, and linked the ELF.
+  Packaging then failed before `IP.BIN` because pinned Yaul `wrap-error`
+  defaulted `TMPDIR` to unwritable `/tmp`; its first `mktemp` returned
+  permission denied. No IP.BIN, ISO/CUE, post-link seal, release manifest, or
+  reproducibility gate is claimed.
+- Packaging-temporary correction: sourceboot exports
+  `$(SH_BUILD_DIR)/tmp`, creates it as an order-only prerequisite of `IP.BIN`,
+  and lets Yaul hook sub-makes plus later ISO/CUE wrappers inherit it. Transient
+  path/stderr bytes stay ignored and outside canonical identity; the tracked
+  recipe remains in source closure and semantic package outputs remain
+  manifest-bound. TDD RED was Make 13/14; GREEN is Make 14/14, attestation
+  16/16, and wrapper 3/3 (33/33 combined). Reference: pinned MIT libyaul
+  `6012f79f...`, inspected `libyaul/build/build.post.iso-cue.mk` and
+  `libyaul/common/wrap-error`; dependency integration/pattern-only reuse of
+  the repository's existing explicit temp-environment recipe, no copied bytes
+  or notice change. Candidate A must restart at the resulting common commit;
+  package/post-link/release/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

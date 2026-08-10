@@ -1896,6 +1896,28 @@ bytes, license, or notice changed. Candidate A must restart at the resulting
 common source commit; compile completion, link, seal, release, and
 reproducibility gates remain open.
 
+Candidate A from `47ab8135` published the new identity tag
+`id-8a95684a4575e95c`, passed closure, attestation, canonical bootstrap, and
+geo depth at 172/192, compiled the complete main and software-float object
+sets, and linked the ELF. Packaging then stopped before `IP.BIN`: pinned
+libyaul's `wrap-error` defaults `TMPDIR` to `/tmp`, which is not writable by
+the managed execution identity, so its first `mktemp` failed. No IP.BIN,
+ISO/CUE, post-link seal, release manifest, or reproducibility gate is claimed.
+Sourceboot now exports an identity-tagged, candidate-local temporary directory
+under `$(SH_BUILD_DIR)` and creates it as an order-only prerequisite of Yaul's
+first wrapper consumer. Hook sub-makes and later `make-iso`/`make-cue` inherit
+the same directory. Transient path and stderr bytes remain ignored and outside
+canonical identity; the tracked recipe stays in source closure and semantic
+package bytes remain release-manifest-bound. TDD was RED at Make 13/14 and
+GREEN at 14/14, with attestation 16/16 and wrapper 3/3 (33/33 combined).
+Reference record: pinned MIT libyaul commit
+`6012f79f237773378c8014e70d8998ad95a38d98`, inspected
+`libyaul/build/build.post.iso-cue.mk` and `libyaul/common/wrap-error`; dependency
+integration plus pattern-only reuse of the repository's existing explicit
+temporary-environment recipe, with no copied upstream bytes or notice change.
+Candidate A must restart at the resulting common source commit; package,
+post-link seal, release, and reproducibility gates remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

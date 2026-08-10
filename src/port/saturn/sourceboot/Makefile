@@ -535,6 +535,13 @@ endif
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd
+# Pinned Yaul's wrap-error helper defaults to /tmp, which is not guaranteed
+# writable under a restricted or non-creator Windows identity. Keep transient
+# command output inside this candidate's ignored, identity-tagged build tree.
+# The path itself is operational only; release identity binds the recipe and
+# every semantic output byte, never an absolute worktree spelling.
+SOURCEBOOT_TOOL_TMPDIR := $(SH_BUILD_DIR)/tmp
+export TMPDIR := $(SOURCEBOOT_TOOL_TMPDIR)
 # These generated assembly inputs live outside the identity-tagged object tree.
 # Otherwise dependency discovery would need the identity before it could name
 # the closure input that determines that same identity.
@@ -971,6 +978,13 @@ $(SOURCEBOOT_BUILD_IDENTITY_JSON) $(SOURCEBOOT_BUILD_IDENTITY_LABEL) &: \
 	  $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
+
+$(SOURCEBOOT_TOOL_TMPDIR):
+	@mkdir -p "$@"
+
+# make-ip is Yaul's first wrap-error consumer. The exported directory remains
+# available to its later make-iso/make-cue calls and inherited hook sub-makes.
+$(SH_BUILD_PATH)/IP.BIN: | $(SOURCEBOOT_TOOL_TMPDIR)
 
 # Hermetic dependency discovery uses the exact source population and flags
 # that Yaul has now expanded. Generated compiled sources are classified as
