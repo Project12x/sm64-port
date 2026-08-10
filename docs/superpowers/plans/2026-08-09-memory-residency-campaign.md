@@ -75,10 +75,72 @@ Hook the counters at the Step-2 sites (peak updated on allocate; `frames_sampled
 
 ### Task 3: OWNER GATE G1 — pool capacity decision
 
-- [ ] **Step 1: Present via AskUserQuestion.** Give the owner: measured `peak_allocated`, the time series shape, and a capacity recommendation = smallest power-of-two-free number ≥ peak × 1.5, alongside the bytes recovered per candidate (e.g. capacity 96 → 87,552 B freed; 128 → 68,096 B freed; deficit to beat: 12,408 B). Options: recommended capacity / a more conservative one / abort-and-find-other-levers.
-- [ ] **Step 2: Record the decision** verbatim in the plan's execution ledger and carry it into Task 4. Do not proceed without it (standing owner constraint: capacity changes require explicit sign-off — precedent: the geo-arena resize).
+**Task 2 execution ledger (2026-08-09):** **review-cleared for G1**. Commit
+`16ff8b4b` implements the target-visible probe and commits the 21,600-frame
+headless evidence report at
+`docs/saturn/evidence/reports/memcamp-object-pool-occupancy-2026-08-09.md`.
+The independent spec review passed; the differential/code-quality review
+accepts the current capacity-240 evidence with two required follow-ons before
+Task 4 reuses the harness under an override: bind reported capacity to the
+sealed compiled artifact (not the source fallback `240`), and make the
+source-text contract prove that each hook remains in its named allocation/free
+function. Tests actually rerun by the review: 11/11 object-pool contract tests
+directly and through the Make target, `py_compile` for the capture tool,
+`git diff --check`, and the geo-walk runtime canary. The remaining gate is
+owner G1. The 138 peak is a real idle-boot measurement with zero allocation
+failures, but not target evidence for pickup/hold or action-particle pressure;
+G1 must state that coverage gap and treat 138 as a floor, not a ceiling.
+
+**Task 3 execution ledger (2026-08-09):** **owner G1 approved.** The owner
+approved the recommended **208-slot** capacity by directing the campaign to
+proceed. It is 1.507× the measured 138-slot peak (the required 1.5× floor),
+recovers exactly `32 × 608 = 19,456 B` from the 240-slot pool, and projects
+an estimated `19,456 - 12,408 = 7,048 B` HWRAM link margin for the known
+flags-on deficit. This approval is deliberately limited: the 21,600-frame
+capture was idle boot only, with no pickup/hold or action-particle pressure,
+so 138 remains an evidence floor rather than an occupancy ceiling. Task 4
+must bind its remeasurement to the sealed 208-slot artifact and return to G1
+on any allocation failure.
+
+- [x] **Step 1: Present via AskUserQuestion.** Give the owner: measured `peak_allocated`, the time series shape, and a capacity recommendation = smallest power-of-two-free number ≥ peak × 1.5, alongside the bytes recovered per candidate (e.g. capacity 96 → 87,552 B freed; 128 → 68,096 B freed; deficit to beat: 12,408 B). Options: recommended capacity / a more conservative one / abort-and-find-other-levers.
+- [x] **Step 2: Record the decision** verbatim in the plan's execution ledger and carry it into Task 4. Do not proceed without it (standing owner constraint: capacity changes require explicit sign-off — precedent: the geo-arena resize).
 
 ### Task 4: Pool capacity cut + overflow latch
+
+**Status (2026-08-09):** review-cleared; commit pending. Task 4
+additionally owns the two Task 2 review hardenings: an artifact-bound capacity
+reader for the remeasurement harness and function-local source-contract checks
+for the three probe hooks.
+
+**Task 4 execution ledger (2026-08-09):** G1 chose 208. The host TDD suite
+observed RED before the implementation, then passed 12 object-pool contracts,
+9 build-identity contracts, 7 bootstrap contracts, and 2 capture-artifact
+contracts. The flags-on 208 target build passed verify-sourceboot, with sealed
+identity id-2db3d6487ae1bb4d; gObjectPool is 0x1ee00 (126,464 B), exactly
+19,456 B below the 240-slot 0x23a00 baseline. The artifact-bound 21,600-frame
+capture recorded 20,100 post-BIOS frames, peak 138, and zero allocation
+failures; see the 208-slot capacity evidence report. The override-unset
+240 build (id-e49afeb0d4f053ab) and a forced explicit-240 recompilation have
+the same ELF SHA-256
+eb1fc628ef2cf523c59d3789645561d044463109cde41176f4348b52a7a582d7.
+The idle-boot coverage gap remains: this is not pickup/hold or
+action-particle target evidence. The Task 4 specification and differential
+reviews passed after correcting two stale target-header comments; remaining
+gates are this commit, then Task 5.
+Final pre-commit verification reran all 30 focused host contracts, both
+Make-level contracts, the geo-walk runtime canary, and the canonical flags-on
+208 target build. That target build passed verify-sourceboot as
+id-999bd5f4943c0267; its sealed generated spec records capacity 208, its map
+records gObjectPool at 0x1ee00 (126,464 B), and its ELF SHA-256 is
+5a4315a0205b786eca06ecbca9b9b4e13b6e7c8b44f13bb5227c6e16f84602b6.
+TDD RED was observed before implementation: the real host preprocessor kept
+an override at 240; the identity/bootstrap contracts did not seal
+`object_pool_capacity`; and the capture harness had no sealed-artifact
+reader. Reference inspection (pattern-only, no copied code): SlaveDriver
+Engine `a8986591557b6e680550d3c23970284d3b38ff8f`, GPL-3.0, `OBJECT.C:9-89`
+(fixed pool and run/idle/free lists); Sonic Z-Treme
+`cff75451c1616aac1236fc2b44223902b55c706b`, GPL-3.0,
+`Projects/SONIC Z-TREME/ZTE/ZTE_DEF.H:187-195` (24-byte static records).
 
 **Files:**
 - Modify: `src/game/object_list_processor.h` (capacity constant)
@@ -87,8 +149,8 @@ Hook the counters at the Step-2 sites (peak updated on allocate; `frames_sampled
 - Test: extend `tools/saturn/test_object_pool_probe_contract.py`
 - Modify: `CHANGELOG.md`
 
-- [ ] **Step 1: RED.** Extend the contract test: `OBJECT_POOL_CAPACITY` must honor an override macro, and the exhaustion path must both count AND latch (a `pool_exhausted_latched` field or reuse `alloc_failures != 0`) — assert the test fails before implementation.
-- [ ] **Step 2: Implement the override.**
+- [x] **Step 1: RED.** Extend the contract test: `OBJECT_POOL_CAPACITY` must honor an override macro, and the exhaustion path must both count AND latch (a `pool_exhausted_latched` field or reuse `alloc_failures != 0`) — assert the test fails before implementation.
+- [x] **Step 2: Implement the override.**
 
 ```c
 /* object_list_processor.h — replace the bare constant */
@@ -100,8 +162,8 @@ Hook the counters at the Step-2 sites (peak updated on allocate; `frames_sampled
 ```
 
 Makefile: `SATURN_OBJECT_POOL_CAPACITY ?=` empty → no define (byte-identical passthrough, feature-off-rollback convention); non-empty → `-DSATURN_OBJECT_POOL_CAPACITY_OVERRIDE=$(value)`. Wire it into the build-identity typed parameters exactly like `polygon_tier` (`gen_build_identity.py` `COMPILER_CONFIG_FIELDS` + bootstrap `--set`), so identity changes when capacity does.
-- [ ] **Step 3: GREEN + passthrough proof.** Contract test passes. Build the canonical config once with the override unset — the sealed identity must match a pre-change build at the same HEAD (byte-identical passthrough), same discipline as the audio closure flag.
-- [ ] **Step 4: Cut + re-measure.** Build canonical flags-on with `SATURN_OBJECT_POOL_CAPACITY=<G1 value>`. From the fresh map: confirm `gObjectPool` shrank by exactly 608 × (240 − N) bytes. Re-run the Task 2 harness to ≥20,000 frames: `alloc_failures == 0` REQUIRED. Any failure = STOP, report, return to G1.
+- [x] **Step 3: GREEN + passthrough proof.** Contract test passes. Build the canonical config once with the override unset — the sealed identity must match a pre-change build at the same HEAD (byte-identical passthrough), same discipline as the audio closure flag.
+- [x] **Step 4: Cut + re-measure.** Build canonical flags-on with `SATURN_OBJECT_POOL_CAPACITY=<G1 value>`. From the fresh map: confirm `gObjectPool` shrank by exactly 608 × (240 − N) bytes. Re-run the Task 2 harness to ≥20,000 frames: `alloc_failures == 0` REQUIRED. Any failure = STOP, report, return to G1.
 - [ ] **Step 5: Commit** with the G1 decision, map delta, and re-measurement numbers in the CHANGELOG: `feat(saturn): cut object pool residency to owner-approved measured capacity`.
 
 ### Task 5: Flags-on textured build — link gate + combined smoke

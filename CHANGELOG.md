@@ -31,6 +31,22 @@
   constraint" note to the sprint plan's Lane A preamble: A2/A4 target
   builds won't link until that deficit closes.
 
+### Changed
+
+- Cut the Saturn sourceboot object pool from its portable 240-slot default
+  to the owner-approved 208 slots when SATURN_OBJECT_POOL_CAPACITY=208 is
+  requested. The pool consumes 608 B per slot, so the fresh target map
+  shrinks gObjectPool by exactly 19,456 B (145,920 B to 126,464 B), enough
+  to turn the known 12,408 B flags-on HWRAM deficit into projected positive
+  link margin. The capacity is an identity-sealed compiler configuration
+  field and the occupancy harness now refuses a report unless the supplied
+  sealed identity tuple is embedded in the selected ELF; this prevents a
+  source-header fallback of 240 from being attributed to an overridden
+  artifact. The 20,100-frame canonical idle-boot remeasurement held the
+  138-slot peak with zero allocation failures, while intentionally retaining
+  the pickup/hold and action-particle coverage gap as a later gate. An unset
+  build remains byte-identical to a forced explicit-240 rebuild.
+
 ### Fixed
 
 - Sticky SH-2 DIVU overflow flag silently corrupted `atan2`/the shared 64/32

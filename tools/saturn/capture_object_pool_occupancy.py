@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import time
 from pathlib import Path
@@ -39,6 +38,7 @@ from typing import Any
 
 from capture_hwtest import artifact_identity
 from capture_route_views import YmirClient
+from gen_build_identity import build_identity
 from capture_sourceboot_boot_trace import (
     NM,
     bind_capture_artifacts,
@@ -66,18 +66,25 @@ DEFAULT_SAMPLE_INTERVAL_FRAMES = 300
 DEFAULT_POST_BIOS_FRAMES = 20100
 MIN_POST_BIOS_FRAMES = 20000
 
-POOL_CAPACITY_HEADER = ROOT / "src/game/object_list_processor.h"
-POOL_CAPACITY_RE = re.compile(r"#define\s+OBJECT_POOL_CAPACITY\s+(\d+)")
+def pool_capacity_from_sealed_artifact(identity_spec: Path, elf: Path) -> int:
+    """Return capacity only after the matching sealed identity is found in ELF.
 
-
-def read_pool_capacity() -> int:
-    """Read the real compiled-in capacity rather than hardcoding a copy
-    that could silently drift from src/game/object_list_processor.h."""
-    source = POOL_CAPACITY_HEADER.read_text(encoding="utf-8")
-    match = POOL_CAPACITY_RE.search(source)
-    if match is None:
-        raise ValueError(f"OBJECT_POOL_CAPACITY not found in {POOL_CAPACITY_HEADER}")
-    return int(match.group(1))
+    The capacity is a compiler-config scalar rather than a standalone ABI
+    field.  Rebuilding the canonical identity from its spec then requiring the
+    resulting tuple bytes in the selected ELF binds the report to that exact
+    compilation, instead of accidentally reporting the header's fallback
+    value for an overridden build.
+    """
+    spec = json.loads(identity_spec.read_text(encoding="utf-8"))
+    expected = build_identity(spec).raw
+    if elf.read_bytes().find(expected) < 0:
+        raise ValueError(
+            "sealed build identity from identity spec is not present in capture ELF"
+        )
+    capacity = spec.get("object_pool_capacity")
+    if type(capacity) is not int:
+        raise ValueError("sealed identity spec has no integer object_pool_capacity")
+    return capacity
 
 
 def resolve_probe_address(elf: Path, *, nm: Path = NM, run: Any = subprocess.run) -> int:
@@ -155,6 +162,12 @@ def main() -> int:
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS image")
     parser.add_argument("--game", type=Path, required=True, help="built sourceboot .cue path")
     parser.add_argument("--elf", type=Path, required=True, help="matching sourceboot ELF")
+    parser.add_argument(
+        "--identity-spec",
+        type=Path,
+        required=True,
+        help="sealed build identity spec generated for the matching ELF",
+    )
     parser.add_argument("--output", type=Path, required=True, help="JSON evidence report")
     parser.add_argument(
         "--post-bios-frames", type=int, default=DEFAULT_POST_BIOS_FRAMES,
@@ -167,7 +180,13 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=1800.0)
     args = parser.parse_args()
 
-    for label, path in (("Ymir", args.ymir), ("IPL", args.ipl), ("game", args.game), ("ELF", args.elf)):
+    for label, path in (
+        ("Ymir", args.ymir),
+        ("IPL", args.ipl),
+        ("game", args.game),
+        ("ELF", args.elf),
+        ("identity spec", args.identity_spec),
+    ):
         if not path.is_file():
             parser.error(f"{label} is not a file: {path}")
     try:
@@ -184,13 +203,19 @@ def main() -> int:
     args.ipl = args.ipl.resolve()
     args.game = args.game.resolve()
     args.elf = args.elf.resolve()
+    args.identity_spec = args.identity_spec.resolve()
     args.output = args.output.resolve()
     try:
         artifacts = bind_capture_artifacts(args.game, args.elf)
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
-    pool_capacity = read_pool_capacity()
+    try:
+        pool_capacity = pool_capacity_from_sealed_artifact(
+            args.identity_spec, args.elf
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        parser.error(str(error))
     probe_address = resolve_probe_address(args.elf)
 
     wall_start = time.perf_counter()
@@ -264,6 +289,8 @@ def main() -> int:
         "game": artifact_identity(args.game),
         "elf": artifact_identity(args.elf),
         "artifacts": artifacts,
+        "build_identity_spec": artifact_identity(args.identity_spec),
+        "pool_capacity_binding": "sealed-identity-tuple-present-in-elf",
         "probe_symbol": PROBE_SYMBOL,
         "probe_address": probe_address,
         "probe_cache_through_address": cpu_cache_through_alias(probe_address),

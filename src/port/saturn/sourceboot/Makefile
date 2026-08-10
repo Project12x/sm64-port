@@ -65,6 +65,11 @@ SATURN_FEATURE_SEMANTIC_AUDIO ?= 0
 SATURN_DIAGNOSTIC_MODE ?= 0
 SATURN_CART_MBIT ?= 32
 SATURN_FAST3D_Q16_TRACE ?= 0
+# Empty means use the portable 240-slot default without adding a compiler
+# definition.  The effective value is still sealed so a captured ELF can
+# attest which capacity its occupancy report measured.
+SATURN_OBJECT_POOL_CAPACITY ?=
+SATURN_OBJECT_POOL_CAPACITY_EFFECTIVE := $(if $(strip $(SATURN_OBJECT_POOL_CAPACITY)),$(strip $(SATURN_OBJECT_POOL_CAPACITY)),240)
 ifneq ($(words $(filter $(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION),0 1)),1)
   $(error SATURN_FEATURE_COMPLETE_MARIO_ANIMATION must be 0 or 1)
 endif
@@ -103,7 +108,8 @@ SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS = \
   --expect near_clip=$(SATURN_DEMO_NEAR_CLIP) \
   --expect bsp_order=$(SATURN_DEMO_BSP_ORDER) \
   --expect polygon_tier=$(SATURN_DEMO_POLY_TIER) \
-  --expect fragment_mode=$(SATURN_DEMO_FRAGMENT_MODE)
+  --expect fragment_mode=$(SATURN_DEMO_FRAGMENT_MODE) \
+  --expect object_pool_capacity=$(SATURN_OBJECT_POOL_CAPACITY_EFFECTIVE)
 SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS += \
   --expect atan2_variant=$(SATURN_ATAN2_VARIANT) \
   --expect demo_path=$(SATURN_DEMO_PATH) \
@@ -443,7 +449,8 @@ SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_ARGS = \
   --set camera_range_capture=$(SATURN_CAMERA_RANGE_CAPTURE) \
   --set bsp_fragment_flat=$(SATURN_DEMO_BSP_FRAGMENT_FLAT) \
   --set fast3d_q16_trace=$(SATURN_FAST3D_Q16_TRACE) \
-  --set experimental_skip_geo_walk=$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK)
+  --set experimental_skip_geo_walk=$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK) \
+  --set "object_pool_capacity=$(SATURN_OBJECT_POOL_CAPACITY_EFFECTIVE)"
 # One logical build must seal exactly once. Yaul's .iso rule re-invokes this
 # makefile for the pre/post-build-iso hooks, and the verify target is a third
 # fresh parse; each re-parse used to re-run the bootstrap against the live
@@ -517,6 +524,10 @@ SH_SPECS := sourceboot.specs
 # free of the trace state and stores.
 ifeq ($(SATURN_FAST3D_Q16_TRACE),1)
 SH_CFLAGS += -DSM64_SATURN_FAST3D_Q16_TRACE=1
+endif
+
+ifneq ($(strip $(SATURN_OBJECT_POOL_CAPACITY)),)
+SH_CFLAGS += -DSATURN_OBJECT_POOL_CAPACITY_OVERRIDE=$(SATURN_OBJECT_POOL_CAPACITY_EFFECTIVE)
 endif
 
 SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSION_JP_US=1 \

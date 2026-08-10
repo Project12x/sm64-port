@@ -13,9 +13,9 @@
  * a compile-time safety rail for malformed or not-yet-generated packages. */
 #define SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE 64U
 /* Source-attested from src/game/object_list_processor.h: OBJECT_POOL_CAPACITY.
- * This identity domain deliberately outlives the compact drawable snapshot
- * domain above: source slots 0..239 can be observed without enlarging queue
- * or snapshot payloads beyond 64 entries. */
+ * This fixed storage ceiling preserves the portable 240-slot source domain;
+ * a sourceboot override uses only slots 0 through OBJECT_POOL_CAPACITY - 1
+ * without enlarging queue or snapshot payloads beyond 64 entries. */
 #define SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY 240U
 #define SM64_SATURN_ACTOR_MAX_SWITCHES 8U
 #define SM64_SATURN_ACTOR_INSTANCE_MODEL_NONE 0U

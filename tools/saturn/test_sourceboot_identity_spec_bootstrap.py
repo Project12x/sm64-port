@@ -49,6 +49,7 @@ def config() -> dict[str, int]:
         "camera_idle_discovery": 0, "camera_range_capture": 0,
         "bsp_fragment_flat": 0, "fast3d_q16_trace": 0,
         "experimental_skip_geo_walk": 0,
+        "object_pool_capacity": 240,
     }
 
 
@@ -97,9 +98,11 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
 
         changed = copy.deepcopy(baseline)
         changed["polygon_tier"] = 1
+        changed["object_pool_capacity"] = 208
         bootstrap.write_spec(self.root, self.output, changed)
         second = json.loads(self.output.read_text(encoding="utf-8"))
         self.assertEqual(second["polygon_tier"], 1)
+        self.assertEqual(second["object_pool_capacity"], 208)
         self.assertNotEqual(identity.build_identity(first).raw, identity.build_identity(second).raw)
 
         for relative in (

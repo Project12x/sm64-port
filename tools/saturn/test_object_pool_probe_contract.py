@@ -16,19 +16,20 @@ which otherwise hangs in an infinite loop -- "We've met with a terrible
 fate.").
 
 This is a source-text contract, not a compiled/behavioral test: like
-test_divu_overflow_clear_contract.py, it parses ``#ifdef TARGET_SATURN`` /
-``#if defined(TARGET_SATURN)`` true-branches (tracking directive nesting
-depth, not a naive first-``#endif`` match) and asserts the counter updates
-live inside them. It cannot prove the counters are numerically correct on
-real hardware or in Ymir -- only that the wiring exists at the sites the
-plan named, under the right compile-time gate, with the right volatile
-qualification for a target-visible probe Ymir's debugger reads out of live
-target RAM.
+test_divu_overflow_clear_contract.py, it extracts each named function's
+brace-balanced body, then parses ``#ifdef TARGET_SATURN`` /
+``#if defined(TARGET_SATURN)`` true-branches while tracking directive nesting
+depth. It cannot prove the counters are numerically correct on real hardware
+or in Ymir -- only that the wiring exists in the sites the plan named, under
+the right compile-time gate, with the right volatile qualification for a
+target-visible probe Ymir's debugger reads out of live target RAM.
 """
 
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -37,6 +38,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PROBE_HEADER = "src/port/saturn/runtime/saturn_object_pool_probe.h"
 SPAWN_OBJECT_C = "src/game/spawn_object.c"
 OBJECT_LIST_PROCESSOR_C = "src/game/object_list_processor.c"
+OBJECT_LIST_PROCESSOR_H = "src/game/object_list_processor.h"
 SOURCEBOOT_MAIN_C = "src/port/saturn/sourceboot/main.c"
 
 FIELD_NAMES = (
@@ -136,6 +138,79 @@ def _target_saturn_branches(source: str) -> list[str]:
     return branches
 
 
+def _function_body(source: str, name: str) -> str:
+    """Return one named C function's brace-balanced body.
+
+    The probe hooks are only meaningful at their named free-list and fatal
+    allocation sites.  Searching every TARGET_SATURN branch in the file can
+    accept a correctly spelled hook relocated to an unrelated function.
+    """
+    match = re.search(
+        rf"(?m)^[^;\n]*\b{re.escape(name)}\s*\([^;\n]*?\)\s*\{{",
+        source,
+    )
+    if match is None:
+        raise AssertionError(f"function definition not found: {name}")
+    opening = match.end() - 1
+    depth = 0
+    for index in range(opening, len(source)):
+        character = source[index]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return source[opening + 1:index]
+    raise AssertionError(f"unterminated function definition: {name}")
+
+
+def _preprocessed_object_pool_capacity(*defines: str) -> int:
+    """Use the real host C preprocessor to observe the public macro's value."""
+    compiler = shutil.which("gcc")
+    if compiler is None:
+        raise AssertionError("object-pool macro contract requires host gcc")
+    header = ROOT / OBJECT_LIST_PROCESSOR_H
+    source = (
+        f'#include "{header.as_posix()}"\n'
+        "enum { object_pool_capacity_probe = OBJECT_POOL_CAPACITY };\n"
+    )
+    completed = subprocess.run(
+        [
+            compiler,
+            "-E",
+            "-P",
+            "-x",
+            "c",
+            "-I",
+            str(ROOT / "include"),
+            "-I",
+            str(ROOT / "src"),
+            "-I",
+            str(ROOT),
+            "-DNON_MATCHING=1",
+            "-DAVOID_UB=1",
+            *defines,
+            "-",
+        ],
+        input=source,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(
+            "host C preprocessor failed for object-pool capacity contract: "
+            + completed.stderr
+        )
+    match = re.search(
+        r"enum\s*\{\s*object_pool_capacity_probe\s*=\s*(\d+)\s*\};",
+        completed.stdout,
+    )
+    if match is None:
+        raise AssertionError("preprocessed object-pool capacity sentinel not found")
+    return int(match.group(1))
+
+
 class ObjectPoolProbeContractTest(unittest.TestCase):
     def test_probe_struct_fields_are_volatile_uint32(self) -> None:
         source = _read(PROBE_HEADER)
@@ -195,7 +270,7 @@ class ObjectPoolProbeContractTest(unittest.TestCase):
         the plan). Every successful allocation must count once and peak must
         track the observed maximum."""
         source = _read(SPAWN_OBJECT_C)
-        branches = _target_saturn_branches(source)
+        branches = _target_saturn_branches(_function_body(source, "try_allocate_object"))
         self.assertTrue(
             any(
                 CURRENT_ALLOCATED_INCREMENT_RE.search(branch)
@@ -211,7 +286,7 @@ class ObjectPoolProbeContractTest(unittest.TestCase):
         """deallocate_object() is the real free-list-push site (Step 2 of
         the plan)."""
         source = _read(SPAWN_OBJECT_C)
-        branches = _target_saturn_branches(source)
+        branches = _target_saturn_branches(_function_body(source, "deallocate_object"))
         self.assertTrue(
             any(CURRENT_ALLOCATED_DECREMENT_RE.search(branch) for branch in branches),
             f"{SPAWN_OBJECT_C}: expected a TARGET_SATURN branch (at the real "
@@ -224,12 +299,38 @@ class ObjectPoolProbeContractTest(unittest.TestCase):
         met with a terrible fate.'); alloc_failures must count reaching it,
         not merely a recoverable eviction."""
         source = _read(SPAWN_OBJECT_C)
-        branches = _target_saturn_branches(source)
+        body = _function_body(source, "allocate_object")
+        branches = _target_saturn_branches(body)
         self.assertTrue(
-            any(ALLOC_FAILURES_INCREMENT_RE.search(branch) for branch in branches),
+            any(
+                ALLOC_FAILURES_INCREMENT_RE.search(branch)
+                for branch in branches
+            ),
             f"{SPAWN_OBJECT_C}: expected a TARGET_SATURN branch (at the true "
             "pool-exhaustion path in allocate_object) that increments "
             "alloc_failures",
+        )
+        self.assertRegex(
+            body,
+            re.compile(
+                r"g_sm64_saturn_object_pool_probe\.alloc_failures"
+                r"\s*(?:\+\+\s*;|\+=\s*1\s*;)\s*#endif\s*"
+                r"// We've met with a terrible fate\.\s*while\s*\(\s*TRUE\s*\)",
+                re.DOTALL,
+            ),
+            f"{SPAWN_OBJECT_C}: allocate_object() must leave the nonzero "
+            "alloc_failures counter latched immediately before its fatal loop",
+        )
+
+    def test_object_pool_capacity_override_changes_the_compiled_header_value(self) -> None:
+        """A sourceboot-only override must change the capacity consumers see;
+        an unset build retains the portable 240-slot default."""
+        self.assertEqual(_preprocessed_object_pool_capacity(), 240)
+        self.assertEqual(
+            _preprocessed_object_pool_capacity(
+                "-DSATURN_OBJECT_POOL_CAPACITY_OVERRIDE=208"
+            ),
+            208,
         )
 
     def test_frames_sampled_incremented_once_per_game_loop_tick(self) -> None:
@@ -253,7 +354,7 @@ class ObjectPoolProbeContractTest(unittest.TestCase):
         source = _read(SPAWN_OBJECT_C)
         mutated = CURRENT_ALLOCATED_INCREMENT_RE.sub("/* removed */", source, count=1)
         self.assertNotEqual(mutated, source)
-        branches = _target_saturn_branches(mutated)
+        branches = _target_saturn_branches(_function_body(mutated, "try_allocate_object"))
         self.assertFalse(
             any(
                 CURRENT_ALLOCATED_INCREMENT_RE.search(branch)
@@ -270,7 +371,7 @@ class ObjectPoolProbeContractTest(unittest.TestCase):
         source = _read(SPAWN_OBJECT_C)
         mutated = CURRENT_ALLOCATED_DECREMENT_RE.sub("/* removed */", source, count=1)
         self.assertNotEqual(mutated, source)
-        branches = _target_saturn_branches(mutated)
+        branches = _target_saturn_branches(_function_body(mutated, "deallocate_object"))
         self.assertFalse(
             any(CURRENT_ALLOCATED_DECREMENT_RE.search(branch) for branch in branches),
             "mutated fixture unexpectedly still contains the free-site "
@@ -283,7 +384,7 @@ class ObjectPoolProbeContractTest(unittest.TestCase):
         source = _read(SPAWN_OBJECT_C)
         mutated = ALLOC_FAILURES_INCREMENT_RE.sub("/* removed */", source, count=1)
         self.assertNotEqual(mutated, source)
-        branches = _target_saturn_branches(mutated)
+        branches = _target_saturn_branches(_function_body(mutated, "allocate_object"))
         self.assertFalse(
             any(ALLOC_FAILURES_INCREMENT_RE.search(branch) for branch in branches),
             "mutated fixture unexpectedly still contains the exhaustion-path "

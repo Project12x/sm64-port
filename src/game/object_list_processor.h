@@ -23,7 +23,11 @@
 /**
  * The maximum number of objects that can be loaded at once.
  */
+#ifdef SATURN_OBJECT_POOL_CAPACITY_OVERRIDE
+#define OBJECT_POOL_CAPACITY SATURN_OBJECT_POOL_CAPACITY_OVERRIDE
+#else
 #define OBJECT_POOL_CAPACITY 240
+#endif
 
 /**
  * Every object is categorized into an object list, which controls the order

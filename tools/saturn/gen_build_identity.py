@@ -31,6 +31,7 @@ COMPILER_CONFIG_FIELDS = (
     "atan2_variant", "demo_path", "demo_view_radius", "slave_render",
     "camera_idle_start_tick", "camera_idle_discovery", "camera_range_capture",
     "bsp_fragment_flat", "fast3d_q16_trace", "experimental_skip_geo_walk",
+    "object_pool_capacity",
 )
 ARTIFACT_HASH_FIELDS = (
     "source_hash", "route_artifact_hash", "input_artifact_hash",
@@ -142,6 +143,9 @@ def _validate_compiler_config(spec: Mapping[str, Any]) -> dict[str, int]:
         ),
         "experimental_skip_geo_walk": _boolean(
             "experimental_skip_geo_walk", spec["experimental_skip_geo_walk"]
+        ),
+        "object_pool_capacity": _integer(
+            "object_pool_capacity", spec["object_pool_capacity"], 1, 240
         ),
     }
 

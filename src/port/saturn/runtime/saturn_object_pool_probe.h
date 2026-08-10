@@ -5,8 +5,9 @@
 
 /*
  * Target-visible occupancy probe for gObjectPool (src/game/
- * object_list_processor.c, OBJECT_POOL_CAPACITY slots, 608 B/slot ==
- * 145,920 B of always-resident HWRAM .bss in every config today).
+ * object_list_processor.c, OBJECT_POOL_CAPACITY slots at 608 B/slot. The
+ * portable 240-slot fallback consumes 145,920 B of always-resident HWRAM
+ * .bss; a sealed sourceboot override may select a smaller pool.
  *
  * The port's snapshot domain already attests at most 64 live RENDERED
  * actors (SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE), but pool occupancy is not

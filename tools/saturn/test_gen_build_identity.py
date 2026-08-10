@@ -66,6 +66,7 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             "bsp_fragment_flat": 0,
             "fast3d_q16_trace": 0,
             "experimental_skip_geo_walk": 0,
+            "object_pool_capacity": 240,
             "artifacts": self.artifacts,
         }
 
@@ -128,6 +129,7 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             "cart_mbit": 16,
             "cart_stage_sectors": 5,
             "polygon_tier": 3,
+            "object_pool_capacity": 0,
         }
         for field, value in mutations.items():
             with self.subTest(field=field):
@@ -158,6 +160,7 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             "bootstrap_ticks": 1200, "cart_mbit": 64, "cart_stage_sectors": 16,
             "hot_promotion": 0, "near_clip": 0, "bsp_order": 0,
             "polygon_tier": 1, "fragment_mode": 1,
+            "object_pool_capacity": 208,
         }
         for field, value in scalar_mutations.items():
             with self.subTest(field=field):
@@ -199,6 +202,7 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             "bsp_fragment_flat": 1,
             "fast3d_q16_trace": 1,
             "experimental_skip_geo_walk": 1,
+            "object_pool_capacity": 208,
         }
         for field, value in mutations.items():
             with self.subTest(field=field):
