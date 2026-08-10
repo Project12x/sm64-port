@@ -1098,6 +1098,7 @@ identity-discovery: $(SOURCEBOOT_DISCOVERY_DEPFILES)
 	$(call sourceboot-write-path-list,$(SOURCEBOOT_DERIVED_OUTPUT_LIST),$(SOURCEBOOT_DERIVED_OUTPUTS))
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_source_closure.py" build \
 	  --root "$(ROOT)" \
+	  --dependency-base "$(CURDIR)" \
 	  --output "$(SOURCEBOOT_SOURCE_CLOSURE).tmp" \
 	  --external-output "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES).tmp" \
 	  --compiled-source-list "$(SOURCEBOOT_COMPILED_SOURCE_LIST)" \
@@ -1133,6 +1134,7 @@ verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	$(call sourceboot-write-path-list,$(SOURCEBOOT_DERIVED_OUTPUT_LIST),$(SOURCEBOOT_DERIVED_OUTPUTS))
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_source_closure.py" verify \
 	  --root "$(ROOT)" --sealed "$(SOURCEBOOT_SOURCE_CLOSURE)" \
+	  --dependency-base "$(CURDIR)" \
 	  --actual-depfile-list "$(SOURCEBOOT_ACTUAL_DEPFILE_LIST)" \
 	  --assembly-scan-depfile-list "$(SOURCEBOOT_ASSEMBLY_DEPFILE_LIST)" \
 	  --derived-output-list "$(SOURCEBOOT_DERIVED_OUTPUT_LIST)" \

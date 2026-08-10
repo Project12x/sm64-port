@@ -1032,6 +1032,20 @@
   RED at 20/21 plus one existing case-fs skip and GREEN at 21/21 plus the same
   skip. Reference: same-file close-port reuse at `b7bdb347`; no external source
   or license/notice change. Candidate A remains open pending the exact rerun.
+- Candidate A from `2bf05467` passed MSYS-path conversion, then stopped before
+  closure publication on bare `saturn_build_identity_values.inc`. Inspection
+  showed real depfiles also carry valid sourceboot-cwd rows (`main.c`, local
+  headers, and `../runtime/...`), so repository-root relative resolution was
+  not the compiler's semantics. No closure or downstream gate is claimed.
+- Closure CLI correction: `--dependency-base` is bounded inside the repository
+  and set to sourceboot `$(CURDIR)` in discovery and post-link verification.
+  Missing single-component dependencies may alias only a unique explicit
+  derived-output basename, modeling GCC `-MG` for the pre-seal identity header;
+  no match stays missing and multiple matches fail ambiguous. TDD RED: closure
+  21/22 plus existing skip and Make 10/11. GREEN: closure 22/22 plus skip and
+  Make 11/11, including ambiguity rejection. Reference: clean-room extension
+  of in-tree Task 2 derived classes/cwd semantics at `2bf05467`; no external
+  source or license/notice change. Candidate A remains open pending exact rerun.
 
 ## Task 5 review repair round 2
 

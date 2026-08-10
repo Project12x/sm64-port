@@ -119,6 +119,7 @@ def build_source_closure(
     generated_inputs: Sequence[Path],
     derived_outputs: Sequence[Path],
     external_roots: Sequence[Path],
+    dependency_base: Path | None = None,
 ) -> ClosureBuild:
     """Build a deterministic source closure from explicit and compiler inputs."""
     root = root.resolve()
@@ -127,7 +128,8 @@ def build_source_closure(
         root, derived, compiled_sources, recipe_inputs, generator_inputs, generated_inputs
     )
     records, external = _classify_dependencies(
-        root, depfiles, (), derived_outputs, external_roots, explicit
+        root, depfiles, (), derived_outputs, external_roots, explicit,
+        dependency_base,
     )
     document = {"schema": "sm64-saturn-source-closure-v2", "inputs": _record_rows(root, records)}
     canonical = canonical_json_bytes(document)
@@ -148,6 +150,7 @@ def verify_source_closure(
     external_roots: Sequence[Path],
     expected_external_dependencies: Sequence[Path],
     release_mode: bool,
+    dependency_base: Path | None = None,
 ) -> tuple[Path, ...]:
     """Reject post-build source, dependency, external, or release-tree drift."""
     root = root.resolve()
@@ -155,7 +158,8 @@ def verify_source_closure(
     sealed_rows = _sealed_rows(root, sealed)
     explicit = _explicit_classes_from_sealed(sealed_rows)
     actual_rows, actual_external = _classify_dependencies(
-        root, actual_depfiles, assembly_scan_depfiles, derived_outputs, external_roots, explicit
+        root, actual_depfiles, assembly_scan_depfiles, derived_outputs,
+        external_roots, explicit, dependency_base,
     )
     if set(actual_rows) != set(sealed_rows) or any(
         _owners(actual_rows.get(key)) != _owners(sealed_rows.get(key))
@@ -246,6 +250,7 @@ def load_external_dependency_handoff(path: Path) -> tuple[Path, ...]:
 
 def _add_common_paths(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--dependency-base", type=Path)
     parser.add_argument("--derived-output", type=Path, action="append", default=[])
     parser.add_argument("--external-root", type=Path, action="append", default=[])
 
@@ -296,6 +301,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _merge_path_arguments(args.generated_input, args.generated_input_list),
             _merge_path_arguments(args.derived_output, args.derived_output_list),
             args.external_root,
+            dependency_base=args.dependency_base,
         )
         handoff = external_dependency_handoff_bytes(built.external_dependencies)
         write_if_changed(args.output, built.canonical)
@@ -311,6 +317,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.external_root,
             load_external_dependency_handoff(args.expected_external),
             release_mode=args.mode == "release",
+            dependency_base=args.dependency_base,
         )
     return 0
 
@@ -372,12 +379,18 @@ def _classify_dependencies(
     derived_outputs: Sequence[Path],
     external_roots: Sequence[Path],
     explicit: Mapping[str, str] | None = None,
+    dependency_base: Path | None = None,
 ) -> tuple[dict[tuple[str, str], dict[str, Any]], set[Path]]:
     """Classify depfile inputs; external inputs are deliberately not serialized."""
     root = root.resolve()
     derived = _normalized_derived_outputs(root, derived_outputs)
     explicit = dict(explicit or {})
     roots = _external_roots(root, external_roots)
+    base = root if dependency_base is None else _host_transport_path(
+        os.fspath(dependency_base)
+    ).resolve()
+    if not _is_within(base, root):
+        raise ValueError(f"dependency base escapes repository: {base}")
     records: dict[tuple[str, str], dict[str, Any]] = {}
     for path, label in explicit.items():
         if path in derived:
@@ -393,9 +406,9 @@ def _classify_dependencies(
             depfile = root / rendered_depfile
             _require_file(depfile, f"{owner_prefix} depfile")
             for dependency in parse_make_depfile(depfile.read_text(encoding="utf-8")):
-                candidate = _resolve_dependency(root, dependency)
+                candidate = _resolve_dependency(base, dependency)
                 try:
-                    rendered = _canonical_repo_path(root, dependency)
+                    rendered = _canonical_repo_path(root, candidate)
                 except ValueError:
                     external_path = candidate.resolve()
                     _require_file(external_path, "external dependency")
@@ -403,17 +416,32 @@ def _classify_dependencies(
                         raise ValueError(f"unclassified external dependency: {external_path}")
                     external.add(external_path)
                     continue
+                if not candidate.is_file():
+                    alias = _derived_dependency_alias(dependency, derived)
+                    if alias is not None:
+                        rendered = alias
                 if rendered in derived:
                     continue
-                _require_file(root / rendered, "compiler dependency")
+                _require_file(candidate, "compiler dependency")
                 label = explicit.get(rendered, "header")
                 _add_record(records, rendered, label, "compiler")
     return records, external
 
 
-def _resolve_dependency(root: Path, dependency: str | Path) -> Path:
+def _resolve_dependency(base: Path, dependency: str | Path) -> Path:
     candidate = _host_transport_path(os.fspath(dependency))
-    return candidate if candidate.is_absolute() else root / candidate
+    return candidate if candidate.is_absolute() else base / candidate
+
+
+def _derived_dependency_alias(dependency: str | Path,
+                              derived: set[str]) -> str | None:
+    candidate = _host_transport_path(os.fspath(dependency))
+    if candidate.is_absolute() or len(candidate.parts) != 1:
+        return None
+    matches = sorted(path for path in derived if Path(path).name == candidate.name)
+    if len(matches) > 1:
+        raise ValueError(f"ambiguous derived dependency alias: {dependency}")
+    return matches[0] if matches else None
 
 
 def _canonical_repo_path(root: Path, value: str | Path) -> str:

@@ -307,6 +307,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertIn("$(call sourceboot-discover-sx-dependency", makefile)
         self.assertIn("--actual-depfile", makefile)
         self.assertIn("--assembly-scan-depfile", makefile)
+        self.assertEqual(makefile.count('--dependency-base "$(CURDIR)"'), 2)
 
     def test_compiled_source_handoff_resolves_sourceboot_relative_paths(self) -> None:
         makefile = self.sourceboot_makefile()

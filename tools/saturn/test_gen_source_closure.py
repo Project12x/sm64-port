@@ -99,6 +99,35 @@ class SourceClosureTests(unittest.TestCase):
             built.document, sort_keys=True, separators=(",", ":"), ensure_ascii=True
         ).encode("ascii") + b"\n")
 
+    def test_dependency_base_resolves_local_headers_and_unique_derived_alias(self) -> None:
+        sourceboot = self.root / "src/port/saturn/sourceboot"
+        sourceboot.mkdir(parents=True)
+        main = self.write("src/port/saturn/sourceboot/main.c", "main\n")
+        self.write("src/port/saturn/sourceboot/source_cart.h", "cart\n")
+        depfile = self.write(
+            "obj/local.d",
+            "main.o: main.c source_cart.h saturn_build_identity_values.inc\n",
+        )
+        derived = self.root / "build/generated/saturn_build_identity_values.inc"
+        built = build_source_closure(
+            self.root, (main,), (depfile,), (), (), (), (derived,), (),
+            dependency_base=sourceboot,
+        )
+        paths = {row["path"] for row in built.document["inputs"]}
+        self.assertIn("src/port/saturn/sourceboot/main.c", paths)
+        self.assertIn("src/port/saturn/sourceboot/source_cart.h", paths)
+        self.assertNotIn("build/generated/saturn_build_identity_values.inc", paths)
+
+        with self.assertRaisesRegex(ValueError, "ambiguous derived dependency alias"):
+            build_source_closure(
+                self.root, (main,), (depfile,), (), (), (),
+                (
+                    derived,
+                    self.root / "build/other/saturn_build_identity_values.inc",
+                ),
+                (), dependency_base=sourceboot,
+            )
+
     def test_explicit_duplicate_and_case_colliding_records_fail_closed(self) -> None:
         for sources, recipes, message in (
             ((self.root / "src/main.c", self.root / "src/main.c"), (), "duplicate"),

@@ -92,6 +92,15 @@
 
 ### Fixed
 
+- Bound compiler-dependency interpretation to the sourceboot Make working
+  directory and added a unique, fail-closed alias for explicitly declared
+  derived outputs. Real depfiles contain valid local rows such as `main.c`,
+  `source_cart.h`, and `../runtime/...`; discovery previously treated those as
+  repository-root paths. GCC `-MG` also emits the not-yet-sealed identity
+  include by basename, so a unique basename may now resolve only to an exact
+  declared derived output, while duplicate candidates are rejected. The same
+  base is used for pre-link discovery and post-link rediscovery.
+
 - Applied the existing Windows/MSYS drive-path transport normalization to
   compiler dependencies parsed inside depfiles, not only to canonical path-list
   rows. Windows Python otherwise interpreted GCC's `/d/...` spelling as

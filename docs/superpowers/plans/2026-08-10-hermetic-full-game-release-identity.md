@@ -1761,6 +1761,25 @@ same-file close-port reuse of `_host_transport_path` at `b7bdb347`; no external
 source, license, or notice change. No closure or downstream target/release gate
 is claimed pending the exact rerun.
 
+The run from `2bf05467` progressed through MSYS dependency conversion, then
+stopped before closure publication on the unresolved generated identity include
+`saturn_build_identity_values.inc`. Real depfiles also contain valid
+sourceboot-working-directory rows including `main.c`, `source_cart.h`, and
+`../runtime/...`; repository-root interpretation was therefore wrong beyond
+the single derived file. The closure CLI now accepts an explicit
+`--dependency-base`, bounded inside the repository and supplied as sourceboot
+`$(CURDIR)` for both discovery and post-link rediscovery. Relative existing
+dependencies resolve from that base. A missing single-component dependency may
+alias only one explicitly declared derived output with the same basename,
+which models GCC `-MG` without materializing the pre-seal identity; zero matches
+remain missing and multiple matches fail as ambiguous. TDD was RED in both
+suites (closure 21/22 plus existing skip; Make 10/11), then GREEN at closure
+22/22 plus the same skip and Make 11/11, including ambiguous-alias rejection.
+Reference record: clean-room extension of the existing Task 2 explicit-derived
+class and sourceboot Make working-directory semantics at `2bf05467`; no external
+source or license/notice change. Closure and downstream gates remain open until
+the exact rerun succeeds.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
