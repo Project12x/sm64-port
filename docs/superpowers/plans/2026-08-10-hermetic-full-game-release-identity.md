@@ -1342,13 +1342,15 @@ Reviews must cover verify-before-I/O, CUE/ISO binding, no overwrite/delete behav
 - Produces measurement CLI `--measure-audit-report PATH`, valid only with `--audit-route-oracle` and without `--audit-contract`.
 - Produces `seal_v4_contract(measurement_path: Path, release_manifest_path: Path, output: Path) -> bytes`, refusing to overwrite an existing output.
 
-**Live status (2026-08-10):** `source-complete` in behavior commit `db4c620d`
-(`feat(saturn): add release-bound native math audit v4`). Parser/preflight,
+**Live status (2026-08-10):** `source-complete` in behavior commits `db4c620d`
+(`feat(saturn): add release-bound native math audit v4`) and repair `9fcc9632`
+(`fix(saturn): harden audit v4 publication`). Parser/preflight,
 explicitly unsealed measurement, one-shot sealing, focused tests, the full
 verifier run, Task 7 release-manifest adjacency, and Python compilation are
 implemented. Independent specification/code-quality reviews remain
-controller-owned; the first verdict is `Needs fixes`, and repair round 1 is
-active, so Task 8 is not `complete`. No real measurement,
+controller-owned; repair round 1 is source-complete and scoped rereview remains
+open, so the first `Needs fixes` verdict remains effective and Task 8 is not
+`complete`. No real measurement,
 v4 contract, or pinned digest was created; Task 9 still owns those exact-target
 steps. Historical v2/v3 bytes and every target/release-evidence gate remain
 open and unchanged.
@@ -1382,8 +1384,15 @@ stage/fsync and publish with an identity-safe exclusive primitive. Measurement
 output must reject aliases with every input before verification or subprocess
 execution. `--release-manifest` must be accepted only for v4/measurement and
 rejected in ordinary/object-reference/v2/v3 modes so historical semantics stay
-unchanged. Repair round 1 and scoped rereview remain open; no target gate is
-affected.
+unchanged. Repair `9fcc9632` now writes/fsyncs a private same-directory file,
+publishes it with Task 7's reviewed platform-dispatched atomic no-replace
+rename, and retains ambiguous private state with diagnostics instead of
+unlinking any pathname. Measurement rejects exact, normalized/casefold,
+symlink, and hardlink aliases of every read input before release verification
+or tools. Release manifests are legal only for parsed v4 or measurement.
+Focused repair tests pass 11 sealer cases; the full verifier is 239/240 with
+only the preserved null-camera failure; Task 7 manifest/staging adjacency is
+46/46. Scoped rereview remains open; no target gate is affected.
 
 - [x] **Step 1: Write failing v4 parser, preflight, and measurement tests**
 

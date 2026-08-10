@@ -661,10 +661,11 @@
 
 - Initial implementation base: `15265084` (`docs(saturn): start release-bound
   audit v4`), following Task 7 review closeout `a07ffbe1`.
-- Status: `source-complete` in behavior commit `db4c620d`
-  (`feat(saturn): add release-bound native math audit v4`). Controller-owned
-  independent specification and code-quality reviews remain open, so Task 8
-  is not `complete`.
+- Status: `source-complete` in behavior commits `db4c620d`
+  (`feat(saturn): add release-bound native math audit v4`) and `9fcc9632`
+  (`fix(saturn): harden audit v4 publication`). The first independent review
+  returned `Needs fixes`; repair round 1 is source-complete and controller-owned
+  rereview remains open, so Task 8 is not `complete`.
 - Scope boundary: no real measurement, real v4 contract, or pinned digest in
   Task 8. Historical v2/v3 contract bytes and invocation behavior must remain
   unchanged. Task 9 owns target measurement and pinning.
@@ -702,6 +703,56 @@
 - Open gates: Task 8 independent reviews, real target build, reproducibility, audit
   v4 measurement/contract, complete-package inventory, release evidence,
   20,100-frame smoke, visual, and manual play.
+- First independent review: one Critical and two Important findings. The v4
+  sealer exposes partial final bytes and raceably unlinks by path on failure;
+  measurement output lacks fail-before-tool alias rejection against its inputs;
+  and `--release-manifest` is accepted in historical modes where it silently
+  changes the target. Repair round 1 is implemented and rereview remains open.
+
+## Task 8 review repair round 1
+
+- Status: `source-complete` in behavior commit `9fcc9632`; this source-status
+  update is recorded in the following docs commit. The first `Needs fixes`
+  verdict remains effective until controller-owned scoped rereview clears all
+  three findings.
+- Reference/reuse: directly reused Task 7's in-tree, reviewed
+  `DirectoryNamespaceGuard` and platform-dispatched `_rename_noreplace`
+  primitive from `release_manifest.py` / `stage_saturn_release.py` at closeout
+  `a07ffbe1`. Reuse mode is same-project close-port/dependency; no external
+  source, license, attribution, or notice obligation was added.
+- TDD RED: the expanded sealer suite had six review-specific failures/errors:
+  final-path visibility during partial/crash writes, absent publish-race and
+  rename-replacement retention, and two input-hardlink alias cases. The CLI
+  matrix reached Task 7 verification in ordinary/v2/v3 modes and returned the
+  wrong object-reference-only diagnostic. Alias cases were then unmasked from
+  unrelated integrity pins and proved premature release verification.
+- TDD GREEN: sealer passes 11/11, including partial/slow/crash/concurrent-reader,
+  file/directory fsync, preexisting output, publish race, rename-replacement
+  retention, and input alias contracts. Measurement rejects exact aliases for
+  ELF, baseline, route oracle, audit route oracle, audit contract, and release
+  manifest plus `..`, Windows casefold spelling, hardlink, and symlink where
+  supported; input bytes remain unchanged and Task 7 verification/SH tools are
+  not called. Ordinary, object-reference-only, v2, and v3 release-manifest
+  combinations fail before tool activity; v4 and measured-unsealed behavior
+  remains release-bound to identity v2 snapshots.
+- Verification: full verifier is 240 tests, 239 pass, with only the preserved
+  `test_pinned_bob_null_camera_trigger_proof_removes_only_exact_two_sites`
+  failure. Task 7 release-manifest and staging adjacency pass 46/46; the first
+  sandboxed attempts errored before assertions because Windows ancestor handle
+  access was denied, and the approved unsandboxed rerun passed. Changed
+  production scripts pass `py_compile`; scoped cached diff/check was clean.
+- Historical immutability: audit v2 remains 507 bytes / SHA-256
+  `87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2`;
+  audit v3 remains 416 bytes / SHA-256
+  `80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5`.
+  `GOAL_AUDIT_CONTRACT_V4_SHA256` remains `None`; no measurement, real v4
+  contract, target build, emulator run, or target evidence was created.
+- Repair self-review: no remaining direct final-path write/unlink, ambiguous
+  cleanup, output/input alias, release-manifest mode, mutable-original ELF, or
+  snapshot-lifetime finding. Controller rereview plus real target build,
+  reproducibility, audit-v4 measurement/contract, complete-package inventory,
+  release evidence, 20,100-frame smoke, visual, and manual-play gates remain
+  open.
 
 ## Task 5 review repair round 2
 
