@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -136,6 +137,64 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field):
                     identity.build_identity(spec)
 
+    def test_v2_root_descriptors_reject_unknown_or_case_colliding_keys(self) -> None:
+        for field in ("target_profile", "package_set", "toolchain_attestation"):
+            for defect, extra_key in (("unknown", "extra"), ("collision", "PATH")):
+                with self.subTest(field=field, defect=defect):
+                    spec = copy.deepcopy(self.v2_spec)
+                    spec[field][extra_key] = "not-part-of-the-descriptor"
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "unknown|case-colliding",
+                    ):
+                        identity.build_identity(spec)
+
+    def test_v1_artifact_descriptors_preserve_extra_key_compatibility(self) -> None:
+        spec = copy.deepcopy(self.v1_spec)
+        spec["artifacts"]["source_hash"]["legacy_note"] = "ignored"
+        self.assertEqual(
+            identity.build_identity(spec).raw,
+            identity.build_identity(self.v1_spec).raw,
+        )
+
+    def test_cli_rejects_duplicate_or_case_colliding_json_keys(self) -> None:
+        serialized = json.dumps(self.v2_spec)
+        descriptor = json.dumps(self.v2_spec["target_profile"])
+        ambiguous_descriptors = {
+            "duplicate": descriptor.replace(
+                '"sha256":',
+                '"sha256": "00", "sha256":',
+                1,
+            ),
+            "case-collision": descriptor[:-1] + ', "PATH": "shadow"}',
+            "unknown": descriptor[:-1] + ', "extra": true}',
+        }
+        documents = {
+            "duplicate-top-level": serialized.replace(
+                '"identity_version": 2',
+                '"identity_version": 2, "identity_version": 2',
+                1,
+            ),
+            **{
+                defect: serialized.replace(descriptor, changed, 1)
+                for defect, changed in ambiguous_descriptors.items()
+            },
+        }
+        for defect, document in documents.items():
+            with self.subTest(defect=defect):
+                spec_path = self.root / f"ambiguous-{defect}.json"
+                spec_path.write_text(document, encoding="utf-8")
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    ["gen_build_identity.py", "--spec", str(spec_path)],
+                ):
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "duplicate|case-colliding|unknown",
+                    ):
+                        identity.main()
+
     def test_v2_effective_config_covers_all_new_roots(self) -> None:
         self.assertEqual(
             identity.V2_ROOT_DESCRIPTOR_FIELDS,
@@ -207,6 +266,51 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             hashlib.sha256(canonical).hexdigest(),
             manifest["identity"]["effective_config_hash"],
         )
+
+    def test_cli_manifest_bytes_are_compact_canonical_json(self) -> None:
+        for version, spec in ((1, self.v1_spec), (2, self.v2_spec)):
+            with self.subTest(version=version):
+                spec_path = self.root / f"identity-v{version}-canonical-spec.json"
+                output_path = self.root / f"identity-v{version}-canonical.json"
+                spec_path.write_text(json.dumps(spec), encoding="utf-8")
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "gen_build_identity.py",
+                        "--spec",
+                        str(spec_path),
+                        "--output-json",
+                        str(output_path),
+                    ],
+                ):
+                    self.assertEqual(identity.main(), 0)
+                expected = (
+                    json.dumps(
+                        identity.output_manifest(identity.build_identity(spec)),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=True,
+                    ).encode("ascii")
+                    + b"\n"
+                )
+                actual = output_path.read_bytes()
+                self.assertEqual(actual, expected)
+                self.assertTrue(actual.endswith(b"\n"))
+                self.assertFalse(actual.endswith(b"\n\n"))
+
+    def test_common_prefix_rejects_crossed_supported_version_size_pairs(self) -> None:
+        v1 = bytearray(identity.build_identity(self.v1_spec).raw)
+        v1[4:6] = (2).to_bytes(2, "big")
+        v2 = bytearray(identity.build_identity(self.v2_spec).raw)
+        v2[4:6] = (1).to_bytes(2, "big")
+        for raw, pair in ((v1, "(2, 404)"), (v2, "(1, 500)")):
+            with self.subTest(pair=pair):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"unsupported version/size pair {re.escape(pair)}",
+                ):
+                    identity.parse_identity(bytes(raw))
 
     def test_emits_fixed_width_big_endian_versioned_identity(self) -> None:
         built = identity.build_identity(self.spec)

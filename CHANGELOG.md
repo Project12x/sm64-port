@@ -39,6 +39,14 @@
 
 ### Fixed
 
+- Hardened Saturn identity v2 after review. ELF identity probes now resolve
+  symbol metadata and extract PT_LOAD bytes from one immutable file snapshot,
+  v2 root descriptors and recursive CLI JSON reject unknown, duplicate, or
+  case-colliding keys, and identity manifests use compact canonical JSON with
+  exactly one trailing newline. This closes mixed-generation ELF evidence and
+  ambiguous or non-reproducible identity inputs while preserving historical v1
+  binary and programmatic descriptor behavior.
+
 - Hardened Saturn toolchain attestation after review: component version strings
   and GCC `--version` output now reject embedded POSIX or Windows absolute
   paths before canonical serialization or atomic publication. This prevents a

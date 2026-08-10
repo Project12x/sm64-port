@@ -246,6 +246,43 @@ def build_identity_fixture(root: Path, version: int) -> bytes:
 
 
 class ThroughputCaptureTests(unittest.TestCase):
+    def test_build_identity_probe_uses_one_snapshot_if_elf_path_changes(self) -> None:
+        class MutatingElfPath:
+            def __init__(self, path: Path, replacement: bytes) -> None:
+                self.path = path
+                self.replacement = replacement
+                self.read_count = 0
+
+            def read_bytes(self) -> bytes:
+                self.read_count += 1
+                snapshot = self.path.read_bytes()
+                if self.read_count == 1:
+                    self.path.write_bytes(self.replacement)
+                return snapshot
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original_raw = build_identity_fixture(root / "original", 2)
+            replacement_bytes = bytearray(original_raw)
+            replacement_bytes[-1] ^= 1
+            replacement_raw = bytes(replacement_bytes)
+            identity.validate_identity(replacement_raw)
+            elf = root / "mutable.elf"
+            replacement_elf = root / "replacement.elf"
+            symbols = [("saturn_build_identity", BOOT_ADDRESS, 500)]
+            elf32_with_symbols(elf, symbols, text_payload=original_raw)
+            elf32_with_symbols(
+                replacement_elf,
+                symbols,
+                text_payload=replacement_raw,
+            )
+            changing_path = MutatingElfPath(elf, replacement_elf.read_bytes())
+            probe = capture.build_elf_build_identity_probe(changing_path)
+
+        self.assertEqual(changing_path.read_count, 1)
+        self.assertEqual(probe["expected_bytes"], list(original_raw))
+        self.assertEqual(probe["identity"]["version"], 2)
+
     def test_build_identity_probe_and_target_read_use_declared_v1_or_v2_size(self) -> None:
         class ExactIdentityClient:
             def __init__(self, raw: bytes) -> None:

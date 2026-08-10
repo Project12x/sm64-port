@@ -141,7 +141,12 @@ def _elf32_load_segments(data: bytes, endian: str) -> list[dict[str, int]]:
 def _resolve_symbols(
     elf: Path, requirements: dict[str, int | tuple[int, ...]]
 ) -> dict[str, dict[str, int]]:
-    data = elf.read_bytes()
+    return _resolve_symbols_from_bytes(elf.read_bytes(), requirements)
+
+
+def _resolve_symbols_from_bytes(
+    data: bytes, requirements: dict[str, int | tuple[int, ...]]
+) -> dict[str, dict[str, int]]:
     endian, sections = _elf32_sections(data)
     found: dict[str, list[dict[str, int]]] = {name: [] for name in requirements}
     for section in sections:
@@ -218,7 +223,10 @@ def resolve_build_identity_symbol(
 
 
 def _elf_symbol_bytes(elf: Path, symbol: dict[str, int]) -> bytes:
-    data = elf.read_bytes()
+    return _elf_symbol_bytes_from_data(elf.read_bytes(), symbol)
+
+
+def _elf_symbol_bytes_from_data(data: bytes, symbol: dict[str, int]) -> bytes:
     endian, _sections = _elf32_sections(data)
     address = int(symbol["address"])
     size = int(symbol["size"])
@@ -231,11 +239,13 @@ def _elf_symbol_bytes(elf: Path, symbol: dict[str, int]) -> bytes:
 
 
 def build_elf_build_identity_probe(elf: Path) -> dict[str, Any]:
-    symbols = _resolve_symbols(
-        elf, {BUILD_IDENTITY_SYMBOL: build_identity.SUPPORTED_IDENTITY_SIZES}
+    elf_snapshot = elf.read_bytes()
+    symbols = _resolve_symbols_from_bytes(
+        elf_snapshot,
+        {BUILD_IDENTITY_SYMBOL: build_identity.SUPPORTED_IDENTITY_SIZES},
     )
     symbol = resolve_build_identity_symbol(symbols)
-    raw = _elf_symbol_bytes(elf, symbol)
+    raw = _elf_symbol_bytes_from_data(elf_snapshot, symbol)
     parsed = build_identity.validate_identity(raw)
     return {
         "address": int(symbol["address"]),

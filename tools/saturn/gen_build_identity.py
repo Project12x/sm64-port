@@ -183,9 +183,36 @@ def _validate_features(features: Any) -> tuple[dict[str, int], int]:
     return canonical, bits
 
 
-def _sha256_file(field: str, descriptor: Any) -> str:
+def _validate_exact_descriptor_keys(
+    field: str, descriptor: Mapping[Any, Any]
+) -> None:
+    folded: dict[str, str] = {}
+    for key in descriptor:
+        if not isinstance(key, str):
+            raise ValueError(f"{field} descriptor has unknown non-string key")
+        folded_key = key.casefold()
+        if folded_key in folded and folded[folded_key] != key:
+            raise ValueError(
+                f"{field} descriptor has case-colliding keys "
+                f"{folded[folded_key]!r} and {key!r}"
+            )
+        folded[folded_key] = key
+    expected = {"path", "sha256"}
+    missing = sorted(expected - set(descriptor))
+    unknown = sorted(set(descriptor) - expected)
+    if missing or unknown:
+        raise ValueError(
+            f"{field} descriptor key mismatch; missing={missing}, unknown={unknown}"
+        )
+
+
+def _sha256_file(
+    field: str, descriptor: Any, *, exact_descriptor: bool = False
+) -> str:
     if not isinstance(descriptor, Mapping):
         raise ValueError(f"{field} artifact descriptor is missing")
+    if exact_descriptor:
+        _validate_exact_descriptor_keys(field, descriptor)
     path_value = descriptor.get("path")
     declared = descriptor.get("sha256")
     if not isinstance(path_value, str) or not path_value:
@@ -199,6 +226,27 @@ def _sha256_file(field: str, descriptor: Any) -> str:
     if actual != declared.lower():
         raise ValueError(f"{field} artifact SHA-256 is stale: expected {declared}, got {actual}")
     return actual
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    folded: dict[str, str] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        folded_key = key.casefold()
+        if folded_key in folded:
+            raise ValueError(
+                f"case-colliding JSON keys: {folded[folded_key]!r} and {key!r}"
+            )
+        result[key] = value
+        folded[folded_key] = key
+    return result
+
+
+def parse_json_document(document: str) -> Any:
+    """Parse JSON while rejecting ambiguity at every object depth."""
+    return json.loads(document, object_pairs_hook=_strict_json_object)
 
 
 def canonical_effective_config(document: Mapping[str, Any]) -> bytes:
@@ -234,7 +282,11 @@ def build_identity(spec: Mapping[str, Any]) -> BuiltIdentity:
     root_hashes: dict[str, str] = {}
     if identity_version == IDENTITY_V2_VERSION:
         root_hashes = {
-            hash_field: _sha256_file(descriptor_field, spec.get(descriptor_field))
+            hash_field: _sha256_file(
+                descriptor_field,
+                spec.get(descriptor_field),
+                exact_descriptor=True,
+            )
             for descriptor_field, hash_field in V2_ROOT_HASH_FIELDS.items()
         }
     canonical_object = {
@@ -513,7 +565,7 @@ def main() -> int:
         help="require one spec scalar/feature to match its build-wrapper value",
     )
     args = parser.parse_args()
-    spec = json.loads(args.spec.read_text(encoding="utf-8"))
+    spec = parse_json_document(args.spec.read_text(encoding="utf-8"))
     validate_spec_expectations(spec, _parse_expectations(args.expect))
     built = build_identity(spec)
     label = identity_label(built.raw)
@@ -529,7 +581,7 @@ def main() -> int:
         _write(args.output_c_include, emit_c_include(built.raw))
     if args.output_json:
         manifest = output_manifest(built)
-        _write(args.output_json, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+        _write(args.output_json, canonical_effective_config(manifest) + b"\n")
     if args.output_label:
         _write(args.output_label, label + "\n")
     if not any((args.output_binary, args.output_c_include, args.output_json,
