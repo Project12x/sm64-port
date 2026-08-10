@@ -1080,8 +1080,13 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 - Produces: `compare_release_manifests(first: Path, second: Path) -> dict[str, Any]`, which verifies both manifests and requires identical canonical identity inputs and output bytes while ignoring their host locations.
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
-**Live status (2026-08-10):** `source-complete`; the behavior commit and
-controller-owned independent reviews remain pending. Focused TDD covers
+**Live status (2026-08-10):** `source-complete` in behavior commit `7195fc48`;
+source status is recorded by this documentation commit, while controller-owned
+independent reviews remain pending. Fresh post-commit host verification passes
+all seven exact suites at
+9 + 4 + 40 + 10 + 3 + 7 + 7 = 80 tests and adjacent identity/bootstrap/boot-
+trace/route-view suites at 21 + 15 + 16 + 1 = 53 tests, with zero skips or
+failures; all six changed production scripts also compile. Focused TDD covers
 canonical root-neutral artifact sealing, strict input/output/ELF/CUE
 verification, relocated comparison, profile-neutral verify-before-copy staging,
 v1/v2 capture identity binding, v2 manifest-owned pool capacity, report
@@ -1100,6 +1105,15 @@ was checked against pinned `yaul-org/libyaul` commit
 `6012f79f237773378c8014e70d8998ad95a38d98`, MIT license,
 `libyaul/build/build.post.iso-cue.mk` and `build.post.bin.mk`. No external
 source was copied.
+
+Final self-review found and TDD-corrected two fail-closed gaps before commit:
+malformed canonical source-closure rows now fail schema validation rather than
+surfacing only as a downstream digest mismatch, and the explicit v1 occupancy
+compatibility spec must reproduce the exact ELF identity bytes. No further
+source finding remains. One initial adjacent command named two tests
+incorrectly and was discarded; the corrected fail-fast rerun is the 53-test
+result above. Step 8 remains open only for the controller-owned specification
+and code-quality reviews and their review-closeout status update.
 
 - [x] **Step 1: Write failing release and staging tests**
 
