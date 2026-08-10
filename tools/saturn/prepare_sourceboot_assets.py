@@ -154,6 +154,24 @@ def verify_existing_targets(root: Path, targets: list[str]) -> None:
             ) from exc
 
 
+def write_path_list(path: Path, root: Path, targets: list[str]) -> None:
+    """Publish the verified target inventory in the closure's strict format."""
+    values = [(root / target).resolve(strict=True).as_posix() for target in targets]
+    if len(values) != len(set(values)):
+        raise ValueError("generated source asset path list contains duplicates")
+    folded = [value.casefold() for value in values]
+    if len(folded) != len(set(folded)):
+        raise ValueError("generated source asset path list contains case collisions")
+    rows = sorted(values, key=lambda value: value.encode("utf-8"))
+    contents = "sm64-saturn-path-list-v1\n" + "".join(
+        f"{value}\n" for value in rows
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.tmp")
+    temporary.write_text(contents, encoding="utf-8", newline="\n")
+    temporary.replace(path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
@@ -162,7 +180,11 @@ def main() -> int:
     parser.add_argument("--define", action="append", default=[])
     parser.add_argument("--required", action="append", default=[])
     parser.add_argument("--verify-existing", action="store_true")
+    parser.add_argument("--path-list", type=Path)
     args = parser.parse_args()
+
+    if args.path_list is not None and not args.verify_existing:
+        parser.error("--path-list requires --verify-existing")
 
     root = args.root.resolve()
     sources = [root / source for source in args.source]
@@ -172,6 +194,8 @@ def main() -> int:
     ))
     if args.verify_existing:
         verify_existing_targets(root, targets)
+    if args.path_list is not None:
+        write_path_list(args.path_list, root, targets)
     print(" ".join(targets))
     return 0
 

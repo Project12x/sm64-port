@@ -1960,6 +1960,28 @@ MIT libyaul commit `6012f79f...` dependency semantics, inspected
 restart at the resulting common source commit; closure, release, and
 reproducibility gates remain open.
 
+Candidate A from `361d27ad` published identity tag
+`id-ed9d802a7e9609df`, passed sealed-versus-actual external closure equality,
+compiled, linked, packaged, and reached release cleanliness. Cleanliness then
+rejected `build/us_pc/actors/amp/amp_body.rgba16.inc.c` as untracked because
+compiler discovery had classed the verified copied prerequisite as a generic
+header: the exact `build/us_pc` target set selected by
+`prepare_sourceboot_assets.py` was verified but never handed to source-closure
+classification. No release manifest or reproducibility gate is claimed.
+Source asset preparation now atomically emits the verified selected targets in
+canonical `sm64-saturn-path-list-v1` form, and discovery consumes that bounded
+list as explicit `generated-input` records. Only generated-input records under
+`build/` retain the existing Git exception; dirty or untracked checked-in
+inputs still fail, and every generated asset byte remains closure-hashed and
+post-link-rehashed while the transport list itself stays outside identity.
+Focused TDD was RED 0/2 and GREEN 2/2; combined hermetic Make and source-
+closure coverage is GREEN 38/38 with one existing case-filesystem skip,
+including explicit generated-input mutation rejection. Reference record:
+same-repository close-port of the strict path-list boundary already used by
+`extract_assets.py` and `gen_source_closure.py`; no external source, copied
+bytes, license, or notice change. Candidate A must restart from the resulting
+common source commit; release and reproducibility gates remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

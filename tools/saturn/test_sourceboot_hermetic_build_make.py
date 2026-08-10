@@ -273,6 +273,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             "--source", "actor.c",
             "--required", "build/us_pc/include/text_strings.h",
             "--verify-existing",
+            "--path-list", os.fspath(root / "asset-inputs-v1.txt"),
         ]
         verified = subprocess.run(
             [os.sys.executable, *command], check=False, capture_output=True, text=True
@@ -284,6 +285,14 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
                 "build/us_pc/actors/test/texture.rgba16.inc.c",
                 "build/us_pc/include/text_strings.h",
             ],
+        )
+        self.assertEqual(
+            (root / "asset-inputs-v1.txt").read_bytes(),
+            (
+                "sm64-saturn-path-list-v1\n"
+                f"{target.resolve().as_posix()}\n"
+                f"{required.resolve().as_posix()}\n"
+            ).encode("utf-8"),
         )
 
         required.unlink()
@@ -450,6 +459,14 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertIn("--compiled-source-list", result.stdout)
         self.assertIn("--depfile-list", result.stdout)
         self.assertIn("--derived-output-list", result.stdout)
+        self.assertIn(
+            '--generated-input-list "$(SOURCEBOOT_PC_ASSET_LIST)"',
+            self.sourceboot_makefile(),
+        )
+        self.assertIn(
+            '--path-list "$(SOURCEBOOT_PC_ASSET_LIST)"',
+            self.sourceboot_makefile(),
+        )
         self.assertNotIn("--compiled-source \"", result.stdout)
         self.assertNotIn("--depfile \"", result.stdout)
 

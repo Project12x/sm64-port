@@ -293,6 +293,7 @@ SOURCEBOOT_BOB_SKY := $(SOURCEBOOT_GENERATED)/bob_sky_rgb1555.bin
 SOURCEBOOT_BOB_SKY_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_sky_manifest.json
 SOURCEBOOT_EXTRACTED_ASSET_ROOT := $(SOURCEBOOT_GENERATED)/extracted-assets
 SOURCEBOOT_EXTRACTED_ASSET_LIST := $(SOURCEBOOT_GENERATED)/extracted-assets-v1.txt
+SOURCEBOOT_PC_ASSET_LIST := $(SOURCEBOOT_GENERATED)/pc-asset-inputs-v1.txt
 SOURCEBOOT_MARIO_TEXTURE_DIR := $(ROOT)/build/saturn/marioturntable/generated
 SOURCEBOOT_MARIO_TEXTURE_HEADER := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.h
 SOURCEBOOT_MARIO_TEXTURE_REPORT := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.json
@@ -781,7 +782,8 @@ source-extracted-assets:
 source-assets: source-extracted-assets source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures source-hud-glyphs source-sky-gradient
 ifeq ($(SOURCEBOOT_RELEASE_MODE),release)
 	@$(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
-	  $(SOURCEBOOT_ASSET_PREPARE_ARGS) --verify-existing >/dev/null
+	  $(SOURCEBOOT_ASSET_PREPARE_ARGS) --verify-existing \
+	  --path-list "$(SOURCEBOOT_PC_ASSET_LIST)" >/dev/null
 else
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  $(SOURCEBOOT_ASSET_PREPARE_ARGS))"; \
@@ -790,6 +792,9 @@ else
 	fi; \
 	$(MAKE) -C "$(ROOT)" TARGET_N64=0 VERSION=us NOEXTRACT=1 \
 	  PYTHON="$(SOURCEBOOT_PYTHON)" $$targets
+	@$(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
+	  $(SOURCEBOOT_ASSET_PREPARE_ARGS) --verify-existing \
+	  --path-list "$(SOURCEBOOT_PC_ASSET_LIST)" >/dev/null
 endif
 	@printf '%s\n' 'sourceboot: local source asset includes are ready'
 
@@ -1135,6 +1140,7 @@ identity-discovery: $(SOURCEBOOT_DISCOVERY_DEPFILES)
 	  --generator-input-list "$(SOURCEBOOT_GENERATOR_INPUT_LIST)" \
 	  --generated-input-list "$(SOURCEBOOT_GENERATED_INPUT_LIST)" \
 	  --generated-input-list "$(SOURCEBOOT_EXTRACTED_ASSET_LIST)" \
+	  --generated-input-list "$(SOURCEBOOT_PC_ASSET_LIST)" \
 	  --derived-output-list "$(SOURCEBOOT_DERIVED_OUTPUT_LIST)" \
 	  --external-root "$(YAUL_INSTALL_ROOT)"
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_toolchain_attestation.py" \

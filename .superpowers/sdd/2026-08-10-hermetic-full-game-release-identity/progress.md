@@ -1208,6 +1208,26 @@
   MIT libyaul `6012f79f...` `build.post.bin.mk` `-MD` semantics; no copied
   bytes or notice change. Candidate A must restart at the resulting common
   commit; closure/release/reproducibility gates remain open.
+- Candidate A from `361d27ad` published identity v2 tag
+  `id-ed9d802a7e9609df`, passed external closure equality, compile, link, and
+  packaging, then failed release cleanliness on untracked
+  `build/us_pc/actors/amp/amp_body.rgba16.inc.c`. The verified copied
+  prerequisite was compiler-owned `header`, not explicit `generated-input`,
+  because its exact selected-target inventory was not handed to closure
+  discovery. No release manifest or reproducibility gate is claimed.
+- Generated-prerequisite classification correction: source asset preparation
+  atomically publishes the verified selected `build/us_pc` targets through a
+  canonical strict path list, and closure discovery consumes that bounded list
+  as explicit generated inputs. The transport list is excluded from identity;
+  each semantic target byte remains closure-hashed and post-link-rehashed.
+  Cleanliness still Git-checks every class except `generated-input` under
+  `build/`, so dirty/untracked checked-in inputs fail, and generated-input byte
+  mutation fails rehash verification. Focused TDD was RED 0/2 and GREEN 2/2;
+  combined Make/source-closure coverage is GREEN 38/38 with one existing case-
+  filesystem skip. Reference: same-repository close-port of the strict list
+  boundary in `extract_assets.py`/`gen_source_closure.py`; no external source,
+  copied bytes, license, or notice change. Candidate A must restart from the
+  resulting common commit; release/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

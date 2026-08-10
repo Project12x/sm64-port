@@ -92,6 +92,15 @@
 
 ### Fixed
 
+- Classified every verified candidate-local `build/us_pc` source asset as an
+  explicit generated input before Saturn release sealing. Sourceboot now
+  publishes the exact selected asset paths through a canonical, atomically
+  written inventory and feeds that bounded list to closure discovery; the
+  inventory file is transport-only, while each asset's semantic bytes remain
+  hashed and rechecked. This preserves release-mode rejection for dirty or
+  untracked checked-in headers while allowing the copied, inventoried ROM-
+  derived prerequisite tree to pass the intended `generated-input` exception.
+
 - Matched pre-seal and post-link dependency discovery to Yaul's real `-MD`
   system-header coverage. The previous `-MM` scans excluded headers reached
   through `-isystem`, sealing only four external inputs while actual compile

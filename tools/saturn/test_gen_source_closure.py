@@ -178,6 +178,7 @@ class SourceClosureTests(unittest.TestCase):
             ("extra", lambda: (self.write("include/extra.h", "extra\n"), self.write("obj/main.d", "obj/main.o: src/main.c include/main.h Makefile.saturn.mk tools/saturn/gen_build_identity.py build/generated/scene.h include/extra.h\n")), "closure"),
             ("stale-removed", lambda: (self.root / "include/main.h").unlink(), "not a file"),
             ("toc-tou", lambda: self.write("include/main.h", "changed after seal\n"), "changed after discovery"),
+            ("generated-toc-tou", lambda: self.write("build/generated/scene.h", "changed generated input\n"), "changed after discovery"),
         )
         for name, mutation, message in mutations:
             with self.subTest(mutation=name):
