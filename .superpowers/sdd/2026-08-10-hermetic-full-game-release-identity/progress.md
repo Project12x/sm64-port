@@ -1318,6 +1318,23 @@
   existing path-limited status interface; no external source, copied bytes,
   license, or notice change. Candidate A must restart from the resulting
   common commit; release/reproducibility gates remain open.
+- Candidate A from `535cba13` published identity v2 tag
+  `id-a0b8a3f2d9a15efe`, completed compile/link/package and external equality,
+  and passed root plus nested cleanliness. This proves bounded status checks
+  on the real 4,234-record closure. Release-manifest construction then
+  rejected each of the seven recipe rows because canonical schema owner
+  `linker/build-recipe` contains a slash. No manifest or reproducibility gate
+  is claimed.
+- Source-owner schema correction: release validation accepts exact
+  `CLASS_PRECEDENCE` values as schema-defined owners while retaining portable-
+  identifier validation for arbitrary owner values. Malformed arbitrary
+  owners and case collisions therefore remain fail-closed. Focused TDD was
+  RED 0/1 and GREEN 1/1; full release-manifest coverage is GREEN 27/27 and
+  staging coverage is GREEN 20/20. Reference: clean-room reconciliation of
+  `release_manifest.py` with the same repository's canonical
+  `gen_source_closure.py` schema; no external source, copied bytes, license,
+  or notice change. Candidate A must restart from the resulting common commit;
+  manifest/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

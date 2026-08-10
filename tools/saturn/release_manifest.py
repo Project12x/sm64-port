@@ -322,6 +322,12 @@ def _portable_identifier(value: Any, label: str) -> tuple[str, str]:
     return value, value.casefold()
 
 
+def _source_closure_owner(value: Any) -> tuple[str, str]:
+    if isinstance(value, str) and value in CLASS_PRECEDENCE:
+        return value, value.casefold()
+    return _portable_identifier(value, "source closure owner")
+
+
 def _portable_relative_path(value: Any, label: str) -> tuple[PurePosixPath, str]:
     if not isinstance(value, str) or not value or "\\" in value:
         raise ValueError(f"{label} release path is invalid")
@@ -707,10 +713,7 @@ def _validate_input_documents(
             raise ValueError("source closure record schema is invalid")
         path, key = _portable_relative_path(row.get("path"), "source closure")
         closure_paths.append((path.as_posix(), key))
-        owners = [
-            _portable_identifier(owner, "source closure owner")
-            for owner in row["owners"]
-        ]
+        owners = [_source_closure_owner(owner) for owner in row["owners"]]
         _reject_duplicate_casefold(owners, "source closure owners")
     _reject_duplicate_casefold(closure_paths, "source closure paths")
     if source_closure["inputs"] != sorted(

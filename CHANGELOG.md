@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Aligned release-manifest source-owner validation with the canonical closure
+  schema. Recipe records deliberately use the schema-defined
+  `linker/build-recipe` class as their owner, but the manifest validator had
+  rejected its slash as though it were an arbitrary identifier; schema class
+  owners are now accepted exactly while malformed arbitrary owners, case
+  collisions, and every other input-document check remain fail-closed.
+
 - Bounded release-cleanliness Git status checks into deterministic commands
   below Windows' process command-line limit. The complete checked-in closure
   had previously been expanded into one argv after a successful target build,

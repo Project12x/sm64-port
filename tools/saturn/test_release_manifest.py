@@ -390,6 +390,19 @@ class ReleaseManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "profile effective config.*identity"):
             self.fixture.build()
 
+    def test_builder_accepts_schema_defined_recipe_owner(self) -> None:
+        self.fixture._write_canonical(self.fixture.source_closure, {
+            "schema": "sm64-saturn-source-closure-v2",
+            "inputs": [{
+                "path": "Makefile.saturn.mk",
+                "sha256": "1" * 64,
+                "class": "linker/build-recipe",
+                "owners": ["linker/build-recipe"],
+            }],
+        })
+        self.fixture.rebuild_identity(2)
+        self.fixture.build()
+
     def test_builder_binds_profile_output_names_to_artifact_basenames(self) -> None:
         profile = json.loads(self.fixture.profile.read_text(encoding="ascii"))
         profile["output_names"]["elf"] = "different.elf"

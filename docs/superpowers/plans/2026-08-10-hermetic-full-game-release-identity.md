@@ -2082,6 +2082,22 @@ clean-room use of Git's existing path-limited status interface; no external
 source, copied bytes, license, or notice change. Candidate A must restart from
 the resulting common source commit; release/reproducibility remain open.
 
+Candidate A from `535cba13` published identity tag
+`id-a0b8a3f2d9a15efe`, completed compile/link/package and external equality,
+and passed root plus nested cleanliness, proving the Windows command-boundary
+correction on the real 4,234-record closure. Manifest construction then
+rejected all seven recipe rows because their canonical schema owner
+`linker/build-recipe` contains a slash. No manifest or reproducibility gate is
+claimed. Release validation now accepts exact `CLASS_PRECEDENCE` values as
+schema-defined owners while retaining portable-identifier validation for all
+other owner values, so malformed arbitrary owners and case collisions still
+fail closed. Focused TDD was RED 0/1 and GREEN 1/1; full release-manifest
+coverage is GREEN 27/27 and staging coverage is GREEN 20/20. Reference:
+clean-room reconciliation of `release_manifest.py` with the same repository's
+canonical `gen_source_closure.py` schema; no external source, copied bytes,
+license, or notice change. Candidate A must restart from the resulting common
+source commit; manifest/reproducibility remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
