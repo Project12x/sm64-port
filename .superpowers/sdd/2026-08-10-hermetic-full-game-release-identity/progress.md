@@ -1110,6 +1110,20 @@
   close-port of Task 5's explicit-root/repository-relative spec contract at
   `a18f612e`; no external source or notice change. Candidate A and every
   target/release gate remain open pending exact rerun from the behavior commit.
+- Candidate A from `7a8271b8` published identity v2 tag
+  `id-d4082ee7fde66135`, passed geo depth at 172/192 across 518 inputs, and
+  started target compilation. Its first `actors/common0.c` object failed when
+  GCC launched `C:\msys64\mingw64\bin\as.exe`; that host assembler rejected
+  the SH-2 `-big` option. Compile did not complete; link/seal/release remain
+  open.
+- Tool-helper correction: the Windows wrapper now orders the selected Yaul
+  `bin` before MSYS host programs because this GCC finds unprefixed `as`
+  through PATH. MSYS DLL directories remain before inherited PATH. Wrapper TDD
+  was RED 2/3 and GREEN 3/3; a disposable minimal compile produced a 552-byte
+  SH object and was removed before resealing. Reference: same-repository
+  close-port of the Yaul helper-path setup in
+  `test_camera_acceptance_route.py` at `7a8271b8`; no external source or notice
+  change. Candidate A compile/link/seal/release gates remain open.
 
 ## Task 5 review repair round 2
 

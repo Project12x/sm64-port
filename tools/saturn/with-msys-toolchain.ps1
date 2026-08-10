@@ -12,6 +12,11 @@ $ErrorActionPreference = 'Stop'
 $msysRoot = if ($env:MSYS2_ROOT) { $env:MSYS2_ROOT } else { 'C:\msys64' }
 $mingwBin = Join-Path $msysRoot 'mingw64\bin'
 $usrBin = Join-Path $msysRoot 'usr\bin'
+$yaulBin = if ($env:YAUL_INSTALL_ROOT) {
+    Join-Path $env:YAUL_INSTALL_ROOT 'bin'
+} else {
+    $null
+}
 
 $requiredDlls = @(
     (Join-Path $usrBin 'msys-2.0.dll'),
@@ -32,9 +37,11 @@ if ($missing.Count -gt 0) {
     throw "MSYS2 runtime dependencies are missing:`n$details`nInstall/update the MSYS2 mingw64 toolchain or set MSYS2_ROOT to its installation directory."
 }
 
-# Keep both DLL directories ahead of inherited PATH. This makes the same
-# dependency set visible to GCC, objdump, and their helper processes.
-$pathParts = @($mingwBin, $usrBin) + @($env:PATH -split ';' | Where-Object { $_ })
+# Keep the selected cross-tool directory ahead of MSYS host programs: this
+# GCC driver locates its unprefixed `as` helper through PATH. The two runtime
+# directories still precede inherited PATH so every helper finds its DLLs.
+$prefixParts = @($yaulBin, $mingwBin, $usrBin) | Where-Object { $_ }
+$pathParts = @($prefixParts) + @($env:PATH -split ';' | Where-Object { $_ })
 $env:PATH = ($pathParts | Select-Object -Unique) -join ';'
 
 $resolvedTool = $null

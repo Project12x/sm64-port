@@ -1849,6 +1849,20 @@ identity CLI retains its existing caller-relative behavior. Make TDD was RED at
 spec at `a18f612e`; no external source, license, or notice change. Identity,
 compile, link, seal, and release gates remain open pending the exact rerun.
 
+Candidate A from `7a8271b8` successfully published identity v2 with sealed tag
+`id-d4082ee7fde66135`, passed geo-depth capacity at 172/192 across 518 inputs,
+and entered real target compilation. The first object then failed because this
+GCC driver searches `PATH` for its unprefixed `as` helper and the Windows
+wrapper placed MSYS `mingw64/bin` ahead of Yaul; host `as.exe` rejected SH-2's
+`-big` option. The wrapper now puts the selected `YAUL_INSTALL_ROOT/bin` first,
+while keeping both MSYS DLL roots ahead of inherited PATH. TDD was RED at 2/3
+wrapper tests and GREEN at 3/3; a disposable one-line SH-2 compile produced a
+552-byte object under the corrected order, and that probe was removed before
+resealing. Reference record: same-repository close-port of the existing
+`test_camera_acceptance_route.py` Yaul helper-path setup at `7a8271b8`; no
+external source, license, or notice change. Compile completion, link, seal, and
+release gates remain open pending the exact rerun from the behavior commit.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

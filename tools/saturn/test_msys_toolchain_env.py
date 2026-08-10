@@ -25,6 +25,10 @@ class MsysToolchainEnvironmentTests(unittest.TestCase):
         ):
             self.assertIn(dll, source)
         self.assertLess(source.index("$mingwBin"), source.index("$usrBin"))
+        self.assertIn(
+            "$prefixParts = @($yaulBin, $mingwBin, $usrBin) | Where-Object { $_ }",
+            source,
+        )
         self.assertIn("Select-Object -Unique", source)
 
     def test_host_compiler_gates_cannot_bypass_environment_prefix(self) -> None:

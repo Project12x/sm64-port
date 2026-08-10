@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Put Yaul's selected cross-tool `bin` directory ahead of MSYS host programs
+  in the Windows toolchain wrapper. The SH GCC driver locates its unprefixed
+  assembler helper through `PATH`; previously the wrapper selected MSYS's host
+  `as.exe`, which rejected SH-2's `-big` option on the first target object.
+  MSYS runtime directories still precede inherited PATH, preserving required
+  DLL discovery while binding compilation to the attested cross assembler.
+
 - Made sourceboot invoke the build-identity generator from the repository root.
   Identity-v2 specs intentionally carry repository-relative sealed-artifact
   paths, but the sourceboot Makefile previously consumed them from its nested
