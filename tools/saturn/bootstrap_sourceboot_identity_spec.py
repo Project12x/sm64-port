@@ -235,6 +235,20 @@ def _verify_snapshots(snapshots: Sequence[_Snapshot], label: str) -> None:
         _verify_digest(snapshot.path, snapshot.sha256, label)
 
 
+def _cleanup_publication_temporaries(paths: Sequence[Path]) -> list[str]:
+    failures: list[str] = []
+    for path in paths:
+        temporary = path.with_name(path.name + ".tmp")
+        try:
+            temporary.unlink(missing_ok=True)
+        except BaseException as error:
+            failures.append(
+                f"temporary cleanup failed for {temporary}: "
+                f"{type(error).__name__}: {error}"
+            )
+    return failures
+
+
 def _publish_transaction(publications: Sequence[tuple[Path, bytes]]) -> None:
     paths = [path.resolve() for path, _data in publications]
     if len(set(paths)) != len(paths):
@@ -243,11 +257,23 @@ def _publish_transaction(publications: Sequence[tuple[Path, bytes]]) -> None:
         path: path.read_bytes() if path.is_file() else None
         for path in paths
     }
+    initial_cleanup = _cleanup_publication_temporaries(paths)
+    if initial_cleanup:
+        error = OSError("identity publication temporary cleanup failed")
+        for note in initial_cleanup:
+            error.add_note(note)
+        raise error
     try:
         for path, data in publications:
             write_if_changed(path, data)
+        cleanup_failures = _cleanup_publication_temporaries(paths)
+        if cleanup_failures:
+            error = OSError("identity publication temporary cleanup failed")
+            for note in cleanup_failures:
+                error.add_note(note)
+            raise error
     except BaseException as error:
-        rollback_errors: list[BaseException] = []
+        diagnostics: list[str] = []
         for path in reversed(paths):
             try:
                 previous = prior[path]
@@ -256,11 +282,13 @@ def _publish_transaction(publications: Sequence[tuple[Path, bytes]]) -> None:
                 else:
                     write_if_changed(path, previous)
             except BaseException as rollback_error:
-                rollback_errors.append(rollback_error)
-        if rollback_errors:
-            raise RuntimeError(
-                f"identity publication failed and rollback had {len(rollback_errors)} errors"
-            ) from error
+                diagnostics.append(
+                    f"rollback failed for {path}: "
+                    f"{type(rollback_error).__name__}: {rollback_error}"
+                )
+        diagnostics.extend(_cleanup_publication_temporaries(paths))
+        for note in diagnostics:
+            error.add_note(note)
         raise
 
 
@@ -299,6 +327,9 @@ def write_spec(
         staged_profile_source.write_bytes(profile_snapshot.raw)
         staged_source_closure.write_bytes(source_snapshot.raw)
         staged_toolchain.write_bytes(toolchain_snapshot.raw)
+        staged_profile_snapshot = _capture_canonical(
+            staged_profile_source, "staged target profile"
+        )
 
         profile_document, _relative = target_profile._profile(
             root, staged_profile_source
@@ -311,8 +342,18 @@ def write_spec(
             )
 
         staged_manifest_dir = stage / "saturn-package-manifests"
+        _verify_digest(
+            staged_profile_snapshot.path,
+            staged_profile_snapshot.sha256,
+            "staged target profile",
+        )
         resolved = target_profile.resolve_target_profile(
             root, staged_profile_source, values, staged_manifest_dir, mode
+        )
+        _verify_digest(
+            staged_profile_snapshot.path,
+            staged_profile_snapshot.sha256,
+            "staged target profile",
         )
         staged_resolved_profile = stage / "saturn-target-profile-v1.json"
         staged_package_set = stage / "saturn-package-set-v1.json"
@@ -403,6 +444,7 @@ def write_spec(
             (
                 source_snapshot,
                 toolchain_snapshot,
+                staged_profile_snapshot,
                 resolved_profile_snapshot,
                 package_set_snapshot,
                 *class_snapshots.values(),

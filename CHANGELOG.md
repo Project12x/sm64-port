@@ -48,6 +48,14 @@
 
 ### Fixed
 
+- Closed the remaining sourceboot identity publication review gaps. The staged
+  target-profile copy is now digest-checked immediately around resolver use and
+  again before publication, preventing an unchecked staging generation from
+  selecting outputs. Rollback now attempts every target, preserves the original
+  publication exception with restore/cleanup diagnostics, and removes owned
+  sibling/spec temporary files on success and failure, so recovery trouble no
+  longer masks the triggering failure or strands transaction debris.
+
 - Hardened sourceboot identity-v2 composition after review. Source closure,
   target profile, and toolchain-attestation documents are now validated and
   hashed from one immutable byte snapshot, then rechecked with every selected

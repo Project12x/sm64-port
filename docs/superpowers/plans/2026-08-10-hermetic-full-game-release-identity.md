@@ -695,12 +695,14 @@ records the implementation below. The first independent combined review
 returned `Needs fixes`: consume validated source/profile/toolchain snapshots,
 publish the sibling manifest set transactionally, emit repository-relative
 canonical descriptors/spec bytes, and isolate mutation tests. Focused repair/
-rereview is active; both review gates remain open. The review's request to
+rereview is active; round 1 cleared portability and mutation isolation but kept
+staged-profile revalidation plus exception-preserving, `.tmp`-clean rollback
+open. Repair round 2 is `source-complete` with its commit pending below; 14
+focused tests plus 21 identity and 11 target-profile regressions pass (46
+total). Both review gates remain open. The review's request to
 remeasure live compiler/header bytes here was withdrawn: Task 5 validates and
 rehashes the exact attestation document snapshot, while Task 6 owns the Task 3
-live verifier after link. Repair round 1 is `source-complete` with its commit
-`ec546de2`: 12 focused tests plus the 21 identity and 11 target-profile
-regressions pass (44 total). TDD replaced the recursive repository-root
+live verifier after link. Repair round 1 is recorded in `ec546de2`. TDD replaced the recursive repository-root
 contract with focused identity-v2 composition tests. The bootstrap now rehashes
 validated source closure, resolved-profile, package-class/package-set, and toolchain descriptors;
 requires Make configuration to equal the selected profile; maps the nine legacy

@@ -174,6 +174,16 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             for path in self._published_paths(selected) if path.is_file()
         }
 
+    def _owned_temporary_paths(self, output: Path | None = None) -> tuple[Path, ...]:
+        selected = self.output if output is None else output
+        return tuple(
+            path.with_name(path.name + ".tmp")
+            for path in self._published_paths(selected)
+        )
+
+    def _assert_no_owned_temporaries(self, output: Path | None = None) -> None:
+        self.assertFalse(any(path.exists() for path in self._owned_temporary_paths(output)))
+
     def _root_vector(self, spec: dict[str, object]) -> dict[str, str]:
         parsed = identity.parse_identity(self._build_identity(spec).raw)
         fields = (*identity.ARTIFACT_HASH_FIELDS, *identity.V2_APPENDED_HASH_FIELDS)
@@ -204,6 +214,7 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             descriptor["path"] for descriptor in spec["artifacts"].values()
         })
         self._build_identity(spec)
+        self._assert_no_owned_temporaries()
 
     def test_capture_tool_and_evidence_changes_do_not_reseal_v2_spec(self) -> None:
         first = self._build_identity(self.write_v2_spec()).raw
@@ -312,6 +323,32 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "actor package class manifest.*stale"):
                 self.write_v2_spec()
         self.assertEqual(self._published_bytes(), preserved)
+        self._assert_no_owned_temporaries()
+
+    def test_staged_profile_mutation_after_resolver_cannot_publish(self) -> None:
+        self.write_v2_spec()
+        preserved = self._published_bytes()
+        import target_profile
+
+        original = target_profile.resolve_target_profile
+
+        def resolve_then_mutate_staged_profile(*args, **kwargs):
+            resolved = original(*args, **kwargs)
+            staged_profile = Path(args[1])
+            staged_profile.write_bytes(staged_profile.read_bytes() + b"changed-generation")
+            return resolved
+
+        with patch.object(
+            target_profile,
+            "resolve_target_profile",
+            side_effect=resolve_then_mutate_staged_profile,
+        ):
+            with self.assertRaisesRegex(
+                ValueError, "staged target profile changed during identity composition"
+            ):
+                self.write_v2_spec()
+        self.assertEqual(self._published_bytes(), preserved)
+        self._assert_no_owned_temporaries()
 
     def test_input_snapshot_drift_preserves_every_published_file(self) -> None:
         self.write_v2_spec()
@@ -359,19 +396,24 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         document["output_names"]["elf"] = "replacement.elf"
         self._write_json(self.profile, document)
         real_write = bootstrap.write_if_changed
-        failed = False
+        publication = True
+        real_publication_writes: list[str] = []
 
         def fail_package_set_once(path: Path, data: bytes) -> None:
-            nonlocal failed
-            if path.name == "saturn-package-set-v1.json" and not failed:
-                failed = True
+            nonlocal publication
+            if path.name == "saturn-package-set-v1.json" and publication:
+                publication = False
                 raise OSError("injected publication failure")
             real_write(path, data)
+            if publication:
+                real_publication_writes.append(path.name)
 
         with patch.object(bootstrap, "write_if_changed", side_effect=fail_package_set_once):
             with self.assertRaisesRegex(OSError, "injected publication failure"):
                 self.write_v2_spec()
         self.assertEqual(self._published_bytes(), preserved)
+        self.assertIn("saturn-target-profile-v1.json", real_publication_writes)
+        self._assert_no_owned_temporaries()
 
     def test_publication_failure_removes_every_new_file(self) -> None:
         output = self.root / "build/fresh/saturn-build-identity-spec-v2.json"
@@ -392,6 +434,57 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
                     self.toolchain_attestation, "development",
                 )
         self.assertFalse(any(path.exists() for path in self._published_paths(output)))
+        self._assert_no_owned_temporaries(output)
+
+    def test_rollback_failure_preserves_original_error_and_attempts_every_path(self) -> None:
+        class PublicationFailure(OSError):
+            pass
+
+        self.write_v2_spec()
+        document = json.loads(self.profile.read_text(encoding="utf-8"))
+        document["output_names"]["elf"] = "rollback-diagnostic.elf"
+        self._write_json(self.profile, document)
+        real_write = bootstrap.write_if_changed
+        publication = True
+        successful_publication: list[str] = []
+        rollback_attempts: list[str] = []
+
+        def fail_publication_and_one_restore(path: Path, data: bytes) -> None:
+            nonlocal publication
+            if publication:
+                if path.name == "saturn-package-set-v1.json":
+                    publication = False
+                    raise PublicationFailure("original publication failure")
+                real_write(path, data)
+                successful_publication.append(path.name)
+                return
+            rollback_attempts.append(path.name)
+            if path.name == "saturn-target-profile-v1.json":
+                path.with_name(path.name + ".tmp").write_bytes(b"rollback debris")
+                raise OSError("injected rollback failure")
+            real_write(path, data)
+
+        with patch.object(
+            bootstrap, "write_if_changed", side_effect=fail_publication_and_one_restore
+        ):
+            try:
+                self.write_v2_spec()
+            except BaseException as error:
+                raised = error
+            else:
+                self.fail("publication failure was not raised")
+        self.assertIsInstance(raised, PublicationFailure)
+        self.assertIn("saturn-target-profile-v1.json", successful_publication)
+        self.assertEqual(
+            set(rollback_attempts),
+            {path.name for path in self._published_paths(self.output)},
+        )
+        self.assertIn("original publication failure", str(raised))
+        self.assertTrue(any(
+            "rollback failed" in note and "saturn-target-profile-v1.json" in note
+            for note in getattr(raised, "__notes__", ())
+        ))
+        self._assert_no_owned_temporaries()
 
     def test_cli_requires_every_sealed_input_and_mode(self) -> None:
         arguments = [
