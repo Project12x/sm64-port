@@ -1080,6 +1080,12 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 - Produces: `compare_release_manifests(first: Path, second: Path) -> dict[str, Any]`, which verifies both manifests and requires identical canonical identity inputs and output bytes while ignoring their host locations.
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
+**Live status (2026-08-10):** `active` from controller base `cad2e90d` after
+Task 6 completed independent review. Task 7 owns exact artifact sealing,
+profile-neutral deployment staging, capture/manual-launch preflight, and Make
+ordering. All target, reproducibility, audit-v4, smoke, visual, and manual-play
+evidence gates remain open; host implementation/tests cannot close them.
+
 - [ ] **Step 1: Write failing release and staging tests**
 
 ```python
