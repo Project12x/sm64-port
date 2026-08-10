@@ -26,6 +26,9 @@ import sys
 from time import monotonic
 from typing import Any, Callable, Iterable
 
+import release_manifest as release_manifest_module
+from hermetic_manifest import canonical_json_bytes, write_if_changed
+
 
 @dataclass(frozen=True)
 class CallSite:
@@ -66,6 +69,10 @@ class AuditContract:
     expected_total: int
     forbidden_callers: frozenset[str]
     expected_elf_sha256: str | None = None
+    expected_release_manifest_sha256: str | None = None
+    expected_identity_sha256: str | None = None
+    expected_effective_config_sha256: str | None = None
+    expected_target_profile_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -3968,6 +3975,7 @@ SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21
 GOAL_AUDIT_CONTRACT_V3_SHA256 = (
     "80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5"
 )
+GOAL_AUDIT_CONTRACT_V4_SHA256: str | None = None
 
 LIBM_NAMES = {
     "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf",
@@ -4386,7 +4394,14 @@ def parse_audit_contract(text: str) -> AuditContract:
     expected_root: str | None = None
     expected_total: int | None = None
     expected_elf_sha256: str | None = None
+    release_hashes: dict[str, str] = {}
     forbidden_callers: set[str] = set()
+    release_directives = {
+        "EXPECTED_RELEASE_MANIFEST_SHA256": "expected_release_manifest_sha256",
+        "EXPECTED_IDENTITY_SHA256": "expected_identity_sha256",
+        "EXPECTED_EFFECTIVE_CONFIG_SHA256": "expected_effective_config_sha256",
+        "EXPECTED_TARGET_PROFILE_SHA256": "expected_target_profile_sha256",
+    }
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.split("#", 1)[0].strip()
         if not line:
@@ -4416,22 +4431,58 @@ def parse_audit_contract(text: str) -> AuditContract:
                     f"audit contract line {line_number}: invalid expected ELF SHA-256"
                 )
             expected_elf_sha256 = parts[1]
+        elif parts[0] in release_directives:
+            directive = parts[0]
+            if len(parts) != 2:
+                raise ValueError(
+                    f"audit contract line {line_number}: {directive} requires one value"
+                )
+            if directive in release_hashes:
+                raise ValueError(
+                    f"audit contract line {line_number}: duplicate {directive}"
+                )
+            if re.fullmatch(r"[0-9a-f]{64}", parts[1]) is None:
+                raise ValueError(
+                    f"audit contract line {line_number}: invalid {directive}"
+                )
+            release_hashes[directive] = parts[1]
         elif parts[0] == "FORBIDDEN_CALLER" and len(parts) == 2:
             if parts[1] in forbidden_callers:
                 raise ValueError(f"audit contract line {line_number}: duplicate forbidden caller")
             forbidden_callers.add(parts[1])
         else:
             raise ValueError(f"audit contract line {line_number}: invalid directive")
-    if version not in {2, 3} or expected_root is None or expected_total is None or expected_total < 0:
-        raise ValueError("audit contract requires v2 or v3 root and non-negative expected total")
+    if version not in {2, 3, 4} or expected_root is None or expected_total is None or expected_total < 0:
+        raise ValueError("audit contract requires v2, v3, or v4 root and non-negative expected total")
     if version == 2 and expected_elf_sha256 is not None:
         raise ValueError("v2 audit contract forbids EXPECTED_ELF_SHA256")
     if version == 3 and expected_elf_sha256 is None:
         raise ValueError("v3 audit contract requires EXPECTED_ELF_SHA256")
+    if version in {2, 3}:
+        for directive in release_directives:
+            if directive in release_hashes:
+                raise ValueError(f"v{version} audit contract forbids {directive}")
+    if version == 4:
+        required = ("EXPECTED_ELF_SHA256", *release_directives)
+        for directive in required:
+            if directive == "EXPECTED_ELF_SHA256":
+                present = expected_elf_sha256 is not None
+            else:
+                present = directive in release_hashes
+            if not present:
+                raise ValueError(f"v4 audit contract requires {directive}")
     if not forbidden_callers:
         raise ValueError("audit contract requires at least one forbidden caller")
     return AuditContract(
-        version, expected_root, expected_total, frozenset(forbidden_callers), expected_elf_sha256
+        version=version,
+        expected_root=expected_root,
+        expected_total=expected_total,
+        forbidden_callers=frozenset(forbidden_callers),
+        expected_elf_sha256=expected_elf_sha256,
+        **{
+            field: release_hashes.get(directive)
+            for directive, field in release_directives.items()
+        },
     )
 
 
@@ -4459,24 +4510,67 @@ def verify_audit_contract_integrity(text: str, contract: AuditContract, *, expec
             expected_digest = SIM_AUDIT_CONTRACT_V2_SHA256
         elif contract.version == 3:
             expected_digest = GOAL_AUDIT_CONTRACT_V3_SHA256
+        elif contract.version == 4:
+            expected_digest = GOAL_AUDIT_CONTRACT_V4_SHA256
+            if expected_digest is None:
+                raise ValueError("v4 audit contract is not pinned")
         else:
             raise ValueError(f"unsupported audit contract version {contract.version}")
-    if contract.version not in {2, 3}:
+    if contract.version not in {2, 3, 4}:
         raise ValueError(f"unsupported audit contract version {contract.version}")
     if expected_digest == "PENDING" or baseline_digest(text) != expected_digest:
         raise ValueError("immutable audit contract digest mismatch")
 
 
-def verify_audit_contract_target(contract: AuditContract, elf: Path) -> None:
+def _verify_v4_release_binding(
+    contract: AuditContract,
+    elf: Path,
+    verified_release: release_manifest_module.ReleaseManifestVerification,
+) -> None:
+    document = verified_release.document
+    if verified_release.manifest_sha256 != contract.expected_release_manifest_sha256:
+        raise ValueError("release manifest SHA-256 differs from audit contract")
+    if document["identity_version"] != 2:
+        raise ValueError("release manifest identity version 2 is required for audit v4")
+    bindings = {
+        "identity_sha256": contract.expected_identity_sha256,
+        "effective_config_sha256": contract.expected_effective_config_sha256,
+        "target_profile_sha256": contract.expected_target_profile_sha256,
+    }
+    for field, expected in bindings.items():
+        if document[field] != expected:
+            raise ValueError(f"release manifest {field} differs from audit contract")
+    manifest_elf = document["outputs"]["elf"]["sha256"]
+    if manifest_elf != contract.expected_elf_sha256:
+        raise ValueError("release manifest ELF SHA-256 differs from audit contract")
+    if file_digest(elf) != contract.expected_elf_sha256:
+        raise ValueError("audit contract target ELF SHA-256 mismatch")
+
+
+def verify_audit_contract_target(
+    contract: AuditContract,
+    elf: Path,
+    release_manifest: Path | None = None,
+) -> None:
     if contract.version == 2:
         return
-    assert contract.expected_elf_sha256 is not None
-    actual = file_digest(elf)
-    if actual != contract.expected_elf_sha256:
-        raise ValueError(
-            "audit contract target ELF SHA-256 mismatch: "
-            f"expected {contract.expected_elf_sha256}, found {actual}"
-        )
+    if contract.version == 3:
+        assert contract.expected_elf_sha256 is not None
+        actual = file_digest(elf)
+        if actual != contract.expected_elf_sha256:
+            raise ValueError(
+                "audit contract target ELF SHA-256 mismatch: "
+                f"expected {contract.expected_elf_sha256}, found {actual}"
+            )
+        return
+    if contract.version != 4:
+        raise ValueError(f"unsupported audit contract version {contract.version}")
+    if release_manifest is None:
+        raise ValueError("release manifest is required for audit v4")
+    with release_manifest_module.verify_release_manifest(release_manifest) as verified:
+        if elf.resolve() != verified.outputs["elf"]:
+            raise ValueError("ELF differs from verified release manifest")
+        _verify_v4_release_binding(contract, verified.snapshot_outputs["elf"], verified)
 
 
 def route_reachable_functions(
@@ -6051,6 +6145,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="optional immutable source-simulation route to audit without changing the shipped ceiling")
     parser.add_argument("--audit-contract", type=Path,
                         help="immutable expected root, minimum, and candidate contract for the audit route")
+    parser.add_argument("--release-manifest", type=Path,
+                        help="verified exact release manifest for audit v4 or measurement")
+    parser.add_argument("--measure-audit-report", type=Path,
+                        help="write explicitly unsealed audit-v4 measurement evidence")
     parser.add_argument("--objdump", required=True, help="target objdump executable")
     parser.add_argument("--readelf", help="target readelf executable")
     parser.add_argument("--addr2line", required=True, help="target addr2line executable")
@@ -6064,6 +6162,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--object-reference-only", action="store_true")
     args = parser.parse_args(argv)
 
+    verified_release: release_manifest_module.ReleaseManifestVerification | None = None
+    measurement_document: dict[str, Any] | None = None
     try:
         if args.object_reference_only:
             if args.readelf is not None:
@@ -6081,6 +6181,15 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("producer commit does not match HEAD")
         elif args.json_output is not None or args.producer_commit is not None:
             raise ValueError("--json-output/--producer-commit require observation-only")
+        if args.measure_audit_report is not None:
+            if args.audit_route_oracle is None:
+                raise ValueError("--measure-audit-report requires --audit-route-oracle")
+            if args.audit_contract is not None:
+                raise ValueError("--measure-audit-report requires no --audit-contract")
+            if args.release_manifest is None:
+                raise ValueError("--measure-audit-report requires --release-manifest")
+            if args.audit_observation_only:
+                raise ValueError("--measure-audit-report is incompatible with observation-only")
         if not args.audit_observation_only and args.analysis_mode not in {
             "code-only", "code-only-route-bounded",
         }:
@@ -6096,7 +6205,9 @@ def main(argv: list[str] | None = None) -> int:
         verify_route_oracle_integrity(route_text, oracle)
         audit_oracle = None
         audit_contract = None
-        if (args.audit_route_oracle is None) != (args.audit_contract is None):
+        if args.measure_audit_report is None and (
+            (args.audit_route_oracle is None) != (args.audit_contract is None)
+        ):
             raise ValueError("--audit-route-oracle and --audit-contract must be supplied together")
         if args.audit_route_oracle is not None:
             audit_text = args.audit_route_oracle.read_text(encoding="utf-8")
@@ -6104,14 +6215,35 @@ def main(argv: list[str] | None = None) -> int:
             verify_route_oracle_integrity(
                 audit_text, audit_oracle, expected_digest=SIM_ROUTE_ORACLE_V1_SHA256
             )
-            audit_contract_text = args.audit_contract.read_text(encoding="utf-8")
-            audit_contract = parse_audit_contract(audit_contract_text)
-            verify_audit_contract_integrity(audit_contract_text, audit_contract)
+            if args.audit_contract is not None:
+                audit_contract_text = args.audit_contract.read_text(encoding="utf-8")
+                audit_contract = parse_audit_contract(audit_contract_text)
+                if audit_contract.version == 4 and args.release_manifest is None:
+                    raise ValueError("--release-manifest is required for audit v4")
+                verify_audit_contract_integrity(audit_contract_text, audit_contract)
         if not args.elf.is_file():
             raise ValueError("ELF is not readable")
         elf_path = args.elf.resolve()
+        if args.release_manifest is not None:
+            verified_release = release_manifest_module.verify_release_manifest(
+                args.release_manifest
+            )
+            if elf_path != verified_release.outputs["elf"]:
+                raise ValueError("ELF differs from verified release manifest")
+            elf_path = verified_release.snapshot_outputs["elf"]
+            if (
+                args.measure_audit_report is not None
+                and verified_release.document["identity_version"] != 2
+            ):
+                raise ValueError(
+                    "release manifest identity version 2 is required for audit measurement"
+                )
         if audit_contract is not None:
-            verify_audit_contract_target(audit_contract, elf_path)
+            if audit_contract.version == 4:
+                assert verified_release is not None
+                _verify_v4_release_binding(audit_contract, elf_path, verified_release)
+            else:
+                verify_audit_contract_target(audit_contract, elf_path)
         disassembly = run_command([args.objdump, "-d", str(elf_path)])
         sections_text = run_command([args.readelf, "-SW", str(elf_path)])
         symbols_text = run_command([args.readelf, "-sW", str(elf_path)])
@@ -6312,15 +6444,65 @@ def main(argv: list[str] | None = None) -> int:
                 args.json_output.write_text(
                     json.dumps(observation, indent=2, sort_keys=True) + "\n", encoding="utf-8"
                 )
+        if (
+            args.measure_audit_report is not None
+            and audit_functions is not None
+            and audit_oracle is not None
+        ):
+            if len(audit_oracle.roots) != 1:
+                raise ValueError("audit measurement requires exactly one route root")
+            observed = _route_call_counts(calls, audit_functions)
+            if analysis is not None:
+                assert audit_edge_result is not None
+                for transfer in audit_edge_result.unlisted_transfers:
+                    owner = owner_address_map.get(transfer.address)
+                    site = (
+                        f"+{transfer.address - owner.start}"
+                        if owner is not None else f"at 0x{transfer.address:x}"
+                    )
+                    failures.append(
+                        "audit has unlisted unresolved indirect transfer: "
+                        f"{transfer.caller} {site} {transfer.mnemonic}"
+                    )
+                effects = [
+                    item for item in analysis.unresolved_effects
+                    if (item.function_identity or item.function) in audit_functions
+                ]
+                if effects:
+                    failures.append(
+                        f"audit has {len(effects)} unresolved register effects"
+                    )
+            assert verified_release is not None
+            measurement_document = {
+                "schema": "sm64-saturn-native-math-measurement-v1",
+                "status": "measured-unsealed",
+                "root": next(iter(audit_oracle.roots)),
+                "total": sum(observed.values()),
+                "callers": sorted({caller for (_owner, caller, _helper) in observed}),
+                "elf_sha256": file_digest(elf_path),
+                "release_manifest_sha256": verified_release.manifest_sha256,
+            }
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"SH-2 native-math census ERROR: {error}", file=sys.stderr)
         return 2
+    finally:
+        if verified_release is not None:
+            verified_release.close()
 
     if failures:
         print("SH-2 native-math census FAILED:", file=sys.stderr)
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         return 1
+    if measurement_document is not None:
+        try:
+            write_if_changed(
+                args.measure_audit_report,
+                canonical_json_bytes(measurement_document),
+            )
+        except OSError as error:
+            print(f"SH-2 native-math census ERROR: {error}", file=sys.stderr)
+            return 2
     return 0
 
 

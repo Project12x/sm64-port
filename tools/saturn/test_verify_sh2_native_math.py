@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import hashlib
+import io
+import json
 import os
 import re
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -2249,6 +2252,335 @@ static bool demo_detached_start_decoy(uint32_t generation)
             "FORBIDDEN_CALLER _atan2_lookup\n"
             "FORBIDDEN_CALLER _atan2s\n"
         )
+
+    def _v4_contract_text(self, **overrides: str) -> str:
+        values = {
+            "release_manifest": "a" * 64,
+            "identity": "b" * 64,
+            "effective_config": "c" * 64,
+            "target_profile": "d" * 64,
+            "elf": "e" * 64,
+        } | overrides
+        return (
+            "AUDIT_CONTRACT_VERSION 4\n"
+            "EXPECTED_ROOT _game_loop_one_iteration\n"
+            "EXPECTED_TOTAL 701\n"
+            f"EXPECTED_RELEASE_MANIFEST_SHA256 {values['release_manifest']}\n"
+            f"EXPECTED_IDENTITY_SHA256 {values['identity']}\n"
+            f"EXPECTED_EFFECTIVE_CONFIG_SHA256 {values['effective_config']}\n"
+            f"EXPECTED_TARGET_PROFILE_SHA256 {values['target_profile']}\n"
+            f"EXPECTED_ELF_SHA256 {values['elf']}\n"
+            "FORBIDDEN_CALLER _atan2_lookup\n"
+            "FORBIDDEN_CALLER _atan2s\n"
+        )
+
+    def test_v4_requires_all_release_identity_hashes(self) -> None:
+        text = self._v4_contract_text()
+        contract = parse_audit_contract(text)
+        self.assertEqual(contract.version, 4)
+        for directive in (
+            "EXPECTED_RELEASE_MANIFEST_SHA256",
+            "EXPECTED_IDENTITY_SHA256",
+            "EXPECTED_EFFECTIVE_CONFIG_SHA256",
+            "EXPECTED_TARGET_PROFILE_SHA256",
+            "EXPECTED_ELF_SHA256",
+        ):
+            with self.subTest(directive=directive):
+                without = "\n".join(
+                    line for line in text.splitlines()
+                    if not line.startswith(directive + " ")
+                ) + "\n"
+                with self.assertRaisesRegex(ValueError, "v4"):
+                    parse_audit_contract(without)
+
+    def test_v4_rejects_malformed_and_duplicate_release_hashes(self) -> None:
+        directives = {
+            "release_manifest": "EXPECTED_RELEASE_MANIFEST_SHA256",
+            "identity": "EXPECTED_IDENTITY_SHA256",
+            "effective_config": "EXPECTED_EFFECTIVE_CONFIG_SHA256",
+            "target_profile": "EXPECTED_TARGET_PROFILE_SHA256",
+            "elf": "EXPECTED_ELF_SHA256",
+        }
+        for field, directive in directives.items():
+            message = "expected ELF SHA-256" if field == "elf" else directive
+            for invalid in ("A" * 64, "a" * 63, "g" * 64):
+                with self.subTest(field=field, invalid=invalid[:4]):
+                    with self.assertRaisesRegex(ValueError, message):
+                        parse_audit_contract(self._v4_contract_text(**{field: invalid}))
+            with self.subTest(field=field, duplicate=True):
+                with self.assertRaisesRegex(ValueError, "duplicate"):
+                    parse_audit_contract(
+                        self._v4_contract_text() + f"{directive} {'f' * 64}\n"
+                    )
+
+    def test_v2_and_v3_reject_every_v4_release_directive(self) -> None:
+        additions = (
+            "EXPECTED_RELEASE_MANIFEST_SHA256",
+            "EXPECTED_IDENTITY_SHA256",
+            "EXPECTED_EFFECTIVE_CONFIG_SHA256",
+            "EXPECTED_TARGET_PROFILE_SHA256",
+        )
+        v2 = (
+            "AUDIT_CONTRACT_VERSION 2\n"
+            "EXPECTED_ROOT _game_loop_one_iteration\n"
+            "EXPECTED_TOTAL 582\n"
+            "FORBIDDEN_CALLER _atan2_lookup\n"
+        )
+        for version, base in ((2, v2), (3, self._v3_contract_text())):
+            for directive in additions:
+                with self.subTest(version=version, directive=directive):
+                    with self.assertRaisesRegex(ValueError, f"v{version}.*{directive}"):
+                        parse_audit_contract(base + f"{directive} {'a' * 64}\n")
+
+    def test_v4_integrity_requires_a_real_pinned_digest(self) -> None:
+        text = self._v4_contract_text()
+        contract = parse_audit_contract(text)
+        with self.assertRaisesRegex(ValueError, "v4 audit contract is not pinned"):
+            verify_audit_contract_integrity(text, contract)
+        verify_audit_contract_integrity(
+            text, contract, expected_digest=hashlib.sha256(text.encode("utf-8")).hexdigest()
+        )
+
+    def test_v4_release_preflight_accepts_only_matching_identity_v2_snapshot(self) -> None:
+        from test_release_manifest import ReleaseFixture
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
+            fixture = ReleaseFixture(Path(temporary))
+            manifest = fixture.write()
+            import release_manifest
+
+            with release_manifest.verify_release_manifest(manifest) as release:
+                document = release.document
+                contract_values = {
+                    "release_manifest": release.manifest_sha256,
+                    "identity": document["identity_sha256"],
+                    "effective_config": document["effective_config_sha256"],
+                    "target_profile": document["target_profile_sha256"],
+                    "elf": document["outputs"]["elf"]["sha256"],
+                }
+                contract = parse_audit_contract(
+                    self._v4_contract_text(**contract_values)
+                )
+            with patch.object(verifier, "run_command") as run_command:
+                digest_paths: list[Path] = []
+                real_digest = verifier.file_digest
+
+                def observe_digest(path: Path) -> str:
+                    digest_paths.append(path)
+                    return real_digest(path)
+
+                with patch.object(verifier, "file_digest", side_effect=observe_digest):
+                    verify_audit_contract_target(
+                        contract, fixture.outputs["elf"], manifest
+                    )
+                self.assertEqual(len(digest_paths), 1)
+                self.assertNotEqual(
+                    digest_paths[0].resolve(), fixture.outputs["elf"].resolve()
+                )
+                self.assertFalse(digest_paths[0].exists())
+                run_command.assert_not_called()
+                mismatches = {
+                    "release_manifest": "release manifest",
+                    "identity": "identity_sha256",
+                    "effective_config": "effective_config_sha256",
+                    "target_profile": "target_profile_sha256",
+                    "elf": "ELF",
+                }
+                for field, message in mismatches.items():
+                    with self.subTest(field=field):
+                        wrong = parse_audit_contract(
+                            self._v4_contract_text(
+                                **(contract_values | {field: "f" * 64})
+                            )
+                        )
+                        with self.assertRaisesRegex(ValueError, message):
+                            verify_audit_contract_target(
+                                wrong, fixture.outputs["elf"], manifest
+                            )
+                        run_command.assert_not_called()
+                fixture.outputs["elf"].write_bytes(b"wrong elf")
+                with self.assertRaisesRegex(ValueError, "release manifest|ELF|elf output"):
+                    verify_audit_contract_target(contract, fixture.outputs["elf"], manifest)
+                run_command.assert_not_called()
+
+    def test_checked_in_v2_v3_contract_bytes_and_digests_are_unchanged(self) -> None:
+        fixture_dir = Path(__file__).parent
+        expected = {
+            "sh2_native_math_sim_audit_contract_v2.txt": (
+                507, "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
+            ),
+            "sh2_native_math_goal_audit_contract_v3.txt": (
+                416, "80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5"
+            ),
+        }
+        for name, (size, digest) in expected.items():
+            with self.subTest(name=name):
+                raw = (fixture_dir / name).read_bytes()
+                self.assertEqual(len(raw), size)
+                self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
+
+    def test_measurement_cli_writes_explicitly_unsealed_release_bound_report(self) -> None:
+        from test_release_manifest import ReleaseFixture
+        import release_manifest as release_manifest_module
+
+        sections = "  [ 1] .text PROGBITS 06001000 001000 002004 00 AX 0 0 2\n"
+        symbols = (
+            "   1: 06001000 16 FUNC GLOBAL DEFAULT 1 _game_loop_one_iteration\n"
+            "   2: 06002000 4 FUNC GLOBAL DEFAULT 1 ___mulsf3\n"
+        )
+        disassembly = (
+            "06001000 <_game_loop_one_iteration>:\n"
+            " 6001000: b7 fe bsr 6002000 <___mulsf3>\n"
+            " 6001002: 00 09 nop\n"
+            " 6001004: 00 0b rts\n"
+            " 6001006: 00 09 nop\n"
+            "06002000 <___mulsf3>:\n"
+            " 6002000: 00 0b rts\n"
+            " 6002002: 00 09 nop\n"
+        )
+        tool_elf_paths: list[Path] = []
+
+        def fake_command(command: list[str]) -> str:
+            if command[0] in {"objdump", "readelf"}:
+                tool_elf_paths.append(Path(command[-1]))
+                self.assertTrue(tool_elf_paths[-1].is_file())
+            if command[1] == "-d":
+                return disassembly
+            if command[1] == "-SW":
+                return sections
+            if command[1] == "-sW":
+                return symbols
+            if command[1] == "--debug-dump=decodedline":
+                return "fixture.c 1 0x06001000\n"
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
+            root = Path(temporary)
+            fixture = ReleaseFixture(root)
+            manifest = fixture.write()
+            baseline = root / "baseline.txt"
+            route_oracle = root / "route.txt"
+            audit_oracle = root / "audit-route.txt"
+            report = root / "measurement.json"
+            baseline.write_text(
+                "BASELINE_VERSION 1\nHOT_CEILING 1\n"
+                "HOT _game_loop_one_iteration ___mulsf3 1\n",
+                encoding="utf-8",
+            )
+            route_oracle.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            audit_oracle.write_bytes(route_oracle.read_bytes())
+            with release_manifest_module.verify_release_manifest(manifest) as release:
+                expected_manifest = release.manifest_sha256
+                expected_elf = release.document["outputs"]["elf"]["sha256"]
+            output = io.StringIO()
+            with patch.object(verifier, "run_command", side_effect=fake_command), \
+                    patch.object(verifier, "verify_baseline_integrity"), \
+                    patch.object(verifier, "verify_route_oracle_integrity"), \
+                    patch.object(
+                        verifier, "prove_sourceboot_bob_null_camera_triggers",
+                        return_value=False,
+                    ), patch.object(verifier, "source_locations", return_value={}), \
+                    redirect_stdout(output):
+                self.assertEqual(
+                    verifier.main([
+                        str(fixture.outputs["elf"]), str(baseline),
+                        "--route-oracle", str(route_oracle),
+                        "--audit-route-oracle", str(audit_oracle),
+                        "--measure-audit-report", str(report),
+                        "--release-manifest", str(manifest),
+                        "--objdump", "objdump", "--readelf", "readelf",
+                        "--addr2line", "addr2line",
+                    ]),
+                    0,
+                )
+            self.assertNotIn("PASS", output.getvalue())
+            self.assertNotIn("accepted", output.getvalue().lower())
+            self.assertEqual(json.loads(report.read_bytes()), {
+                "schema": "sm64-saturn-native-math-measurement-v1",
+                "status": "measured-unsealed",
+                "root": "_game_loop_one_iteration",
+                "total": 1,
+                "callers": ["_game_loop_one_iteration"],
+                "elf_sha256": expected_elf,
+                "release_manifest_sha256": expected_manifest,
+            })
+            self.assertTrue(tool_elf_paths)
+            self.assertTrue(all(path == tool_elf_paths[0] for path in tool_elf_paths))
+            self.assertNotEqual(tool_elf_paths[0], fixture.outputs["elf"].resolve())
+            self.assertFalse(tool_elf_paths[0].exists())
+
+    def test_measurement_cli_rejects_contract_or_missing_inputs_before_tools(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
+            root = Path(temporary)
+            elf = root / "target.elf"
+            baseline = root / "baseline.txt"
+            route = root / "route.txt"
+            audit = root / "audit.txt"
+            contract = root / "contract.txt"
+            report = root / "measurement.json"
+            elf.write_bytes(b"ELF")
+            baseline.write_text("BASELINE_VERSION 1\nHOT_CEILING 0\n", encoding="utf-8")
+            route.write_text("ROUTE_ORACLE_VERSION 1\nROOT _root\n", encoding="utf-8")
+            audit.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            contract.write_text(self._v3_contract_text(), encoding="utf-8")
+            common = [
+                str(elf), str(baseline), "--route-oracle", str(route),
+                "--objdump", "objdump", "--readelf", "readelf",
+                "--addr2line", "addr2line", "--measure-audit-report", str(report),
+            ]
+            cases = (
+                common,
+                [*common, "--audit-route-oracle", str(audit)],
+                [
+                    *common, "--audit-route-oracle", str(audit),
+                    "--audit-contract", str(contract),
+                ],
+            )
+            with patch.object(verifier, "run_command") as run_command:
+                for argv in cases:
+                    with self.subTest(argv=argv[-4:]):
+                        self.assertEqual(verifier.main(argv), 2)
+                run_command.assert_not_called()
+
+    def test_v4_cli_requires_release_manifest_before_tools_or_pin_lookup(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
+            root = Path(temporary)
+            elf = root / "target.elf"
+            baseline = root / "baseline.txt"
+            route = root / "route.txt"
+            audit = root / "audit.txt"
+            contract = root / "contract-v4.txt"
+            elf.write_bytes(b"ELF")
+            baseline.write_text(
+                "BASELINE_VERSION 1\nHOT_CEILING 0\n", encoding="utf-8"
+            )
+            route.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _root\n", encoding="utf-8"
+            )
+            audit.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            contract.write_text(self._v4_contract_text(), encoding="utf-8")
+            with patch.object(verifier, "verify_baseline_integrity"), \
+                    patch.object(verifier, "verify_route_oracle_integrity"), \
+                    patch.object(verifier, "verify_audit_contract_integrity") as integrity, \
+                    patch.object(verifier, "run_command") as run_command:
+                self.assertEqual(verifier.main([
+                    str(elf), str(baseline), "--route-oracle", str(route),
+                    "--audit-route-oracle", str(audit),
+                    "--audit-contract", str(contract),
+                    "--objdump", "objdump", "--readelf", "readelf",
+                    "--addr2line", "addr2line",
+                ]), 2)
+                integrity.assert_not_called()
+                run_command.assert_not_called()
 
     def test_v3_audit_contract_requires_one_lowercase_exact_elf_sha256(self) -> None:
         contract = parse_audit_contract(self._v3_contract_text())

@@ -4,6 +4,18 @@
 
 ### Added
 
+- Added release-bound native-math audit v4 support. The verifier now parses
+  version-specific manifest, identity, effective-config, target-profile, and
+  exact-ELF hashes; verifies identity-v2 release bytes into a private immutable
+  snapshot before any SH tool runs; and can write only an explicitly
+  `measured-unsealed` canonical report. A separate one-shot sealer rejects
+  mismatched manifests/ELFs, wrong roots, historical identity v1, and either
+  forbidden atan2 caller before exclusively creating canonical v4 text. The
+  accepted v4 digest deliberately remains unpinned until the exact Task 9
+  target is measured, so measurement cannot masquerade as acceptance; audit
+  v2/v3 files and their historical manifest-free invocation behavior remain
+  byte-for-byte unchanged.
+
 - Added deterministic post-link Saturn release sealing and profile-neutral
   deployment staging. The canonical manifest binds the exact ELF,
   `SOURCE.DAT`, ISO, CUE, identity-v2 effective configuration, resolved
