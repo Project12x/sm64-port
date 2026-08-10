@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added a compiler-derived, canonical source-closure v2 seal for Saturn
+  builds. It records only classed target inputs and their byte hashes while
+  keeping permitted absolute toolchain dependencies outside the serialized
+  manifest. Post-build verification reparses actual depfiles, rejects any
+  missing/extra/class-owner/external dependency drift, rehashes every sealed
+  input, and in release mode checks only checked-in closure paths. This
+  prevents stale depfiles, host-path leakage, TOCTOU byte changes, or unrelated
+  workspace edits from silently being accepted as a reproducible release.
+
 - Added deterministic Saturn target profiles, strict canonical package
   descriptors, per-class aggregate manifests, and a package-set v2 root. This
   lets the playable BOB demo identify only its selected measured payloads while

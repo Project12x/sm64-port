@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Contracts for compiler-derived Saturn source closure sealing."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+
+from gen_source_closure import (
+    build_source_closure,
+    parse_make_depfile,
+    verify_source_closure,
+)
+
+
+class SourceClosureTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "repo"
+        self.root.mkdir()
+        self.write("src/main.c", '#include "main.h"\n')
+        self.write("include/main.h", "#define MAIN 1\n")
+        self.write("tools/saturn/gen_build_identity.py", "generator\n")
+        self.write("Makefile.saturn.mk", "recipe\n")
+        self.write("build/generated/scene.h", "generated\n")
+        self.write("build/generated/saturn_build_identity_values.inc", "derived\n")
+        self.write("obj/main.d", "obj/main.o: src/main.c include/main.h build/generated/scene.h \\\n tools/saturn/gen_build_identity.py Makefile.saturn.mk\n")
+        self.write("obj/scan.d", "obj/main.sx.o: src/main.c include/main.h\n")
+        self.depfiles = (self.root / "obj/main.d",)
+        self.asm_depfiles = (self.root / "obj/scan.d",)
+        self.derived = (self.root / "build/generated/saturn_build_identity_values.inc",)
+        self.external_roots: tuple[Path, ...] = ()
+        self.expected_external: tuple[Path, ...] = ()
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def write(self, relative: str, contents: str) -> Path:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(contents, encoding="utf-8")
+        return path
+
+    def build_closure(self):
+        return build_source_closure(
+            self.root,
+            (self.root / "src/main.c",),
+            self.depfiles,
+            (self.root / "Makefile.saturn.mk",),
+            (self.root / "tools/saturn/gen_build_identity.py",),
+            (self.root / "build/generated/scene.h",),
+            self.derived,
+            self.external_roots,
+        )
+
+    def write_sealed_closure(self) -> Path:
+        built = self.build_closure()
+        sealed = self.root / "build/sealed-source-closure.json"
+        sealed.parent.mkdir(parents=True, exist_ok=True)
+        sealed.write_bytes(built.canonical)
+        return sealed
+
+    def test_depfile_parser_handles_continuations_and_escaped_spaces(self) -> None:
+        self.assertEqual(
+            parse_make_depfile("obj.o: src/main.c include/a.h \\\n include/with\\ space.h\n"),
+            ("src/main.c", "include/a.h", "include/with space.h"),
+        )
+
+    def test_depfile_parser_rejects_multiple_targets_and_malformed_syntax(self) -> None:
+        for contents in ("a.o b.o: src/main.c\n", "a.o src/main.c\n", "a.o: src/main.c\\\n"):
+            with self.subTest(contents=contents):
+                with self.assertRaisesRegex(ValueError, "depfile"):
+                    parse_make_depfile(contents)
+
+    def test_closure_excludes_derived_identity_outputs_but_includes_generators(self) -> None:
+        built = self.build_closure()
+        records = {row["path"]: row["class"] for row in built.document["inputs"]}
+        self.assertNotIn("build/generated/saturn_build_identity_values.inc", records)
+        self.assertEqual(records["tools/saturn/gen_build_identity.py"], "generator")
+        self.assertEqual(records["src/main.c"], "compiled-source")
+        self.assertEqual(records["include/main.h"], "header")
+        self.assertEqual(records["build/generated/scene.h"], "generated-input")
+        self.assertEqual(built.document["schema"], "sm64-saturn-source-closure-v2")
+        self.assertEqual(built.canonical, json.dumps(
+            built.document, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii") + b"\n")
+
+    def test_explicit_duplicate_and_case_colliding_records_fail_closed(self) -> None:
+        for sources, recipes, message in (
+            ((self.root / "src/main.c", self.root / "src/main.c"), (), "duplicate"),
+            ((self.root / "src/main.c",), (self.root / "src/main.c",), "explicit"),
+        ):
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ValueError, message):
+                    build_source_closure(self.root, sources, self.depfiles, recipes, (), (), (), ())
+        self.write("include/MAIN.h", "case collision\n")
+        self.write("obj/case.d", "obj/case.o: include/main.h include/MAIN.h\n")
+        with self.assertRaisesRegex(ValueError, "case-colliding"):
+            build_source_closure(self.root, (), (self.root / "obj/case.d",), (), (), (), (), ())
+
+    def test_missing_depfile_and_repo_escape_fail_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "depfile.*not a file"):
+            build_source_closure(self.root, (), (self.root / "obj/missing.d",), (), (), (), (), ())
+        escaped = self.root.parent / "escape.h"
+        escaped.write_text("escape\n", encoding="utf-8")
+        self.write("obj/escape.d", f"obj/escape.o: {escaped.as_posix()}\n")
+        with self.assertRaisesRegex(ValueError, "unclassified external"):
+            build_source_closure(self.root, (), (self.root / "obj/escape.d",), (), (), (), (), ())
+
+    def test_generated_input_precedence_wins_over_compiler_discovery(self) -> None:
+        built = self.build_closure()
+        rows = {row["path"]: row for row in built.document["inputs"]}
+        self.assertEqual(rows["build/generated/scene.h"]["class"], "generated-input")
+        self.assertIn("compiler", rows["build/generated/scene.h"]["owners"])
+
+    def test_external_dependencies_are_returned_but_unclassified_ones_fail(self) -> None:
+        external = self.root.parent / "toolchain"
+        external.mkdir()
+        header = external / "sdk.h"
+        header.write_text("sdk\n", encoding="utf-8")
+        self.write("obj/external.d", f"obj/external.o: src/main.c {header.as_posix()}\n")
+        built = build_source_closure(
+            self.root, (self.root / "src/main.c",), (self.root / "obj/external.d",),
+            (), (), (), (), (external,),
+        )
+        self.assertEqual(built.external_dependencies, (header.resolve(),))
+        self.assertNotIn(str(header.resolve()), json.dumps(built.document))
+
+    def test_post_build_rejects_missing_extra_stale_and_toc_tou_inputs(self) -> None:
+        sealed = self.write_sealed_closure()
+        mutations = (
+            ("missing", lambda: self.write("obj/main.d", "obj/main.o: src/main.c include/main.h\n"), "closure"),
+            ("extra", lambda: (self.write("include/extra.h", "extra\n"), self.write("obj/main.d", "obj/main.o: src/main.c include/main.h Makefile.saturn.mk tools/saturn/gen_build_identity.py build/generated/scene.h include/extra.h\n")), "closure"),
+            ("stale", lambda: (self.write("include/stale.h", "stale\n"), self.write("obj/main.d", "obj/main.o: src/main.c include/main.h Makefile.saturn.mk tools/saturn/gen_build_identity.py build/generated/scene.h include/stale.h\n")), "closure"),
+            ("toc-tou", lambda: self.write("include/main.h", "changed after seal\n"), "changed after discovery"),
+        )
+        for name, mutation, message in mutations:
+            with self.subTest(mutation=name):
+                self.write("obj/main.d", "obj/main.o: src/main.c include/main.h build/generated/scene.h \\\n tools/saturn/gen_build_identity.py Makefile.saturn.mk\n")
+                sealed = self.write_sealed_closure()
+                mutation()
+                with self.assertRaisesRegex(ValueError, message):
+                    verify_source_closure(
+                        self.root, sealed, self.depfiles, self.asm_depfiles,
+                        self.derived, self.external_roots, self.expected_external,
+                        release_mode=False,
+                    )
+
+    def git_init_with_tracked_closure(self) -> Path:
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(["git", "add", "src", "include", "tools", "Makefile.saturn.mk", "obj"], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test", "commit", "-qm", "baseline"],
+            cwd=self.root, check=True,
+        )
+        sealed = self.write_sealed_closure()
+        return sealed
+
+    def test_release_mode_ignores_dirty_file_outside_closure(self) -> None:
+        sealed = self.git_init_with_tracked_closure()
+        self.write("docs/unrelated.md", "dirty\n")
+        verify_source_closure(
+            self.root, sealed, self.depfiles, (), self.derived,
+            self.external_roots, self.expected_external, release_mode=True,
+        )
+
+    def test_release_mode_rejects_dirty_or_untracked_checked_in_closure_inputs(self) -> None:
+        sealed = self.git_init_with_tracked_closure()
+        self.write("include/main.h", "dirty\n")
+        with self.assertRaisesRegex(ValueError, "release closure inputs are not clean"):
+            verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
+
+        self.write("include/untracked.h", "untracked\n")
+        self.write("obj/main.d", "obj/main.o: src/main.c include/main.h include/untracked.h build/generated/scene.h tools/saturn/gen_build_identity.py Makefile.saturn.mk\n")
+        sealed = self.write_sealed_closure()
+        with self.assertRaisesRegex(ValueError, "release closure inputs are not clean"):
+            verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
+
+    def test_release_mode_allows_clean_ignored_generated_input_without_git_status(self) -> None:
+        sealed = self.git_init_with_tracked_closure()
+        self.write(".gitignore", "build/\n")
+        subprocess.run(["git", "add", ".gitignore"], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test", "commit", "-qm", "ignore-build"],
+            cwd=self.root, check=True,
+        )
+        verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -246,6 +246,15 @@ Run independent specification-compliance review, then code-quality review. Fix f
 
 ### Task 2: Compiler-derived source closure and post-build verification
 
+**Live status (2026-08-10):** source-complete. Focused TDD RED observed the
+expected absent-module import failure before implementation; focused GREEN
+passes 11 closure contracts and the existing identity-bootstrap regression
+passes 7 tests. The implementation seals compiler-derived repository inputs,
+keeps attestation-bound external paths out of the document, and verifies exact
+post-build closure/class ownership plus byte and release-cleanliness drift.
+Independent specification and code-quality reviews remain open, as do all
+target/reproducibility/audit/package/smoke/visual/manual evidence gates.
+
 **Files:**
 - Create: `tools/saturn/gen_source_closure.py`
 - Create: `tools/saturn/test_gen_source_closure.py`
