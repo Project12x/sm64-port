@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Distinguished generated-header children from compiler-search includes while
+  sealing copied source assets. `water_skybox.c` legitimately quotes
+  `types.h`, but that header lives on the repository include path rather than
+  beside the generated C file; the first transitive walk falsely required
+  `build/us_pc/bin/types.h`. Missing local children now fail closed for
+  generated headers, while generated C targets remain directly inventoried
+  and their real compiler-resolved headers stay covered by depfile discovery.
+
 - Restored transitive generated-header sealing for the Saturn source-asset
   inventory. The direct target list included `text_strings.h` but not its
   generated `text_menu_strings.h` child, leaving the compiler-discovered child

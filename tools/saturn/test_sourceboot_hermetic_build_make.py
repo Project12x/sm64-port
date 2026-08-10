@@ -256,11 +256,14 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
     def test_release_asset_verifier_ignores_mtime_and_rejects_missing(self) -> None:
         root = Path(self.temporary.name) / "asset-root"
         target = root / "build/us_pc/actors/test/texture.rgba16.inc.c"
+        compiled = root / "build/us_pc/bin/water_skybox.c"
         required = root / "build/us_pc/include/text_strings.h"
         transitive = root / "build/us_pc/include/text_menu_strings.h"
         target.parent.mkdir(parents=True)
+        compiled.parent.mkdir(parents=True)
         required.parent.mkdir(parents=True)
         target.write_text("texture-bytes\n", encoding="utf-8")
+        compiled.write_text('#include "types.h"\n', encoding="utf-8")
         required.write_text('#include "text_menu_strings.h"\n', encoding="utf-8")
         transitive.write_text("menu-text-bytes\n", encoding="utf-8")
         source = root / "actor.c"
@@ -273,6 +276,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             "--root", os.fspath(root),
             "--build-prefix", "build/us_pc",
             "--source", "actor.c",
+            "--required", "build/us_pc/bin/water_skybox.c",
             "--required", "build/us_pc/include/text_strings.h",
             "--verify-existing",
             "--path-list", os.fspath(root / "asset-inputs-v1.txt"),
@@ -285,6 +289,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             verified.stdout.split(),
             [
                 "build/us_pc/actors/test/texture.rgba16.inc.c",
+                "build/us_pc/bin/water_skybox.c",
                 "build/us_pc/include/text_menu_strings.h",
                 "build/us_pc/include/text_strings.h",
             ],
@@ -294,6 +299,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             (
                 "sm64-saturn-path-list-v1\n"
                 f"{target.resolve().as_posix()}\n"
+                f"{compiled.resolve().as_posix()}\n"
                 f"{transitive.resolve().as_posix()}\n"
                 f"{required.resolve().as_posix()}\n"
             ).encode("utf-8"),

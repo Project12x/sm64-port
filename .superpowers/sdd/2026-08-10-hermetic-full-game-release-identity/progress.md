@@ -1257,6 +1257,19 @@
   `46162df5` identity-v1 generated-header traversal into source-closure v2; no
   external source, copied notice, or license change. Candidate A must restart
   from the resulting common commit; release/reproducibility gates remain open.
+- The first `085cdbc9` candidate restart stopped in verified asset inventory,
+  before discovery/identity. Generated `water_skybox.c` quotes repository
+  `types.h`, but the initial transitive walk falsely treated that compiler-
+  search include as missing `build/us_pc/bin/types.h`. No identity, compile,
+  release manifest, or reproducibility gate is claimed.
+- Generated-header boundary correction: missing local children fail closed for
+  generated headers; existing in-root children are followed; generated C/inc.c
+  direct targets remain inventoried and hashed, while actual compiler-resolved
+  headers remain depfile-sealed. The historical reviewed traversal did not put
+  water-skybox C through its recursive set. A water-style TDD fixture was RED
+  0/1 and GREEN 1/1; combined Make/source-closure coverage remains GREEN 38/38
+  with one existing case-filesystem skip. Candidate A must restart from the
+  resulting common commit; release/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

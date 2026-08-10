@@ -197,6 +197,12 @@ def collect_verified_target_closure(
                 candidate.resolve().relative_to(generated_root)
             except ValueError:
                 continue
+            if not candidate.is_file() and resolved.suffix != ".h":
+                # Generated C sources also use quoted includes resolved by the
+                # compiler's repository include paths (for example
+                # water_skybox.c includes "types.h"). A nonexistent path next
+                # to such a source is not a generated child.
+                continue
             if not candidate.is_file():
                 missing = candidate.relative_to(root).as_posix()
                 raise FileNotFoundError(

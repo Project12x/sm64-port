@@ -2015,6 +2015,20 @@ RED 0/1 and GREEN 1/1; combined Make/source-closure coverage is GREEN 38/38
 with one existing case-filesystem skip. Candidate A must restart from the
 resulting common source commit; release and reproducibility remain open.
 
+The first candidate restart from `085cdbc9` stopped during verified asset
+inventory, before discovery or identity publication. The transitive walker
+treated `water_skybox.c`'s quoted `types.h` as a missing local generated child,
+but pinned root Make compiles that generated C source with repository include
+paths; no `build/us_pc/bin/types.h` should exist. The reviewed historical walk
+did not place water-skybox C through its recursive input set. The close-port now
+requires missing local children only when walking generated headers, while
+following any existing in-root child and directly inventorying/hash-sealing all
+generated C/inc.c targets. Real compiler-resolved headers remain covered by
+pre-seal and post-link depfiles. A water-style regression was RED 0/1 and GREEN
+1/1; combined Make/source-closure coverage remains GREEN 38/38 with one
+existing case-filesystem skip. Candidate A must restart from the resulting
+common source commit; all release/reproducibility gates remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
