@@ -427,6 +427,9 @@ remain open. `external_dependency_keys` use `(component_id, component-relative
 path)`, and the `yaul-sh-sdk` version string carries Yaul `0.3.1`, pinned commit
 `6012f79f237773378c8014e70d8998ad95a38d98`, and exact GCC `--version` stdout.
 This keeps component install roots diagnostic-only and out of canonical bytes.
+Source implementation commit: `1ab25c845b1a0c782db9e2aec0d27324763e6017`.
+Focused verification: `test_gen_toolchain_attestation.py` passed 6 tests and
+the Task 2 closure regression passed 14 tests with one existing host-only skip.
 
 - [x] **Step 1: Write failing toolchain tests**
 
