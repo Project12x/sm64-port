@@ -246,17 +246,19 @@ Run independent specification-compliance review, then code-quality review. Fix f
 
 ### Task 2: Compiler-derived source closure and post-build verification
 
-**Live status (2026-08-10):** source-complete. Focused TDD RED observed the
-expected absent-module import failure before implementation; focused GREEN
-passes 11 closure contracts and the existing identity-bootstrap regression
-passes 7 tests. The implementation seals compiler-derived repository inputs,
+**Live status (2026-08-10):** `complete` at source commit `11cdef08` plus
+release-hardening repair `b43169b4`. Focused TDD RED observed the expected
+absent-module import failure before implementation; final focused GREEN passes
+14 closure contracts with one legitimate host-capability skip, and the existing
+identity-bootstrap regression passes 7 tests. The implementation seals compiler-derived repository inputs,
 keeps attestation-bound external paths out of the document, and verifies exact
 post-build closure/class ownership plus byte and release-cleanliness drift.
 The first independent combined specification/code-quality review returned
 `Needs fixes`: release cleanliness must Git-check generated inputs outside
-`build/` and must reject ignored/untracked checked-in closure inputs. Focused
-repair/rereview is active; both review gates and all target/reproducibility/
-audit/package/smoke/visual/manual evidence gates remain open.
+`build/` and must reject ignored/untracked checked-in closure inputs. The scoped
+rereview found those and both minor findings addressed with no new breakage,
+clearing Task 2's specification and code-quality gates. All target/
+reproducibility/audit/package/smoke/visual/manual evidence gates remain open.
 
 **Repair status (2026-08-10):** source-complete after focused RED/GREEN repair
 of the first review findings. Release verification now proves every
@@ -280,7 +282,7 @@ pending rereview; no target evidence gate is closed.
 - Produces: `build_source_closure(root: Path, compiled_sources: Sequence[Path], depfiles: Sequence[Path], recipe_inputs: Sequence[Path], generator_inputs: Sequence[Path], generated_inputs: Sequence[Path], derived_outputs: Sequence[Path], external_roots: Sequence[Path]) -> ClosureBuild`.
 - Produces: `verify_source_closure(root: Path, sealed_path: Path, actual_depfiles: Sequence[Path], assembly_scan_depfiles: Sequence[Path], derived_outputs: Sequence[Path], external_roots: Sequence[Path], expected_external_dependencies: Sequence[Path], release_mode: bool) -> tuple[Path, ...]` returning the verified external dependencies.
 
-- [ ] **Step 1: Write failing depfile, classification, mutation, and cleanliness tests**
+- [x] **Step 1: Write failing depfile, classification, mutation, and cleanliness tests**
 
 ```python
 def test_depfile_parser_handles_continuations_and_escaped_spaces(self) -> None:
@@ -320,7 +322,7 @@ def test_release_mode_ignores_dirty_file_outside_closure(self) -> None:
 
 Also test duplicate/case-colliding records, missing depfiles, malformed multiple-target depfiles, repo escapes, generated-input precedence, unclassified external paths, dirty tracked closure inputs, untracked checked-in closure inputs, and clean ignored `generated-input` records.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_source_closure.py
@@ -328,7 +330,7 @@ Also test duplicate/case-colliding records, missing depfiles, malformed multiple
 
 Expected: import failure for absent `gen_source_closure`.
 
-- [ ] **Step 3: Implement strict depfile parsing and classification**
+- [x] **Step 3: Implement strict depfile parsing and classification**
 
 Use one record per canonical path and this precedence:
 
@@ -357,7 +359,7 @@ document = {
 
 Each record contains only `path`, `sha256`, `class`, and sorted `owners`. Absolute external paths are returned separately for Task 3 and never serialized here.
 
-- [ ] **Step 4: Implement verification and release cleanliness**
+- [x] **Step 4: Implement verification and release cleanliness**
 
 Post-build verification must:
 
@@ -385,7 +387,7 @@ for key, row in sealed_rows.items():
         raise ValueError(f"source closure input changed after discovery: {row['path']}")
 ```
 
-- [ ] **Step 5: Run tests and the broader identity bootstrap regression tests**
+- [x] **Step 5: Run tests and the broader identity bootstrap regression tests**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_source_closure.py
@@ -394,7 +396,7 @@ for key, row in sealed_rows.items():
 
 Expected: new focused tests pass; existing bootstrap tests retain their pre-Task-5 behavior.
 
-- [ ] **Step 6: Update changelog/ledgers, commit, and clear both reviews**
+- [x] **Step 6: Update changelog/ledgers, commit, and clear both reviews**
 
 ```powershell
 git add CHANGELOG.md docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md tools/saturn/gen_source_closure.py tools/saturn/test_gen_source_closure.py
