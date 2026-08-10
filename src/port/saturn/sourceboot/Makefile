@@ -1150,13 +1150,24 @@ identity-discovery: $(SOURCEBOOT_DISCOVERY_DEPFILES)
 SOURCEBOOT_SX_BUILD_DEPS := $(foreach src,$(SH_SRCS_S),\
   $(call macro-convert-build-path,$(addsuffix .d,$(basename $(src)))))
 SOURCEBOOT_C_AND_CXX_DEPS := $(filter-out $(SOURCEBOOT_SX_BUILD_DEPS),$(SH_DEPS))
-SOURCEBOOT_POSTLINK_SX_DEPS := $(foreach src,$(SH_SRCS_S),\
-  $(SOURCEBOOT_DISCOVERY_DEPS)/postlink-$(call sourceboot-dep-key,$(src)).d)
+sourceboot-postlink-sx-dep = $(SOURCEBOOT_DISCOVERY_DEPS)/postlink-$(call sourceboot-dep-key,$(1)).d
+SOURCEBOOT_POSTLINK_SX_DEPS := $(foreach src,$(SH_SRCS_S),$(call sourceboot-postlink-sx-dep,$(src)))
+
+# Each scan is a real target. A recipe-level foreach joins its expansions with
+# spaces, turning later GCC commands into input operands of the first and
+# leaving every depfile except the last absent. Depending on the ELF preserves
+# the required post-link freshness boundary rather than merely naming it.
+define sourceboot-postlink-sx-rule
+$(call sourceboot-postlink-sx-dep,$(1)): $(SH_BUILD_PATH)/$(SH_PROGRAM).elf $(1) sourceboot-force-discovery-scan
+	@mkdir -p "$(SOURCEBOOT_DISCOVERY_DEPS)"
+	$(call sourceboot-discover-sx-dependency,$(1),$(call sourceboot-postlink-sx-dep,$(1)))
+endef
+
+$(foreach src,$(SH_SRCS_S),$(eval $(call sourceboot-postlink-sx-rule,$(src))))
 
 .PHONY: verify-sealed-inputs
-verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
+verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf $(SOURCEBOOT_POSTLINK_SX_DEPS)
 	@mkdir -p "$(SOURCEBOOT_DISCOVERY_DEPS)"
-	$(foreach src,$(SH_SRCS_S),$(call sourceboot-discover-sx-dependency,$(src),$(SOURCEBOOT_DISCOVERY_DEPS)/postlink-$(call sourceboot-dep-key,$(src)).d))
 	$(call sourceboot-write-path-list,$(SOURCEBOOT_ACTUAL_DEPFILE_LIST),$(SOURCEBOOT_C_AND_CXX_DEPS))
 	$(call sourceboot-write-path-list,$(SOURCEBOOT_ASSEMBLY_DEPFILE_LIST),$(SOURCEBOOT_POSTLINK_SX_DEPS))
 	$(call sourceboot-write-path-list,$(SOURCEBOOT_DERIVED_OUTPUT_LIST),$(SOURCEBOOT_DERIVED_OUTPUTS))

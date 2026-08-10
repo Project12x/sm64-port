@@ -1918,6 +1918,27 @@ temporary-environment recipe, with no copied upstream bytes or notice change.
 Candidate A must restart at the resulting common source commit; package,
 post-link seal, release, and reproducibility gates remain open.
 
+Candidate A from `d48e069e` published identity tag
+`id-fb999abbcc42c7fa`, completed compilation/link, and proved the candidate
+temporary boundary by producing `IP.BIN` (4,108 bytes), `SOURCE.DAT`
+(3,565,696 bytes), ISO (4,968,448 bytes), and CUE (88 bytes). It then stopped
+inside post-link source-closure verification: the recipe-level `foreach` for
+fresh assembly scans expanded all GCC commands onto one shell line. Later GCC
+paths became operands of the first invocation, only the final depfile was
+written, and the verifier correctly rejected the missing generated
+`bob_sky_bitmap.sx` depfile. No post-link closure pass or release manifest is
+claimed. Each post-link assembly scan is now an explicit Make target whose
+prerequisites include the linked ELF, its own source, and the force-scan gate;
+`verify-sealed-inputs` requires the complete depfile set. This preserves the
+required after-link freshness and makes command separation structural under
+both serial and parallel Make. TDD was RED at Make 14/15 and GREEN at 15/15;
+combined Make, source-closure, and attestation coverage is 53/53 with the one
+existing case-filesystem skip. Reference record: clean-room correction using
+the existing per-source discovery-rule pattern in the same sourceboot
+Makefile; no external source, copied bytes, license, or notice change.
+Candidate A must restart at the resulting common source commit; post-link
+closure, release, and reproducibility gates remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

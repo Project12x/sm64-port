@@ -1174,6 +1174,24 @@
   the repository's existing explicit temp-environment recipe, no copied bytes
   or notice change. Candidate A must restart at the resulting common commit;
   package/post-link/release/reproducibility gates remain open.
+- Candidate A from `d48e069e` published identity v2 tag
+  `id-fb999abbcc42c7fa`, completed compile/link, and produced verified-present
+  package intermediates: 4,108-byte IP.BIN, 3,565,696-byte SOURCE.DAT,
+  4,968,448-byte ISO, and 88-byte CUE. Post-link closure verification then
+  stopped on a missing generated `bob_sky_bitmap.sx` depfile. No post-link
+  closure pass or release manifest is claimed.
+- Post-link scan correction: recipe-level `foreach` had space-joined all fresh
+  assembly GCC invocations, so later compiler paths became operands and only
+  the final depfile existed. Every assembly scan is now an explicit Make
+  target depending on the linked ELF, its own source, and force-scan gate;
+  `verify-sealed-inputs` requires the entire depfile set. This structurally
+  preserves after-link freshness and independent commands. TDD RED was Make
+  14/15; GREEN is Make 15/15, with source closure plus attestation yielding
+  53/53 and one existing case-filesystem skip. Reference: clean-room reuse of
+  the same sourceboot Makefile's existing per-source discovery rule; no
+  external source, copied bytes, license, or notice change. Candidate A must
+  restart at the resulting common commit; post-link closure, release, and
+  reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

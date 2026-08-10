@@ -453,6 +453,25 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertNotIn("--compiled-source \"", result.stdout)
         self.assertNotIn("--depfile \"", result.stdout)
 
+    def test_postlink_assembly_scans_are_independent_targets_after_elf(self) -> None:
+        makefile = self.sourceboot_makefile()
+        self.assertIn("define sourceboot-postlink-sx-rule", makefile)
+        self.assertIn(
+            "$(call sourceboot-postlink-sx-dep,$(1)): "
+            "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf $(1) sourceboot-force-discovery-scan",
+            makefile,
+        )
+        self.assertIn(
+            "verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf "
+            "$(SOURCEBOOT_POSTLINK_SX_DEPS)",
+            makefile,
+        )
+        self.assertNotIn(
+            "\t$(foreach src,$(SH_SRCS_S),"
+            "$(call sourceboot-discover-sx-dependency",
+            makefile,
+        )
+
     def test_second_discovery_rescans_cached_depfile_after_flag_drift(self) -> None:
         dep_root = Path(self.temporary.name) / "discovery-deps"
         dep_root_arg = f"SOURCEBOOT_DISCOVERY_DEPS={dep_root.as_posix()}"

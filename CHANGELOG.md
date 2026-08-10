@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Made every post-link preprocessed-assembly dependency scan an independent
+  Make target ordered after the linked ELF. A recipe-level `foreach` had joined
+  all GCC invocations into one shell command, treating later compiler paths as
+  input operands and emitting only the final depfile; release verification now
+  requires each fresh scan as an explicit prerequisite before closure
+  rediscovery, so no missing assembly input can be skipped or silently stale.
+
 - Gave pinned Yaul packaging helpers a writable candidate-local temporary
   directory. `wrap-error` otherwise fell back to `/tmp`, which is unwritable
   when the build runs under a restricted identity, after the entire ELF had
