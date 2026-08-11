@@ -1494,6 +1494,18 @@
   `80f66286...9cba5`. Step 6 is source-complete in the scoped contract/pin/test
   behavior commit with CHANGELOG, plan, and ledger. Exact candidate-B v4 is
   still open; measurement is not substituted for acceptance.
+- Exact-v4 command preflight exposed a Task 8/Task 9 interface defect before
+  any target tool ran: Task 9 requires a durable `--json-output`, while the
+  verifier reserved it for non-accepting observation mode. Normal release-
+  bound v4 now publishes canonical result schema
+  `sm64-saturn-native-math-audit-v4-result-v1` exclusively after all failures
+  are empty. V2/v3, measurement, and producer-commit observation modes remain
+  unchanged; preexisting and input-aliasing outputs fail before target tools.
+  Focused RED was 0/1 on the exact rejection, GREEN 1/1, and the five-test
+  v4/measurement/mode/integrity slice is GREEN 5/5. Reference: same-repository
+  close-port of the reviewed measurement document and exact-object publisher;
+  no external source or license/notice change. Exact candidate-B v4 remains
+  open pending the scoped behavior commit and real command.
 
 ## Task 5 review repair round 2
 

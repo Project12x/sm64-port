@@ -6167,6 +6167,7 @@ def main(argv: list[str] | None = None) -> int:
 
     verified_release: release_manifest_module.ReleaseManifestVerification | None = None
     measurement_document: dict[str, Any] | None = None
+    audit_result_document: dict[str, Any] | None = None
     try:
         if args.measure_audit_report is not None:
             read_inputs = [
@@ -6214,8 +6215,8 @@ def main(argv: list[str] | None = None) -> int:
             actual_commit = run_command(["git", "rev-parse", "HEAD"]).strip()
             if actual_commit != args.producer_commit:
                 raise ValueError("producer commit does not match HEAD")
-        elif args.json_output is not None or args.producer_commit is not None:
-            raise ValueError("--json-output/--producer-commit require observation-only")
+        elif args.producer_commit is not None:
+            raise ValueError("--producer-commit requires observation-only")
         if args.measure_audit_report is not None:
             if args.audit_route_oracle is None:
                 raise ValueError("--measure-audit-report requires --audit-route-oracle")
@@ -6240,6 +6241,7 @@ def main(argv: list[str] | None = None) -> int:
         verify_route_oracle_integrity(route_text, oracle)
         audit_oracle = None
         audit_contract = None
+        audit_contract_text = None
         if args.measure_audit_report is None and (
             (args.audit_route_oracle is None) != (args.audit_contract is None)
         ):
@@ -6264,6 +6266,26 @@ def main(argv: list[str] | None = None) -> int:
                 if audit_contract.version == 4 and args.release_manifest is None:
                     raise ValueError("--release-manifest is required for audit v4")
                 verify_audit_contract_integrity(audit_contract_text, audit_contract)
+        if args.json_output is not None and not args.audit_observation_only:
+            if (
+                args.measure_audit_report is not None
+                or audit_contract is None
+                or audit_contract.version != 4
+            ):
+                raise ValueError("--json-output requires observation-only or audit v4")
+            read_inputs = [
+                ("ELF", args.elf),
+                ("baseline", args.baseline),
+                ("route oracle", args.route_oracle),
+                ("audit route oracle", args.audit_route_oracle),
+                ("audit contract", args.audit_contract),
+                ("release manifest", args.release_manifest),
+            ]
+            reject_output_input_aliases(args.json_output, read_inputs)
+            if args.json_output.exists() or args.json_output.is_symlink():
+                raise ValueError(
+                    f"refusing to overwrite audit result output: {args.json_output}"
+                )
         if not args.elf.is_file():
             raise ValueError("ELF is not readable")
         elf_path = args.elf.resolve()
@@ -6440,6 +6462,36 @@ def main(argv: list[str] | None = None) -> int:
                         "audit total differs from fixed post-conversion baseline "
                         f"{audit_contract.expected_total}, found {actual_total}"
                     )
+                if audit_contract.version == 4 and args.json_output is not None:
+                    assert verified_release is not None
+                    assert audit_contract_text is not None
+                    release_document = verified_release.document
+                    audit_result_document = {
+                        "schema": "sm64-saturn-native-math-audit-v4-result-v1",
+                        "status": "passed",
+                        "root": audit_contract.expected_root,
+                        "total": actual_total,
+                        "callers": sorted(
+                            {caller for (_owner, caller, _helper) in observed}
+                        ),
+                        "verified_absent_callers": sorted(
+                            audit_contract.forbidden_callers
+                        ),
+                        "audit_contract_sha256": baseline_digest(
+                            audit_contract_text
+                        ),
+                        "release_manifest_sha256": (
+                            verified_release.manifest_sha256
+                        ),
+                        "identity_sha256": release_document["identity_sha256"],
+                        "effective_config_sha256": (
+                            release_document["effective_config_sha256"]
+                        ),
+                        "target_profile_sha256": (
+                            release_document["target_profile_sha256"]
+                        ),
+                        "elf_sha256": file_digest(elf_path),
+                    }
             if analysis is not None:
                 assert audit_edge_result is not None
                 unresolved = list(audit_edge_result.unlisted_transfers)
@@ -6545,6 +6597,19 @@ def main(argv: list[str] | None = None) -> int:
                 existing_error=(
                     "refusing to overwrite measurement output: "
                     f"{args.measure_audit_report}"
+                ),
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            print(f"SH-2 native-math census ERROR: {error}", file=sys.stderr)
+            return 2
+    if audit_result_document is not None:
+        try:
+            publish_new_bytes(
+                args.json_output,
+                canonical_json_bytes(audit_result_document),
+                existing_error=(
+                    "refusing to overwrite audit result output: "
+                    f"{args.json_output}"
                 ),
             )
         except (OSError, RuntimeError, ValueError) as error:

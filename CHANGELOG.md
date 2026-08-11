@@ -4,6 +4,13 @@
 
 ### Added
 
+- Made normal release-bound audit-v4 acceptance publish a canonical,
+  no-overwrite JSON result after every audit gate passes. This closes the gap
+  where `--json-output` was reserved for non-accepting observation mode even
+  though the release workflow required a durable acceptance record; v2/v3 and
+  producer-commit observation semantics remain unchanged, while v4 output
+  aliases and preexisting destinations fail before target tools run.
+
 - Sealed the reproducible identity-v2 BOB release into native-math audit v4
   after one-shot target measurement proved a total of 700 from
   `_game_loop_one_iteration` and no `_atan2_lookup` or `_atan2s` caller. The

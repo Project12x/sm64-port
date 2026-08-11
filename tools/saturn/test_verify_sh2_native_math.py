@@ -2513,6 +2513,102 @@ static bool demo_detached_start_decoy(uint32_t generation)
             self.assertNotEqual(tool_elf_paths[0], fixture.outputs["elf"].resolve())
             self.assertFalse(tool_elf_paths[0].exists())
 
+    def test_v4_acceptance_cli_writes_release_bound_result_without_observation_mode(self) -> None:
+        from test_release_manifest import ReleaseFixture
+        import release_manifest as release_manifest_module
+
+        sections = "  [ 1] .text PROGBITS 06001000 001000 002004 00 AX 0 0 2\n"
+        symbols = (
+            "   1: 06001000 16 FUNC GLOBAL DEFAULT 1 _game_loop_one_iteration\n"
+            "   2: 06002000 4 FUNC GLOBAL DEFAULT 1 ___mulsf3\n"
+        )
+        disassembly = (
+            "06001000 <_game_loop_one_iteration>:\n"
+            " 6001000: b7 fe bsr 6002000 <___mulsf3>\n"
+            " 6001002: 00 09 nop\n"
+            " 6001004: 00 0b rts\n"
+            " 6001006: 00 09 nop\n"
+            "06002000 <___mulsf3>:\n"
+            " 6002000: 00 0b rts\n"
+            " 6002002: 00 09 nop\n"
+        )
+
+        def fake_command(command: list[str]) -> str:
+            if command[1] == "-d":
+                return disassembly
+            if command[1] == "-SW":
+                return sections
+            if command[1] == "-sW":
+                return symbols
+            if command[1] == "--debug-dump=decodedline":
+                return "fixture.c 1 0x06001000\n"
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
+            root = Path(temporary)
+            fixture = ReleaseFixture(root)
+            manifest = fixture.write()
+            baseline = root / "baseline.txt"
+            route_oracle = root / "route.txt"
+            audit_oracle = root / "audit-route.txt"
+            contract_path = root / "contract-v4.txt"
+            report = root / "audit-v4.json"
+            baseline.write_text(
+                "BASELINE_VERSION 1\nHOT_CEILING 1\n"
+                "HOT _game_loop_one_iteration ___mulsf3 1\n",
+                encoding="utf-8",
+            )
+            route_oracle.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            audit_oracle.write_bytes(route_oracle.read_bytes())
+            with release_manifest_module.verify_release_manifest(manifest) as release:
+                document = release.document
+                contract_text = self._v4_contract_text(
+                    release_manifest=release.manifest_sha256,
+                    identity=document["identity_sha256"],
+                    effective_config=document["effective_config_sha256"],
+                    target_profile=document["target_profile_sha256"],
+                    elf=document["outputs"]["elf"]["sha256"],
+                ).replace("EXPECTED_TOTAL 701", "EXPECTED_TOTAL 1")
+                expected = {
+                    "schema": "sm64-saturn-native-math-audit-v4-result-v1",
+                    "status": "passed",
+                    "root": "_game_loop_one_iteration",
+                    "total": 1,
+                    "callers": ["_game_loop_one_iteration"],
+                    "verified_absent_callers": ["_atan2_lookup", "_atan2s"],
+                    "audit_contract_sha256": hashlib.sha256(
+                        contract_text.encode("utf-8")
+                    ).hexdigest(),
+                    "release_manifest_sha256": release.manifest_sha256,
+                    "identity_sha256": document["identity_sha256"],
+                    "effective_config_sha256": document["effective_config_sha256"],
+                    "target_profile_sha256": document["target_profile_sha256"],
+                    "elf_sha256": document["outputs"]["elf"]["sha256"],
+                }
+            contract_path.write_text(contract_text, encoding="utf-8")
+            with patch.object(verifier, "run_command", side_effect=fake_command), \
+                    patch.object(verifier, "verify_baseline_integrity"), \
+                    patch.object(verifier, "verify_route_oracle_integrity"), \
+                    patch.object(verifier, "verify_audit_contract_integrity"), \
+                    patch.object(
+                        verifier, "prove_sourceboot_bob_null_camera_triggers",
+                        return_value=False,
+                    ), patch.object(verifier, "source_locations", return_value={}):
+                self.assertEqual(verifier.main([
+                    str(fixture.outputs["elf"]), str(baseline),
+                    "--route-oracle", str(route_oracle),
+                    "--audit-route-oracle", str(audit_oracle),
+                    "--audit-contract", str(contract_path),
+                    "--release-manifest", str(manifest),
+                    "--json-output", str(report),
+                    "--objdump", "objdump", "--readelf", "readelf",
+                    "--addr2line", "addr2line",
+                ]), 0)
+            self.assertEqual(json.loads(report.read_bytes()), expected)
+
     def test_measurement_cli_rejects_contract_or_missing_inputs_before_tools(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
             root = Path(temporary)

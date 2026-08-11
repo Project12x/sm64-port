@@ -2276,6 +2276,20 @@ GREEN 3/3. Historical v2/v3 digests remain `87dabb51...6127e2` and
 pin, test, CHANGELOG, plan, and ledger behavior commit. Exact v4 execution
 against candidate B remains open and is the only acceptance audit.
 
+Exact-v4 preflight exposed a Task 8/Task 9 interface gap before any target tool
+ran: the Task 9 command requires a durable `--json-output`, but the verifier
+reserved that flag exclusively for non-accepting observation mode. The scoped
+correction permits canonical, exclusive JSON publication only for normal
+release-bound audit v4 after every acceptance failure list is empty; v2/v3,
+measurement, and producer-commit observation semantics remain unchanged.
+Preexisting or input-aliasing acceptance outputs fail before target tools.
+Focused TDD was RED 0/1 on the exact mode rejection, GREEN 1/1 after the
+correction, and the five-test v4/measurement/mode/integrity slice is GREEN
+5/5. Reference: close-port of the same verifier's reviewed measurement
+document plus exact-object `publish_new_bytes` boundary; no external source,
+copied bytes, license, or notice change. Exact candidate-B v4 remains open
+until this correction is committed and the full planned command exits 0.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
