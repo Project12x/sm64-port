@@ -431,9 +431,9 @@
 ## 2026-08-11 generic actor bundle Task 3 — generic S64B variant banks
 
 - Status: `source-complete; independent review pending`. The behavior commit
-  is the Task 3 transition itself; its exact SHA is recorded in the follow-up
-  evidence commit and Task 3 report. Task 4 has not started, and Task 16 Tasks
-  2-5 remain blocked/open on the rest of the prerequisite lane.
+  is `031e1620` (`feat(saturn): compile source-selected actor variant banks`),
+  followed by this evidence/status transition. Task 4 has not started, and
+  Task 16 Tasks 2-5 remain blocked/open on the rest of the prerequisite lane.
 - TDD: the required variant RED failed at import with
   `ModuleNotFoundError: No module named 'actor_variant_bank'`; the animation
   parser RED separately failed because `parse_animation_table_text` did not

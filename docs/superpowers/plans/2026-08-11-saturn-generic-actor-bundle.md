@@ -12,8 +12,8 @@
 subagent-driven workflow. Tasks 1 and 2 are complete and independently
 approved. Task 2 repair `f1799118` passed scoped rereview with both Important
 findings addressed and no new breakage; its malformed-path error-type Minor is
-deferred to the final branch review. Task 3 is source-complete in its behavior
-commit (exact SHA recorded by the follow-up evidence transition) and awaits
+deferred to the final branch review. Task 3 is source-complete at behavior
+commit `031e1620` and awaits
 independent review before Task 4. Target, release, smoke, visual, desktop,
 manual, and total-game gates remain open.
 
@@ -385,9 +385,9 @@ leaves Mario's 596,896-byte payload at
 `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`
 and its exact JSON report hash at
 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
-Focused Python, historical pose/meshlet, and rigid-group gates pass; the
-behavior commit is this transition and its exact SHA is recorded by the
-follow-up evidence commit/report. No `dl_rigid_groups.py` change was required:
+Focused Python, historical pose/meshlet, and rigid-group gates pass; behavior
+commit `031e1620` is followed by this evidence/status transition. No
+`dl_rigid_groups.py` change was required:
 the existing walker exposed every modeled token needed by the fixtures.
 Sourceboot, scene-level S64F orchestration, target/release, whole-game, smoke,
 visual, desktop, and manual gates remain open and unclaimed.
