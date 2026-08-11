@@ -32,12 +32,14 @@ two fixed LWRAM SH-2 workspace lanes, scalar generation-last publication, and
 lease-drained master-owned CD scene transitions. Its implementation plan is
 active at
 `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md`.
-Tasks 1-3 are source-complete and independently approved: shared target SHA-256,
-canonical 96/64/88-byte S64F-v3 host/target validation, and strict
-source-selected generic S64B compilation. Task 3 preserves the exact historical
-Mario bank while rejecting unrepresentable or unattested source semantics.
-Task 4 real BOB S64F-v3 orchestration is next. Completing and reviewing the
-full prerequisite remains the gate before Task 16 Task 2 resumes.
+Tasks 1 and 2 are source-complete and independently approved: shared target
+SHA-256 and canonical 96/64/88-byte S64F-v3 host/target validation. Task 3's
+strict source-selected generic S64B compiler is source-complete after a third,
+real-source binding repair and awaits scoped rereview. It preserves the exact
+historical Mario bank while rejecting unrepresentable or unattested selected
+semantics. Task 4 real BOB S64F-v3 orchestration remains unstarted until that
+rereview. Completing and reviewing the full prerequisite remains the gate
+before Task 16 Task 2 resumes.
 The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system

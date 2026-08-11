@@ -12,6 +12,16 @@
 
 ### Fixed
 
+- Distinguished the repository's two-argument `LOAD_MODEL_FROM_GEO` and
+  three-argument `LOAD_MODEL_FROM_DL` source bindings in the generic actor
+  compiler. Valid neighboring direct-display-list commands no longer reject a
+  selected GeoLayout, while a selected direct list retains its authoritative
+  source layer and feeds that layer through material, opacity, typed-report,
+  source-identity, and S64B semantics. Unsupported selected layers and
+  malformed, empty, duplicate, conflicting, unterminated, or suffix-tainted
+  bindings still fail closed; the closure schema and historical Mario bytes
+  are unchanged.
+
 - Bound generic actor model selection to the attested binding-source bytes,
   not just closure metadata: the selected numeric model must now have one
   exact `LOAD_MODEL_FROM_GEO/DL` (or model-ID comment) mapping to the declared

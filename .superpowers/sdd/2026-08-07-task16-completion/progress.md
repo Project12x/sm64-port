@@ -554,3 +554,42 @@
   S64F/registry/cart/workspace, Task 16 Tasks 2-5, feature-off, target/P2/Ymir,
   transition, release/reseal, smoke/visual/desktop/owner-manual, and total-game
   gates. None is claimed by this source-only repair.
+
+## 2026-08-11 generic actor bundle Task 3 real-source repair round 3
+
+- Status: `source-complete-review-repair-round-3; scoped rereview pending`.
+  A Task 4 pre-edit BOB probe found the selected valid two-argument
+  `LOAD_MODEL_FROM_GEO(MODEL_WOODEN_SIGNPOST, wooden_signpost_geo)` was rejected
+  because the next valid three-argument direct-DL command was globally parsed
+  as malformed. Task 4 remains unstarted and blocked on this rereview.
+- Design correction: the attested binding-source bytes are authoritative; no
+  closure layer field was added. The parser coverage-validates exact GEO and
+  DL forms and retains the third direct-DL layer internally. Representability
+  is enforced only for a selected direct-DL binding. Selected direct lists use
+  a synthetic root GeoLayout at the strict declared Gfx source so the layer
+  reaches existing material, opacity, Mesh IR, report, and S64B semantics;
+  valid unselected neighboring layers do not affect a selected GeoLayout.
+- TDD: the initial three real-shaped/direct-DL tests all errored at the old
+  two-argument parser. After the first repair, a focused adjacent-binding RED
+  showed an unselected `LAYER_TRANSPARENT_DECAL` still poisoned the selected
+  GeoLayout. GREEN is 28/28 focused variant/source tests, 25/25 rigid-group
+  tests, compileall, and the combined native-root variant/pose/meshlet Make
+  wave. Wrong arity, empty arguments, duplicate/conflicting selected bindings,
+  unknown selected layers, unterminated commands, and suffix tokens fail named.
+- Real-source evidence: BOB `bhvMessagePanel`, model ID `0x007c`, now selects
+  exactly `MODEL_WOODEN_SIGNPOST`, `wooden_signpost_geo`,
+  `actors/wooden_signpost/geo.inc.c`, binding kind `geo`, layer none. Exact
+  358-byte direct-DL alpha/opaque fixtures have lane/scratch 104/211 and
+  payload/source hashes
+  `89f2f521e98deda81c4af9be1b8867d23e9245421da8554ba720119234a7fb30` /
+  `eaf9fcbffaa587ff5cb46a45f621e5f5294eddcd14cb640e56f1bb245d0d88d1`
+  and
+  `3472a30bf9c4be9e8f3f1b7c86a18e71fcffa3e5382f0c85d756317740811058` /
+  `57234f661d1cb7dec5a2c15999bc649f247f89c1a37f33e064033c6b53e45909`.
+- Legacy proof: Mario S64B remains 596,896 bytes at
+  `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
+  exact JSON remains 562,096 bytes at
+  `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+- Remaining: scoped Task 3 rereview; Task 4 and all S64F/registry/cart/workspace,
+  Task 16 Tasks 2-5, feature-off, target/P2/Ymir, transition, release/reseal,
+  smoke/visual/desktop/owner-manual, and total-game gates. None is claimed.

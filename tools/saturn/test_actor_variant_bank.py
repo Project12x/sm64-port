@@ -196,6 +196,164 @@ const GeoLayout test_geo[] = {
 
 
 class ActorVariantBankTest(unittest.TestCase):
+    def test_real_shaped_adjacent_geo_and_direct_dl_bindings_select_geo(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            script = fixture.root / "levels/test/script.c"
+            script.write_text(
+                "LOAD_MODEL_FROM_GEO(MODEL_TEST, test_geo)\n"
+                "LOAD_MODEL_FROM_DL( MODEL_WHITE_PARTICLE_SMALL, "
+                "white_particle_small_dl, LAYER_ALPHA)\n"
+                "LOAD_MODEL_FROM_DL(MODEL_UNSELECTED_DECAL, "
+                "unselected_decal_dl, LAYER_TRANSPARENT_DECAL)\n",
+                encoding="utf-8", newline="\n",
+            )
+            fixture.rehash()
+            compiled = fixture.compile(model=1)
+
+        self.assertEqual(compiled.report["selection"]["model"], "MODEL_TEST")
+        self.assertEqual(compiled.report["selection"]["geo_root"], "test_geo")
+        self.assertEqual(compiled.report["selection"]["model_binding"], {
+            "kind": "geo", "layer": None,
+        })
+        self.assertEqual(compiled.report["geometry"]["primitives"], [
+            {"material": 0, "indices": [0, 1, 2, 3]},
+        ])
+        self.assertEqual(compiled.report["selection"]["layers"], [])
+
+    def test_selected_direct_dl_layer_drives_exact_typed_and_binary_semantics(self) -> None:
+        def compile_layer(directory: str, layer: str):
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            script = fixture.root / "levels/test/script.c"
+            script.write_text(
+                f"LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, {layer})\n",
+                encoding="utf-8", newline="\n",
+            )
+            fixture.record["geo_root"] = "test_root_dl"
+            fixture.record["model_variants"][0]["geo_root"] = "test_root_dl"
+            binding = fixture.record["root_provenance"]["models"]["MODEL_TEST"]
+            binding["geo_symbol"] = "test_root_dl"
+            binding["geo_source"] = "actors/test/model.inc.c"
+            fixture.rehash()
+            return fixture.compile(model=1)
+
+        with tempfile.TemporaryDirectory() as alpha_directory:
+            alpha = compile_layer(alpha_directory, "LAYER_ALPHA")
+        with tempfile.TemporaryDirectory() as opaque_directory:
+            opaque = compile_layer(opaque_directory, "LAYER_OPAQUE")
+
+        self.assertEqual((len(alpha.payload), alpha.lane_bytes, alpha.maximum_scratch),
+                         (358, 104, 211))
+        self.assertEqual(alpha.payload_sha256,
+                         "89f2f521e98deda81c4af9be1b8867d23e9245421da8554ba720119234a7fb30")
+        self.assertEqual(alpha.source_sha256,
+                         "eaf9fcbffaa587ff5cb46a45f621e5f5294eddcd14cb640e56f1bb245d0d88d1")
+        self.assertEqual([source.path for source in alpha.sources], [
+            "actors/test/model.inc.c",
+            "data/behavior_data.c",
+            "include/model_ids.h",
+            "levels/test/script.c",
+        ])
+        self.assertEqual(alpha.report["selection"]["model_binding"], {
+            "kind": "display_list", "layer": "LAYER_ALPHA",
+        })
+        self.assertEqual(alpha.report["selection"]["layers"], [{
+            "part_ordinal": 0, "layer": "LAYER_ALPHA", "opacity": "alpha",
+        }])
+        self.assertEqual(alpha.report["geometry"]["materials"], [{
+            "material_id": 0, "rgb": [31, 16, 8], "light": "test_light",
+            "texture": None, "combine_mode": None, "cull_back": True,
+            "env_color": None, "alpha_compare": None, "layer": "LAYER_ALPHA",
+        }])
+        self.assertEqual(alpha.report["geometry"]["primitives"], [
+            {"material": 0, "indices": [0, 1, 2, 3]},
+        ])
+        self.assertEqual(
+            [meshlet["opacity"] for meshlet in alpha.report["geometry"]["meshlets"]],
+            [1],
+        )
+        self.assertEqual(opaque.report["selection"]["model_binding"], {
+            "kind": "display_list", "layer": "LAYER_OPAQUE",
+        })
+        self.assertEqual(opaque.payload_sha256,
+                         "3472a30bf9c4be9e8f3f1b7c86a18e71fcffa3e5382f0c85d756317740811058")
+        self.assertEqual(opaque.source_sha256,
+                         "57234f661d1cb7dec5a2c15999bc649f247f89c1a37f33e064033c6b53e45909")
+        self.assertEqual(opaque.report["selection"]["layers"], [])
+        self.assertEqual(opaque.report["geometry"]["materials"][0]["layer"],
+                         "LAYER_OPAQUE")
+        self.assertEqual(
+            [meshlet["opacity"] for meshlet in opaque.report["geometry"]["meshlets"]],
+            [0],
+        )
+        self.assertNotEqual(alpha.source_sha256, opaque.source_sha256)
+        self.assertNotEqual(alpha.payload_sha256, opaque.payload_sha256)
+
+    def test_direct_dl_binding_arity_layer_and_conflicts_fail_closed(self) -> None:
+        malformed = {
+            "geo_three_args": (
+                "LOAD_MODEL_FROM_GEO(MODEL_TEST, test_root_dl, LAYER_ALPHA)\n"
+            ),
+            "dl_two_args": "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl)\n",
+            "dl_four_args": (
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, LAYER_ALPHA, 0)\n"
+            ),
+            "dl_empty_layer": (
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, )\n"
+            ),
+            "dl_empty_model": (
+                "LOAD_MODEL_FROM_DL(, test_root_dl, LAYER_ALPHA)\n"
+            ),
+            "dl_empty_root": (
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, , LAYER_ALPHA)\n"
+            ),
+            "geo_empty_model": "LOAD_MODEL_FROM_GEO(, test_root_dl)\n",
+            "geo_empty_root": "LOAD_MODEL_FROM_GEO(MODEL_TEST, )\n",
+            "dl_duplicate": (
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, LAYER_ALPHA)\n"
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, LAYER_ALPHA)\n"
+            ),
+            "dl_conflicting_layer": (
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, LAYER_ALPHA)\n"
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, LAYER_OPAQUE)\n"
+            ),
+            "dl_trailing_token": (
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, LAYER_ALPHA) BROKEN\n"
+            ),
+            "dl_unterminated": (
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, LAYER_ALPHA\n"
+            ),
+        }
+        for label, source in malformed.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _RIGID_GEO)
+                script = fixture.root / "levels/test/script.c"
+                script.write_text(source, encoding="utf-8", newline="\n")
+                fixture.record["geo_root"] = "test_root_dl"
+                fixture.record["model_variants"][0]["geo_root"] = "test_root_dl"
+                binding = fixture.record["root_provenance"]["models"]["MODEL_TEST"]
+                binding["geo_symbol"] = "test_root_dl"
+                binding["geo_source"] = "actors/test/model.inc.c"
+                fixture.rehash()
+                with self.assertRaises(ActorSourceSelectionError):
+                    fixture.compile(model=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            script = fixture.root / "levels/test/script.c"
+            script.write_text(
+                "LOAD_MODEL_FROM_DL(MODEL_TEST, test_root_dl, LAYER_FORCE)\n",
+                encoding="utf-8", newline="\n",
+            )
+            fixture.record["geo_root"] = "test_root_dl"
+            fixture.record["model_variants"][0]["geo_root"] = "test_root_dl"
+            binding = fixture.record["root_provenance"]["models"]["MODEL_TEST"]
+            binding["geo_symbol"] = "test_root_dl"
+            binding["geo_source"] = "actors/test/model.inc.c"
+            fixture.rehash()
+            with self.assertRaises(UnsupportedActorSourceError):
+                fixture.compile(model=1)
+
     def test_model_binding_source_must_match_selected_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = _Fixture(Path(directory), _RIGID_GEO)

@@ -82,6 +82,14 @@ class _Definition:
     body: str
 
 
+@dataclass(frozen=True)
+class _ModelBinding:
+    model: str
+    root: str
+    kind: str
+    layer: str | None
+
+
 _C_INTEGER = re.compile(r"-?(?:0[xX][0-9A-Fa-f]+|\d+)")
 
 
@@ -478,10 +486,12 @@ def _collect_layouts(index: _SourceIndex, entry: str, path: str,
 
 def _collect_lists(index: _SourceIndex, name: str, preferred: str,
                    lists: dict[str, list[tuple[str, str]]],
-                   list_paths: dict[str, str], stack: tuple[str, ...] = ()) -> None:
+                   list_paths: dict[str, str], stack: tuple[str, ...] = (),
+                   *, declared: bool = False) -> None:
     if name in stack:
         raise ActorSourceSelectionError(f"recursive display list: {' -> '.join(stack + (name,))}")
-    definition = index.resolve_block("Gfx", name, preferred)
+    definition = (index.declared_block("Gfx", name, preferred) if declared
+                  else index.resolve_block("Gfx", name, preferred))
     prior = list_paths.get(name)
     if prior is not None:
         if prior != definition.path:
@@ -512,12 +522,15 @@ class _Context:
     billboard: int | None = None
 
 
+_REPRESENTABLE_LAYERS = {
+    "LAYER_OPAQUE": "opaque",
+    "LAYER_ALPHA": "alpha",
+    "LAYER_TRANSPARENT": "translucent",
+}
+
+
 class _GeoCompiler:
-    _LAYERS = {
-        "LAYER_OPAQUE": "opaque",
-        "LAYER_ALPHA": "alpha",
-        "LAYER_TRANSPARENT": "translucent",
-    }
+    _LAYERS = _REPRESENTABLE_LAYERS
     _UNSUPPORTED = {
         "GEO_ASM", "GEO_HELD_OBJECT", "GEO_RENDER_RANGE", "GEO_SHADOW",
         "GEO_TRANSLATE_ROTATE", "GEO_ROTATION_NODE", "GEO_SCALE",
@@ -854,25 +867,38 @@ def _meshlets(primitives: Sequence[dict[str, object]], positions: Sequence[list[
     return output
 
 
-def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str
+def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
+                      model_binding: _ModelBinding
                       ) -> tuple[tuple[Joint, ...], tuple[Vertex, ...], Geometry,
                                  dict[str, object]]:
     layouts: dict[str, list[tuple[str, str]]] = {}
     layout_paths: dict[str, str] = {}
-    _collect_layouts(index, geo_root, geo_path, layouts, layout_paths, declared=True)
     lists: dict[str, list[tuple[str, str]]] = {}
     list_paths: dict[str, str] = {}
-    for layout_name, tokens in layouts.items():
-        preferred = layout_paths[layout_name]
-        for macro, args in tokens:
-            binding = _display_list_arg(macro, args)
-            if binding is not None:
-                _collect_lists(index, binding[1], preferred, lists, list_paths)
-    geo = _GeoCompiler(layouts, geo_root)
-    geo.walk(geo_root)
+    entry = geo_root
+    if model_binding.kind == "geo":
+        _collect_layouts(index, geo_root, geo_path, layouts, layout_paths, declared=True)
+        for layout_name, tokens in layouts.items():
+            preferred = layout_paths[layout_name]
+            for macro, args in tokens:
+                binding = _display_list_arg(macro, args)
+                if binding is not None:
+                    _collect_lists(index, binding[1], preferred, lists, list_paths)
+    elif model_binding.kind == "display_list" and model_binding.layer is not None:
+        entry = "__actor_direct_display_list_root"
+        layouts[entry] = [
+            ("GEO_DISPLAY_LIST", f"{model_binding.layer}, {geo_root}"),
+            ("GEO_END", ""),
+        ]
+        layout_paths[entry] = geo_path
+        _collect_lists(index, geo_root, geo_path, lists, list_paths, declared=True)
+    else:
+        raise ActorSourceSelectionError("selected model binding kind is incomplete")
+    geo = _GeoCompiler(layouts, entry)
+    geo.walk(entry)
     joints, source_parts = geo.finish()
     try:
-        structural_sites = walk_geo_layout(layouts, lists, geo_root)
+        structural_sites = walk_geo_layout(layouts, lists, entry)
     except ValueError as error:
         raise ActorSourceSelectionError(str(error)) from error
     unsupported = sorted({reason for site in structural_sites for reason in site.reasons})
@@ -1043,13 +1069,13 @@ def _source_model_id(index: _SourceIndex, path: str, symbol: str) -> int:
     return value
 
 
-def _levelscript_model_bindings(index: _SourceIndex, path: str) -> list[tuple[str, str]]:
+def _levelscript_model_bindings(index: _SourceIndex, path: str) -> list[_ModelBinding]:
     """Return every exact LOAD_MODEL_FROM_GEO/DL binding in one attested source."""
     path = _normal_path(path)
     index.require_attested(path, "model binding source")
     clean = _strip_comments(index.text(path), path)
-    pattern = re.compile(r"\bLOAD_MODEL_FROM_(?:GEO|DL)\b")
-    bindings: list[tuple[str, str]] = []
+    pattern = re.compile(r"\b(LOAD_MODEL_FROM_(?:GEO|DL))\b")
+    bindings: list[_ModelBinding] = []
     for match in pattern.finditer(clean):
         cursor = match.end()
         whitespace = re.match(r"\s*", clean[cursor:])
@@ -1073,11 +1099,15 @@ def _levelscript_model_bindings(index: _SourceIndex, path: str) -> list[tuple[st
             raise ActorSourceSelectionError(
                 f"unterminated model binding command in {path}")
         fields = _arguments(clean[start:cursor - 1])
-        if (len(fields) != 2 or
+        macro = match.group(1)
+        expected = 2 if macro == "LOAD_MODEL_FROM_GEO" else 3
+        if (len(fields) != expected or
                 re.fullmatch(r"MODEL_[A-Z0-9_]+", fields[0]) is None or
-                re.fullmatch(r"[A-Za-z_]\w*", fields[1]) is None):
+                re.fullmatch(r"[A-Za-z_]\w*", fields[1]) is None or
+                (expected == 3 and re.fullmatch(r"LAYER_[A-Z0-9_]+", fields[2]) is None)):
             raise ActorSourceSelectionError(
                 f"malformed model binding command in {path}")
+        layer = fields[2] if expected == 3 else None
         boundary = cursor
         while boundary < len(clean) and clean[boundary] in " \t":
             boundary += 1
@@ -1085,13 +1115,17 @@ def _levelscript_model_bindings(index: _SourceIndex, path: str) -> list[tuple[st
                 clean[boundary] not in ",;\r\n"):
             raise ActorSourceSelectionError(
                 f"unexplained token after model binding command in {path}")
-        bindings.append((fields[0], fields[1]))
+        bindings.append(_ModelBinding(
+            fields[0], fields[1],
+            "geo" if macro == "LOAD_MODEL_FROM_GEO" else "display_list",
+            layer,
+        ))
     return bindings
 
 
 def _source_model_binding(index: _SourceIndex, model_source: str,
                           binding_source: str, model: str,
-                          geo_root: str) -> None:
+                          geo_root: str) -> _ModelBinding:
     """Require source bytes, not provenance metadata, to bind model to root."""
     model_source = _normal_path(model_source)
     binding_source = _normal_path(binding_source)
@@ -1103,24 +1137,32 @@ def _source_model_binding(index: _SourceIndex, model_source: str,
             r"[ \t]*//[ \t]*([A-Za-z_]\w*)[ \t]*$",
             re.MULTILINE,
         )
-        roots = pattern.findall(index.text(binding_source))
+        matches = [_ModelBinding(model, root, "geo", None)
+                   for root in pattern.findall(index.text(binding_source))]
     else:
-        roots = [root for bound_model, root in
-                 _levelscript_model_bindings(index, binding_source)
-                 if bound_model == model]
-    if len(roots) != 1:
-        detail = "missing" if not roots else "duplicate/conflicting"
+        matches = [binding for binding in
+                   _levelscript_model_bindings(index, binding_source)
+                   if binding.model == model]
+    if len(matches) != 1:
+        detail = "missing" if not matches else "duplicate/conflicting"
         raise ActorSourceSelectionError(
             f"{detail} model binding for {model} in {binding_source}")
-    if roots[0] != geo_root:
+    if matches[0].root != geo_root:
         raise ActorSourceSelectionError(
-            f"model binding for {model} selects {roots[0]}, not {geo_root}")
+            f"model binding for {model} selects {matches[0].root}, not {geo_root}")
+    if (matches[0].kind == "display_list" and
+            matches[0].layer not in _REPRESENTABLE_LAYERS):
+        raise UnsupportedActorSourceError(
+            f"unsupported selected direct-DL material layer in "
+            f"{binding_source}: {matches[0].layer}")
+    return matches[0]
 
 
 def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
                       requested_model_id: int) -> tuple[str, str, str,
-                                                         list[dict[str, object]]]:
-    selected: set[tuple[str, str, str]] = set()
+                                                         list[dict[str, object]],
+                                                         _ModelBinding]:
+    selected: set[tuple[str, str, str, str, str | None]] = set()
     variants: list[dict[str, object]] = []
     for record in records:
         primary = record.get("model")
@@ -1139,7 +1181,7 @@ def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
         variant_models = [item["model"] for item in model_variants]
         if len(set(variant_models)) != len(variant_models) or primary not in variant_models:
             raise ActorSourceSelectionError("closure model variants do not contain one primary")
-        record_matches: list[tuple[str, str, str]] = []
+        record_matches: list[tuple[str, str, str, str, str | None]] = []
         for item in model_variants:
             model = item["model"]
             geo_root = item["geo_root"]
@@ -1156,11 +1198,12 @@ def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
                         f"closure model {label} is incomplete: {model}")
             value = _source_model_id(index, binding["source"], model)
             if value == requested_model_id:
-                _source_model_binding(
+                selected_binding = _source_model_binding(
                     index, binding["source"], binding["binding_source"],
                     model, geo_root)
                 record_matches.append(
-                    (model, geo_root, _normal_path(binding["geo_source"])))
+                    (model, geo_root, _normal_path(binding["geo_source"]),
+                     selected_binding.kind, selected_binding.layer))
         if not record_matches:
             raise ActorSourceSelectionError(
                 f"model ID {requested_model_id} has no closure variant")
@@ -1172,9 +1215,11 @@ def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
     if len(selected) != 1:
         raise ActorSourceSelectionError(
             f"model ID {requested_model_id} selects conflicting model/GeoLayout provenance")
-    model, symbol, path = selected.pop()
+    model, symbol, path, binding_kind, binding_layer = selected.pop()
     typed = sorted({(item["model"], item["geo_root"]) for item in variants})
-    return model, symbol, path, [{"model": item[0], "geo_root": item[1]} for item in typed]
+    return (model, symbol, path,
+            [{"model": item[0], "geo_root": item[1]} for item in typed],
+            _ModelBinding(model, symbol, binding_kind, binding_layer))
 
 
 def compile_actor_variant(
@@ -1197,7 +1242,7 @@ def compile_actor_variant(
     if not records or any(not isinstance(item, dict) for item in records):
         raise ActorSourceSelectionError("variant requires closure records")
     index = _SourceIndex(Path(root), records)
-    model, geo_root, geo_path, model_variants = _record_selection(
+    model, geo_root, geo_path, model_variants, model_binding = _record_selection(
         index, records, model_id)
     for record in records:
         provenance = record["root_provenance"]
@@ -1212,7 +1257,7 @@ def compile_actor_variant(
             index.require_attested(binding[label], f"model {label}")
 
     joints, vertices, geometry, geometry_report = _compile_geometry(
-        index, geo_path, geo_root)
+        index, geo_path, geo_root, model_binding)
     animations, animation_bindings = _animation_records(
         index, records, len(joints), geo_path)
     sources = index.source_records()
@@ -1265,6 +1310,8 @@ def compile_actor_variant(
         "selection": {
             "model": model, "geo_root": geo_root, "geo_source": geo_path,
             "model_variants": model_variants,
+            "model_binding": {"kind": model_binding.kind,
+                              "layer": model_binding.layer},
             "animation_bindings": animation_bindings,
             "switches": geometry_report["switches"],
             "billboards": geometry_report["billboards"],

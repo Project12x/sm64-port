@@ -12,10 +12,12 @@
 subagent-driven workflow. Tasks 1 and 2 are complete and independently
 approved. Task 2 repair `f1799118` passed scoped rereview with both Important
 findings addressed and no new breakage; its malformed-path error-type Minor is
-deferred to the final branch review. Task 3 is complete after two review-repair
-rounds; round 2 passed scoped rereview with both remaining findings addressed
-and no new breakage. Task 4 is the next RED. Target, release, smoke, visual,
-desktop, manual, and total-game gates remain open.
+deferred to the final branch review. Task 3 is source-complete after a third,
+real-source repair round and awaits scoped rereview: the Task 4 pre-edit probe
+found that a valid neighboring three-argument direct-DL binding rejected the
+selected two-argument GeoLayout binding. Task 4 has not started and remains
+blocked on that rereview. Target, release, smoke, visual, desktop, manual, and
+total-game gates remain open.
 
 ## Global Constraints
 
@@ -451,6 +453,38 @@ The behavior commit is `b21bb197`
 and its JSON remains
 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
 No target/release/manual gate is claimed.
+
+**Task 3 real-source repair round 3 (2026-08-11):** source-complete; scoped
+rereview pending. The attested binding source is authoritative and the closure
+schema remains unchanged. The coverage parser now distinguishes exact
+two-argument `LOAD_MODEL_FROM_GEO` from exact three-argument
+`LOAD_MODEL_FROM_DL`, retains every direct-DL layer token, and enforces S64B-v1
+layer representability only when that binding is selected. A selected direct
+list is compiled through a synthetic one-node GeoLayout rooted at the exact
+declared Gfx source, so `LAYER_ALPHA`, `LAYER_OPAQUE`, or
+`LAYER_TRANSPARENT` reaches the existing material, opacity, Mesh IR, typed
+report, and S64B paths; neighboring valid unselected layers have no selected
+semantics. Missing/empty arguments, wrong arity, duplicate/conflicting selected
+bindings, unknown selected layers, unterminated commands, and trailing tokens
+remain named failures. RED was three real-shaped/direct-DL tests rejected by
+the old global two-argument parser, followed by one focused unselected-layer
+RED. GREEN is 28/28 focused variant/source tests, 25/25 historical rigid-group
+tests, compileall, and the combined native-root variant/pose/meshlet Make wave.
+The real BOB `bhvMessagePanel` model ID `0x007c` now selects exactly
+`MODEL_WOODEN_SIGNPOST`, `wooden_signpost_geo`, and
+`actors/wooden_signpost/geo.inc.c`. Direct alpha/opaque fixtures are exactly
+358 bytes with lane/scratch 104/211; alpha payload/source hashes are
+`89f2f521e98deda81c4af9be1b8867d23e9245421da8554ba720119234a7fb30` /
+`eaf9fcbffaa587ff5cb46a45f621e5f5294eddcd14cb640e56f1bb245d0d88d1`,
+and opaque hashes are
+`3472a30bf9c4be9e8f3f1b7c86a18e71fcffa3e5382f0c85d756317740811058` /
+`57234f661d1cb7dec5a2c15999bc649f247f89c1a37f33e064033c6b53e45909`.
+Mario remains exactly 596,896 bytes at
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
+its JSON remains
+`3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+Task 4, target, release, smoke, visual, desktop, manual, and total-game gates
+remain open and unclaimed.
 
 ---
 
