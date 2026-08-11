@@ -415,9 +415,8 @@ are rigid payload/source
 and articulated payload/source
 `1bff9db7ae5c3cea3512f748a721706a3709b662cb9c8a88ad3b4c0528b0634e` /
 `0d617e2444ef50ce6d16e41aaac6572e47eacdff534c5aab8efcc08cdb118a60`.
-The behavior commit is recorded by subject as
-`fix(saturn): harden actor variant source boundaries` until the following
-evidence transition pins its exact SHA. Historical Mario remains exactly
+The behavior commit is `11c86f6a`
+(`fix(saturn): harden actor variant source boundaries`). Historical Mario remains exactly
 596,896 bytes at
 `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`,
 and its JSON remains

@@ -476,10 +476,10 @@
 ## 2026-08-11 generic actor bundle Task 3 review repair round 1
 
 - Status: `source-complete-review-repair-round-1; independent rereview
-  pending`. The scoped behavior commit is recorded by subject as
-  `fix(saturn): harden actor variant source boundaries` until the evidence
-  transition pins its exact SHA. Task 4 has not started; Task 16 Tasks 2-5
-  remain blocked/open on the rest of the prerequisite lane.
+  pending`. The scoped behavior commit is `11c86f6a`
+  (`fix(saturn): harden actor variant source boundaries`). Task 4 has not
+  started; Task 16 Tasks 2-5 remain blocked/open on the rest of the
+  prerequisite lane.
 - Model/root corrections: requested numeric `model_id` now resolves through
   the attested model-ID source to exactly one `model_variants` row and matching
   GeoLayout provenance; alias, mismatch, and cross-record conflicts fail.
