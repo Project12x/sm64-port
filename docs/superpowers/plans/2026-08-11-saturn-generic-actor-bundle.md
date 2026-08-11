@@ -10,9 +10,10 @@
 
 **Execution status (2026-08-11):** active under the owner-selected
 subagent-driven workflow. Task 1 is complete and independently approved. Task
-2 is source-complete at `b1133026`; its independent task review remains the
-gate before Task 3. Target, release, smoke, visual, desktop, manual, and
-total-game gates remain open.
+2 is in independent-review repair round 1 at `f1799118` after a `C0/I2/M1`
+verdict; rereview remains the gate before Task 3. The deferred malformed-path
+type Minor was not addressed in this bounded round. Target, release, smoke, visual,
+desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
 
@@ -258,16 +259,18 @@ CHANGELOG states v3 is additive and feature-on selection is not wired yet. Commi
 
 #### Task 2 live status (2026-08-11)
 
-- Status: `source-complete; independent review pending` at behavior commit
-  `b1133026` (`feat(saturn): define generic actor family bundle v3`). Task 3
-  remains blocked on the controller-owned task review. No sourceboot selection,
-  target build, P2, Ymir, release, smoke, visual, desktop, or manual claim is
-  made.
+- Status: `source-complete-review-repair-round-1; rereview pending` at repair
+  commit `f1799118` (`fix(saturn): align actor bundle host target validation`),
+  following original behavior commit `b1133026`. The review's two Important
+  findings are repaired; the deferred malformed-path type Minor is
+  intentionally untouched in this round. Task 3 remains blocked on controller-owned
+  rereview. No sourceboot selection, target build, P2, Ymir, release, smoke,
+  visual, desktop, or manual claim is made.
 - TDD: the Python RED failed with `ModuleNotFoundError: No module named
   'actor_family_bundle'`; the C RED failed on absent
   `saturn_actor_bundle.h/.c`. GREEN passes seven Python cases and the
   freestanding target fixture's 53 resealed field/identity/span mutations.
-  Python covers 46 malformed-input assertions, for 99 mutation/rejection
+  Python now covers 47 malformed-input assertions, for 100 mutation/rejection
   assertions across both boundaries.
 - Verification: the required native-forward-slash-root Make wave passes
   `verify-actor-family-bundle verify-actor-family-bank
@@ -290,6 +293,13 @@ CHANGELOG states v3 is additive and feature-on selection is not wired yet. Commi
   link/map/capacity, heterogeneous dual-SH-2 lanes, sourceboot production
   selection, feature-off identity, transition, Task 9 reseal/repro/v4/staging,
   and Task 10 smoke/visual/desktop/manual gates.
+- Review correction: host S64B validation now requires every tier-0 primitive
+  reference to be exactly `source_ordinal + local`, matching the target; a
+  resealed later-reference permutation is permanently rejected. The internal
+  target record decoder now builds a local candidate and publishes it only
+  after every scalar/span check. The public lookup already decoded through a
+  local `found`, so its new shortened-view zero-output test is a characterization
+  gate rather than a pre-fix RED.
 
 ---
 

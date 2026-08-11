@@ -395,3 +395,30 @@
   cart residency and fixed workspace; Task 16 Tasks 2-5; feature-off identity;
   target/P2/Ymir/map/capacity; Task 9 clean rebuild/repro/v4/staging; Task 10
   smoke/visual/desktop/owner-manual; release and total-game gates.
+
+## 2026-08-11 generic actor bundle Task 2 review repair round 1
+
+- Review verdict: `CHANGES REQUIRED C0/I2/M1`; the malformed-path type Minor
+  was explicitly deferred and out of scope for this round. Status is
+  `source-complete-review-repair-round-1; rereview pending` at `f1799118`
+  (`fix(saturn): align actor bundle host target validation`). Task 16 Tasks 2-5
+  and Task 3 of the prerequisite remain blocked.
+- I1 repair: host S64B validation now requires every tier-0 primitive reference
+  to equal `source_ordinal + local`, matching the approved target validator.
+  The focused resealed `[0,2,1]` tier-0/tier-1 mutation first failed with
+  `ValueError not raised`, then passed after the parity correction.
+- I2 hardening: the static target variant decoder now fills a local candidate
+  and assigns its destination only after complete scalar/span success. The
+  public lookup already used its own local `found`, so the shortened-view
+  zero-output regression passed before and after this internal hardening; no
+  contrary pre-fix RED is claimed.
+- Verification: eight Python tests pass with 47 malformed-input assertions and
+  pinned 1,688-byte fixture digest
+  `4b3334a61f8ce7c8b2c4548a112b0c7354c444b42659ec7943941de5529e4dbc`.
+  The C fixture passes 53 mutations, for 100 host/target rejection assertions.
+  The native-root combined wave passes v3, historical v2 (47/13/14), Mario
+  pose-bank, and S64P runtime gates.
+- Remaining: independent rereview, deferred Minor disposition, prerequisite
+  Tasks 3-11, Task 16 Tasks 2-5, and every target/P2/Ymir/map/capacity,
+  feature-off, transition, release/reseal, smoke, visual, desktop, manual, and
+  total-game gate remain open.
