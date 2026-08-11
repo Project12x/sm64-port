@@ -121,6 +121,13 @@ bool sm64_saturn_geo_state_observer_begin_object(
 bool sm64_saturn_geo_state_observer_record_switch(
     sm64_saturn_geo_state_observer_t *observer, uint16_t ordinal,
     uint16_t state);
+bool sm64_saturn_geo_state_observer_record_selected_switch(
+    sm64_saturn_geo_state_observer_t *observer, uint16_t state);
+bool sm64_saturn_geo_state_observer_record_render_range(
+    sm64_saturn_geo_state_observer_t *observer, int32_t min_q16,
+    int32_t max_q16, bool selected);
+bool sm64_saturn_geo_state_observer_record_opacity(
+    sm64_saturn_geo_state_observer_t *observer, uint16_t opacity);
 bool sm64_saturn_geo_state_observer_end_object(
     sm64_saturn_geo_state_observer_t *observer);
 void sm64_saturn_geo_state_observer_end_frame(

@@ -32,6 +32,7 @@ MARIO_ACTOR_BANK := $(MARIO_ACTOR_BANK_DIR)/mario.s64b
 MARIO_ACTOR_BANK_REPORT := $(MARIO_ACTOR_BANK_DIR)/mario-actor-bank.json
 ACTOR_FAMILY_BANK_DIR ?= $(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)/actors
 ACTOR_FAMILY_BANK_REPORT ?= $(ACTOR_FAMILY_BANK_DIR)/actor-families.json
+SCENE_PACKAGE_GENERATION ?= 1
 PYTHON ?= python3
 HOST_CC ?= gcc
 ifeq ($(OS),Windows_NT)
@@ -670,7 +671,7 @@ verify-render-snapshot-bank:
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_snapshot_bank_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_render_snapshot_source.py"
 
 verify-saturn-hud-snapshot: check-host-tools
@@ -804,7 +805,7 @@ verify-actor-instance-snapshot:
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_instance.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_geo_state_observer.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-instance-snapshot-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-instance-snapshot-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-instance-snapshot-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_actor_snapshot_source.py"
 
 verify-dual-frame-bank:
@@ -1021,6 +1022,7 @@ compile-actor-banks: compile-scene-closure check-host-tools
 	  --root "$(SATURN_REPO_ROOT)" \
 	  --family-closure "$(SCENE_CLOSURE_OUTPUT)" \
 	  --family-output-dir "$(ACTOR_FAMILY_BANK_DIR)" \
+	  --scene-package-generation "$(SCENE_PACKAGE_GENERATION)" \
 	  --output "$(ACTOR_FAMILY_BANK_REPORT)" \
 	  --report "$(ACTOR_FAMILY_BANK_REPORT)"
 
@@ -1041,7 +1043,7 @@ verify-actor-identity-registry: compile-actor-banks
 	  --family-report "$(ACTOR_FAMILY_BANK_REPORT)" \
 	  --closure "$(SCENE_CLOSURE_OUTPUT)" \
 	  --model-ids "$(SATURN_REPO_ROOT)/include/model_ids.h" \
-	  --scene-generation 1 \
+	  --scene-generation "$(SCENE_PACKAGE_GENERATION)" \
 	  --output "$(ACTOR_IDENTITY_REGISTRY_HEADER)"
 	@cd "$(SATURN_REPO_ROOT)/tools/saturn" && "$(SATURN_TOOLS_PYTHON)" -m unittest test_gen_actor_identity_registry -v
 

@@ -311,6 +311,7 @@ SOURCEBOOT_SKY_GRADIENT_HEADER := $(SOURCEBOOT_GENERATED)/saturn_sky_gradient_ge
 SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER := $(SOURCEBOOT_GENERATED)/actor_identity_registry.h
 SOURCEBOOT_ACTOR_FAMILY_REPORT := $(ROOT)/build/saturn/packages/bob/1/actors/actor-families.json
 SOURCEBOOT_ACTOR_CLOSURE := $(ROOT)/build/saturn/packages/bob/1/closure.json
+SOURCEBOOT_SCENE_PACKAGE_GENERATION ?= 1
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
@@ -943,7 +944,9 @@ source-sky-gradient: $(SOURCEBOOT_SKY_GRADIENT_HEADER)
 
 .PHONY: source-actor-families
 source-actor-families:
-	$(MAKE) -C "$(ROOT)" -f Makefile.saturn.mk -j1 compile-actor-banks
+	$(MAKE) -C "$(ROOT)" -f Makefile.saturn.mk -j1 \
+	  SCENE_PACKAGE_GENERATION="$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)" \
+	  compile-actor-banks
 
 $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER): source-actor-families \
     $(ROOT)/tools/saturn/gen_actor_identity_registry.py \
@@ -953,7 +956,7 @@ $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER): source-actor-families \
 	  --family-report "$(SOURCEBOOT_ACTOR_FAMILY_REPORT)" \
 	  --closure "$(SOURCEBOOT_ACTOR_CLOSURE)" \
 	  --model-ids "$(ROOT)/include/model_ids.h" \
-	  --scene-generation 1 \
+	  --scene-generation "$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)" \
 	  --output "$(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER)"
 
 .PHONY: source-actor-identity-registry

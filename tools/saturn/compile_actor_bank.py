@@ -312,8 +312,13 @@ def validate_family_bank_payload(payload: bytes) -> None:
                 raise ValueError("family record span escapes payload")
 
 
-def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path) -> dict[str, object]:
+def compile_actor_family_banks(
+    root: Path, closure_path: Path, output_dir: Path,
+    scene_package_generation: int = 1,
+) -> dict[str, object]:
     """Compile every drawable and model-less BOB closure record generically."""
+    if not 0 < scene_package_generation <= 0xFFFFFFFF:
+        raise ValueError("scene package generation must be a nonzero uint32")
     closure = json.loads(closure_path.read_text(encoding="utf-8"))
     if closure.get("schema") != "sm64-saturn-scene-closure-v1":
         raise ValueError("actor family compiler requires a scene closure")
@@ -379,6 +384,7 @@ def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path)
     report = {
         "schema": "sm64-saturn-actor-family-bank-v2", "version": FAMILY_VERSION,
         "scene": {"level": closure.get("level"), "area": closure.get("area")},
+        "scene_package_generation": scene_package_generation,
         "family_count": len(families),
         "closure_record_count": len(records),
         "unsupported_required_capability_count": unsupported_count,
@@ -952,12 +958,17 @@ def main() -> None:
                         help="compile a generic S64F family bank from a scene closure")
     parser.add_argument("--family-output-dir", type=Path,
                         help="directory for the immutable S64F payload")
+    parser.add_argument("--scene-package-generation", type=int,
+                        help="generation owned by the scene/package build")
     args = parser.parse_args()
     if args.family_closure is not None:
         if args.family_output_dir is None:
             raise SystemExit("--family-output-dir is required with --family-closure")
+        if args.scene_package_generation is None:
+            raise SystemExit("--scene-package-generation is required with --family-closure")
         report = compile_actor_family_banks(args.root.resolve(), args.family_closure.resolve(),
-                                            args.family_output_dir.resolve())
+                                            args.family_output_dir.resolve(),
+                                            args.scene_package_generation)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n",
                                encoding="utf-8")

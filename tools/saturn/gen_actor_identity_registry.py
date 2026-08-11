@@ -16,6 +16,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from compile_actor_bank import (
+    FAMILY_FLAG_GEOMETRY,
+    FAMILY_FLAG_SUPPORTED,
+    FAMILY_HEADER_STRUCT,
+    FAMILY_RECORD_STRUCT,
+    validate_family_bank_payload,
+)
+
 
 MODEL_DEFINE_RE = re.compile(
     r"#define\s+(MODEL_[A-Z0-9_]+)\s+(0[xX][0-9A-Fa-f]+|\d+)"
@@ -83,7 +91,28 @@ def closure_family_key(record: dict) -> str:
     return canonical_json(key)
 
 
-def _validated_inputs(report: dict, closure: dict, payload: bytes) -> None:
+def _family_metadata(family: dict) -> dict:
+    return {
+        "family_key": family["family_key"], "model": family["model"],
+        "geo_root": family["geo_root"], "geo_source": family["geo_source"],
+        "capabilities": family["capabilities"], "geo_nodes": family["geo_nodes"],
+        "animation_table": family["animation_table"],
+        "model_variants": family["model_variants"], "effects": family["effects"],
+        "runtime_capabilities": family["runtime_capabilities"],
+        "required_capabilities": family["required_capabilities"],
+    }
+
+
+def _payload_json(value: object) -> bytes:
+    return (canonical_json(value) + "\n").encode("utf-8")
+
+
+def _validated_inputs(
+    report: dict, closure: dict, payload: bytes,
+    scene_package_generation: int,
+) -> None:
+    if not 0 < scene_package_generation <= 0xFFFFFFFF:
+        raise ValueError("scene generation must be a nonzero uint32")
     if report.get("schema") != "sm64-saturn-actor-family-bank-v2":
         raise ValueError("family report schema is not sm64-saturn-actor-family-bank-v2")
     if closure.get("schema") != "sm64-saturn-scene-closure-v1":
@@ -109,9 +138,49 @@ def _validated_inputs(report: dict, closure: dict, payload: bytes) -> None:
     actual_digest = hashlib.sha256(payload).hexdigest()
     if report.get("payload_sha256") != actual_digest:
         raise ValueError("family bank payload SHA-256 does not match report")
+    validate_family_bank_payload(payload)
+    if report.get("header_content_sha256") != payload[24:56].hex():
+        raise ValueError("family bank internal digest does not match report")
+    if report.get("scene_package_generation") != scene_package_generation:
+        raise ValueError("family report scene package generation is stale")
     ordering = [(int(item["family_id"]), str(item["family_key"])) for item in families]
     if ordering != sorted(ordering) or len(ordering) != len(set(ordering)):
         raise ValueError("family report order is not canonical and unique")
+    _, _, count, records_offset, _, blob_offset, blob_size, _ = (
+        FAMILY_HEADER_STRUCT.unpack_from(payload)
+    )
+    if count != len(families):
+        raise ValueError("family payload record count does not match report")
+    blob = payload[blob_offset:blob_offset + blob_size]
+    for index, family in enumerate(families):
+        fields = FAMILY_RECORD_STRUCT.unpack_from(
+            payload, records_offset + index * FAMILY_RECORD_STRUCT.size,
+        )
+        expected_flags = (
+            (FAMILY_FLAG_SUPPORTED if family["supported"] else 0) |
+            (FAMILY_FLAG_GEOMETRY if family["geo_source"] else 0)
+        )
+        expected_scalars = (
+            int(family["family_id"]), int(family["capability_mask"]),
+            int(family["maximum_live_instances"]), int(family["actor_count"]),
+            expected_flags, int(family["runtime_capability_mask"]),
+        )
+        actual_scalars = fields[0], fields[1], fields[2], fields[3], fields[4], fields[13]
+        if actual_scalars != expected_scalars:
+            raise ValueError("family payload record does not match report")
+        expected_spans = (
+            str(family["stable_id"]).encode("utf-8"),
+            _payload_json(family["sources"]),
+            _payload_json(family["unsupported"]),
+            _payload_json(_family_metadata(family)),
+        )
+        for expected, (offset, size) in zip(
+            expected_spans,
+            ((fields[5], fields[6]), (fields[7], fields[8]),
+             (fields[9], fields[10]), (fields[11], fields[12])),
+        ):
+            if blob[offset:offset + size] != expected:
+                raise ValueError("family payload record span does not match report")
 
 
 def build_registry_rows(
@@ -207,6 +276,7 @@ def build_header(rows: Iterable[RegistryRow]) -> str:
         "#include <stdint.h>",
         "",
         '#include "behavior_data.h"',
+        '#include "saturn_actor_instance.h"',
         "",
         "typedef struct saturn_actor_identity_registry_entry {",
         "    uint16_t model_id;",
@@ -265,6 +335,30 @@ def build_header(rows: Iterable[RegistryRow]) -> str:
         "    return NULL;",
         "}",
         "",
+        "static inline bool saturn_actor_identity_registry_apply(",
+        "    uint16_t model_id, const BehaviorScript *behavior,",
+        "    sm64_saturn_actor_source_observation_t *observation)",
+        "{",
+        "    const saturn_actor_identity_registry_entry_t *entry;",
+        "    uint16_t word;",
+        "    if (observation == NULL) return false;",
+        "    observation->family_id = 0U;",
+        "    observation->actor_bank_id = 0U;",
+        "    observation->scene_package_generation = 0U;",
+        "    for (word = 0U; word < 8U; word++)",
+        "        observation->actor_bank_hash_words[word] = 0U;",
+        "    entry = saturn_actor_identity_registry_lookup(model_id, behavior);",
+        "    if (entry == NULL) return false;",
+        "    observation->family_id = entry->family_id;",
+        "    observation->actor_bank_id = entry->actor_bank_id;",
+        "    observation->scene_package_generation =",
+        "        entry->scene_package_generation;",
+        "    for (word = 0U; word < 8U; word++)",
+        "        observation->actor_bank_hash_words[word] =",
+        "            entry->actor_bank_hash_words[word];",
+        "    return true;",
+        "}",
+        "",
     ])
     return "\n".join(lines)
 
@@ -281,7 +375,7 @@ def generate(
     if not payload_path.is_absolute():
         payload_path = family_report_path.parent / payload_path
     payload = payload_path.read_bytes()
-    _validated_inputs(report, closure, payload)
+    _validated_inputs(report, closure, payload, scene_package_generation)
     model_ids = parse_model_ids(model_ids_path.read_text(encoding="utf-8"))
     rows = build_registry_rows(report, closure, model_ids, scene_package_generation)
     return build_header(rows)

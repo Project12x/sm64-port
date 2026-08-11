@@ -1,5 +1,8 @@
 import hashlib
 import json
+import os
+import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -9,6 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = ROOT / "tools/saturn/gen_actor_identity_registry.py"
+sys.path.insert(0, str(ROOT / "tools/saturn"))
+from compile_actor_bank import _pack_family_bank  # noqa: E402
 
 SUPPORTED_KEY = (
     '{"animation_table":[],"geo_root":"shared_geo",'
@@ -21,7 +26,40 @@ UNSUPPORTED_KEY = (
     '"model":"MODEL_UNSUPPORTED","model_variants":'
     '[{"geo_root":"unsupported_geo","model":"MODEL_UNSUPPORTED"}]}'
 )
-PAYLOAD = bytes(range(64))
+
+def packed_family(supported: bool, family_id: int, family_key: str,
+                  stable_id: str, geo_source: str) -> dict:
+    return {
+        "family_id": family_id,
+        "family_key": family_key,
+        "stable_id": stable_id,
+        "supported": supported,
+        "geo_source": geo_source,
+        "capability_mask": 0x20,
+        "runtime_capability_mask": 0x01,
+        "maximum_live_instances": 4,
+        "actor_count": 1,
+        "sources": [],
+        "unsupported": [] if supported else ["TEST_UNSUPPORTED"],
+        "model": "MODEL_SHARED" if supported else "MODEL_UNSUPPORTED",
+        "geo_root": "shared_geo" if supported else "unsupported_geo",
+        "capabilities": [],
+        "geo_nodes": [],
+        "animation_table": [],
+        "model_variants": [],
+        "effects": [],
+        "runtime_capabilities": [],
+        "required_capabilities": [],
+    }
+
+
+PAYLOAD_FAMILIES = [
+    packed_family(True, 0x12345678, SUPPORTED_KEY, "bhvSharedFirst",
+                  "actors/shared/geo.inc.c"),
+    packed_family(False, 0x9ABCDEF0, UNSUPPORTED_KEY, "bhvUnsupported",
+                  "actors/unsupported/geo.inc.c"),
+]
+PAYLOAD = _pack_family_bank(PAYLOAD_FAMILIES)
 PAYLOAD_SHA256 = hashlib.sha256(PAYLOAD).hexdigest()
 
 
@@ -89,25 +127,14 @@ class GeneratorFixture:
                 "schema": "sm64-saturn-actor-family-bank-v2",
                 "version": 2,
                 "scene": {"level": "bob", "area": 1},
+                "scene_package_generation": 7,
                 "family_count": 2,
                 "closure_record_count": 3,
                 "payload": self.payload.as_posix(),
                 "payload_size": len(PAYLOAD),
                 "payload_sha256": PAYLOAD_SHA256,
-                "families": [
-                    {
-                        "family_id": 0x12345678,
-                        "family_key": SUPPORTED_KEY,
-                        "stable_id": "bhvSharedFirst",
-                        "supported": True,
-                    },
-                    {
-                        "family_id": 0x9ABCDEF0,
-                        "family_key": UNSUPPORTED_KEY,
-                        "stable_id": "bhvUnsupported",
-                        "supported": False,
-                    },
-                ],
+                "header_content_sha256": PAYLOAD[24:56].hex(),
+                "families": PAYLOAD_FAMILIES,
             }),
             encoding="utf-8",
         )
@@ -129,6 +156,188 @@ class GeneratorFixture:
 
 
 class TestActorIdentityRegistryGenerator(unittest.TestCase):
+    def test_s64f_identity_layout_digest_and_record_spans_fail_closed(self) -> None:
+        """Break caught: arbitrary or internally malformed bytes are accepted
+        merely because the outer report size/SHA were updated to match them.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = GeneratorFixture(Path(directory))
+            output = Path(directory) / "registry.h"
+
+            for label, payload in (
+                ("identity", bytes(range(64))),
+                ("internal digest", PAYLOAD[:-1] + bytes([PAYLOAD[-1] ^ 1])),
+            ):
+                fixture.payload.write_bytes(payload)
+                report = json.loads(fixture.report.read_text(encoding="utf-8"))
+                report["payload_size"] = len(payload)
+                report["payload_sha256"] = hashlib.sha256(payload).hexdigest()
+                fixture.report.write_text(json.dumps(report), encoding="utf-8")
+                result = fixture.run(output)
+                self.assertNotEqual(result.returncode, 0, label)
+
+            malformed = bytearray(PAYLOAD)
+            # First record's name offset escapes the declared blob.
+            struct.pack_into(">I", malformed, 56 + 5 * 4, 0xFFFFFFFF)
+            malformed[24:56] = bytes(32)
+            malformed[24:56] = hashlib.sha256(malformed).digest()
+            fixture.payload.write_bytes(malformed)
+            report = json.loads(fixture.report.read_text(encoding="utf-8"))
+            report["payload_size"] = len(malformed)
+            report["payload_sha256"] = hashlib.sha256(malformed).hexdigest()
+            fixture.report.write_text(json.dumps(report), encoding="utf-8")
+            result = fixture.run(output)
+            self.assertNotEqual(result.returncode, 0, "record span")
+
+    def test_payload_records_and_scene_generation_must_match_report(self) -> None:
+        """Break caught: report metadata or caller generation drifts from the
+        validated S64F/package generation but still emits an admitting row.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = GeneratorFixture(Path(directory))
+            output = Path(directory) / "registry.h"
+            report = json.loads(fixture.report.read_text(encoding="utf-8"))
+            report["families"][0]["capability_mask"] = 0x21
+            fixture.report.write_text(json.dumps(report), encoding="utf-8")
+            mismatched = fixture.run(output)
+            self.assertNotEqual(mismatched.returncode, 0)
+            self.assertIn("record", mismatched.stderr.lower())
+
+            report["families"][0]["capability_mask"] = 0x20
+            fixture.report.write_text(json.dumps(report), encoding="utf-8")
+            stale = fixture.run(output, scene_generation=8)
+            self.assertNotEqual(stale.returncode, 0)
+            self.assertIn("generation", stale.stderr.lower())
+
+    def test_generated_identity_drives_real_observer_admission_and_miss_rejection(self) -> None:
+        """Break caught: generated lookup is not the identity source consumed
+        by the real observer/capture admission path, or a miss gains fallback
+        identity instead of remaining zero and rejected.
+        """
+        compiler = shutil.which("gcc") or shutil.which("cc")
+        self.assertIsNotNone(compiler, "host C compiler is required")
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = GeneratorFixture(Path(directory))
+            header = Path(directory) / "actor_identity_registry.h"
+            result = fixture.run(header)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            (Path(directory) / "behavior_data.h").write_text(
+                "#pragma once\n"
+                "#include <stdint.h>\n"
+                "typedef uintptr_t BehaviorScript;\n"
+                "extern const BehaviorScript bhvSharedFirst[];\n"
+                "extern const BehaviorScript bhvSharedSecond[];\n"
+                "extern const BehaviorScript bhvUnsupported[];\n",
+                encoding="utf-8",
+            )
+            source = Path(directory) / "registry_admission_test.c"
+            source.write_text(
+                r'''#include <assert.h>
+#include <string.h>
+
+#include "actor_identity_registry.h"
+#include "saturn_actor_instance.h"
+
+const BehaviorScript bhvSharedFirst[] = { 1U };
+const BehaviorScript bhvSharedSecond[] = { 2U };
+const BehaviorScript bhvUnsupported[] = { 3U };
+
+static sm64_saturn_actor_source_observation_t base_source(uint16_t slot)
+{
+    sm64_saturn_actor_source_observation_t source;
+    memset(&source, 0, sizeof(source));
+    source.source_generation = 5U;
+    source.pool_slot = slot;
+    source.model_id = 0x21U;
+    source.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+    source.parent_node_ordinal = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+    source.scale_q16[0] = source.scale_q16[1] = source.scale_q16[2] = 65536;
+    source.active = 1U;
+    source.render_active = 1U;
+    source.opacity = 191U;
+    source.draw_distance_q16 = 300 * 65536;
+    source.render_range_min_q16 = -64 * 65536;
+    source.render_range_max_q16 = 512 * 65536;
+    source.render_range_state = 1U;
+    source.switch_count = 1U;
+    source.switch_state[0] = 3U;
+    return source;
+}
+
+int main(void)
+{
+    sm64_saturn_geo_state_observer_t observer;
+    sm64_saturn_actor_source_observation_t source = base_source(7U);
+    sm64_saturn_actor_instance_snapshot_t snapshot[2];
+    sm64_saturn_actor_capture_telemetry_t stats;
+    uint16_t count = 0U, word;
+
+    assert(saturn_actor_identity_registry_apply(
+        source.model_id, bhvSharedSecond, &source));
+    assert(source.family_id != 0U && source.actor_bank_id != 0U);
+    assert(source.scene_package_generation == 7U);
+    for (word = 0U; word < 8U; word++)
+        assert(source.actor_bank_hash_words[word] != 0U);
+
+    sm64_saturn_geo_state_observer_init(&observer, 2U);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 5U);
+    sm64_saturn_actor_instances_set_observer(&observer);
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    sm64_saturn_geo_state_observer_end_frame(&observer);
+    assert(sm64_saturn_actor_instances_capture(
+        snapshot, 2U, 5U, &count, &stats));
+    assert(count == 1U && stats.published_count == 1U);
+    assert(snapshot[0].family_id == source.family_id);
+    assert(snapshot[0].actor_bank_id == source.actor_bank_id);
+    assert(snapshot[0].scene_package_generation == 7U);
+    assert(snapshot[0].opacity == 191U);
+    assert(snapshot[0].render_range_min_q16 == -64 * 65536);
+    assert(snapshot[0].render_range_max_q16 == 512 * 65536);
+    assert(snapshot[0].switch_count == 1U && snapshot[0].switch_state[0] == 3U);
+
+    source = base_source(8U);
+    assert(!saturn_actor_identity_registry_apply(
+        source.model_id, bhvUnsupported, &source));
+    assert(source.family_id == 0U && source.actor_bank_id == 0U &&
+           source.scene_package_generation == 0U);
+    for (word = 0U; word < 8U; word++)
+        assert(source.actor_bank_hash_words[word] == 0U);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 5U);
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    sm64_saturn_geo_state_observer_end_frame(&observer);
+    assert(sm64_saturn_actor_instances_capture(
+        snapshot, 2U, 5U, &count, &stats));
+    assert(count == 0U && stats.unknown_family_count == 1U);
+    return 0;
+}
+''',
+                encoding="utf-8",
+            )
+            executable = Path(directory) / (
+                "registry-admission-test.exe" if os.name == "nt"
+                else "registry-admission-test"
+            )
+            compiled = subprocess.run(
+                [
+                    str(compiler), "-std=c11", "-Wall", "-Wextra", "-Werror",
+                    f"-I{directory}",
+                    f"-I{ROOT / 'src/port/saturn/gfx'}",
+                    str(source),
+                    str(ROOT / "src/port/saturn/gfx/saturn_actor_instance.c"),
+                    str(ROOT / "src/port/saturn/gfx/saturn_geo_state_observer.c"),
+                    "-o", str(executable),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            admitted = subprocess.run(
+                [str(executable)], capture_output=True, text=True,
+            )
+            self.assertEqual(admitted.returncode, 0, admitted.stderr)
+
     def test_output_is_byte_stable_across_two_runs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = GeneratorFixture(Path(directory))

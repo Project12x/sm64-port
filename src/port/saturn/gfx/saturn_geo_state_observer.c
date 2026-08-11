@@ -93,6 +93,41 @@ bool sm64_saturn_geo_state_observer_record_switch(
     return true;
 }
 
+bool sm64_saturn_geo_state_observer_record_selected_switch(
+    sm64_saturn_geo_state_observer_t *observer, uint16_t state)
+{
+    if (observer == NULL || observer != s_observer || s_current == NULL ||
+        s_current->switch_count >= SM64_SATURN_ACTOR_MAX_SWITCHES)
+        return false;
+    return sm64_saturn_geo_state_observer_record_switch(
+        observer, s_current->switch_count, state);
+}
+
+bool sm64_saturn_geo_state_observer_record_render_range(
+    sm64_saturn_geo_state_observer_t *observer, int32_t min_q16,
+    int32_t max_q16, bool selected)
+{
+    if (observer == NULL || observer != s_observer || s_current == NULL ||
+        min_q16 > max_q16)
+        return false;
+    if (selected) {
+        s_current->render_range_min_q16 = min_q16;
+        s_current->render_range_max_q16 = max_q16;
+        s_current->render_range_state = 1U;
+    }
+    return true;
+}
+
+bool sm64_saturn_geo_state_observer_record_opacity(
+    sm64_saturn_geo_state_observer_t *observer, uint16_t opacity)
+{
+    if (observer == NULL || observer != s_observer || s_current == NULL ||
+        opacity > 255U)
+        return false;
+    s_current->opacity = opacity;
+    return true;
+}
+
 bool sm64_saturn_geo_state_observer_end_object(
     sm64_saturn_geo_state_observer_t *observer)
 {
@@ -129,4 +164,5 @@ void sm64_saturn_geo_state_observer_record_authoritative_geo_decision(
     bool rendered)
 {
     sm64_saturn_geo_state_observer_record_geo_decision(s_observer, rendered);
+    if (s_current != NULL) s_current->render_active = rendered ? 1U : 0U;
 }

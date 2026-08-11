@@ -123,6 +123,49 @@ static void test_mutation_is_observed_and_parent_is_pointer_free(void)
     assert(offsetof(sm64_saturn_actor_instance_snapshot_t, instance_key) == 8U);
 }
 
+static void test_authoritative_geo_seams_update_the_published_observation(void)
+{
+    sm64_saturn_geo_state_observer_t observer;
+    sm64_saturn_actor_source_observation_t source = observation(9U, 3U);
+    sm64_saturn_actor_instance_snapshot_t destination;
+    sm64_saturn_actor_capture_telemetry_t telemetry;
+    uint16_t count = 0U;
+
+    /* Breaks caught: frustum, selected LOD, selected switch, or evaluated
+     * opacity are counted as telemetry but do not update the current object. */
+    source.render_active = 1U;
+    source.render_range_min_q16 = 0;
+    source.render_range_max_q16 = 0;
+    source.render_range_state = 0U;
+    source.switch_count = 0U;
+    source.opacity = 255U;
+    sm64_saturn_geo_state_observer_init(&observer, 2U);
+    sm64_saturn_actor_instances_set_observer(&observer);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 9U);
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    sm64_saturn_geo_state_observer_record_authoritative_geo_decision(false);
+    assert(sm64_saturn_geo_state_observer_record_render_range(
+        &observer, -0x20000, 0x90000, true));
+    assert(sm64_saturn_geo_state_observer_record_selected_switch(
+        &observer, 5U));
+    assert(sm64_saturn_geo_state_observer_record_selected_switch(
+        &observer, 2U));
+    assert(sm64_saturn_geo_state_observer_record_opacity(&observer, 123U));
+    assert(!sm64_saturn_geo_state_observer_record_opacity(&observer, 256U));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    assert(sm64_saturn_actor_instances_capture(
+        &destination, 1U, 9U, &count, &telemetry));
+    assert(count == 1U);
+    assert(destination.render_active == 0U);
+    assert(destination.render_range_min_q16 == -0x20000);
+    assert(destination.render_range_max_q16 == 0x90000);
+    assert(destination.render_range_state == 1U);
+    assert(destination.switch_count == 2U);
+    assert(destination.switch_state[0] == 5U);
+    assert(destination.switch_state[1] == 2U);
+    assert(destination.opacity == 123U);
+}
+
 static void test_identity_reuse_and_despawn(void)
 {
     sm64_saturn_geo_state_observer_t observer;
@@ -489,6 +532,7 @@ int main(void)
 {
     test_all_typed_fields_and_model_none();
     test_mutation_is_observed_and_parent_is_pointer_free();
+    test_authoritative_geo_seams_update_the_published_observation();
     test_identity_reuse_and_despawn();
     test_source_pool_slots_are_independent_from_compact_capacity();
     test_compact_observation_overflow_remains_latched_at_65();

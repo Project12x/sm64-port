@@ -53,13 +53,20 @@
 
 - Added a generated, immutable BOB actor-identity registry that binds each
   supported drawable `(model/geo, behavior)` pair to the current S64F family
-  record, payload identity, and scene-package generation. The Saturn object
-  observer now admits registry hits with the complete four-field identity and
+  record, fully validated payload identity, and build-owned scene-package
+  generation. Generation now rejects malformed S64F identity/layout/internal
+  digest/record spans, report-to-payload drift, and stale package generations
+  instead of trusting only an outer file hash. The Saturn object observer now
+  admits registry hits with the complete four-field identity and
   leaves misses—including unsupported families and `MODEL_NONE` controllers—
   fully zero/fail-closed; shared geometry is disambiguated by exact behavior
-  identity rather than a model-only fallback. The seam also records typed
-  graph visibility and culling distance, preserves the reviewed no-parent
-  rule, and never substitutes generic feature bits for unresolved state.
+  identity rather than a model-only fallback. Authoritative frustum, selected
+  render-range, switch-case, and opacity evaluation now update the bound typed
+  observation at their source-owned geo seams, while the reviewed no-parent
+  rule remains intact and generic feature bits never substitute for typed
+  state. The two affected MSYS host-test recipes directly execute their fresh
+  binaries, avoiding native-Python `/d/...` path rejection so the prescribed
+  combined registry/snapshot Make gate is runnable on Windows.
 
 - Added bank-driven actor meshlet preparation over immutable validated S64B
   geometry and selected pose records. Queue and meshlet paths now share one

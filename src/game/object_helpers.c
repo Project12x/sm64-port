@@ -27,6 +27,10 @@
 #include "spawn_object.h"
 #include "spawn_sound.h"
 
+#ifdef TARGET_SATURN
+#include "port/saturn/gfx/saturn_geo_state_observer.h"
+#endif
+
 static s8 sBbhStairJiggleOffsets[] = { -8, 8, -4, 4 };
 static s16 sPowersOfTwo[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
 static s8 sLevelsWithRooms[] = { LEVEL_BBH, LEVEL_CASTLE, LEVEL_HMC, -1 };
@@ -69,6 +73,12 @@ Gfx *geo_update_layer_transparency(s32 callContext, struct GraphNode *node, UNUS
         }
 
         objectOpacity = objectGraphNode->oOpacity;
+#ifdef TARGET_SATURN
+        (void)sm64_saturn_geo_state_observer_record_opacity(
+            sm64_saturn_geo_state_observer_bound(),
+            objectOpacity <= 0 ? 0U :
+            (objectOpacity >= 255 ? 255U : (uint16_t)objectOpacity));
+#endif
         dlStart = alloc_display_list(sizeof(Gfx) * 3);
 
         dlHead = dlStart;

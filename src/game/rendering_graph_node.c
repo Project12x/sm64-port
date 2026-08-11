@@ -131,9 +131,7 @@ static bool saturn_source_observe_object_begin(struct Object *node)
     const uint16_t pool_slot = saturn_source_object_pool_slot(node);
     const uint16_t model_id =
         saturn_source_model_id(node->header.gfx.sharedChild);
-    const saturn_actor_identity_registry_entry_t *identity;
     if (pool_slot == UINT16_MAX) return false;
-    identity = saturn_actor_identity_registry_lookup(model_id, node->behavior);
     memset(&source, 0, sizeof(source));
     source.source_generation = sm64_saturn_geo_state_observer_generation(
         observer);
@@ -144,14 +142,8 @@ static bool saturn_source_observe_object_begin(struct Object *node)
      * for a typed immutable parent source. */
     source.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
     source.parent_node_ordinal = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
-    if (identity != NULL) {
-        source.family_id = identity->family_id;
-        source.actor_bank_id = identity->actor_bank_id;
-        for (axis = 0U; axis < 8U; axis++)
-            source.actor_bank_hash_words[axis] =
-                identity->actor_bank_hash_words[axis];
-        source.scene_package_generation = identity->scene_package_generation;
-    }
+    (void)saturn_actor_identity_registry_apply(
+        model_id, node->behavior, &source);
     source.position_q16[0] = sm64_saturn_float_to_q16(
         node->header.gfx.pos[0]);
     source.position_q16[1] = sm64_saturn_float_to_q16(
@@ -595,6 +587,7 @@ static void geo_process_perspective(struct GraphNodePerspective *node) {
  * matrix stack or any global that needs post-child restoration.
  */
 static bool saturn_geo_enter_level_of_detail(struct GraphNodeLevelOfDetail *node) {
+    bool selected;
 #ifdef GBI_FLOATS
     Mtx *mtx = gMatStackFixed[gMatStackIndex];
     s16 distanceFromCam = (s32) -mtx->m[3][2]; // z-component of the translation column
@@ -610,7 +603,15 @@ static bool saturn_geo_enter_level_of_detail(struct GraphNodeLevelOfDetail *node
     distanceFromCam = 0;
 #endif
 
-    if (node->minDistance <= distanceFromCam && distanceFromCam < node->maxDistance) {
+    selected = node->minDistance <= distanceFromCam &&
+               distanceFromCam < node->maxDistance;
+#ifdef TARGET_SATURN
+    (void)sm64_saturn_geo_state_observer_record_render_range(
+        sm64_saturn_geo_state_observer_bound(),
+        (int32_t)node->minDistance * 65536,
+        (int32_t)node->maxDistance * 65536, selected);
+#endif
+    if (selected) {
         return node->node.children != 0;
     }
     return false;
@@ -647,6 +648,10 @@ static struct GraphNode *saturn_geo_enter_switch(struct GraphNodeSwitchCase *nod
     if (node->fnNode.func != NULL) {
         node->fnNode.func(GEO_CONTEXT_RENDER, &node->fnNode.node, gMatStack[gMatStackIndex]);
     }
+#ifdef TARGET_SATURN
+    (void)sm64_saturn_geo_state_observer_record_selected_switch(
+        sm64_saturn_geo_state_observer_bound(), (uint16_t)node->selectedCase);
+#endif
     for (i = 0; selectedChild != NULL && node->selectedCase > i; i++) {
         selectedChild = selectedChild->next;
     }

@@ -6,6 +6,7 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 GFX = ROOT / "src/port/saturn/gfx"
 RENDERING = ROOT / "src/game/rendering_graph_node.c"
+OBJECT_HELPERS = ROOT / "src/game/object_helpers.c"
 SOURCEBOOT = ROOT / "src/port/saturn/sourceboot/main.c"
 
 
@@ -409,20 +410,16 @@ def test_object_observer_resolves_the_behavior_geo_pair_and_fails_closed_on_miss
     rendering = RENDERING.read_text(encoding="utf-8")
     observe = object_observer_body()
     assert '#include "actor_identity_registry.h"' in rendering
-    assert "saturn_actor_identity_registry_lookup(model_id, node->behavior)" in observe
-    branch_start = observe.index("if (identity != NULL)")
-    branch = body_text(observe[branch_start:], "if (identity != NULL)")
-    for assignment in (
-        "source.family_id = identity->family_id;",
-        "source.actor_bank_id = identity->actor_bank_id;",
-        "source.actor_bank_hash_words[axis] =",
-        "source.scene_package_generation = identity->scene_package_generation;",
-    ):
-        assert assignment in branch
-    outside = observe[:branch_start] + observe[branch_start + observe[branch_start:].index("}") + 1:]
-    assert "source.family_id =" not in outside
-    assert "source.actor_bank_id =" not in outside
-    assert "source.scene_package_generation =" not in outside
+    assert (
+        "saturn_actor_identity_registry_apply(\n"
+        "        model_id, node->behavior, &source)"
+        in observe
+    )
+    assert "saturn_actor_identity_registry_lookup" not in observe
+    assert "source.family_id =" not in observe
+    assert "source.actor_bank_id =" not in observe
+    assert "source.actor_bank_hash_words[" not in observe
+    assert "source.scene_package_generation =" not in observe
 
 
 def test_object_observer_sources_visibility_and_draw_distance_from_graph_state() -> None:
@@ -443,7 +440,9 @@ def test_object_observer_sources_visibility_and_draw_distance_from_graph_state()
     )
 
 
-def test_object_observer_uses_typed_neutral_values_without_feature_state_substitution() -> None:
+def test_authoritative_render_seams_replace_typed_neutral_values_without_feature_state_substitution() -> None:
+    rendering = RENDERING.read_text(encoding="utf-8")
+    object_helpers = OBJECT_HELPERS.read_text(encoding="utf-8")
     observe = object_observer_body()
     assert "source.opacity = 255U;" in observe
     assert "source.switch_count = 0U;" in observe
@@ -451,7 +450,14 @@ def test_object_observer_uses_typed_neutral_values_without_feature_state_substit
     assert "source.render_range_max_q16 =" not in observe
     assert "source.feature_state" not in observe
     assert "->feature_state" not in observe
-    assert "sm64_saturn_geo_state_observer_record_switch" in observe
+    assert "sm64_saturn_geo_state_observer_record_render_range(" in rendering
+    assert "sm64_saturn_geo_state_observer_record_selected_switch(" in rendering
+    assert "sm64_saturn_geo_state_observer_record_authoritative_geo_decision(" in rendering
+    opacity_read = object_helpers.index("objectOpacity = objectGraphNode->oOpacity;")
+    opacity_record = object_helpers.index(
+        "sm64_saturn_geo_state_observer_record_opacity("
+    )
+    assert opacity_read < opacity_record
 
 
 def test_object_observer_preserves_task19_no_parent_design_correction() -> None:
@@ -474,5 +480,5 @@ if __name__ == "__main__":
     test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture()
     test_object_observer_resolves_the_behavior_geo_pair_and_fails_closed_on_miss()
     test_object_observer_sources_visibility_and_draw_distance_from_graph_state()
-    test_object_observer_uses_typed_neutral_values_without_feature_state_substitution()
+    test_authoritative_render_seams_replace_typed_neutral_values_without_feature_state_substitution()
     test_object_observer_preserves_task19_no_parent_design_correction()
