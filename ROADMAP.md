@@ -2,14 +2,13 @@
 
 ## Now — verify and play the hermetic integrated BOB candidate
 
-Task 9 of the hermetic full-game release-identity plan is active in review
-repair round 2. The `04d6a2a3` / `5e04e252...11c1df` candidate is superseded
-because generated-asset cleanup could follow a swapped ancestor after path
-validation. Next seal the held-namespace cleanup repair into one common source,
-rebuild/compare two clean candidates, regenerate v4 and capacity/package
-evidence, and transactionally restage before same-reviewer rereviews. Task 10
-remains the next acceptance lane—20,100-frame smoke, visual proof, desktop
-launch, and owner manual test—and stays paused until Task 9 clears.
+Task 9 of the hermetic full-game release-identity plan is source-complete in
+review repair round 2, pending both same-reviewer rereviews. Source
+`df7894ac` reproduced two clean `-j1` candidates at manifest
+`9110b40d...b99` / identity `id-a40f992c085da2f0`; exact v4,
+capacity/package, guarded staging, and overwrite refusal pass. Task 10 remains
+the next acceptance lane—20,100-frame smoke, visual proof, desktop launch, and
+owner manual test—and stays paused until Task 9 clears.
 
 The staged result is the integrated BOB demo candidate only. The same profile,
 closure, identity-v2, audit, release-manifest, capture-binding, and staging
