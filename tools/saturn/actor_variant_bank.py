@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import struct
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -25,17 +26,11 @@ from actor_source import (
 )
 from compile_actor_bank import Geometry, Joint, Vertex, pack_actor_bank
 from dl_rigid_groups import (
-    REASON_TEXTURED,
-    parse_display_lists,
-    parse_geo_layouts,
     walk_geo_layout,
 )
 from extract_mario_actor import (
-    blocks,
     identity_matrix,
-    ints,
     matrix_apply,
-    vertex_rows,
 )
 from saturn_mesh_ir import compile_mesh_ir
 
@@ -87,6 +82,169 @@ class _Definition:
     body: str
 
 
+_C_INTEGER = re.compile(r"-?(?:0[xX][0-9A-Fa-f]+|\d+)")
+
+
+def _strip_comments(source: str, label: str) -> str:
+    output: list[str] = []
+    cursor = 0
+    while cursor < len(source):
+        if source.startswith("//", cursor):
+            end = source.find("\n", cursor + 2)
+            if end < 0:
+                break
+            output.append("\n")
+            cursor = end + 1
+        elif source.startswith("/*", cursor):
+            end = source.find("*/", cursor + 2)
+            if end < 0:
+                raise MalformedActorSourceError(f"unterminated block comment in {label}")
+            output.append("".join("\n" if char == "\n" else " "
+                                  for char in source[cursor:end + 2]))
+            cursor = end + 2
+        else:
+            output.append(source[cursor])
+            cursor += 1
+    return "".join(output)
+
+
+def _definition_bodies(source: str, kind: str, symbol: str,
+                       label: str) -> tuple[str, ...]:
+    clean = _strip_comments(source, label)
+    declaration = re.compile(
+        r"(?:static\s+)?const\s+" + re.escape(kind) + r"\s+" +
+        re.escape(symbol) + r"\s*\[\]\s*=\s*\{")
+    bodies: list[str] = []
+    for match in declaration.finditer(clean):
+        depth = 1
+        cursor = match.end()
+        while cursor < len(clean) and depth:
+            if clean[cursor] == "{":
+                depth += 1
+            elif clean[cursor] == "}":
+                depth -= 1
+            cursor += 1
+        if depth:
+            raise MalformedActorSourceError(
+                f"unterminated {kind} definition {symbol} in {label}")
+        end = cursor - 1
+        terminator = re.match(r"\s*;", clean[cursor:])
+        if terminator is None:
+            raise MalformedActorSourceError(
+                f"malformed {kind} terminator {symbol} in {label}")
+        bodies.append(clean[match.end():end])
+    return tuple(bodies)
+
+
+def _macro_tokens(body: str, prefix: str, label: str) -> list[tuple[str, str]]:
+    tokens: list[tuple[str, str]] = []
+    cursor = 0
+    while True:
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body):
+            break
+        name = re.match(r"[A-Za-z_]\w*", body[cursor:])
+        if name is None or not name.group(0).startswith(prefix):
+            raise MalformedActorSourceError(f"unexplained token in {label}")
+        macro = name.group(0)
+        cursor += name.end()
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body) or body[cursor] != "(":
+            raise MalformedActorSourceError(f"malformed command {macro} in {label}")
+        argument_start = cursor + 1
+        depth = 1
+        cursor += 1
+        while cursor < len(body) and depth:
+            if body[cursor] in "\"'":
+                raise MalformedActorSourceError(
+                    f"unsupported literal in command {macro} in {label}")
+            if body[cursor] == "(":
+                depth += 1
+            elif body[cursor] == ")":
+                depth -= 1
+            cursor += 1
+        if depth:
+            raise MalformedActorSourceError(f"unterminated command {macro} in {label}")
+        arguments = body[argument_start:cursor - 1]
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body) or body[cursor] != ",":
+            raise MalformedActorSourceError(f"missing command comma after {macro} in {label}")
+        cursor += 1
+        tokens.append((macro, arguments))
+    if not tokens:
+        raise MalformedActorSourceError(f"empty command initializer in {label}")
+    return tokens
+
+
+def _integer_literal(value: str, label: str) -> int:
+    value = value.strip()
+    if _C_INTEGER.fullmatch(value) is None:
+        raise MalformedActorSourceError(f"{label} must be an integer literal")
+    negative = value.startswith("-")
+    digits = value.lstrip("-")
+    base = 16 if digits.lower().startswith("0x") else (
+        8 if len(digits) > 1 and digits.startswith("0") else 10)
+    try:
+        result = int(digits, base)
+    except ValueError as error:
+        raise MalformedActorSourceError(f"{label} is not a valid C integer") from error
+    return -result if negative else result
+
+
+def _integer_fields(args: str, count: int, label: str) -> list[int]:
+    fields = _arguments(args)
+    if len(fields) != count:
+        raise MalformedActorSourceError(f"malformed {label}")
+    return [_integer_literal(field, label) for field in fields]
+
+
+_VTX_ROW = re.compile(
+    r"\{\s*\{\s*\{\s*(" + _C_INTEGER.pattern + r")\s*,\s*(" +
+    _C_INTEGER.pattern + r")\s*,\s*(" + _C_INTEGER.pattern +
+    r")\s*\}\s*,\s*(" + _C_INTEGER.pattern +
+    r")\s*,\s*\{\s*(" + _C_INTEGER.pattern + r")\s*,\s*(" +
+    _C_INTEGER.pattern + r")\s*\}\s*,\s*\{\s*(" +
+    _C_INTEGER.pattern + r")\s*,\s*(" + _C_INTEGER.pattern +
+    r")\s*,\s*(" + _C_INTEGER.pattern + r")\s*,\s*(" +
+    _C_INTEGER.pattern + r")\s*\}\s*\}\s*\}")
+
+
+def _vertex_rows(body: str, label: str) -> list[tuple[int, ...]]:
+    rows: list[tuple[int, ...]] = []
+    cursor = 0
+    while True:
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body):
+            break
+        match = _VTX_ROW.match(body, cursor)
+        if match is None:
+            raise MalformedActorSourceError(f"malformed Vtx row in {label}")
+        values = tuple(_integer_literal(value, f"Vtx field in {label}")
+                       for value in match.groups())
+        if any(value < -0x8000 or value > 0x7FFF for value in values[0:3]):
+            raise MalformedActorSourceError(f"Vtx coordinate exceeds int16 in {label}")
+        if not 0 <= values[3] <= 0xFFFF:
+            raise MalformedActorSourceError(f"Vtx flag exceeds uint16 in {label}")
+        if any(value < -0x8000 or value > 0x7FFF for value in values[4:6]):
+            raise MalformedActorSourceError(f"Vtx texture coordinate exceeds int16 in {label}")
+        if any(value < -0x80 or value > 0xFF for value in values[6:10]):
+            raise MalformedActorSourceError(f"Vtx color/normal exceeds byte range in {label}")
+        rows.append(values)
+        cursor = match.end()
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body) or body[cursor] != ",":
+            raise MalformedActorSourceError(f"missing Vtx row comma in {label}")
+        cursor += 1
+    if not rows:
+        raise MalformedActorSourceError(f"empty Vtx initializer in {label}")
+    return rows
+
+
 def _normal_path(value: object) -> str:
     if not isinstance(value, str) or not value or value.startswith("/") or \
             (len(value) >= 2 and value[1] == ":") or "\\" in value or "\x00" in value:
@@ -126,7 +284,7 @@ class _SourceIndex:
         self.candidates = tuple(sorted(self.expected))
         self._bytes: dict[str, bytes] = {}
         self._text: dict[str, str] = {}
-        self._blocks: dict[tuple[str, str], dict[str, str]] = {}
+        self._definitions: dict[tuple[str, str, str], tuple[str, ...]] = {}
         self.used: set[str] = set()
 
     def _load(self, path: str) -> bytes:
@@ -171,28 +329,51 @@ class _SourceIndex:
             raise ActorSourceSelectionError(f"{label} is not closure-attested: {path}")
         self.mark_used(path)
 
-    def file_blocks(self, path: str, kind: str) -> dict[str, str]:
-        key = (path, kind)
-        if key not in self._blocks:
-            self._blocks[key] = blocks(self.text(path), kind)
-        return self._blocks[key]
+    def definition_bodies(self, path: str, kind: str,
+                          symbol: str) -> tuple[str, ...]:
+        key = (path, kind, symbol)
+        if key not in self._definitions:
+            self._definitions[key] = _definition_bodies(
+                self.text(path), kind, symbol, path)
+        return self._definitions[key]
+
+    def declared_block(self, kind: str, symbol: str, path: str) -> _Definition:
+        path = _normal_path(path)
+        self.require_attested(path, f"declared {kind} source")
+        bodies = self.definition_bodies(path, kind, symbol)
+        if len(bodies) != 1:
+            detail = "missing" if not bodies else "duplicate"
+            raise ActorSourceSelectionError(
+                f"{detail} declared {kind} {symbol}: {path}")
+        return _Definition(path, bodies[0])
 
     def resolve_block(self, kind: str, symbol: str,
                       preferred: str | None = None) -> _Definition:
         if not re.fullmatch(r"[A-Za-z_]\w*", symbol):
             raise ActorSourceSelectionError(f"invalid {kind} symbol: {symbol}")
-        if preferred is not None and symbol in self.file_blocks(preferred, kind):
-            self.mark_used(preferred)
-            return _Definition(preferred, self.file_blocks(preferred, kind)[symbol])
-        matches = [path for path in self.candidates
-                   if symbol in self.file_blocks(path, kind)]
+        if preferred is not None:
+            preferred_bodies = self.definition_bodies(preferred, kind, symbol)
+            if len(preferred_bodies) > 1:
+                raise ActorSourceSelectionError(
+                    f"ambiguous {kind} source {symbol}: {preferred}")
+            if preferred_bodies:
+                self.mark_used(preferred)
+                return _Definition(preferred, preferred_bodies[0])
+        matches: list[tuple[str, str]] = []
+        for path in self.candidates:
+            bodies = self.definition_bodies(path, kind, symbol)
+            if len(bodies) > 1:
+                raise ActorSourceSelectionError(
+                    f"ambiguous {kind} source {symbol}: {path}")
+            if bodies:
+                matches.append((path, bodies[0]))
         if not matches:
             raise ActorSourceSelectionError(f"missing {kind} source: {symbol}")
         if len(matches) != 1:
             raise ActorSourceSelectionError(
-                f"ambiguous {kind} source {symbol}: {', '.join(matches)}")
-        self.mark_used(matches[0])
-        return _Definition(matches[0], self.file_blocks(matches[0], kind)[symbol])
+                f"ambiguous {kind} source {symbol}: {', '.join(item[0] for item in matches)}")
+        self.mark_used(matches[0][0])
+        return _Definition(matches[0][0], matches[0][1])
 
     def resolve_animation(self, symbol: str) -> str:
         pattern = re.compile(
@@ -211,18 +392,19 @@ class _SourceIndex:
         pattern = re.compile(
             r"(?:static\s+)?(?:const\s+)?Lights1\s+" + re.escape(symbol) +
             r"\s*=\s*gdSPDefLights1\s*\((.*?)\)\s*;", re.DOTALL)
-        preferred_match = pattern.search(self.text(preferred))
-        matches = [(preferred, preferred_match)] if preferred_match is not None else []
+        preferred_matches = pattern.findall(_strip_comments(self.text(preferred), preferred))
+        if len(preferred_matches) > 1:
+            raise ActorSourceSelectionError(f"ambiguous Lights1 source: {symbol}")
+        matches = [(preferred, preferred_matches[0])] if preferred_matches else []
         if not matches:
-            matches = [(path, match) for path in self.candidates
-                       if (match := pattern.search(self.text(path))) is not None]
+            matches = [(path, body) for path in self.candidates
+                       for body in pattern.findall(_strip_comments(self.text(path), path))]
         if len(matches) != 1:
             detail = "missing" if not matches else "ambiguous"
             raise ActorSourceSelectionError(f"{detail} Lights1 source: {symbol}")
-        path, match = matches[0]
+        path, body = matches[0]
         self.mark_used(path)
-        values = [int(token, 0) for token in re.findall(
-            r"(?<![A-Za-z0-9_])(?:0[xX][0-9A-Fa-f]+|-?\d+)", match.group(1))]
+        values = _integer_fields(body, 9, f"gdSPDefLights1 {symbol}")
         if len(values) != 9 or any(value < -128 or value > 255 for value in values):
             raise MalformedActorSourceError(f"unsupported gdSPDefLights1 shape: {symbol}")
         return tuple(max(0, min(31, value >> 3)) for value in values[3:6])
@@ -256,25 +438,36 @@ def _branch_arg(macro: str, args: str) -> str | None:
         return None
     fields = _arguments(args)
     if macro == "GEO_BRANCH_AND_LINK" and len(fields) == 1:
-        return fields[0]
-    if macro == "GEO_BRANCH" and len(fields) == 2:
-        return fields[1]
-    raise MalformedActorSourceError(f"malformed {macro}")
+        target = fields[0]
+    elif macro == "GEO_BRANCH" and len(fields) == 2:
+        if _integer_literal(fields[0], "GEO_BRANCH type") not in (0, 1):
+            raise MalformedActorSourceError("GEO_BRANCH type must be zero or one")
+        target = fields[1]
+    else:
+        raise MalformedActorSourceError(f"malformed {macro}")
+    if re.fullmatch(r"[A-Za-z_]\w*", target) is None:
+        raise MalformedActorSourceError(f"malformed {macro} target")
+    return target
 
 
 def _collect_layouts(index: _SourceIndex, entry: str, path: str,
                      layouts: dict[str, list[tuple[str, str]]],
-                     layout_paths: dict[str, str], stack: tuple[str, ...] = ()) -> None:
+                     layout_paths: dict[str, str], stack: tuple[str, ...] = (),
+                     *, declared: bool = False) -> None:
     if entry in stack:
         raise ActorSourceSelectionError(f"recursive GeoLayout: {' -> '.join(stack + (entry,))}")
-    definition = index.resolve_block("GeoLayout", entry, path)
-    parsed = parse_geo_layouts(index.text(definition.path))
-    if entry not in parsed:
-        raise ActorSourceSelectionError(f"missing selected GeoLayout: {entry}")
+    definition = (index.declared_block("GeoLayout", entry, path) if declared
+                  else index.resolve_block("GeoLayout", entry, path))
     prior = layout_paths.get(entry)
     if prior is not None and prior != definition.path:
         raise ActorSourceSelectionError(f"ambiguous reached GeoLayout: {entry}")
-    layouts[entry] = parsed[entry]
+    layouts[entry] = _macro_tokens(
+        definition.body, "GEO_", f"GeoLayout {entry} in {definition.path}")
+    terminators = [position for position, (macro, _args) in enumerate(layouts[entry])
+                   if macro in ("GEO_END", "GEO_RETURN")]
+    if terminators != [len(layouts[entry]) - 1]:
+        raise MalformedActorSourceError(
+            f"GeoLayout {entry} requires one final GEO_END/GEO_RETURN")
     layout_paths[entry] = definition.path
     for macro, args in layouts[entry]:
         target = _branch_arg(macro, args)
@@ -289,15 +482,18 @@ def _collect_lists(index: _SourceIndex, name: str, preferred: str,
     if name in stack:
         raise ActorSourceSelectionError(f"recursive display list: {' -> '.join(stack + (name,))}")
     definition = index.resolve_block("Gfx", name, preferred)
-    parsed = parse_display_lists(index.text(definition.path))
-    if name not in parsed:
-        raise ActorSourceSelectionError(f"missing reached display list: {name}")
     prior = list_paths.get(name)
     if prior is not None:
         if prior != definition.path:
             raise ActorSourceSelectionError(f"ambiguous reached display list: {name}")
         return
-    lists[name] = parsed[name]
+    lists[name] = _macro_tokens(
+        definition.body, "gs", f"Gfx {name} in {definition.path}")
+    terminators = [position for position, (macro, _args) in enumerate(lists[name])
+                   if macro == "gsSPEndDisplayList"]
+    if terminators != [len(lists[name]) - 1] or lists[name][-1][1].strip():
+        raise MalformedActorSourceError(
+            f"display list {name} requires one final gsSPEndDisplayList()")
     list_paths[name] = definition.path
     for macro, args in lists[name]:
         if macro == "gsSPDisplayList":
@@ -382,6 +578,9 @@ class _GeoCompiler:
         for macro, args in tokens:
             ordinal = self.node_ordinal
             self.node_ordinal += 1
+            if macro in ("GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_RETURN",
+                         "GEO_END", "GEO_NODE_START") and args.strip():
+                raise MalformedActorSourceError(f"malformed {macro}")
             if macro == "GEO_OPEN_NODE":
                 self.stack.append(self.scope)
                 self.scope = self.node
@@ -471,11 +670,11 @@ class _GeoCompiler:
 
 
 class _Fast3DCompiler:
-    _PASSIVE = {
-        "gsDPPipeSync", "gsDPLoadSync", "gsDPLoadBlock", "gsDPSetTile",
-        "gsDPTileSync", "gsDPSetTileSize", "gsDPSetEnvColor",
-        "gsDPSetAlphaCompare", "gsSPSetGeometryMode", "gsSPClearGeometryMode",
-        "gsSPEndDisplayList",
+    _UNREPRESENTABLE = {
+        "gsDPSetTextureImage", "gsDPLoadTextureBlock", "gsSPTexture",
+        "gsDPSetCombineMode", "gsSPSetGeometryMode", "gsSPClearGeometryMode",
+        "gsDPSetEnvColor", "gsDPSetAlphaCompare", "gsDPLoadSync",
+        "gsDPLoadBlock", "gsDPSetTile", "gsDPTileSync", "gsDPSetTileSize",
     }
 
     def __init__(self, index: _SourceIndex,
@@ -487,11 +686,6 @@ class _Fast3DCompiler:
         self.cache: list[tuple[tuple[int, ...], str, str, int] | None] = [None] * 32
         self.light: str | None = None
         self.light_rgb: tuple[int, int, int] | None = None
-        self.texture: str | None = None
-        self.combine: str | None = None
-        self.cull_back = True
-        self.env_color: tuple[int, int, int, int] | None = None
-        self.alpha_compare: str | None = None
         self.materials: list[dict[str, object]] = []
         self.material_ids: dict[tuple[object, ...], int] = {}
         self.triangles: list[dict[str, object]] = []
@@ -500,17 +694,15 @@ class _Fast3DCompiler:
         if self.light is None or self.light_rgb is None:
             raise ActorSourceSelectionError(
                 f"display list {part['display_list']} emits geometry without a diffuse light")
-        key = (self.light_rgb, self.light, self.texture, self.combine,
-               self.cull_back, self.env_color, self.alpha_compare, part["layer"])
+        key = (self.light_rgb, self.light, part["layer"])
         if key not in self.material_ids:
             material_id = len(self.materials)
             self.material_ids[key] = material_id
             self.materials.append({
                 "material_id": material_id, "rgb": list(self.light_rgb),
-                "light": self.light, "texture": self.texture,
-                "combine_mode": self.combine, "cull_back": self.cull_back,
-                "env_color": list(self.env_color) if self.env_color is not None else None,
-                "alpha_compare": self.alpha_compare, "layer": part["layer"],
+                "light": self.light, "texture": None,
+                "combine_mode": None, "cull_back": True,
+                "env_color": None, "alpha_compare": None, "layer": part["layer"],
             })
         return self.material_ids[key]
 
@@ -523,76 +715,49 @@ class _Fast3DCompiler:
             raise ActorSourceSelectionError(f"missing reached display list: {name}")
         local_ordinal = 0
         for macro, args in body:
+            if macro in self._UNREPRESENTABLE:
+                raise UnsupportedActorSourceError(
+                    f"S64B v1 cannot represent Fast3D state {macro} in {name}")
             if macro == "gsSPDisplayList":
                 child = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*", args)
                 if child is None:
                     raise MalformedActorSourceError(f"malformed gsSPDisplayList in {name}")
                 self.walk(child.group(1), part, stack + (name,))
             elif macro == "gsSPVertex":
-                group = re.match(r"\s*([A-Za-z_]\w*)", args)
-                if group is None:
+                fields = _arguments(args)
+                if len(fields) != 3 or re.fullmatch(r"[A-Za-z_]\w*", fields[0]) is None:
                     raise MalformedActorSourceError(f"malformed gsSPVertex in {name}")
-                definition = self.index.resolve_block("Vtx", group.group(1), path)
-                rows = vertex_rows(self.index.text(definition.path)).get(group.group(1), [])
-                values = ints(args[group.end():])
-                if len(values) != 2:
-                    raise MalformedActorSourceError(f"malformed gsSPVertex in {name}")
-                count, destination = values
+                group = fields[0]
+                definition = self.index.resolve_block("Vtx", group, path)
+                rows = _vertex_rows(definition.body, f"Vtx {group} in {definition.path}")
+                count = _integer_literal(fields[1], f"gsSPVertex count in {name}")
+                destination = _integer_literal(fields[2], f"gsSPVertex destination in {name}")
                 if count <= 0 or count > len(rows) or destination < 0 or destination + count > 32:
                     raise MalformedActorSourceError(f"invalid Fast3D vertex-cache load in {name}")
                 self.cache[destination:destination + count] = [
-                    (rows[index], definition.path, group.group(1), index)
+                    (rows[index], definition.path, group, index)
                     for index in range(count)
                 ]
             elif macro == "gsSPLight":
-                selected = re.search(r"&([A-Za-z_]\w*)\.(a|l)\b", args)
+                selected = re.fullmatch(
+                    r"\s*&([A-Za-z_]\w*)\.(a|l)\s*,\s*(" +
+                    _C_INTEGER.pattern + r")\s*", args)
                 if selected is None:
                     raise MalformedActorSourceError(f"malformed gsSPLight in {name}")
-                if selected.group(2) == "l":
-                    self.light = selected.group(1)
-                    self.light_rgb = self.index.light_rgb(self.light, path)
-            elif macro == "gsDPSetTextureImage":
-                selected = re.search(r"([A-Za-z_]\w*)\s*$", args)
-                if selected is None:
-                    raise MalformedActorSourceError(f"malformed gsDPSetTextureImage in {name}")
-                self.texture = selected.group(1)
-            elif macro == "gsDPLoadTextureBlock":
-                selected = re.match(r"\s*([A-Za-z_]\w*)", args)
-                if selected is None:
-                    raise MalformedActorSourceError(f"malformed gsDPLoadTextureBlock in {name}")
-                self.texture = selected.group(1)
-            elif macro == "gsDPSetCombineMode":
-                fields = _arguments(args)
-                if len(fields) != 2:
-                    raise MalformedActorSourceError(f"malformed gsDPSetCombineMode in {name}")
-                self.combine = fields[0]
-            elif macro in ("gsSPSetGeometryMode", "gsSPClearGeometryMode"):
-                modes = {item.strip() for item in args.split("|") if item.strip()}
-                if modes != {"G_CULL_BACK"}:
+                if (selected.group(2) != "l" or
+                        _integer_literal(selected.group(3),
+                                         f"gsSPLight index in {name}") != 1):
                     raise UnsupportedActorSourceError(
-                        f"unsupported Fast3D geometry mode in {name}: {args}")
-                self.cull_back = macro == "gsSPSetGeometryMode"
-            elif macro == "gsDPSetEnvColor":
-                values = ints(args)
-                if len(values) != 4 or any(value < 0 or value > 255 for value in values):
-                    raise MalformedActorSourceError(f"malformed gsDPSetEnvColor in {name}")
-                self.env_color = tuple(values)
-            elif macro == "gsDPSetAlphaCompare":
-                value = args.strip()
-                if not re.fullmatch(r"G_AC_(?:NONE|THRESHOLD|DITHER)", value):
-                    raise UnsupportedActorSourceError(
-                        f"unsupported gsDPSetAlphaCompare in {name}: {args}")
-                self.alpha_compare = value
-            elif macro == "gsSPTexture":
-                if "G_OFF" in args:
-                    self.texture = None
-                elif "G_ON" not in args:
-                    raise UnsupportedActorSourceError(f"unsupported gsSPTexture state in {name}")
+                        f"S64B v1 cannot represent ambient/alternate light state in {name}")
+                self.light = selected.group(1)
+                self.light_rgb = self.index.light_rgb(self.light, path)
             elif macro in ("gsSP1Triangle", "gsSP2Triangles"):
-                values = ints(args)
                 expected_count = 8 if macro == "gsSP2Triangles" else 4
-                if len(values) != expected_count:
-                    raise MalformedActorSourceError(f"malformed {macro} in {name}")
+                values = _integer_fields(args, expected_count, f"{macro} in {name}")
+                flags = (values[3], values[7]) if macro == "gsSP2Triangles" else (values[3],)
+                if any(flag != 0 for flag in flags):
+                    raise UnsupportedActorSourceError(
+                        f"unsupported nonzero triangle flag in {name}")
                 triples = ((values[0:3], values[4:7]) if macro == "gsSP2Triangles"
                            else (values[0:3],))
                 if any(len(triple) != 3 for triple in triples):
@@ -610,13 +775,19 @@ class _Fast3DCompiler:
                         "material": material, "joint_ordinal": part["joint_ordinal"],
                         "branch_ordinal": part["branch_ordinal"], "local_positions": local,
                         "opacity": 0 if part["opacity"] == "opaque" else 1,
-                        "texture": self.texture,
+                        "texture": None,
                     })
                     local_ordinal += 1
             elif macro in ("gsSPMatrix", "gsSPPopMatrix"):
                 raise UnsupportedActorSourceError(
                     f"display-list matrix state has no closure joint owner: {name}")
-            elif macro not in self._PASSIVE:
+            elif macro == "gsDPPipeSync":
+                if args.strip():
+                    raise MalformedActorSourceError(f"malformed gsDPPipeSync in {name}")
+            elif macro == "gsSPEndDisplayList":
+                if args.strip():
+                    raise MalformedActorSourceError(f"malformed gsSPEndDisplayList in {name}")
+            else:
                 raise UnsupportedActorSourceError(f"unknown Fast3D material/list state: {macro}")
             if macro == "gsSPEndDisplayList":
                 break
@@ -688,7 +859,7 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str
                                  dict[str, object]]:
     layouts: dict[str, list[tuple[str, str]]] = {}
     layout_paths: dict[str, str] = {}
-    _collect_layouts(index, geo_root, geo_path, layouts, layout_paths)
+    _collect_layouts(index, geo_root, geo_path, layouts, layout_paths, declared=True)
     lists: dict[str, list[tuple[str, str]]] = {}
     list_paths: dict[str, str] = {}
     for layout_name, tokens in layouts.items():
@@ -697,18 +868,17 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str
             binding = _display_list_arg(macro, args)
             if binding is not None:
                 _collect_lists(index, binding[1], preferred, lists, list_paths)
+    geo = _GeoCompiler(layouts, geo_root)
+    geo.walk(geo_root)
+    joints, source_parts = geo.finish()
     try:
         structural_sites = walk_geo_layout(layouts, lists, geo_root)
     except ValueError as error:
         raise ActorSourceSelectionError(str(error)) from error
-    unsupported = sorted({reason for site in structural_sites for reason in site.reasons
-                          if reason != REASON_TEXTURED})
+    unsupported = sorted({reason for site in structural_sites for reason in site.reasons})
     if unsupported:
         raise UnsupportedActorSourceError(f"unsupported rigid-group source: {unsupported[0]}")
 
-    geo = _GeoCompiler(layouts, geo_root)
-    geo.walk(geo_root)
-    joints, source_parts = geo.finish()
     fast = _Fast3DCompiler(index, lists, list_paths)
     for part in source_parts:
         fast.walk(str(part["display_list"]), part)
@@ -748,7 +918,10 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str
         "vertex_attributes": {}, "validation_poses": [],
         "source": {"geo": geo_path, "display_lists": sorted(set(list_paths.values()))},
     }
-    compiled, primitives, pairing = compile_mesh_ir(mesh_ir)
+    try:
+        compiled, primitives, pairing = compile_mesh_ir(mesh_ir)
+    except (ValueError, TypeError, OverflowError) as error:
+        raise MalformedActorSourceError(f"generic Mesh IR rejected geometry: {error}") from error
     primitive_documents = [{"material": primitive.material,
                             "indices": list(primitive.vertices)} for primitive in primitives]
     primitive_opacity: list[int] = []
@@ -849,34 +1022,79 @@ def _animation_records(index: _SourceIndex, records: Sequence[dict[str, object]]
     return tuple(parsed), bindings
 
 
-def _record_selection(records: Sequence[dict[str, object]]) -> tuple[str, str, str,
-                                                                         list[dict[str, object]]]:
+def _source_model_id(index: _SourceIndex, path: str, symbol: str) -> int:
+    path = _normal_path(path)
+    index.require_attested(path, "model ID source")
+    clean = _strip_comments(index.text(path), path)
+    pattern = re.compile(
+        r"^[ \t]*#define[ \t]+" + re.escape(symbol) + r"[ \t]+([^\r\n]+)$",
+        re.MULTILINE,
+    )
+    values = pattern.findall(clean)
+    if len(values) != 1:
+        detail = "missing" if not values else "duplicate"
+        raise ActorSourceSelectionError(f"{detail} model ID definition: {symbol}")
+    try:
+        value = _integer_literal(values[0], f"model ID {symbol}")
+    except MalformedActorSourceError as error:
+        raise ActorSourceSelectionError(str(error)) from error
+    if not 0 <= value <= 0xFFFF:
+        raise ActorSourceSelectionError(f"model ID definition exceeds uint16: {symbol}")
+    return value
+
+
+def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
+                      requested_model_id: int) -> tuple[str, str, str,
+                                                         list[dict[str, object]]]:
     selected: set[tuple[str, str, str]] = set()
     variants: list[dict[str, object]] = []
     for record in records:
-        model = record.get("model")
+        primary = record.get("model")
         provenance = record.get("root_provenance")
         models = provenance.get("models") if isinstance(provenance, dict) else None
-        if not isinstance(model, str) or not isinstance(models, dict):
+        if not isinstance(primary, str) or not isinstance(models, dict):
             raise ActorSourceSelectionError("closure model provenance is malformed")
-        binding = models.get(model)
-        if not isinstance(binding, dict):
-            raise ActorSourceSelectionError(f"closure has no selected model binding: {model}")
-        symbol = binding.get("geo_symbol")
-        path = binding.get("geo_source")
-        if not isinstance(symbol, str) or not isinstance(path, str):
-            raise ActorSourceSelectionError(f"closure model binding is incomplete: {model}")
-        selected.add((model, symbol, _normal_path(path)))
         model_variants = record.get("model_variants", [])
         if (not isinstance(model_variants, list) or
+                not model_variants or
                 any(not isinstance(item, dict) or
                     not isinstance(item.get("model"), str) or
                     not isinstance(item.get("geo_root"), str)
                     for item in model_variants)):
             raise ActorSourceSelectionError("closure model variants are malformed")
+        variant_models = [item["model"] for item in model_variants]
+        if len(set(variant_models)) != len(variant_models) or primary not in variant_models:
+            raise ActorSourceSelectionError("closure model variants do not contain one primary")
+        record_matches: list[tuple[str, str, str]] = []
+        for item in model_variants:
+            model = item["model"]
+            geo_root = item["geo_root"]
+            binding = models.get(model)
+            if not isinstance(binding, dict):
+                raise ActorSourceSelectionError(
+                    f"closure has no model-variant provenance: {model}")
+            if binding.get("geo_symbol") != geo_root:
+                raise ActorSourceSelectionError(
+                    f"closure model-variant provenance mismatch: {model}")
+            for label in ("source", "binding_source", "geo_source"):
+                if not isinstance(binding.get(label), str):
+                    raise ActorSourceSelectionError(
+                        f"closure model {label} is incomplete: {model}")
+            value = _source_model_id(index, binding["source"], model)
+            if value == requested_model_id:
+                record_matches.append(
+                    (model, geo_root, _normal_path(binding["geo_source"])))
+        if not record_matches:
+            raise ActorSourceSelectionError(
+                f"model ID {requested_model_id} has no closure variant")
+        if len(record_matches) != 1:
+            raise ActorSourceSelectionError(
+                f"ambiguous model ID {requested_model_id} in closure variants")
+        selected.add(record_matches[0])
         variants.extend(model_variants)
     if len(selected) != 1:
-        raise ActorSourceSelectionError("variant records do not select one exact model/GeoLayout")
+        raise ActorSourceSelectionError(
+            f"model ID {requested_model_id} selects conflicting model/GeoLayout provenance")
     model, symbol, path = selected.pop()
     typed = sorted({(item["model"], item["geo_root"]) for item in variants})
     return model, symbol, path, [{"model": item[0], "geo_root": item[1]} for item in typed]
@@ -889,15 +1107,21 @@ def compile_actor_variant(
     records: Sequence[dict[str, object]],
 ) -> CompiledActorVariant:
     """Return one fully validated generic S64B without writing output."""
-    if not isinstance(family_ordinal, int) or not 0 < family_ordinal <= 0xFFFF:
+    if (isinstance(family_ordinal, bool) or not isinstance(family_ordinal, int) or
+            not 0 < family_ordinal <= 0xFFFF):
         raise ActorSourceSelectionError("family ordinal must be a nonzero uint16")
-    if not isinstance(model_id, int) or not 0 < model_id <= 0xFFFF:
+    if (isinstance(model_id, bool) or not isinstance(model_id, int) or
+            not 0 < model_id <= 0xFFFF):
         raise ActorSourceSelectionError("model ID must be a nonzero uint16")
-    records = tuple(records)
+    try:
+        records = tuple(records)
+    except TypeError as error:
+        raise ActorSourceSelectionError("variant records must be a sequence") from error
     if not records or any(not isinstance(item, dict) for item in records):
         raise ActorSourceSelectionError("variant requires closure records")
     index = _SourceIndex(Path(root), records)
-    model, geo_root, geo_path, model_variants = _record_selection(records)
+    model, geo_root, geo_path, model_variants = _record_selection(
+        index, records, model_id)
     for record in records:
         provenance = record["root_provenance"]
         behavior = provenance.get("behavior")
@@ -915,16 +1139,27 @@ def compile_actor_variant(
     animations, animation_bindings = _animation_records(
         index, records, len(joints), geo_path)
     sources = index.source_records()
-    digest = source_identity(family_ordinal, model_id, sources)
+    try:
+        digest = source_identity(family_ordinal, model_id, sources)
+    except (ValueError, TypeError, OverflowError) as error:
+        raise ActorSourceSelectionError(f"invalid variant source identity: {error}") from error
     if int.from_bytes(digest[:4], "big") == 0:
         raise ActorSourceSelectionError("variant source identity has a zero bank ID")
-    maximum_live = sum(int(record.get("maximum_live_instances", 0)) for record in records)
+    live_counts = [record.get("maximum_live_instances") for record in records]
+    if any(isinstance(value, bool) or not isinstance(value, int) or
+           not 0 < value <= 0xFFFF for value in live_counts):
+        raise ActorSourceSelectionError(
+            "variant maximum live instances must be nonzero uint16 values")
+    maximum_live = sum(live_counts)
     if not 0 < maximum_live <= 0xFFFF:
         raise ActorSourceSelectionError("variant maximum live instances exceeds uint16")
-    payload, packed = pack_actor_bank(
-        family_id=family_ordinal, model_id=model_id, max_instances=maximum_live,
-        source_digest=digest, joints=joints, animations=animations,
-        vertices=vertices, geometry=geometry)
+    try:
+        payload, packed = pack_actor_bank(
+            family_id=family_ordinal, model_id=model_id, max_instances=maximum_live,
+            source_digest=digest, joints=joints, animations=animations,
+            vertices=vertices, geometry=geometry)
+    except (ValueError, TypeError, OverflowError, struct.error) as error:
+        raise MalformedActorSourceError(f"S64B packing rejected variant: {error}") from error
     try:
         bank = _validate_s64b(payload)
     except ValueError as error:

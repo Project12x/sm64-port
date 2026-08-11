@@ -14,8 +14,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from actor_variant_bank import (  # noqa: E402
     ActorAnimationBindingError,
     ActorJointOwnershipError,
+    MalformedActorSourceError,
     ActorSourceDriftError,
     ActorSourceSelectionError,
+    UnsupportedActorSourceError,
     compile_actor_variant,
 )
 from compile_actor_bank import decode_animation_channels  # noqa: E402
@@ -164,7 +166,7 @@ class _Fixture:
             self.record["sources"], key=lambda item: str(item["path"])
         )
 
-    def compile(self, *, family: int = 7, model: int = 11):
+    def compile(self, *, family: int = 7, model: int = 1):
         return compile_actor_variant(self.root, family, model, [self.record])
 
 
@@ -193,22 +195,253 @@ const GeoLayout test_geo[] = {
 
 
 class ActorVariantBankTest(unittest.TestCase):
+    def test_model_id_selects_exact_primary_or_alternate_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            primary = fixture.compile(model=1)
+            self.assertEqual(primary.report["selection"]["model"], "MODEL_TEST")
+            self.assertEqual(primary.report["selection"]["geo_root"], "test_geo")
+
+            model_ids = fixture.root / "include/model_ids.h"
+            model_ids.write_text(
+                model_ids.read_text(encoding="utf-8") +
+                "#define MODEL_ALT 2 // test_alt_geo\n",
+                encoding="utf-8", newline="\n",
+            )
+            script = fixture.root / "levels/test/script.c"
+            script.write_text(
+                script.read_text(encoding="utf-8") +
+                "LOAD_MODEL_FROM_GEO(MODEL_ALT, test_alt_geo)\n",
+                encoding="utf-8", newline="\n",
+            )
+            alternate_geo = fixture.root / "actors/test/alt_geo.inc.c"
+            alternate_geo.write_text("""
+const GeoLayout test_alt_geo[] = {
+    GEO_DISPLAY_LIST(LAYER_OPAQUE, test_case_a_dl),
+    GEO_END(),
+};
+""", encoding="utf-8", newline="\n")
+            fixture.record["model_variants"].append(
+                {"model": "MODEL_ALT", "geo_root": "test_alt_geo"}
+            )
+            fixture.record["root_provenance"]["models"]["MODEL_ALT"] = {
+                "source": "include/model_ids.h",
+                "binding_source": "levels/test/script.c",
+                "geo_symbol": "test_alt_geo",
+                "geo_source": "actors/test/alt_geo.inc.c",
+            }
+            fixture.rehash()
+
+            alternate = fixture.compile(model=2)
+            self.assertEqual(alternate.report["selection"]["model"], "MODEL_ALT")
+            self.assertEqual(alternate.report["selection"]["geo_root"], "test_alt_geo")
+            self.assertEqual([item.path for item in alternate.sources], [
+                "actors/test/alt_geo.inc.c",
+                "actors/test/model.inc.c",
+                "data/behavior_data.c",
+                "include/model_ids.h",
+                "levels/test/script.c",
+            ])
+            self.assertEqual(alternate.report["geometry"]["primitives"], [
+                {"material": 0, "indices": [0, 1, 2, 2]},
+            ])
+            with self.assertRaisesRegex(ActorSourceSelectionError, "model ID"):
+                fixture.compile(model=3)
+
+    def test_model_id_alias_ambiguity_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            model_ids = fixture.root / "include/model_ids.h"
+            model_ids.write_text(
+                model_ids.read_text(encoding="utf-8") +
+                "#define MODEL_ALIAS 1 // test_alias_geo\n",
+                encoding="utf-8", newline="\n",
+            )
+            alias_geo = fixture.root / "actors/test/alias_geo.inc.c"
+            alias_geo.write_text(_RIGID_GEO.replace("test_geo", "test_alias_geo"),
+                                 encoding="utf-8", newline="\n")
+            fixture.record["model_variants"].append(
+                {"model": "MODEL_ALIAS", "geo_root": "test_alias_geo"}
+            )
+            fixture.record["root_provenance"]["models"]["MODEL_ALIAS"] = {
+                "source": "include/model_ids.h",
+                "binding_source": "include/model_ids.h",
+                "geo_symbol": "test_alias_geo",
+                "geo_source": "actors/test/alias_geo.inc.c",
+            }
+            fixture.rehash()
+            with self.assertRaisesRegex(ActorSourceSelectionError, "ambiguous model ID"):
+                fixture.compile(model=1)
+
+    def test_declared_root_must_exist_once_in_its_provenance_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            declared = fixture.root / "actors/test/geo.inc.c"
+            alternate = fixture.root / "actors/test/other_geo.inc.c"
+            alternate.write_text(declared.read_text(encoding="utf-8"),
+                                 encoding="utf-8", newline="\n")
+            declared.write_text("/* declared root removed */\n",
+                                encoding="utf-8", newline="\n")
+            fixture.rehash()
+            with self.assertRaisesRegex(ActorSourceSelectionError, "declared GeoLayout"):
+                fixture.compile(model=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            declared = fixture.root / "actors/test/geo.inc.c"
+            declared.write_text(
+                declared.read_text(encoding="utf-8") + _RIGID_GEO,
+                encoding="utf-8", newline="\n",
+            )
+            fixture.rehash()
+            with self.assertRaisesRegex(ActorSourceSelectionError, "declared GeoLayout"):
+                fixture.compile(model=1)
+
+    def test_unrepresentable_fast3d_material_and_texture_states_fail_closed(self) -> None:
+        states = {
+            "texture_image": "gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, tex),",
+            "texture_block": "gsDPLoadTextureBlock(tex, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),",
+            "texture_enable": "gsSPTexture(0xffff, 0xffff, 0, G_TX_RENDERTILE, G_ON),",
+            "combine": "gsDPSetCombineMode(G_CC_SHADE, G_CC_SHADE),",
+            "cull_set": "gsSPSetGeometryMode(G_CULL_BACK),",
+            "cull_clear": "gsSPClearGeometryMode(G_CULL_BACK),",
+            "environment": "gsDPSetEnvColor(1, 2, 3, 4),",
+            "alpha_compare": "gsDPSetAlphaCompare(G_AC_THRESHOLD),",
+            "load_sync": "gsDPLoadSync(),",
+            "load_block": "gsDPLoadBlock(0, 0, 0, 0, 0),",
+            "tile": "gsDPSetTile(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),",
+            "tile_sync": "gsDPTileSync(),",
+            "tile_size": "gsDPSetTileSize(0, 0, 0, 0, 0),",
+            "ambient_light": "gsSPLight(&test_light.a, 2),",
+        }
+        for label, state in states.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _RIGID_GEO)
+                model = fixture.root / "actors/test/model.inc.c"
+                model.write_text(model.read_text(encoding="utf-8").replace(
+                    "const Gfx test_material_dl[] = {",
+                    "const Gfx test_material_dl[] = {\n    " + state,
+                ), encoding="utf-8", newline="\n")
+                fixture.rehash()
+                with self.assertRaises(UnsupportedActorSourceError):
+                    fixture.compile(model=1)
+
+    def test_selected_geo_list_and_vertex_bodies_require_complete_tokens(self) -> None:
+        mutations = {
+            "geo_token": ("actors/test/geo.inc.c", "GEO_END(),", "BROKEN_TOKEN,\n    GEO_END(),"),
+            "geo_comma": ("actors/test/geo.inc.c", "GEO_NODE_START(),", "GEO_NODE_START()"),
+            "geo_unterminated": (
+                "actors/test/geo.inc.c",
+                "GEO_DISPLAY_LIST(LAYER_OPAQUE, test_root_dl),",
+                "GEO_DISPLAY_LIST(LAYER_OPAQUE, test_root_dl,",
+            ),
+            "list_token": ("actors/test/model.inc.c", "gsSPEndDisplayList(),", "BROKEN_TOKEN,\n    gsSPEndDisplayList(),"),
+            "list_comma": ("actors/test/model.inc.c", "gsSPVertex(test_vertices, 4, 0),", "gsSPVertex(test_vertices, 4, 0)"),
+            "list_unterminated": (
+                "actors/test/model.inc.c",
+                "gsSPVertex(test_vertices, 4, 0),",
+                "gsSPVertex(test_vertices, 4, 0,",
+            ),
+            "vertex_row": (
+                "actors/test/model.inc.c",
+                "const Vtx test_vertices[] = {",
+                "const Vtx test_vertices[] = {\n"
+                "    {{{ 1 + 2, 0, 0}, 0, {0, 0}, {0, 0, 127, 255}}},",
+            ),
+        }
+        for label, (relative, old, new) in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _RIGID_GEO)
+                path = fixture.root / relative
+                path.write_text(path.read_text(encoding="utf-8").replace(old, new, 1),
+                                encoding="utf-8", newline="\n")
+                fixture.rehash()
+                with self.assertRaises(MalformedActorSourceError):
+                    fixture.compile(model=1)
+
+    def test_animation_expressions_and_unencoded_fields_fail_closed(self) -> None:
+        mutations = {
+            "numeric_expression": ("10, 11,", "5 + 5, 11,"),
+            "parts_expression": (
+                "ANIMINDEX_NUMPARTS(test_anim_indices)",
+                "BAD_PARTS(test_anim_indices)",
+            ),
+            "flags_range": ("    1,\n    1,", "    70000,\n    1,"),
+        }
+        for label, (old, new) in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _ARTICULATED_GEO, animated=True)
+                animation = fixture.root / "actors/test/anims/anim.inc.c"
+                animation.write_text(animation.read_text(encoding="utf-8").replace(old, new),
+                                     encoding="utf-8", newline="\n")
+                fixture.rehash()
+                with self.assertRaises(ActorAnimationBindingError):
+                    fixture.compile(model=1)
+
+    def test_public_boundary_translates_scalar_count_and_packing_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            vertices = fixture.root / "actors/test/model.inc.c"
+            vertices.write_text(vertices.read_text(encoding="utf-8").replace(
+                "{{{ 10,  0, 0}", "{{{ 40000,  0, 0}", 1,
+            ), encoding="utf-8", newline="\n")
+            fixture.rehash()
+            with self.assertRaises(MalformedActorSourceError):
+                fixture.compile(model=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            vertices = fixture.root / "actors/test/model.inc.c"
+            vertices.write_text(vertices.read_text(encoding="utf-8").replace(
+                "{{{ 10,  0, 0}", "{{{ 08,  0, 0}", 1,
+            ), encoding="utf-8", newline="\n")
+            fixture.rehash()
+            with self.assertRaises(MalformedActorSourceError):
+                fixture.compile(model=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _ARTICULATED_GEO, animated=True)
+            animation = fixture.root / "actors/test/anims/anim.inc.c"
+            animation.write_text(animation.read_text(encoding="utf-8").replace(
+                "10, 11,", "40000, 11,", 1,
+            ), encoding="utf-8", newline="\n")
+            fixture.rehash()
+            with self.assertRaises(ActorAnimationBindingError):
+                fixture.compile(model=1)
+
+        for invalid in (True, "three", 65536):
+            with self.subTest(maximum_live_instances=invalid), \
+                    tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _RIGID_GEO)
+                fixture.record["maximum_live_instances"] = invalid
+                with self.assertRaises(ActorSourceSelectionError):
+                    fixture.compile(model=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            with self.assertRaises(ActorSourceSelectionError):
+                fixture.compile(family=True, model=1)
+            with self.assertRaises(ActorSourceSelectionError):
+                fixture.compile(model=True)
+            with self.assertRaises(ActorSourceSelectionError):
+                compile_actor_variant(fixture.root, 7, 1, None)  # type: ignore[arg-type]
+
     def test_rigid_nested_list_has_exact_geometry_and_neutral_pose(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = _Fixture(Path(directory), _RIGID_GEO)
             compiled = fixture.compile()
 
-        self.assertEqual((compiled.family_ordinal, compiled.model_id), (7, 11))
+        self.assertEqual((compiled.family_ordinal, compiled.model_id), (7, 1))
         self.assertEqual(len(compiled.payload), 358)
         self.assertEqual(compiled.lane_bytes, 104)
         self.assertEqual(compiled.maximum_scratch, 211)
         self.assertEqual(
             compiled.payload_sha256,
-            "3aa76aa8d63d012e5117ed28748bf21f144e31010ac8aea03038f3fedb57a043",
+            "d356417800cc21a0f982e18647be8ff1ffba27b4c1f4c50d52d4d21976771f30",
         )
         self.assertEqual(
             compiled.source_sha256,
-            "129e2d833160e29caba88e00552512b739484bc8ee14b1861475b3e0da5033f1",
+            "780d1b65c6c27a8c7d1c77867f816ec07fd239f7fffcfa0c84a48a338fad68f7",
         )
         self.assertEqual(compiled.maximum_scratch, 3 + 2 * compiled.lane_bytes)
         self.assertEqual(
@@ -251,18 +484,18 @@ class ActorVariantBankTest(unittest.TestCase):
     def test_articulated_fixture_has_joint_local_vertices_and_exact_samples(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = _Fixture(Path(directory), _ARTICULATED_GEO, animated=True)
-            compiled = fixture.compile(family=9, model=13)
+            compiled = fixture.compile(family=9, model=1)
 
         self.assertEqual(len(compiled.payload), 468)
         self.assertEqual(compiled.lane_bytes, 192)
         self.assertEqual(compiled.maximum_scratch, 387)
         self.assertEqual(
             compiled.payload_sha256,
-            "1e688dc471c5590c672632377c31d8c3f4906bb31f7c3d476e8cf310069c395e",
+            "1bff9db7ae5c3cea3512f748a721706a3709b662cb9c8a88ad3b4c0528b0634e",
         )
         self.assertEqual(
             compiled.source_sha256,
-            "9efc768508379b3d07c36d76b54171f9382eee42c6c6e423cb8af4c4319f5ef2",
+            "0d617e2444ef50ce6d16e41aaac6572e47eacdff534c5aab8efcc08cdb118a60",
         )
         geometry = compiled.report["geometry"]
         self.assertEqual(geometry["joints"], [

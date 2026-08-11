@@ -86,6 +86,20 @@ class Geometry:
     meshlets: Sequence[dict[str, object]]
     primitives: Sequence[dict[str, object]]
 
+
+def _encoded_integer(value: object, minimum: int, maximum: int, label: str) -> int:
+    if (isinstance(value, bool) or not isinstance(value, int) or
+            value < minimum or value > maximum):
+        raise ValueError(f"{label} is outside [{minimum}, {maximum}]")
+    return value
+
+
+def _encoded_count(items: Sequence[object], label: str, *, nonzero: bool = False) -> int:
+    count = len(items)
+    if count > 0xFFFF or (nonzero and count == 0):
+        raise ValueError(f"{label} count is outside uint16")
+    return count
+
 # Generic family-bank container.  It intentionally carries JSON metadata as
 # bounded byte spans; the Saturn runtime never publishes pointers into it.
 FAMILY_MAGIC = b"S64F"
@@ -660,9 +674,12 @@ def pack_actor_bank(
     joints = tuple(joints)
     animations = tuple(animations)
     vertices = tuple(vertices)
-    if not 0 < family_id <= 0xFFFF or not 0 < model_id <= 0xFFFF:
+    if (isinstance(family_id, bool) or isinstance(model_id, bool) or
+            not isinstance(family_id, int) or not isinstance(model_id, int) or
+            not 0 < family_id <= 0xFFFF or not 0 < model_id <= 0xFFFF):
         raise ValueError("actor bank family/model IDs must be nonzero uint16 values")
-    if not 0 < max_instances <= 0xFFFF:
+    if (isinstance(max_instances, bool) or not isinstance(max_instances, int) or
+            not 0 < max_instances <= 0xFFFF):
         raise ValueError("actor bank maximum instances must be a nonzero uint16")
     if not isinstance(source_digest, bytes) or len(source_digest) != 32 or not any(source_digest):
         raise ValueError("actor bank source digest must be a nonzero SHA-256")
@@ -674,6 +691,110 @@ def pack_actor_bank(
         raise ValueError("actor bank animation IDs must be contiguous")
     if any(record.joint_count != len(joints) for record in animations):
         raise ValueError("actor bank animation joint count mismatch")
+    _encoded_count(joints, "joint", nonzero=True)
+    _encoded_count(animations, "animation", nonzero=True)
+    _encoded_count(vertices, "vertex", nonzero=True)
+    _encoded_count(geometry.parts, "part")
+    _encoded_count(geometry.materials, "material", nonzero=True)
+    _encoded_count(geometry.meshlets, "meshlet", nonzero=True)
+    _encoded_count(geometry.primitives, "primitive", nonzero=True)
+    for joint_index, joint in enumerate(joints):
+        _encoded_integer(joint.parent_ordinal, -0x8000, 0x7FFF,
+                         f"joint {joint_index} parent")
+        if (joint.parent_ordinal >= joint_index or
+                (joint_index == 0) != (joint.parent_ordinal == -1)):
+            raise ValueError(f"joint {joint_index} parent is not a strict hierarchy")
+        for axis, value in enumerate(joint.translation):
+            _encoded_integer(value, -0x8000, 0x7FFF,
+                             f"joint {joint_index} translation {axis}")
+        _encoded_integer(joint.node_ordinal, -0x8000, 0x7FFF,
+                         f"joint {joint_index} node ordinal")
+        _encoded_integer(joint.branch_ordinal, 0, 0xFFFF,
+                         f"joint {joint_index} branch ordinal")
+    for vertex_index, vertex in enumerate(vertices):
+        if len(vertex.local) != 3:
+            raise ValueError(f"vertex {vertex_index} local coordinate length")
+        for axis, value in enumerate(vertex.local):
+            _encoded_integer(value, -0x8000, 0x7FFF,
+                             f"vertex {vertex_index} coordinate {axis}")
+        _encoded_integer(vertex.joint_ordinal, 0, len(joints) - 1,
+                         f"vertex {vertex_index} joint")
+        _encoded_integer(vertex.branch_ordinal, 0, 0xFFFF,
+                         f"vertex {vertex_index} branch")
+    for record in animations:
+        _encoded_integer(record.frame_count, 1, 0xFFFF,
+                         f"animation {record.animation_id} frame count")
+        _encoded_integer(record.flags, 0, 0xFFFF,
+                         f"animation {record.animation_id} flags")
+        _encoded_integer(record.y_translation_divisor, -0x8000, 0x7FFF,
+                         f"animation {record.animation_id} divisor")
+        if not record.indices or len(record.indices) % 2 or not record.values:
+            raise ValueError(f"animation {record.animation_id} channel layout")
+        for value in record.indices:
+            _encoded_integer(value, 0, 0xFFFF,
+                             f"animation {record.animation_id} index")
+        for value in record.values:
+            _encoded_integer(value, -0x8000, 0x7FFF,
+                             f"animation {record.animation_id} value")
+        for count, offset in zip(record.indices[0::2], record.indices[1::2]):
+            if count == 0 or offset + count > len(record.values):
+                raise ValueError(f"animation {record.animation_id} channel span")
+    for part_index, part in enumerate(geometry.parts):
+        _encoded_integer(part.get("joint_ordinal"), 0, len(joints) - 1,
+                         f"part {part_index} joint")
+        _encoded_integer(part.get("branch_ordinal"), 0, 0xFFFF,
+                         f"part {part_index} branch")
+    for material_index, material in enumerate(geometry.materials):
+        rgb = material.get("rgb")
+        if not isinstance(rgb, (list, tuple)) or len(rgb) != 3:
+            raise ValueError(f"material {material_index} RGB shape")
+        for channel in rgb:
+            _encoded_integer(channel, 0, 31, f"material {material_index} RGB")
+    for primitive_index, primitive in enumerate(geometry.primitives):
+        indices = primitive.get("indices")
+        if not isinstance(indices, (list, tuple)) or len(indices) != 4:
+            raise ValueError(f"primitive {primitive_index} index shape")
+        _encoded_integer(primitive.get("material"), 0, len(geometry.materials) - 1,
+                         f"primitive {primitive_index} material")
+        for vertex in indices:
+            _encoded_integer(vertex, 0, len(vertices) - 1,
+                             f"primitive {primitive_index} vertex")
+    primitive_ref_count = 0
+    vertex_ref_count = 0
+    for meshlet_index, meshlet in enumerate(geometry.meshlets):
+        _encoded_integer(meshlet.get("material"), 0, len(geometry.materials) - 1,
+                         f"meshlet {meshlet_index} material")
+        _encoded_integer(meshlet.get("source_ordinal"), 0, 0xFFFF,
+                         f"meshlet {meshlet_index} source ordinal")
+        _encoded_integer(meshlet.get("opacity"), 0, 1,
+                         f"meshlet {meshlet_index} opacity")
+        bounds = meshlet.get("bounds")
+        if not isinstance(bounds, dict):
+            raise ValueError(f"meshlet {meshlet_index} bounds")
+        for side in ("min", "max"):
+            values = bounds.get(side)
+            if not isinstance(values, (list, tuple)) or len(values) != 3:
+                raise ValueError(f"meshlet {meshlet_index} {side} bounds")
+            for value in values:
+                _encoded_integer(value, -0x8000, 0x7FFF,
+                                 f"meshlet {meshlet_index} {side} bounds")
+        tiers = meshlet.get("tiers")
+        if not isinstance(tiers, (list, tuple)) or len(tiers) != 3:
+            raise ValueError(f"meshlet {meshlet_index} tier shape")
+        for tier_index, tier in enumerate(tiers):
+            if not isinstance(tier, (list, tuple)) or len(tier) != 2:
+                raise ValueError(f"meshlet {meshlet_index} tier {tier_index}")
+            tier_primitives, tier_vertices = tier
+            for primitive in tier_primitives:
+                _encoded_integer(primitive, 0, len(geometry.primitives) - 1,
+                                 f"meshlet {meshlet_index} primitive ref")
+            for vertex in tier_vertices:
+                _encoded_integer(vertex, 0, len(vertices) - 1,
+                                 f"meshlet {meshlet_index} vertex ref")
+            primitive_ref_count += len(tier_primitives)
+            vertex_ref_count += len(tier_vertices)
+    if primitive_ref_count > 0xFFFF or vertex_ref_count > 0xFFFF:
+        raise ValueError("actor bank meshlet reference count exceeds uint16")
 
     payload = bytearray(bytes(HEADER_SIZE))
     records_offset = _align(payload)

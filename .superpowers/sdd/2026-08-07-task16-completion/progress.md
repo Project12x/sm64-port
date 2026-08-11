@@ -472,3 +472,45 @@
   fixed two-lane runtime; Task 16 Tasks 2-5; target/P2/Ymir/map/capacity;
   feature-off identity; transition; release/reseal; smoke, visual, desktop,
   owner-manual, and total-game gates. None is claimed by host/source evidence.
+
+## 2026-08-11 generic actor bundle Task 3 review repair round 1
+
+- Status: `source-complete-review-repair-round-1; independent rereview
+  pending`. The scoped behavior commit is recorded by subject as
+  `fix(saturn): harden actor variant source boundaries` until the evidence
+  transition pins its exact SHA. Task 4 has not started; Task 16 Tasks 2-5
+  remain blocked/open on the rest of the prerequisite lane.
+- Model/root corrections: requested numeric `model_id` now resolves through
+  the attested model-ID source to exactly one `model_variants` row and matching
+  GeoLayout provenance; alias, mismatch, and cross-record conflicts fail.
+  Declared roots must exist exactly once in their declared `geo_source`; only
+  reached symbols may use unique closure-attested cross-file lookup.
+- Source/semantic corrections: selected GeoLayout, Gfx, Vtx, animation
+  headers, and numeric arrays require coverage-preserving tokens, exact arity,
+  final terminators, and encoded ranges. S64B-v1-unrepresentable texture,
+  combine, culling, environment, alpha, tile/load, and alternate-light states
+  raise `UnsupportedActorSourceError` rather than losing runtime semantics.
+  Mesh IR, scalar/count, conversion, and packing failures cross the public API
+  only as named actor-variant errors.
+- RED: the combined focused boundary reproduced the review with 24 failures
+  and one raw error; targeted REDs additionally caught a duplicate animation
+  table that was accepted, malformed `records=None` escaping as `TypeError`,
+  and invalid C octal `08` escaping as `ValueError`.
+- GREEN: 22/22 focused variant/source tests and 25/25 historical rigid-group
+  tests pass; the combined native-root `verify-actor-variant-bank
+  verify-actor-pose-bank verify-actor-meshlets` wave exits 0; compileall passes.
+  Exact repaired rigid payload/source hashes are
+  `d356417800cc21a0f982e18647be8ff1ffba27b4c1f4c50d52d4d21976771f30` /
+  `780d1b65c6c27a8c7d1c77867f816ec07fd239f7fffcfa0c84a48a338fad68f7`;
+  articulated hashes are
+  `1bff9db7ae5c3cea3512f748a721706a3709b662cb9c8a88ad3b4c0528b0634e` /
+  `0d617e2444ef50ce6d16e41aaac6572e47eacdff534c5aab8efcc08cdb118a60`.
+- Legacy proof: Mario remains byte-identical at 596,896 bytes and SHA-256
+  `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
+  its exact JSON SHA-256 remains
+  `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+- Remaining: independent Task 3 rereview; real BOB/whole-game compilation and
+  capacity; scene S64F orchestration; registry regeneration; cart/fixed
+  workspace; Task 16 Tasks 2-5; target/P2/Ymir/map/capacity; feature-off,
+  transition, release/reseal, smoke, visual, desktop, owner-manual, and
+  total-game gates. None is claimed by this source-only repair.

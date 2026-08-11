@@ -77,6 +77,35 @@ static const struct Animation bad_anim[] = {
         with self.assertRaisesRegex(ValueError, "channel span"):
             parse_generic_animation_file_text("bad.inc.c", source, {"bad_anim": 0})
 
+        duplicate_table = """
+const struct Animation *const test_anims[] = { &first_anim, NULL };
+const struct Animation *const test_anims[] = { &second_anim, NULL };
+"""
+        with self.assertRaisesRegex(ValueError, "duplicate animation table"):
+            parse_animation_table_text(
+                "table.inc.c", duplicate_table, "test_anims"
+            )
+
+    def test_generic_animation_parser_rejects_unconsumed_array_and_header_tokens(self) -> None:
+        source = """
+static const s16 bad_values[] = { 1 + 2, 0, 0, 0, 0, 0 };
+static const u16 bad_indices[] = {
+    1, 0, 1, 1, 1, 2, 1, 3, 1, 4, 1, 5,
+};
+static const struct Animation bad_anim[] = {
+    1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(bad_indices),
+    bad_values, bad_indices, 0,
+};
+"""
+        with self.assertRaisesRegex(ValueError, "numeric initializer"):
+            parse_generic_animation_file_text("bad.inc.c", source, {"bad_anim": 0})
+
+        source = source.replace("1 + 2", "1").replace(
+            "ANIMINDEX_NUMPARTS(bad_indices)", "BAD_PARTS(bad_indices)"
+        )
+        with self.assertRaisesRegex(ValueError, "part-count field"):
+            parse_generic_animation_file_text("bad.inc.c", source, {"bad_anim": 0})
+
     def test_complete_mario_inventory_has_stable_ids_and_hashes(self) -> None:
         inventory = load_animation_inventory(ROOT)
         self.assertEqual(len(inventory.animation_ids), 209)

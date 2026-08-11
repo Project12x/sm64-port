@@ -12,6 +12,17 @@
 
 ### Fixed
 
+- Hardened the generic S64B variant compiler after review: the requested
+  numeric model ID now selects exactly one attested model/GeoLayout provenance
+  instead of merely labeling the primary model's bytes; declared root layouts
+  no longer fall back to same-named definitions elsewhere; and selected
+  GeoLayout, display-list, vertex, and animation initializers require complete
+  token coverage, exact arity, and bounded encoded scalars. Fast3D texture,
+  combine, culling, environment, alpha, tile/load, and alternate-light states
+  are now rejected because S64B v1 cannot encode them, preventing a validly
+  sealed but visually incorrect bank. Expected extraction, Mesh IR, and packing
+  failures are translated to the public named actor-variant error contract.
+
 - Matched the S64F v3 host's embedded-S64B geometry validation to the target's
   contiguous tier-0 primitive-order contract, preventing a host-sealed bundle
   from failing master validation. Variant-record decoding now also publishes

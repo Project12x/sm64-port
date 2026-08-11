@@ -299,15 +299,13 @@ def parse_animation_table_text(filename: str, source: str,
     """Parse one closure-selected Animation pointer table without guessing."""
     if not re.fullmatch(r"[A-Za-z_]\w*", table_symbol):
         raise ValueError(f"{filename}: invalid animation table symbol")
-    match = re.search(
+    source = _strip_c_comments(filename, source)
+    body = _selected_initializer(
+        filename, source,
         r"(?:static\s+)?const\s+struct\s+Animation\s*\*\s*const\s+" +
-        re.escape(table_symbol) + r"\s*\[\]\s*=\s*\{(.*?)\};",
-        source, re.DOTALL,
+        re.escape(table_symbol) + r"\s*\[\]",
+        f"animation table {table_symbol}",
     )
-    if match is None:
-        raise ValueError(f"{filename}: missing animation table {table_symbol}")
-    body = re.sub(r"/\*.*?\*/", "", match.group(1), flags=re.DOTALL)
-    body = re.sub(r"//.*", "", body)
     entries = [item.strip() for item in body.split(",") if item.strip()]
     if not entries or entries[-1] != "NULL":
         raise ValueError(f"{filename}: animation table requires one trailing NULL")
@@ -325,6 +323,111 @@ def parse_animation_table_text(filename: str, source: str,
     return tuple(symbols)
 
 
+def _strip_c_comments(filename: str, source: str) -> str:
+    """Remove C comments while rejecting an unterminated block comment."""
+    output: list[str] = []
+    cursor = 0
+    while cursor < len(source):
+        if source.startswith("//", cursor):
+            end = source.find("\n", cursor + 2)
+            if end < 0:
+                break
+            output.append("\n")
+            cursor = end + 1
+        elif source.startswith("/*", cursor):
+            end = source.find("*/", cursor + 2)
+            if end < 0:
+                raise ValueError(f"{filename}: unterminated block comment")
+            output.append("".join("\n" if char == "\n" else " "
+                                  for char in source[cursor:end + 2]))
+            cursor = end + 2
+        else:
+            output.append(source[cursor])
+            cursor += 1
+    return "".join(output)
+
+
+def _selected_initializer(filename: str, source: str, declaration: str,
+                          label: str) -> str:
+    """Return one exact initializer body, including balanced-brace coverage."""
+    matches = list(re.finditer(declaration + r"\s*=\s*\{", source))
+    if len(matches) != 1:
+        detail = "missing" if not matches else "duplicate"
+        raise ValueError(f"{filename}: {detail} {label}")
+    match = matches[0]
+    depth = 1
+    cursor = match.end()
+    while cursor < len(source) and depth:
+        if source[cursor] == "{":
+            depth += 1
+        elif source[cursor] == "}":
+            depth -= 1
+        cursor += 1
+    if depth:
+        raise ValueError(f"{filename}: unterminated {label}")
+    end = cursor - 1
+    terminator = re.match(r"\s*;", source[cursor:])
+    if terminator is None:
+        raise ValueError(f"{filename}: malformed {label} terminator")
+    return source[match.end():end]
+
+
+_C_INTEGER = re.compile(r"-?(?:0[xX][0-9A-Fa-f]+|\d+)")
+
+
+def _integer_literal(filename: str, text: str, label: str) -> int:
+    text = text.strip()
+    if _C_INTEGER.fullmatch(text) is None:
+        raise ValueError(f"{filename}: invalid {label}")
+    negative = text.startswith("-")
+    digits = text.lstrip("-")
+    base = 16 if digits.lower().startswith("0x") else (
+        8 if len(digits) > 1 and digits.startswith("0") else 10)
+    try:
+        value = int(digits, base)
+    except ValueError as error:
+        raise ValueError(f"{filename}: invalid {label}") from error
+    return -value if negative else value
+
+
+def _numeric_initializer(filename: str, name: str, body: str,
+                         *, signed: bool) -> tuple[int, ...]:
+    values: list[int] = []
+    cursor = 0
+    while True:
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body):
+            break
+        token = _C_INTEGER.match(body, cursor)
+        if token is None:
+            raise ValueError(f"{filename}: invalid numeric initializer for {name}")
+        value = _integer_literal(filename, token.group(0),
+                                 f"numeric initializer for {name}")
+        cursor = token.end()
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if signed:
+            if token.group(0).lower().lstrip("-").startswith("0x"):
+                if value < 0 or value > 0xFFFF:
+                    raise ValueError(f"{filename}: s16 initializer out of range for {name}")
+                if value >= 0x8000:
+                    value -= 0x10000
+            elif value < -0x8000 or value > 0x7FFF:
+                raise ValueError(f"{filename}: s16 initializer out of range for {name}")
+        elif value < 0 or value > 0xFFFF:
+            raise ValueError(f"{filename}: u16 initializer out of range for {name}")
+        values.append(value)
+        if cursor == len(body):
+            break
+        if body[cursor] != ",":
+            raise ValueError(f"{filename}: invalid numeric initializer for {name}")
+        cursor += 1
+    if not values:
+        raise ValueError(f"{filename}: empty numeric initializer for {name}")
+    return tuple(values)
+
+
 def parse_generic_animation_file_text(
     filename: str,
     source: str,
@@ -338,49 +441,65 @@ def parse_generic_animation_file_text(
     if (any(isinstance(value, bool) or not isinstance(value, int) or value < 0
             for value in ids) or len(set(ids)) != len(ids)):
         raise ValueError(f"{filename}: invalid selected animation IDs")
-    arrays: dict[str, tuple[int, ...]] = {}
-    for kind, name, body in re.findall(
-        r"(?:static\s+)?const\s+(u16|s16)\s+([A-Za-z_]\w*)\[\]\s*=\s*\{(.*?)\};",
-        source, re.DOTALL,
-    ):
-        arrays[name] = _numbers(body, signed=kind == "s16")
-    records: list[AnimationRecord] = []
     digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
-    found: set[str] = set()
-    for symbol, body in re.findall(
-        r"(?:static\s+)?const\s+struct\s+Animation\s+([A-Za-z_]\w*)\[\]\s*=\s*\{(.*?)\};",
-        source, re.DOTALL,
-    ):
-        if symbol not in symbol_ids:
-            continue
+    source = _strip_c_comments(filename, source)
+    records: list[AnimationRecord] = []
+    for symbol, animation_id in symbol_ids.items():
+        body = _selected_initializer(
+            filename, source,
+            r"(?:static\s+)?const\s+struct\s+Animation\s+" +
+            re.escape(symbol) + r"\s*\[\]",
+            f"Animation {symbol}",
+        )
         fields = [field.strip() for field in body.split(",") if field.strip()]
         if len(fields) != 9:
             raise ValueError(f"{filename}: incomplete Animation header for {symbol}")
-        try:
-            header = [int(fields[index], 0) for index in range(5)]
-        except ValueError as error:
-            raise ValueError(f"{filename}: invalid Animation scalar for {symbol}") from error
+        header = [_integer_literal(filename, fields[index],
+                                   f"Animation scalar for {symbol}")
+                  for index in range(5)]
         values_name, indices_name = fields[6], fields[7]
-        if values_name not in arrays or indices_name not in arrays:
-            raise ValueError(f"{filename}: missing channel array for {symbol}")
-        values, indices = arrays[values_name], arrays[indices_name]
+        if (re.fullmatch(r"[A-Za-z_]\w*", values_name) is None or
+                re.fullmatch(r"[A-Za-z_]\w*", indices_name) is None):
+            raise ValueError(f"{filename}: malformed channel binding for {symbol}")
+        if fields[5] != f"ANIMINDEX_NUMPARTS({indices_name})":
+            raise ValueError(f"{filename}: invalid Animation part-count field for {symbol}")
+        if _integer_literal(filename, fields[8],
+                            f"Animation reserved field for {symbol}") != 0:
+            raise ValueError(f"{filename}: unsupported Animation reserved field for {symbol}")
+        values_body = _selected_initializer(
+            filename, source,
+            r"(?:static\s+)?const\s+s16\s+" + re.escape(values_name) + r"\s*\[\]",
+            f"s16 array {values_name}",
+        )
+        indices_body = _selected_initializer(
+            filename, source,
+            r"(?:static\s+)?const\s+u16\s+" + re.escape(indices_name) + r"\s*\[\]",
+            f"u16 array {indices_name}",
+        )
+        values = _numeric_initializer(filename, values_name, values_body, signed=True)
+        indices = _numeric_initializer(filename, indices_name, indices_body, signed=False)
         if len(indices) < 12 or len(indices) % 6:
             raise ValueError(f"{filename}: corrupt Animation index length for {symbol}")
         for channel in range(0, len(indices), 2):
             count, offset = indices[channel:channel + 2]
             if count <= 0 or offset < 0 or offset + count > len(values):
                 raise ValueError(f"{filename}: corrupt channel span for {symbol}")
+        flags, divisor, start_frame, loop_start, frame_count = header
+        if not 0 <= flags <= 0xFFFF:
+            raise ValueError(f"{filename}: Animation flags out of range for {symbol}")
+        if not -0x8000 <= divisor <= 0x7FFF:
+            raise ValueError(f"{filename}: Animation divisor out of range for {symbol}")
+        if start_frame != 0 or loop_start != 0:
+            raise ValueError(f"{filename}: unsupported Animation start/loop for {symbol}")
+        if not 0 < frame_count <= 0xFFFF:
+            raise ValueError(f"{filename}: Animation frame count out of range for {symbol}")
         records.append(AnimationRecord(
-            animation_id=symbol_ids[symbol], enum_name=symbol, symbol=symbol,
+            animation_id=animation_id, enum_name=symbol, symbol=symbol,
             source_path=filename.replace("\\", "/"), source_sha256=digest,
-            flags=header[0], y_translation_divisor=header[1],
-            start_frame=header[2], loop_start=header[3], frame_count=header[4],
+            flags=flags, y_translation_divisor=divisor,
+            start_frame=start_frame, loop_start=loop_start, frame_count=frame_count,
             joint_count=len(indices) // 6 - 1, indices=indices, values=values,
         ))
-        found.add(symbol)
-    missing = sorted(set(symbol_ids) - found)
-    if missing:
-        raise ValueError(f"{filename}: missing selected Animation {missing[0]}")
     records.sort(key=lambda record: record.animation_id)
     return tuple(records)
 

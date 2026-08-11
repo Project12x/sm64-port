@@ -12,9 +12,9 @@
 subagent-driven workflow. Tasks 1 and 2 are complete and independently
 approved. Task 2 repair `f1799118` passed scoped rereview with both Important
 findings addressed and no new breakage; its malformed-path error-type Minor is
-deferred to the final branch review. Task 3 is source-complete at behavior
-commit `031e1620` and awaits
-independent review before Task 4. Target, release, smoke, visual, desktop,
+deferred to the final branch review. Task 3 review repair round 1 is
+source-complete at the scoped behavior commit described below and awaits
+independent rereview before Task 4. Target, release, smoke, visual, desktop,
 manual, and total-game gates remain open.
 
 ## Global Constraints
@@ -391,6 +391,39 @@ commit `031e1620` is followed by this evidence/status transition. No
 the existing walker exposed every modeled token needed by the fixtures.
 Sourceboot, scene-level S64F orchestration, target/release, whole-game, smoke,
 visual, desktop, and manual gates remain open and unclaimed.
+
+**Task 3 review repair round 1 (2026-08-11):** source-complete; independent
+rereview pending. The repair binds `model_id` to exactly one attested
+`model_variants` entry and its matching model-ID/GeoLayout provenance, requires
+the declared root symbol in its exact `geo_source`, and permits cross-file
+lookup only for reached symbols with ambiguity rejection. Task-local strict
+tokenizers now consume every selected GeoLayout, Gfx, Vtx, animation-header,
+and numeric-array token, enforce final terminators/macro arity, and reject
+invalid expressions or encoded ranges. Because S64B v1 has no representation
+for texture/UV, combine, culling, environment, alpha, tile/load, or alternate
+light state, every such accepted Fast3D mutation now raises
+`UnsupportedActorSourceError`; it is never discarded into plausible bytes.
+Public scalar/count, Mesh IR, and pack failures are translated to named
+`ActorVariantError` subclasses. RED reproduced all five review findings
+(24 failures plus one raw error across the focused boundary, followed by
+targeted duplicate-table, malformed-record, and invalid-octal raw failures).
+GREEN is 22/22 focused tests, 25/25 rigid-group tests, the combined variant,
+pose, and meshlet Make gates, and compileall. Repaired exact fixture identities
+are rigid payload/source
+`d356417800cc21a0f982e18647be8ff1ffba27b4c1f4c50d52d4d21976771f30` /
+`780d1b65c6c27a8c7d1c77867f816ec07fd239f7fffcfa0c84a48a338fad68f7`
+and articulated payload/source
+`1bff9db7ae5c3cea3512f748a721706a3709b662cb9c8a88ad3b4c0528b0634e` /
+`0d617e2444ef50ce6d16e41aaac6572e47eacdff534c5aab8efcc08cdb118a60`.
+The behavior commit is recorded by subject as
+`fix(saturn): harden actor variant source boundaries` until the following
+evidence transition pins its exact SHA. Historical Mario remains exactly
+596,896 bytes at
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`,
+and its JSON remains
+`3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+No Task 4, Task 16 production, target, release, smoke, visual, desktop,
+owner-manual, transition, or total-game gate is claimed.
 
 ---
 
