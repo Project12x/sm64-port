@@ -577,7 +577,7 @@ reached by real BOB; any macro absent from that allowlist and the two reference
 tables raises `ClosureError` without inspecting tokens. GREEN is 33/33
 synthetic closure, 2/2 BOB, 28/28 variant/source, 25/25 rigid-group, 4/4
 generic-family, Make, compileall, and exact Mario identity. Continuation
-behavior commit pending; Task 4 remains zero-edit and all broader gates open.
+behavior commit `2d8c4479`; Task 4 remains zero-edit and all broader gates open.
 
 ---
 

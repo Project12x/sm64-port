@@ -699,5 +699,5 @@
   reference, and state tables now fail named without token inspection.
 - GREEN: 33/33 complete synthetic closure, 2/2 real BOB, 28/28 variant/source,
   25/25 rigid-group, 4/4 generic-family, native-root Make, compileall, and exact
-  Mario hashes. Final continuation behavior commit pending; same-reviewer
+  Mario hashes. Final continuation behavior commit `2d8c4479`; same-reviewer
   rereview and all prior open gates remain open.
