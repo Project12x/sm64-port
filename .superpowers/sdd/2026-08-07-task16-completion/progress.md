@@ -158,7 +158,8 @@
   pose bank, actual queue/batch storage, neutrality 2/2, legacy hashes, and
   feature-off 6/6. Python bytecode syntax, scoped diff check, and unchanged
   renderer/main/residency/package/wrapper paths also pass.
-- Status: `source-complete-review-repair-round-2` from `a99fded7` in the
-  behavior commit containing this status. Behavior commit and exact-SHA
-  follow-up remain, then controller-owned independent rereview; Task 2 and all
-  target evidence remain blocked/open.
+- Status: `source-complete-review-repair-round-2` at behavior commit
+  `16cd2570` (`fix(saturn): align actor dependency workspaces`) from
+  `a99fded7`; this scoped follow-up records the exact SHA. Controller-owned
+  independent rereview remains, while Task 2 and all target evidence stay
+  blocked/open.

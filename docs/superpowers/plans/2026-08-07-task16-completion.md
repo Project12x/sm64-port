@@ -92,10 +92,10 @@ production path changes in this repair.
 
 ### Task 1: Generalize meshlet preparation to bank instances (registry-independent — start immediately)
 
-**Status:** `source-complete-review-repair-round-2` from `a99fded7` in the
-behavior commit containing this status; modulo-four RED/GREEN and the forced
-focused host suite are complete. Task 2 remains blocked until independent
-rereview passes. No target-complete claim is made.
+**Status:** `source-complete-review-repair-round-2` at `16cd2570` from
+`a99fded7`; modulo-four RED/GREEN and the forced focused host suite are
+complete. Task 2 remains blocked until independent rereview passes. No
+target-complete claim is made.
 
 **Files:**
 - Modify: `src/port/saturn/gfx/saturn_actor_meshlets.h/.c`
