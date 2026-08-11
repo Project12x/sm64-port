@@ -132,7 +132,8 @@ Add a Keep-a-Changelog `Changed` entry explaining removal of duplicate target SH
 
 #### Task 1 live status (2026-08-11)
 
-- Status: `source-complete; independent review pending`. The close-port creates
+- Status: `source-complete; independent review pending` at behavior commit
+  `1faa2ffb` (`refactor(saturn): share target SHA-256 validation`). The close-port creates
   one freestanding incremental API consumed by the existing S64P and S64F v2
   validators; no S64F v3 behavior, target completion, or release claim is
   introduced.
