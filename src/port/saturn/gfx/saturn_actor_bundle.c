@@ -113,6 +113,7 @@ static bool read_variant_record(const sm64_saturn_actor_bundle_view_t *view,
                                 sm64_saturn_actor_bundle_variant_t *out)
 {
     const uint8_t *record;
+    sm64_saturn_actor_bundle_variant_t candidate;
     uint16_t word;
     uint32_t table_size;
     if (view == NULL || out == NULL || view->bytes == NULL ||
@@ -122,28 +123,34 @@ static bool read_variant_record(const sm64_saturn_actor_bundle_view_t *view,
                       &table_size) ||
         !span_u32(view->variant_records_offset, table_size, view->byte_count))
         return false;
+    memset(&candidate, 0, sizeof(candidate));
     record = view->bytes + view->variant_records_offset +
         (uint32_t)index * SM64_SATURN_ACTOR_BUNDLE_VARIANT_RECORD_SIZE;
     if (read_be32(record + 4U) != 0U) return false;
-    out->family_ordinal = read_be16(record);
-    out->model_id = read_be16(record + 2U);
-    out->bank_offset = read_be32(record + 8U);
-    out->bank_size = read_be32(record + 12U);
-    out->bank_lane_bytes = read_be32(record + 16U);
-    out->bank_maximum_scratch = read_be32(record + 20U);
+    candidate.family_ordinal = read_be16(record);
+    candidate.model_id = read_be16(record + 2U);
+    candidate.bank_offset = read_be32(record + 8U);
+    candidate.bank_size = read_be32(record + 12U);
+    candidate.bank_lane_bytes = read_be32(record + 16U);
+    candidate.bank_maximum_scratch = read_be32(record + 20U);
     for (word = 0U; word < 8U; word++) {
-        out->payload_hash_words[word] = read_be32(record + 24U + (uint32_t)word * 4U);
-        out->source_hash_words[word] = read_be32(record + 56U + (uint32_t)word * 4U);
+        candidate.payload_hash_words[word] = read_be32(
+            record + 24U + (uint32_t)word * 4U);
+        candidate.source_hash_words[word] = read_be32(
+            record + 56U + (uint32_t)word * 4U);
     }
-    if (out->family_ordinal == 0U || out->model_id == 0U ||
-        (out->bank_offset & 3U) != 0U || out->bank_size == 0U ||
+    if (candidate.family_ordinal == 0U || candidate.model_id == 0U ||
+        (candidate.bank_offset & 3U) != 0U || candidate.bank_size == 0U ||
         !span_u32(view->bank_payloads_offset, view->bank_payloads_size,
                   view->byte_count) ||
-        !span_u32(out->bank_offset, out->bank_size, view->bank_payloads_size) ||
-        out->bank_lane_bytes == 0U || (out->bank_lane_bytes & 3U) != 0U ||
-        out->bank_lane_bytes > (UINT32_MAX - 3U) / 2U ||
-        out->bank_maximum_scratch != 3U + 2U * out->bank_lane_bytes)
+        !span_u32(candidate.bank_offset, candidate.bank_size,
+                  view->bank_payloads_size) ||
+        candidate.bank_lane_bytes == 0U ||
+        (candidate.bank_lane_bytes & 3U) != 0U ||
+        candidate.bank_lane_bytes > (UINT32_MAX - 3U) / 2U ||
+        candidate.bank_maximum_scratch != 3U + 2U * candidate.bank_lane_bytes)
         return false;
+    *out = candidate;
     return true;
 }
 

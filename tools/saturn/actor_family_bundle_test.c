@@ -78,6 +78,11 @@ int main(int argc, char **argv)
     {
         sm64_saturn_actor_bundle_view_t short_view = view;
         short_view.bank_payloads_size = variant.bank_offset + variant.bank_size - 1U;
+        sm64_saturn_actor_bundle_variant_t short_variant;
+        memset(&short_variant, 0xA5, sizeof(short_variant));
+        assert(!sm64_saturn_actor_bundle_variant(&short_view, 1U, 9U,
+                                                  &short_variant));
+        assert_zero(&short_variant, sizeof(short_variant));
         memset(&bank, 0xA5, sizeof(bank));
         assert(!sm64_saturn_actor_bundle_resolve(&short_view, 1U, 9U,
             variant.source_hash_words[0], variant.source_hash_words, &bank));

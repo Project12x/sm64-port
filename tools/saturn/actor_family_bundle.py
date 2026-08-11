@@ -324,8 +324,10 @@ def _validate_s64b(payload: bytes) -> _Bank:
             if tuple(emitted) != vertex_refs[vo:vo + vc]:
                 raise ValueError("S64B meshlet vertex closure")
             counts.append((po, pc, vo, vc, refs))
+        expected_tier0 = tuple(range(source_ordinal,
+                                     source_ordinal + counts[0][1]))
         if not counts[0][1] or counts[1][1] != counts[0][1] or counts[1][3] != counts[0][3] or \
-                source_ordinal != source_cursor or counts[0][4][0] != source_ordinal or \
+                source_ordinal != source_cursor or counts[0][4] != expected_tier0 or \
                 counts[0][4] != counts[1][4]:
             raise ValueError("S64B meshlet source order")
         expected_tier2 = tuple(v for v in counts[0][4] if v % 8 == 1)

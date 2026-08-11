@@ -12,6 +12,12 @@
 
 ### Fixed
 
+- Matched the S64F v3 host's embedded-S64B geometry validation to the target's
+  contiguous tier-0 primitive-order contract, preventing a host-sealed bundle
+  from failing master validation. Variant-record decoding now also publishes
+  its candidate only after every scalar and span check succeeds, preserving
+  zeroed lookup outputs for shortened or corrupted bundle views.
+
 - Reserved worst-case leading alignment headroom in actor-bank dependency
   scratch and aligned the raw `payload + byte_count` address inside that span.
   Either SH-2 lane now binds safely for every address modulo four with the

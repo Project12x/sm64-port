@@ -59,10 +59,10 @@ def tiny_bank(family_ordinal: int, model_id: int, source_hash: bytes) -> bytes:
     material_offset = part_offset + 4
     meshlet_offset = material_offset + 4
     primitive_offset = meshlet_offset + meshlet.size
-    primitive_ref_offset = primitive_offset + 10
-    vertex_ref_offset = primitive_ref_offset + 4
+    primitive_ref_offset = primitive_offset + 30
+    vertex_ref_offset = primitive_ref_offset + 14
     geometry = bytearray(geometry_header.pack(
-        b"GEO1", 1, 1, 1, 1, 1, 2, 6, joint_offset, part_offset,
+        b"GEO1", 1, 1, 1, 1, 3, 7, 9, joint_offset, part_offset,
         material_offset, meshlet_offset, primitive_offset,
         primitive_ref_offset, vertex_ref_offset))
     geometry.extend(struct.pack(">hhhhhH", -1, 0, 0, 0, 0, 0))
@@ -70,16 +70,16 @@ def tiny_bank(family_ordinal: int, model_id: int, source_hash: bytes) -> bytes:
     geometry.extend(bytes(4))
     geometry.extend(meshlet.pack(
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 1, 0, 3, 1, 1, 3, 3, 2, 0, 6, 0))
-    geometry.extend(struct.pack(">5H", 0, 0, 1, 2, 2))
-    geometry.extend(struct.pack(">2H", 0, 0))
-    geometry.extend(struct.pack(">6H", 0, 1, 2, 0, 1, 2))
+        0, 3, 0, 3, 3, 3, 3, 3, 6, 1, 6, 3))
+    geometry.extend(struct.pack(">5H", 0, 0, 1, 2, 2) * 3)
+    geometry.extend(struct.pack(">7H", 0, 1, 2, 0, 1, 2, 1))
+    geometry.extend(struct.pack(">9H", 0, 1, 2, 0, 1, 2, 0, 1, 2))
     payload.extend(geometry)
     meshlets_size = len(geometry)
     payload[records_offset:records_offset + animation.size] = animation.pack(
         values_offset + 4, indices_offset + 4, 1, 1, 0, 1)
     payload[:header.size] = header.pack(
-        b"S64B", 1, family_ordinal, model_id, 1, 1, 1, 1, 3, 1,
+        b"S64B", 1, family_ordinal, model_id, 1, 1, 1, 3, 3, 1,
         0x1F, source_hash, 104, 16, records_offset,
         indices_offset, indices_size, values_offset, values_size,
         vertices_offset, vertices_size, meshlets_offset, meshlets_size, 203)
@@ -147,9 +147,9 @@ class ActorFamilyBundleTest(unittest.TestCase):
         doc, banks = document_and_banks()
         payload = pack_bundle(doc, dict(reversed(tuple(banks.items()))))
         self.assertEqual(payload, pack_bundle(doc, banks))
-        self.assertEqual(len(payload), 1580)
+        self.assertEqual(len(payload), 1688)
         self.assertEqual(hashlib.sha256(payload).hexdigest(),
-                         "fa47d3342b2111e946778a1f67bb479f235ecb7be7bcaeac5e2d0d0a8fcf42e4")
+                         "4b3334a61f8ce7c8b2c4548a112b0c7354c444b42659ec7943941de5529e4dbc")
         view = validate_bundle(payload)
         self.assertEqual(view.package_generation, 0x12345678)
         self.assertEqual([(v.family_ordinal, v.model_id) for v in view.variants],
@@ -247,6 +247,25 @@ class ActorFamilyBundleTest(unittest.TestCase):
             corrupt[64:96] = hashlib.sha256(corrupt[:64] + bytes(32) + corrupt[96:]).digest()
             with self.subTest(name=name), self.assertRaises(ValueError):
                 validate_bundle(bytes(corrupt))
+
+    def test_host_rejects_reordered_later_tier0_and_matching_tier1_references(self) -> None:
+        doc, banks = document_and_banks()
+        valid = pack_bundle(doc, banks)
+        header = S64F_V3_HEADER.unpack_from(valid)
+        variant_offset, bank_root = header[8], header[11]
+        bank = bank_root + struct.unpack_from(">I", valid, variant_offset + 8)[0]
+        bank_size = struct.unpack_from(">I", valid, variant_offset + 12)[0]
+        geometry = bank + struct.unpack_from(">I", valid, bank + 90)[0]
+        primitive_refs = geometry + struct.unpack_from(">I", valid, geometry + 38)[0]
+        corrupt = bytearray(valid)
+        corrupt[primitive_refs + 2:primitive_refs + 6] = struct.pack(">2H", 2, 1)
+        corrupt[primitive_refs + 8:primitive_refs + 12] = struct.pack(">2H", 2, 1)
+        corrupt[variant_offset + 24:variant_offset + 56] = hashlib.sha256(
+            corrupt[bank:bank + bank_size]).digest()
+        corrupt[64:96] = hashlib.sha256(
+            corrupt[:64] + bytes(32) + corrupt[96:]).digest()
+        with self.assertRaisesRegex(ValueError, "source order"):
+            validate_bundle(bytes(corrupt))
 
     def test_validator_rejects_every_family_metadata_and_variant_bank_span_class(self) -> None:
         doc, banks = document_and_banks()
