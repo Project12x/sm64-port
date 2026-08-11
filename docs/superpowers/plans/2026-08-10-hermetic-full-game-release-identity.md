@@ -1539,8 +1539,8 @@ Do not create or pin the real v4 contract in this task. Reviewers must verify me
 
 ### Task 9: Reproducible identity-v2 BOB target, release seal, and audit-v4 contract
 
-**Closeout status (2026-08-10):** `source-complete`; controller-owned
-independent evidence and code-quality reviews remain open, so Task 9 is not yet
+**Closeout status (2026-08-10):** `source-complete`; first independent evidence
+and code-quality reviews returned `Needs fixes`, so Task 9 is not yet
 `complete`. Isolated candidates A/B at common source `44b78627` reproduced
 manifest `b75ba5f0...a2ddf` and identity `id-9a051d30880c78f0`; measurement,
 exclusive v4 seal/pin, exact v4 acceptance, package/capacity facts, direct
@@ -1558,6 +1558,28 @@ the plan-approved unrelated null-camera proof failure. Release staging,
 manifest, and hermetic-Make suites are GREEN 20/20, 28/28, and 18/18.
 Source-closeout commit: `50228ae0` (`test(saturn): close reproducible goal
 target v4`).
+
+**Independent review round 1 (2026-08-10):** the evidence itself recomputed:
+A/B manifests and artifacts match, all 4,234 closure rows and 111 recorded
+toolchain rows rehash, v4 passes at total 700 with both forbidden callers
+absent, capacity/cart/package arithmetic is correct, and the staged manifest
+verifies. The review nevertheless found a Critical identity omission:
+release verification invokes `sh-elf-nm.exe`, including through the attested
+`sh-elf-gcc-nm.exe` wrapper, but the backend executable is not in the toolchain
+attestation. Repair must bind every invoked nm executable, then rebuild both
+candidates and regenerate every downstream manifest, measurement, contract,
+v4 result, capacity/package report, and staged release before rereview.
+
+Code review also found two publication-safety gaps and one whole-game scaling
+gap: isolated asset cleanup accepts escaping manifest rows and can prune above
+its output root; the pinned v4 contract lacks an LF checkout rule; final release
+provenance rechecks cleanliness but not every closure digest and unchanged HEAD
+at publication; and checked-in classification launches one `git ls-files` per
+path. Repair round 1 is `active` and must add root-bounded cleanup, filtered-
+checkout integrity coverage, final digest/HEAD binding, and one-shot Git-index
+inventory. `STATE.md` must consistently name Task 10 as the next active lane,
+and `docs/saturn/BUILDING.md` must stop describing Saturn as hello-screen-only.
+No Task 10/Ymir/manual gate may start while rereview is open.
 
 **Files:**
 - Create: `tools/saturn/sh2_native_math_goal_audit_contract_v4.txt`

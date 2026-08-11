@@ -173,3 +173,22 @@ Open gates are the two independent Task 9 reviews, then Task 10's exact staged
 20,100-frame smoke, visual inspection, desktop launch, and owner manual play.
 The `sm64-saturn-full` profile remains intentionally non-releasable until the
 complete-game content/system inventory and game-wide target gates are finished.
+
+## Independent review round 1
+
+Verdict: `Needs fixes`. Evidence review independently reproduced the current
+A/B artifact equality, closure/toolchain rehashes, v4 result, capacity/cart
+math, exact package classes, historical v2/v3 integrity, and staged-manifest
+verification. These facts describe the current installed toolchain but do not
+close Task 9 because `sh-elf-nm.exe`, which is invoked directly and as the
+backend of the recorded `sh-elf-gcc-nm.exe` wrapper, is absent from the sealed
+toolchain attestation. A backend mutation could therefore change a release gate
+without changing identity. Repair must bind the backend and rebuild/reseal all
+downstream evidence.
+
+Code review additionally requires: root-bounded isolated asset cleanup; LF
+checkout pinning for immutable audit text plus filtered-checkout coverage;
+final prepublication closure-digest and HEAD revalidation; one-shot Git index
+inventory instead of per-path `ls-files`; consistent Task 10 ownership in
+`STATE.md`; and a current sourceboot description in `docs/saturn/BUILDING.md`.
+Task 10/Ymir/manual execution remains paused pending repair and scoped rereview.

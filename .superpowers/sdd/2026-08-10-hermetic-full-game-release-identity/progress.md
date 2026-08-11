@@ -1585,6 +1585,32 @@
   profile remains non-releasable pending complete content/system inventory and
   game-wide evidence.
 
+## Task 9 independent review repair round 1
+
+- Status: `active`. Independent evidence and code-quality reviews returned
+  `Needs fixes`; Task 9 remains incomplete and Task 10 is paused.
+- Evidence recomputation passed for the current candidate: byte-identical A/B
+  manifests/artifacts, 4,234 closure rows, 111 recorded toolchain rows, identity
+  v2, ten package classes, v4 total 700/forbidden-caller absence, HWRAM/cart
+  arithmetic, historical v2/v3 bytes, and staged-manifest verification.
+- Critical identity finding: release verification invokes
+  `sh-elf-nm.exe`, directly and as the backend of `sh-elf-gcc-nm.exe`, but only
+  the wrapper is attested. Repair must seal every invoked nm executable and
+  rebuild A/B plus all manifest/audit/capacity/staging evidence.
+- Important safety findings: isolated asset cleanup accepts absolute/traversal
+  rows and may prune above its output root; the immutable v4 contract has no
+  LF checkout rule; and final release provenance does not rehash every closure
+  row or prove unchanged HEAD at publication.
+- Moderate scaling finding: release cleanliness launches `git ls-files` once
+  per checked-in row (1,651 processes for BOB). Repair must load one canonical
+  NUL-delimited index inventory and classify direct/gitlink paths in memory.
+- Documentation findings: `STATE.md` contradicts the active Task 10 lane, and
+  the build guide still says Saturn is hello-screen-only. Both must be
+  reconciled without claiming Task 10 or full-game completion.
+- Open gates: repaired host/source verification, rebuilt reproducible pair,
+  regenerated v4/capacity/package/staging evidence, scoped rereviews, then all
+  Task 10 smoke/visual/desktop/manual gates.
+
 ## Task 5 review repair round 2
 
 - Status: `source-complete`; repair round 2 is implemented and controller-owned rereview remains open. The first `Needs fixes` verdict remains effective until both remaining findings clear.
