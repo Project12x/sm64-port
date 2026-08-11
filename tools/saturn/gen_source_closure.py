@@ -581,18 +581,18 @@ def verify_release_cleanliness(
     )
     if not checked_in:
         return
-    gitlinks = _indexed_gitlinks(root)
+    root_index = _git_index_inventory(_git_cleanliness_command(), root)
+    gitlinks = {
+        path: entry[1]
+        for path, entries in root_index.items()
+        if (entry := _stage_zero_index_entry(entries)) is not None
+        and entry[0] == "160000"
+    }
     direct_paths: list[str] = []
     submodule_inputs: dict[str, list[str]] = {}
     for path in checked_in:
-        tracked = subprocess.run(
-            [*_git_cleanliness_command(), "ls-files", "--error-unmatch", "--", path],
-            cwd=root,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if tracked.returncode == 0:
+        entry = _stage_zero_index_entry(root_index.get(path, ()))
+        if entry is not None and entry[0] != "160000":
             direct_paths.append(path)
             continue
         enclosing = max(
@@ -611,6 +611,44 @@ def verify_release_cleanliness(
     _verify_clean_git_paths(
         _git_cleanliness_command(), root, status_paths, ignore_submodules=True
     )
+
+
+def verify_release_provenance(
+    root: Path, sealed_rows: Mapping[tuple[str, str], dict[str, Any]]
+) -> str:
+    """Revalidate clean index state, every closure digest, and stable HEAD."""
+    root = root.resolve()
+    head_before = _git_head(root)
+    verify_release_cleanliness(root, sealed_rows)
+    for key, row in sorted(sealed_rows.items()):
+        path, label = key
+        if (
+            row.get("path") != path
+            or row.get("class") != label
+            or path != normalize_repo_path(root, path)
+            or not isinstance(row.get("sha256"), str)
+            or len(row["sha256"]) != 64
+            or any(character not in "0123456789abcdef" for character in row["sha256"])
+        ):
+            raise ValueError("release closure provenance row is invalid")
+        candidate = root / path
+        if not candidate.is_file() or sha256_file(candidate) != row["sha256"]:
+            raise ValueError(f"release closure input digest differs: {path}")
+    head_after = _git_head(root)
+    if head_after != head_before:
+        raise ValueError("release closure Git HEAD changed during final verification")
+    return head_after
+
+
+def _git_head(root: Path) -> str:
+    result = subprocess.run(
+        [*_git_cleanliness_command(), "rev-parse", "--verify", "HEAD"],
+        cwd=root, check=False, capture_output=True, text=True,
+    )
+    value = result.stdout.strip().lower() if result.returncode == 0 else ""
+    if len(value) != 40 or any(character not in "0123456789abcdef" for character in value):
+        raise ValueError("release closure Git HEAD is unavailable")
+    return value
 
 
 def _verify_clean_git_paths(
@@ -650,23 +688,51 @@ def _require_clean_git_status(prefix: Sequence[str], paths: Sequence[str], root:
         raise ValueError("release closure inputs are not clean")
 
 
-def _indexed_gitlinks(root: Path) -> dict[str, str]:
+def _git_index_inventory(
+    command: Sequence[str], root: Path
+) -> dict[str, tuple[tuple[str, str, str], ...]]:
+    """Read one NUL-delimited index snapshot for a repository."""
     result = subprocess.run(
-        [*_git_cleanliness_command(), "ls-files", "--stage"], cwd=root, check=False,
-        capture_output=True, text=True,
+        [*command, "ls-files", "--stage", "-z"], cwd=root, check=False,
+        capture_output=True,
     )
     if result.returncode != 0:
         raise ValueError("release closure Git index could not be read")
-    gitlinks: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        metadata, separator, path = line.partition("\t")
+    raw = result.stdout
+    if not isinstance(raw, bytes):
+        raise ValueError("release closure Git index output is invalid")
+    inventory: dict[str, list[tuple[str, str, str]]] = {}
+    records = raw.split(b"\0")
+    if records[-1] != b"":
+        raise ValueError("release closure Git index is not NUL terminated")
+    for record in records[:-1]:
+        metadata, separator, path_bytes = record.partition(b"\t")
         fields = metadata.split()
-        if not separator or len(fields) != 3:
+        if not separator or len(fields) != 3 or not path_bytes:
             raise ValueError("release closure Git index row is malformed")
-        mode, object_id, stage = fields
-        if mode == "160000" and stage == "0":
-            gitlinks[path] = object_id
-    return gitlinks
+        try:
+            mode, object_id, stage = (field.decode("ascii") for field in fields)
+        except UnicodeDecodeError as error:
+            raise ValueError("release closure Git index row is malformed") from error
+        if (
+            len(mode) != 6 or any(character not in "01234567" for character in mode)
+            or len(object_id) not in (40, 64)
+            or any(character not in "0123456789abcdef" for character in object_id)
+            or stage not in ("0", "1", "2", "3")
+        ):
+            raise ValueError("release closure Git index row is malformed")
+        path = path_bytes.decode("utf-8", errors="surrogateescape")
+        inventory.setdefault(path, []).append((mode, object_id, stage))
+    return {path: tuple(entries) for path, entries in inventory.items()}
+
+
+def _stage_zero_index_entry(
+    entries: Sequence[tuple[str, str, str]],
+) -> tuple[str, str, str] | None:
+    matches = [entry for entry in entries if entry[2] == "0"]
+    if len(matches) > 1:
+        raise ValueError("release closure Git index has duplicate stage-zero rows")
+    return matches[0] if matches else None
 
 
 def _git_cleanliness_command() -> list[str]:
@@ -702,12 +768,10 @@ def _verify_submodule_inputs(
     )
     if head.returncode != 0 or head.stdout.strip() != expected_commit:
         raise ValueError(f"release closure submodule is not at pinned commit: {gitlink}")
+    index = _git_index_inventory(command, submodule)
     for path in paths:
-        tracked = subprocess.run(
-            [*command, "ls-files", "--error-unmatch", "--", path], check=False,
-            capture_output=True, text=True,
-        )
-        if tracked.returncode != 0:
+        entry = _stage_zero_index_entry(index.get(path, ()))
+        if entry is None or entry[0] == "160000":
             raise ValueError(
                 f"release closure input is not tracked in submodule: {gitlink}/{path}"
             )

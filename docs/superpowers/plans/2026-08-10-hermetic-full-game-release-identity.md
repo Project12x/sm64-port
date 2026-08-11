@@ -2770,3 +2770,19 @@ arguments/topology; focused GREEN is attestation 17/17 and Make 19/19,
 including backend mutation, absence, and direct-gate assertions. The old
 candidate identity and all downstream acceptance remain invalid pending the
 common-commit A/B rebuild and reseal.
+
+### Repair round 1 — final provenance and index scaling (2026-08-10)
+
+Task 9 remains **active** and Task 10 remains paused. Release cleanliness now
+loads one strict NUL-delimited `git ls-files --stage -z` snapshot for the root
+and one for each used submodule, classifies direct rows/gitlinks in memory,
+and retains the existing byte-bounded `git status` batches. At the final
+prepublication boundary—after all other manifest inputs and outputs have been
+remeasured—the shared provenance verifier captures HEAD, runs scoped
+cleanliness, hashes every closure row against its declared digest (including
+generated inputs), and proves HEAD is unchanged. TDD RED observed 5 root index
+launches and 7 root/submodule launches plus absent fake-digest/late-edit/HEAD
+checks. GREEN is closure 27/27 with one capability skip and release-manifest
+28/28 (the latter required normal Windows temporary-directory access). Old
+candidate evidence remains invalid; documentation reconciliation and the full
+clean A/B/reseal wave remain open.

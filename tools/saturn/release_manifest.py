@@ -22,7 +22,7 @@ if os.name == "nt":
     from ctypes import wintypes
 
 import gen_build_identity as identity
-from gen_source_closure import CLASS_PRECEDENCE, verify_release_cleanliness
+from gen_source_closure import CLASS_PRECEDENCE, verify_release_provenance
 from hermetic_manifest import canonical_json_bytes, write_if_changed
 from target_profile import PACKAGE_CLASSES
 
@@ -816,12 +816,6 @@ def _git_provenance(
     root: Path, source_closure: Mapping[str, Any], mode: str
 ) -> dict[str, Any]:
     """Record revision and one closure-clean fact without serializing dirty paths."""
-    revision = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=root, check=False,
-        capture_output=True, text=True,
-    )
-    if revision.returncode != 0 or re.fullmatch(r"[0-9a-fA-F]{40}\s*", revision.stdout) is None:
-        raise ValueError("repository Git revision is unavailable")
     paths = [
         row.get("path") for row in source_closure["inputs"]
         if isinstance(row, dict)
@@ -839,13 +833,19 @@ def _git_provenance(
             for row in source_closure["inputs"]
         }
         try:
-            verify_release_cleanliness(root, sealed_rows)
+            revision = verify_release_provenance(root, sealed_rows)
         except ValueError as error:
-            raise ValueError("release source closure is not clean") from error
+            raise ValueError("release source closure provenance is invalid") from error
         return {
-            "git_revision": revision.stdout.strip().lower(),
+            "git_revision": revision,
             "closure_clean": True,
         }
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=False,
+        capture_output=True, text=True,
+    )
+    if revision.returncode != 0 or re.fullmatch(r"[0-9a-fA-F]{40}\s*", revision.stdout) is None:
+        raise ValueError("repository Git revision is unavailable")
     status = subprocess.run(
         ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *paths],
         cwd=root, check=False, capture_output=True, text=True,
@@ -853,8 +853,6 @@ def _git_provenance(
     if status.returncode != 0:
         raise ValueError("source closure cleanliness is unavailable")
     clean = not bool(status.stdout)
-    if mode == "release" and not clean:
-        raise ValueError("release source closure is not clean")
     return {
         "git_revision": revision.stdout.strip().lower(),
         "closure_clean": clean,
@@ -957,6 +955,21 @@ def build_release_manifest(
             raise ValueError("toolchain attestation SHA-256 differs from ELF identity")
     _validate_cue(resolved_outputs["cue"], resolved_outputs["iso"])
 
+    for path, expected, label in (
+        (profile_path, profile_raw, "resolved target profile"),
+        (identity_json, identity_raw, "identity JSON"),
+        (source_closure, closure_raw, "source closure"),
+        (package_set, package_raw, "package set"),
+        (toolchain_attestation, toolchain_raw, "toolchain attestation"),
+    ):
+        if path.read_bytes() != expected:
+            raise ValueError(f"{label} changed during release sealing")
+    for name, path in resolved_outputs.items():
+        if _measure(path, f"{name} output") != measurements[name]:
+            raise ValueError(f"{name} output changed during release sealing")
+    # This is deliberately the last read boundary before canonical manifest
+    # publication: release mode rechecks clean index state, every declared
+    # closure digest, and an unchanged HEAD after all other inputs/outputs.
     provenance = _git_provenance(root, closure, mode)
     document = {
         "schema": SCHEMA,
@@ -974,18 +987,6 @@ def build_release_manifest(
         "provenance": provenance,
         "outputs": records,
     }
-    for path, expected, label in (
-        (profile_path, profile_raw, "resolved target profile"),
-        (identity_json, identity_raw, "identity JSON"),
-        (source_closure, closure_raw, "source closure"),
-        (package_set, package_raw, "package set"),
-        (toolchain_attestation, toolchain_raw, "toolchain attestation"),
-    ):
-        if path.read_bytes() != expected:
-            raise ValueError(f"{label} changed during release sealing")
-    for name, path in resolved_outputs.items():
-        if _measure(path, f"{name} output") != measurements[name]:
-            raise ValueError(f"{name} output changed during release sealing")
     return canonical_json_bytes(document)
 
 

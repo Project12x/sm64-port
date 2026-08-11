@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Revalidated every declared source-closure digest and an unchanged Git HEAD
+  at the final release-manifest publication boundary. Release cleanliness now
+  reads one NUL-delimited index inventory per repository/submodule instead of
+  launching `git ls-files` for every row, preserving bounded status batches
+  while making large full-game closures both race-resistant and scalable.
+
 - Bound sourceboot archive creation and every post-link symbol gate directly
   to the attested `sh-elf-ar` and `sh-elf-nm` backends. This removes Yaul's
   PATH-resolved `gcc-ar`/`gcc-nm` wrapper delegation, so an unsealed backend can

@@ -262,6 +262,55 @@ class SourceClosureTests(unittest.TestCase):
                 )
         self.assertEqual(dirty_run.call_count, len(commands))
 
+    def test_release_cleanliness_reads_root_index_once_for_many_inputs(self) -> None:
+        sealed = self.git_init_with_tracked_closure()
+        real_run = subprocess.run
+        with mock.patch.object(
+            gen_source_closure.subprocess, "run", side_effect=real_run
+        ) as run:
+            verify_source_closure(
+                self.root, sealed, self.depfiles, (), self.derived, (), (), True
+            )
+        index_calls = [
+            call for call in run.call_args_list
+            if "ls-files" in call.args[0]
+        ]
+        self.assertEqual(len(index_calls), 1)
+        self.assertIn("--stage", index_calls[0].args[0])
+        self.assertIn("-z", index_calls[0].args[0])
+        self.assertNotIn("--error-unmatch", index_calls[0].args[0])
+
+    def test_final_release_provenance_rejects_fake_or_late_row_digest(self) -> None:
+        sealed = self.git_init_with_tracked_closure()
+        document = json.loads(sealed.read_text(encoding="utf-8"))
+        rows = {(row["path"], row["class"]): row for row in document["inputs"]}
+
+        fake_rows = {key: dict(row) for key, row in rows.items()}
+        first = next(iter(fake_rows))
+        fake_rows[first]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "digest differs"):
+            gen_source_closure.verify_release_provenance(self.root, fake_rows)
+
+        def mutate_generated(_root, _rows):
+            self.write("build/generated/scene.h", "late mutation\n")
+
+        with mock.patch.object(
+            gen_source_closure, "verify_release_cleanliness",
+            side_effect=mutate_generated,
+        ):
+            with self.assertRaisesRegex(ValueError, "digest differs"):
+                gen_source_closure.verify_release_provenance(self.root, rows)
+
+    def test_final_release_provenance_rejects_head_change(self) -> None:
+        sealed = self.git_init_with_tracked_closure()
+        document = json.loads(sealed.read_text(encoding="utf-8"))
+        rows = {(row["path"], row["class"]): row for row in document["inputs"]}
+        with mock.patch.object(
+            gen_source_closure, "_git_head", side_effect=("a" * 40, "b" * 40)
+        ):
+            with self.assertRaisesRegex(ValueError, "Git HEAD changed"):
+                gen_source_closure.verify_release_provenance(self.root, rows)
+
     def test_release_mode_allows_clean_ignored_generated_input_without_git_status(self) -> None:
         sealed = self.git_init_with_tracked_closure()
         self.write(".gitignore", "build/\n")
@@ -331,10 +380,22 @@ class SourceClosureTests(unittest.TestCase):
 
         header.write_bytes(b"sdk-v1\r\n")
         sealed = self.write_sealed_closure()
-        with mock.patch.dict(os.environ, {"GIT_CONFIG_NOSYSTEM": "1"}):
+        real_run = subprocess.run
+        with (
+            mock.patch.dict(os.environ, {"GIT_CONFIG_NOSYSTEM": "1"}),
+            mock.patch.object(
+                gen_source_closure.subprocess, "run", side_effect=real_run
+            ) as run,
+        ):
             verify_source_closure(
                 self.root, sealed, self.depfiles, (), self.derived, (), (), True
             )
+        index_calls = [
+            call for call in run.call_args_list if "ls-files" in call.args[0]
+        ]
+        self.assertEqual(len(index_calls), 2)
+        self.assertTrue(all("-z" in call.args[0] for call in index_calls))
+        self.assertTrue(all("--error-unmatch" not in call.args[0] for call in index_calls))
 
         header.write_text("dirty-sdk\n", encoding="utf-8")
         sealed = self.write_sealed_closure()
