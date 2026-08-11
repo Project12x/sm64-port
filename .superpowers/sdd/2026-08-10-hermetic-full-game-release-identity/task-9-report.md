@@ -4,12 +4,15 @@ Date: 2026-08-11
 
 ## Status and scope
 
-Task 9 is source-complete pending the two controller-owned same-reviewer
-rereviews. Candidate source is
+Task 9 is complete after both controller-owned same-reviewer rereviews passed.
+Candidate source is
 df7894acd9cbce03eb099df68f8bc17ea71735b6 and the one-shot v4 pin is commit
 537dd7210c2846e283c21a12a32770d601218c0c. Authoritative release evidence and
-public status are commit 6685084aa258238a312dd6228f649e4b30328792. Task 10
-is the next acceptance lane and remains paused. This task did not run Ymir,
+public status are commit 6685084aa258238a312dd6228f649e4b30328792. The
+normalized SDD closeout is commit cfea3518e1ac019c27f07f776b8ced4aff428188.
+Evidence rereview returned PASS with no Critical or Important findings; code
+quality rereview returned APPROVED with no Critical, Important, or Moderate
+findings. Task 10 is now the active acceptance lane. This task did not run Ymir,
 the 20,100-frame smoke, visual capture, desktop launch, or owner manual play.
 
 All release, audit, capacity, package, and stage evidence from earlier Task 9
@@ -181,10 +184,8 @@ The evidence files are:
 - docs/saturn/evidence/reports/sh2-native-math-goal-audit-v4-2026-08-10.json
 - docs/saturn/evidence/reports/hermetic-sourceboot-release-2026-08-10.md
 
-Still open:
+Task 9 review gates are closed. Still open:
 
-- same-reviewer specification/evidence rereview;
-- same-reviewer code-quality rereview;
 - Task 10 exact staged 20,100-frame smoke;
 - Task 10 visual, desktop-launch, and owner manual-play acceptance;
 - total-game content/system inventory and game-wide target evidence;

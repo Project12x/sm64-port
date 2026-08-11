@@ -2,13 +2,13 @@
 
 ## Now — verify and play the hermetic integrated BOB candidate
 
-Task 9 of the hermetic full-game release-identity plan is source-complete in
-review repair round 2, pending both same-reviewer rereviews. Source
+Task 9 of the hermetic full-game release-identity plan is complete after both
+same-reviewer rereviews passed. Source
 `df7894ac` reproduced two clean `-j1` candidates at manifest
 `9110b40d...b99` / identity `id-a40f992c085da2f0`; exact v4,
-capacity/package, guarded staging, and overwrite refusal pass. Task 10 remains
-the next acceptance lane—20,100-frame smoke, visual proof, desktop launch, and
-owner manual test—and stays paused until Task 9 clears.
+capacity/package, guarded staging, and overwrite refusal pass. Task 10 is now
+the active acceptance lane—20,100-frame smoke, visual proof, desktop launch,
+and owner manual test.
 
 The staged result is the integrated BOB demo candidate only. The same profile,
 closure, identity-v2, audit, release-manifest, capture-binding, and staging

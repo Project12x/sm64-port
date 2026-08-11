@@ -5,16 +5,14 @@ Active plan:
 
 ## Current lane: hermetic integrated release candidate
 
-Task 9 repair round 2 is source-complete pending both controller-owned
-same-reviewer rereviews. Candidate source `df7894ac` produced two clean,
+Task 9 repair round 2 is complete after both controller-owned same-reviewer
+rereviews passed. Candidate source `df7894ac` produced two clean,
 identical `-j1` releases at manifest `9110b40d...b99` and identity
 `id-a40f992c085da2f0`; exact v4 passes at total 700 with both forbidden
 callers absent, and capacity/package/staging/overwrite-refusal gates pass. The
-previous release/audit/stage evidence is superseded. Task 9 is not complete
-until both rereviews clear.
+previous release/audit/stage evidence is superseded.
 
-Task 10 is the next active acceptance lane after Task 9 rereview and remains
-paused. It owns the 20,100-frame smoke, visual
+Task 10 is now the active acceptance lane. It owns the 20,100-frame smoke, visual
 capture, desktop launch, and owner manual-play result. The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system

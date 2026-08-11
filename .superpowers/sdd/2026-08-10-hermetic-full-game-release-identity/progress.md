@@ -808,9 +808,10 @@
 
 ## Task 9 execution ledger — authoritative repair-round-2 closeout
 
-- Status: source-complete pending controller-owned same-reviewer evidence and
-  code-quality rereviews. Task 10 is the next acceptance lane and remains
-  paused; no Ymir, smoke, visual, desktop, or manual gate ran.
+- Status: complete. Controller-owned same-reviewer evidence rereview returned
+  PASS with no Critical or Important findings; code-quality rereview returned
+  APPROVED with no Critical, Important, or Moderate findings. Task 10 is now
+  active; no Ymir, smoke, visual, desktop, or manual gate has run yet.
 - Candidate source:
   df7894acd9cbce03eb099df68f8bc17ea71735b6
   (fix(saturn): pin asset cleanup namespaces). V4 pin:
@@ -856,8 +857,8 @@
   910ac359...2004, and the manifest reverified.
 - Authoritative report:
   .superpowers/sdd/2026-08-10-hermetic-full-game-release-identity/task-9-report.md.
-  Remaining gates are both rereviews, then Task 10 smoke/visual/desktop/manual;
-  total-game inventory/evidence also remains open.
+  Task 9 review gates are closed. Remaining campaign gates are Task 10
+  smoke/visual/desktop/manual and total-game inventory/evidence.
 
 ## Task 5 review repair round 2
 

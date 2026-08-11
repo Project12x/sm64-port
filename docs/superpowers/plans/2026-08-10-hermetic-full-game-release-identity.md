@@ -1539,8 +1539,8 @@ Do not create or pin the real v4 contract in this task. Reviewers must verify me
 
 ### Task 9: Reproducible identity-v2 BOB target, release seal, and audit-v4 contract
 
-**Current status (2026-08-11):** `source-complete` for independent-review
-repair round 2, pending both controller-owned same-reviewer rereviews. Candidate
+**Current status (2026-08-11):** `complete` after independent-review repair
+round 2 and both controller-owned same-reviewer rereviews. Candidate
 source is `df7894acd9cbce03eb099df68f8bc17ea71735b6`; the one-shot v4 pin is
 `537dd7210c2846e283c21a12a32770d601218c0c`; authoritative release evidence
 and public status are `6685084aa258238a312dd6228f649e4b30328792`. Two clean,
@@ -1549,8 +1549,10 @@ release-manifest SHA-256
 `9110b40da0e890b7b03dc5748e9ead4a47865ea4f9e3df21869b47de33679b99`
 and identity `id-a40f992c085da2f0`. Exact v4 passes at total 700 with both
 forbidden callers absent. Capacity, ten-class BOB package, guarded staging,
-and overwrite-refusal gates pass. Step 11 and every Task 10/Ymir/manual gate
-remain unchecked; Task 10 is the next acceptance lane and stays paused.
+and overwrite-refusal gates pass. Evidence rereview returned PASS with no
+Critical or Important findings; code-quality rereview returned APPROVED with
+no Critical, Important, or Moderate findings. Every Task 10/Ymir/manual gate
+remains unchecked; Task 10 is now the active acceptance lane.
 Authoritative details are in
 `.superpowers/sdd/2026-08-10-hermetic-full-game-release-identity/task-9-report.md`.
 
@@ -2619,13 +2621,18 @@ git add CHANGELOG.md STATE.md ROADMAP.md docs/saturn/evidence/reports/hermetic-s
 git commit -m "test(saturn): seal reproducible goal target v4"
 ```
 
-- [ ] **Step 11: Obtain independent evidence and code-quality reviews**
+- [x] **Step 11: Obtain independent evidence and code-quality reviews**
 
 Reviewers independently recompute the v4 contract digest, release-manifest/artifact hashes, identity-v2 fields, reproducibility comparison, total, forbidden callers, HWRAM/cart margins, and historical v2/v3 immutability. Fix and rereview any finding before Task 9 is complete.
 
 ---
 
 ### Task 10: Exact-target 20,100-frame smoke, visual proof, and manual-test handoff
+
+**Current status (2026-08-11):** `active`. Task 9 is complete after evidence
+PASS and code-quality APPROVED rereviews. Re-verify the canonical staged
+manifest `9110b40d...b99` before any emulator execution. Smoke, visual,
+desktop-launch, owner manual-play, and total-game gates remain open.
 
 **Files:**
 - Create: `docs/saturn/evidence/reports/hermetic-sourceboot-combined-smoke-2026-08-10.json`
