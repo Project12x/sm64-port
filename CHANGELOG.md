@@ -59,6 +59,15 @@
 
 ### Added
 
+- Added the canonical, deterministic S64F v3 scene-local actor-family bundle
+  writer and matching host/SH-2 validators. The additive format binds sorted
+  family and drawable-variant directories, canonical metadata, complete S64B
+  payloads, per-variant source/payload identities, and the two-lane workspace
+  ceiling with fail-closed overflow, padding, mutation, and resolver checks.
+  Historical S64F v2 tooling bytes remain unchanged. Production sourceboot
+  selection is intentionally not wired yet, so this is a validated data
+  boundary rather than a target-runtime activation claim.
+
 - Added a generated, immutable BOB actor-identity registry that binds each
   supported drawable `(model/geo, behavior)` pair to the current S64F family
   record, fully validated payload identity, and build-owned scene-package
