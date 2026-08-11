@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Regenerated and pinned audit v4 around the reproducible repaired release
+  identity after direct archive/nm attestation changed the toolchain root. The
+  measured total remains 700 with both forbidden atan2 callers absent, while
+  the contract now fails closed against the new manifest, identity, profile,
+  effective configuration, and ELF hashes.
+
 - Revalidated every declared source-closure digest and an unchanged Git HEAD
   at the final release-manifest publication boundary. Release cleanliness now
   reads one NUL-delimited index inventory per repository/submodule instead of

@@ -2803,3 +2803,35 @@ Git ignore excluded `third_party`, preventing the deliberate embedded-repository
 gitlink fixture from being staged. The test now force-adds only its exact two
 owned fixture paths. RED was the ignored-path `git add` failure; GREEN restores
 closure 27/27 with one capability skip. Product behavior is unchanged.
+
+### Repair round 1 — rebuilt candidate A (2026-08-11)
+
+Candidate A rebuilt from empty owned `build/saturn` at detached source
+`04d6a2a3ff08577e64497132a4a77726fb33cc24` with the exact release profile,
+accepted flag tuple, and `-j1`; the command exited 0 in 911.7 seconds. Identity
+is `id-264ab4203c268487`; release manifest SHA-256 is
+`5e04e2527e2373f30521bfcaaa63b56b061b74291cf1a4a3fd6e427aa311c1df`,
+closure SHA-256 is
+`3a5756b523ccdf5a055b630eb58b462de0f8fc92f4992f0f35257426b415fb8f`,
+and toolchain SHA-256 is
+`e74c5bad3adcf9f5207c99776ce13292ed3c4a97889aee0f315a4794bfda48db`.
+Independent manifest verification passed. Provenance binds the exact source
+commit and `closure_clean:true`. The attestation contains direct
+`bin/sh-elf-ar.exe` (`6ea97810...024a`) and `bin/sh-elf-nm.exe`
+(`d6ed58af...7bb2`) rows and zero `gcc-ar`/`gcc-nm` wrapper rows. This is only
+candidate A: reproducibility, measurement, v4 reseal, capacity/package,
+restaging, and rereview remain open.
+
+### Repair round 1 — reproducibility, measurement, and v4 pin (2026-08-11)
+
+Candidate B passed the same exact `-j1` command at source `04d6a2a3` in 938.6
+seconds. Independent verification and comparison passed: both manifests are
+`5e04e252...11c1df`, `identical:true`, zero differing fields, comparison
+report `50500456...1f8a`. Exact unsealed measurement against B passed in 330.3
+seconds with root `_game_loop_one_iteration`, total 700, and neither forbidden
+atan2 caller; report SHA-256 is `d875fdc8...7680`. Only then was v4 regenerated
+as the same canonical 606-byte contract and pinned at
+`d52ecdb1d2a4f4847143af3d5e13629760ae8141f3fcecb413ad739b61ed7072`.
+Historical v2/v3 hashes remain `87dabb51...6127e2` and
+`80f66286...9cba5`. Exact-v4 execution, capacity/package, restaging, scoped
+closeout commit, and rereview remain open.
