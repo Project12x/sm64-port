@@ -1419,3 +1419,14 @@ Mario artifacts; and all 33/2/28/25/4 focused suites plus Make, compileall, and
 diff checks. No schema, public ABI, actor compiler, Makefile, or Task 4 drift
 was found. Task 4 is unblocked; `GEO_SHADOW` remains explicit unsupported
 evidence rather than a repaired or discarded semantic.
+
+### Real-source tail-branch repair round 6 — active
+
+After the provenance PASS, Task 4 correctly retained the signpost
+`GEO_SHADOW` as an unsupported row and continued. The next supported real BOB
+key, `bhvExplosion` / model `0x00cd`, failed because
+`explosion_seg3_dl_03004298` ends in a valid unconditional
+`gsSPBranchList(explosion_seg3_dl_03004208)` with no
+`gsSPEndDisplayList`. Task 4 made zero edits. Task 3 is reopened only for exact
+terminal tail-transfer semantics with strict suffix, source, cycle, and depth
+checks; RED/GREEN and scoped rereview remain open.

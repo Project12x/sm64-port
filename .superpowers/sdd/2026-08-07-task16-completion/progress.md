@@ -715,3 +715,13 @@
 - Transition: Task 4 resumes from zero edits and must inventory `GEO_SHADOW`
   as an explicit unsupported capability gap. Task 16 Tasks 2-5 and every
   target/release/manual gate remain open.
+
+## 2026-08-11 generic actor bundle Task 3 tail-branch repair round 6
+
+- Status: `active; Task 4 paused before edits`. The next real BOB key,
+  `bhvExplosion` / model `0x00cd`, uses a valid terminal `gsSPBranchList` and
+  no `gsSPEndDisplayList`; the strict variant compiler misclassified it.
+- Required correction: exact unconditional tail-transfer semantics with final-
+  position, arity, identifier, closure, cycle/depth, and suffix checks. Preserve
+  ordinary call/return display lists, provenance, and exact Mario artifacts.
+- Task 16 Tasks 2-5 and every target/release/manual gate remain open.

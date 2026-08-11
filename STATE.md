@@ -43,8 +43,10 @@ narrow upstream closure repair then received C0/I3/M0: conditional Gfx
 references, stale same-process definition indices, and unbounded recursive
 walking required correction. Round 5 closed those findings plus rereview
 continuations for index-independent command semantics and exhaustive unknown-
-command rejection; final same-reviewer verdict is C0/I0/M0. Task 4 resumes
-from zero edits and retains `GEO_SHADOW` as explicit unsupported evidence.
+command rejection; final same-reviewer verdict is C0/I0/M0. Task 4 retained
+`GEO_SHADOW` as explicit unsupported evidence, then its next zero-edit BOB
+probe exposed valid terminal `gsSPBranchList` control flow that Task 3 does not
+yet model. Task 3 is narrowly reopened; Task 4 is paused without edits.
 Completing and reviewing the full prerequisite remains the gate before Task 16
 Task 2 resumes.
 The reusable

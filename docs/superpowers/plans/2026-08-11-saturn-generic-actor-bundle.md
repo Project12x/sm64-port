@@ -23,8 +23,10 @@ received C0/I3/M0 for conditional Gfx references, stale same-process source
 indices, and unbounded traversal. Round 5 closed those findings plus two
 rereview continuations for index-independent reference semantics and exhaustive
 unknown-command rejection. The same reviewer now passes the complete repair at
-C0/I0/M0. Task 4 resumes with `GEO_SHADOW` retained as an explicit unsupported
-capability gap, not silently dropped geometry. Target, release, smoke,
+C0/I0/M0. Task 4 retained `GEO_SHADOW` as an explicit unsupported gap, then its
+next zero-edit BOB probe found a valid tail-branch display list rejected for
+lacking `gsSPEndDisplayList`. Task 3 is narrowly reopened to model terminal
+`gsSPBranchList` control flow; Task 4 is paused without edits. Target, release, smoke,
 visual, desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
@@ -585,6 +587,15 @@ failure, exact Z/Zraw/Zrg reachability, unconditional unknown-command failure,
 and no schema/ABI/Task 4 drift. Task 4 resumes from its zero-edit preflight;
 `GEO_SHADOW` is an explicit unsupported semantic for Task 4 inventory, and all
 broader gates remain open.
+
+**Task 3 real-source tail-branch repair round 6 (2026-08-11):** active. After
+the provenance PASS, Task 4 correctly recorded the signpost `GEO_SHADOW` gap,
+then real supported key `(family ordinal 4, model ID 0x00cd)` / `bhvExplosion`
+failed because `explosion_seg3_dl_03004298` ends with a valid unconditional
+`gsSPBranchList(explosion_seg3_dl_03004208)` rather than
+`gsSPEndDisplayList`. Task 3 must model that exact terminal transfer while
+retaining strict final-position, arity, symbol, closure, cycle/depth, and suffix
+checks. Task 4 remains zero-edit and paused for RED/GREEN plus scoped rereview.
 
 ---
 

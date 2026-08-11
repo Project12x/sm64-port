@@ -24,8 +24,9 @@ the reached wooden-signpost display-list source was not closure-attested. Its
 first repair received C0/I3/M0 for conditional Gfx references, stale index
 state, and unbounded traversal. Round 5 closed those findings plus index-
 independent reference semantics and exhaustive unknown-command rejection; the
-same reviewer now passes C0/I0/M0. Resume Task 4, record `GEO_SHADOW` as an
-explicit unsupported capability gap, and build/review the scene-local DRAM-cart bundle and fixed
+same reviewer now passes C0/I0/M0. Task 4 recorded `GEO_SHADOW` explicitly,
+then exposed a valid terminal `gsSPBranchList` shape. Repair that exact tail-
+transfer boundary before building/reviewing the scene-local DRAM-cart bundle and fixed
 dual-SH-2 LWRAM
 workspace and complete the Task 16 production generic actor cutover. After
 those target-byte changes, rerun Task 9's build/repro/v4/staging chain before

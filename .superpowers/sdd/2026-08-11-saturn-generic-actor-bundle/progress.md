@@ -134,6 +134,11 @@
   rereview PASS C0/I0/M0 after 33/33 closure, 2/2 BOB, 28/28 variant/source,
   25/25 rigid, 4/4 generic, Make, compileall, and exact Mario gates. Task 4
   resumes; named `GEO_SHADOW` remains explicit unsupported evidence.
+- Task 4 replay after the provenance PASS correctly inventoried signpost
+  `GEO_SHADOW`, then stopped before edits on `bhvExplosion`: a real display
+  list uses terminal `gsSPBranchList` without `gsSPEndDisplayList`. Task 3 is
+  reopened narrowly for exact tail-transfer semantics; Task 4 remains paused
+  with zero edits.
 
 ## Task 2: source-complete, independent review pending
 
