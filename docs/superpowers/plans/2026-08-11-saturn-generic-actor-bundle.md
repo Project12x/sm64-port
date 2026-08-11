@@ -588,14 +588,24 @@ and no schema/ABI/Task 4 drift. Task 4 resumes from its zero-edit preflight;
 `GEO_SHADOW` is an explicit unsupported semantic for Task 4 inventory, and all
 broader gates remain open.
 
-**Task 3 real-source tail-branch repair round 6 (2026-08-11):** active. After
+**Task 3 real-source tail-branch repair round 6 (2026-08-11):** source-complete;
+scoped rereview pending. After
 the provenance PASS, Task 4 correctly recorded the signpost `GEO_SHADOW` gap,
 then real supported key `(family ordinal 4, model ID 0x00cd)` / `bhvExplosion`
 failed because `explosion_seg3_dl_03004298` ends with a valid unconditional
 `gsSPBranchList(explosion_seg3_dl_03004208)` rather than
-`gsSPEndDisplayList`. Task 3 must model that exact terminal transfer while
-retaining strict final-position, arity, symbol, closure, cycle/depth, and suffix
-checks. Task 4 remains zero-edit and paused for RED/GREEN plus scoped rereview.
+`gsSPEndDisplayList`. The repair models that exact final command as an
+unconditional tail transfer in source collection, rigid-group analysis, and
+Fast3D extraction. The one bare target is resolved only through the attested
+closure; suffix commands, bad arity/expressions, missing or duplicate targets,
+cycles, and traversal beyond 256 fail named. `gsSPDisplayList` remains a
+returning call and ordinary lists still require one final
+`gsSPEndDisplayList()`. The real explosion record now advances to the existing
+`UnsupportedActorSourceError: unsupported rigid-group source: textured`, as
+required by S64B v1 rather than broadening its material format. GREEN is 32/32
+variant/source, 27/27 rigid-group, 33/33 closure, 2/2 real BOB, 4/4 historical
+generic-family, native-root Make, compileall, and exact Mario identity. Task 4
+remains zero-edit and paused for scoped rereview.
 
 ---
 

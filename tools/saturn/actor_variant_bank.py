@@ -490,6 +490,9 @@ def _collect_lists(index: _SourceIndex, name: str, preferred: str,
                    *, declared: bool = False) -> None:
     if name in stack:
         raise ActorSourceSelectionError(f"recursive display list: {' -> '.join(stack + (name,))}")
+    if len(stack) >= 256:
+        raise ActorSourceSelectionError(
+            f"display-list traversal depth exceeds 256 at {name}")
     definition = (index.declared_block("Gfx", name, preferred) if declared
                   else index.resolve_block("Gfx", name, preferred))
     prior = list_paths.get(name)
@@ -499,9 +502,20 @@ def _collect_lists(index: _SourceIndex, name: str, preferred: str,
         return
     lists[name] = _macro_tokens(
         definition.body, "gs", f"Gfx {name} in {definition.path}")
-    terminators = [position for position, (macro, _args) in enumerate(lists[name])
-                   if macro == "gsSPEndDisplayList"]
-    if terminators != [len(lists[name]) - 1] or lists[name][-1][1].strip():
+    ends = [position for position, (macro, _args) in enumerate(lists[name])
+            if macro == "gsSPEndDisplayList"]
+    branches = [position for position, (macro, _args) in enumerate(lists[name])
+                if macro == "gsSPBranchList"]
+    tail: str | None = None
+    if branches:
+        if branches != [len(lists[name]) - 1] or ends:
+            raise MalformedActorSourceError(
+                f"gsSPBranchList must be the sole final terminator in {name}")
+        fields = _arguments(lists[name][-1][1])
+        if len(fields) != 1 or re.fullmatch(r"[A-Za-z_]\w*", fields[0]) is None:
+            raise MalformedActorSourceError(f"malformed gsSPBranchList in {name}")
+        tail = fields[0]
+    elif ends != [len(lists[name]) - 1] or lists[name][-1][1].strip():
         raise MalformedActorSourceError(
             f"display list {name} requires one final gsSPEndDisplayList()")
     list_paths[name] = definition.path
@@ -512,6 +526,9 @@ def _collect_lists(index: _SourceIndex, name: str, preferred: str,
                 raise MalformedActorSourceError(f"malformed gsSPDisplayList in {name}")
             _collect_lists(index, child.group(1), definition.path, lists, list_paths,
                            stack + (name,))
+    if tail is not None:
+        _collect_lists(index, tail, definition.path, lists, list_paths,
+                       stack + (name,))
 
 
 @dataclass(frozen=True)
@@ -722,6 +739,9 @@ class _Fast3DCompiler:
     def walk(self, name: str, part: dict[str, object], stack: tuple[str, ...] = ()) -> None:
         if name in stack:
             raise ActorSourceSelectionError(f"recursive display list: {' -> '.join(stack + (name,))}")
+        if len(stack) >= 256:
+            raise ActorSourceSelectionError(
+                f"display-list traversal depth exceeds 256 at {name}")
         body = self.lists.get(name)
         path = self.list_paths.get(name)
         if body is None or path is None:
@@ -736,6 +756,12 @@ class _Fast3DCompiler:
                 if child is None:
                     raise MalformedActorSourceError(f"malformed gsSPDisplayList in {name}")
                 self.walk(child.group(1), part, stack + (name,))
+            elif macro == "gsSPBranchList":
+                child = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*", args)
+                if child is None:
+                    raise MalformedActorSourceError(f"malformed gsSPBranchList in {name}")
+                self.walk(child.group(1), part, stack + (name,))
+                return
             elif macro == "gsSPVertex":
                 fields = _arguments(args)
                 if len(fields) != 3 or re.fullmatch(r"[A-Za-z_]\w*", fields[0]) is None:

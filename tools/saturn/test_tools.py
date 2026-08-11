@@ -2467,12 +2467,45 @@ class DisplayListRigidGroupTests(unittest.TestCase):
         self.assertEqual([s.ordinal for s in sites], [0, 1])
         self.assertEqual(sites[0].rigid_group, sites[1].rigid_group)
 
+    def test_terminal_branch_list_transfers_to_child_without_returning(self) -> None:
+        lists = {
+            "root": [
+                ("gsSPVertex", "v, 3, 0"),
+                ("gsSPBranchList", "child"),
+            ],
+            "child": [
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSPEndDisplayList", ""),
+            ],
+        }
+        sites = walk_display_lists(lists, "root")
+        self.assertEqual([(site.display_list, site.list_ordinal, site.indices)
+                          for site in sites], [
+            ("child", 0, (0, 1, 2)),
+        ])
+
+    def test_terminal_branch_list_rejects_suffix_and_bad_target(self) -> None:
+        malformed = {
+            "suffix": {
+                "root": [("gsSPBranchList", "child"),
+                         ("gsSPEndDisplayList", "")],
+                "child": list(_ONE_TRIANGLE),
+            },
+            "computed": {
+                "root": [("gsSPBranchList", "select_child(1)")],
+            },
+        }
+        for label, lists in malformed.items():
+            with self.subTest(label=label), self.assertRaisesRegex(ValueError,
+                                                                  "gsSPBranchList"):
+                walk_display_lists(lists, "root")
+
     def test_unknown_macro_marks_sites_unsafe(self) -> None:
         """An unmodelled construct must poison the group, never be ignored."""
         lists = {
             "root": [
                 ("gsSPVertex", "v, 3, 0"),
-                ("gsSPBranchList", "somewhere_else"),
+                ("gsSPUnknownState", "somewhere_else"),
                 ("gsSP1Triangle", "0, 1, 2, 0"),
             ]
         }

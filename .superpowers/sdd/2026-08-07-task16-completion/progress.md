@@ -718,10 +718,16 @@
 
 ## 2026-08-11 generic actor bundle Task 3 tail-branch repair round 6
 
-- Status: `active; Task 4 paused before edits`. The next real BOB key,
+- Status: `source-complete; scoped rereview pending; Task 4 paused before
+  edits`. The next real BOB key,
   `bhvExplosion` / model `0x00cd`, uses a valid terminal `gsSPBranchList` and
   no `gsSPEndDisplayList`; the strict variant compiler misclassified it.
-- Required correction: exact unconditional tail-transfer semantics with final-
-  position, arity, identifier, closure, cycle/depth, and suffix checks. Preserve
-  ordinary call/return display lists, provenance, and exact Mario artifacts.
+- Repair: the compiler and rigid walker now treat one final one-identifier
+  `gsSPBranchList` as an unconditional closure-only tail transfer. Suffixes,
+  malformed/missing/duplicate targets, recursion, and depth beyond 256 fail
+  named; returning display-list calls and ordinary final-End rules are intact.
+- GREEN: 32/32 variant/source, 27/27 rigid, 33/33 closure, 2/2 real BOB, 4/4
+  generic-family, native-root Make, compileall, and exact Mario artifacts. The
+  real explosion key reaches the preserved named textured-state unsupported
+  boundary rather than publishing unrepresentable S64B material semantics.
 - Task 16 Tasks 2-5 and every target/release/manual gate remain open.

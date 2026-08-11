@@ -195,7 +195,149 @@ const GeoLayout test_geo[] = {
 """
 
 
+_ROOT_DISPLAY_LIST = """const Gfx test_root_dl[] = {
+    gsSPDisplayList(test_material_dl),
+    gsSPDisplayList(test_child_dl),
+    gsSPEndDisplayList(),
+};"""
+
+
+def _replace_root_display_list(fixture: _Fixture, replacement: str) -> Path:
+    model = fixture.root / "actors/test/model.inc.c"
+    source = model.read_text(encoding="utf-8")
+    if source.count(_ROOT_DISPLAY_LIST) != 1:
+        raise AssertionError("fixture root display list changed unexpectedly")
+    model.write_text(source.replace(_ROOT_DISPLAY_LIST, replacement, 1),
+                     encoding="utf-8", newline="\n")
+    fixture.rehash()
+    return model
+
+
 class ActorVariantBankTest(unittest.TestCase):
+    def test_real_shaped_terminal_branch_list_executes_exact_tail_geometry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            _replace_root_display_list(fixture, """const Gfx test_root_dl[] = {
+    gsSPDisplayList(test_material_dl),
+    gsDPPipeSync(),
+    gsSPBranchList(test_child_dl),
+};""")
+            compiled = fixture.compile()
+
+        self.assertEqual((len(compiled.payload), compiled.lane_bytes,
+                          compiled.maximum_scratch), (358, 104, 211))
+        self.assertEqual(compiled.payload_sha256,
+                         "216112f7f8b59aeeefe15b86845f3aecfd4caf267f9a63a8d3d01663cbd944e2")
+        self.assertEqual(compiled.source_sha256,
+                         "5336a502acfb2f85072367ae5d0f5cef58f8958b91c54d58d6f31eebe47aa7bd")
+        self.assertEqual(compiled.report["geometry"]["vertices"], [
+            {"local": [0, 0, 0], "joint_ordinal": 0, "branch_ordinal": 0},
+            {"local": [10, 0, 0], "joint_ordinal": 0, "branch_ordinal": 0},
+            {"local": [10, 10, 0], "joint_ordinal": 0, "branch_ordinal": 0},
+            {"local": [0, 10, 0], "joint_ordinal": 0, "branch_ordinal": 0},
+        ])
+        self.assertEqual(compiled.report["geometry"]["materials"], [{
+            "material_id": 0, "rgb": [31, 16, 8], "light": "test_light",
+            "texture": None, "combine_mode": None, "cull_back": True,
+            "env_color": None, "alpha_compare": None, "layer": "LAYER_OPAQUE",
+        }])
+        self.assertEqual(compiled.report["geometry"]["primitives"], [
+            {"material": 0, "indices": [0, 1, 2, 3]},
+        ])
+        self.assertEqual(compiled.report["animations"][0]["frame_count"], 1)
+        self.assertEqual(decode_animation_channels(
+            compiled.report, compiled.payload, 0, 0), [0, 0, 0, 0, 0, 0])
+
+    def test_terminal_branch_list_malformed_forms_fail_closed(self) -> None:
+        malformed = {
+            "suffix_end": """const Gfx test_root_dl[] = {
+    gsSPBranchList(test_child_dl),
+    gsSPEndDisplayList(),
+};""",
+            "suffix_state": """const Gfx test_root_dl[] = {
+    gsSPBranchList(test_child_dl),
+    gsDPPipeSync(),
+    gsSPEndDisplayList(),
+};""",
+            "wrong_arity": """const Gfx test_root_dl[] = {
+    gsSPBranchList(test_child_dl, 0),
+};""",
+            "empty_target": """const Gfx test_root_dl[] = {
+    gsSPBranchList(),
+};""",
+            "computed_target": """const Gfx test_root_dl[] = {
+    gsSPBranchList(select_test_child_dl(1)),
+};""",
+            "ordinary_missing_end": """const Gfx test_root_dl[] = {
+    gsSPDisplayList(test_child_dl),
+};""",
+        }
+        for label, source in malformed.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _RIGID_GEO)
+                _replace_root_display_list(fixture, source)
+                with self.assertRaises(MalformedActorSourceError):
+                    fixture.compile()
+
+    def test_terminal_branch_list_target_resolution_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            _replace_root_display_list(fixture, """const Gfx test_root_dl[] = {
+    gsSPBranchList(missing_tail_dl),
+};""")
+            with self.assertRaisesRegex(ActorSourceSelectionError, "missing Gfx source"):
+                fixture.compile()
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            model = _replace_root_display_list(fixture, """const Gfx test_root_dl[] = {
+    gsSPBranchList(test_child_dl),
+};""")
+            model.write_text(model.read_text(encoding="utf-8") + """
+const Gfx test_child_dl[] = {
+    gsSPEndDisplayList(),
+};
+""", encoding="utf-8", newline="\n")
+            fixture.rehash()
+            with self.assertRaisesRegex(ActorSourceSelectionError, "ambiguous Gfx source"):
+                fixture.compile()
+
+    def test_terminal_branch_list_cycle_and_depth_fail_named(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            model = _replace_root_display_list(fixture, """const Gfx test_root_dl[] = {
+    gsSPBranchList(test_cycle_dl),
+};""")
+            model.write_text(model.read_text(encoding="utf-8") + """
+const Gfx test_cycle_dl[] = {
+    gsSPBranchList(test_root_dl),
+};
+""", encoding="utf-8", newline="\n")
+            fixture.rehash()
+            with self.assertRaisesRegex(ActorSourceSelectionError,
+                                        "recursive display list"):
+                fixture.compile()
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            model = _replace_root_display_list(fixture, """const Gfx test_root_dl[] = {
+    gsSPBranchList(test_chain_000),
+};""")
+            chain = []
+            for index in range(300):
+                target = (f"test_chain_{index + 1:03d}" if index < 299
+                          else "test_child_dl")
+                chain.append(
+                    f"const Gfx test_chain_{index:03d}[] = {{\n"
+                    f"    gsSPBranchList({target}),\n"
+                    "};\n"
+                )
+            model.write_text(model.read_text(encoding="utf-8") + "\n".join(chain),
+                             encoding="utf-8", newline="\n")
+            fixture.rehash()
+            with self.assertRaisesRegex(ActorSourceSelectionError, "depth"):
+                fixture.compile()
+
     def test_real_shaped_adjacent_geo_and_direct_dl_bindings_select_geo(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = _Fixture(Path(directory), _RIGID_GEO)

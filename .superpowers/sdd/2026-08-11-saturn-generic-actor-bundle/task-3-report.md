@@ -1430,3 +1430,77 @@ key, `bhvExplosion` / model `0x00cd`, failed because
 `gsSPEndDisplayList`. Task 4 made zero edits. Task 3 is reopened only for exact
 terminal tail-transfer semantics with strict suffix, source, cycle, and depth
 checks; RED/GREEN and scoped rereview remain open.
+
+### Real-source tail-branch repair round 6 — source-complete
+
+Base is docs-only operational stop `0e2f03b9`. Reference reuse remains wholly
+in-tree: `actor_variant_bank.py` retains its close-port of the selected-source
+Fast3D walk and `dl_rigid_groups.py` remains the directly reused structural
+contract. The narrow correction adds no external source, schema field, public
+ABI, sourceboot wiring, or S64B material representation.
+
+Pre-production focused RED:
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest [four tail-branch ActorVariantBankTest methods] [two tail-branch DisplayListRigidGroupTests methods] -v
+Ran 6 tests in 0.231s
+FAILED (failures=3, errors=5)
+```
+
+The valid real-shaped list was rejected for lacking a final End; structural
+walking returned no downstream triangle. Two suffix variants escaped the
+malformed contract into unknown-state errors, while the rigid walker accepted
+suffix/computed forms. Missing, duplicate, cycle, and the 300-link chain could
+not reach their named assertions because the outer tail list failed first.
+
+The repair recognizes `gsSPBranchList(target)` only as the sole final
+terminator. It coverage-validates exact arity and a bare C identifier, resolves
+the target through `_SourceIndex`, and recursively collects it under the same
+cycle and fixed depth-256 limits. Fast3D execution and rigid-group analysis
+walk the child using inherited state and return immediately from the parent;
+`gsSPDisplayList` retains call/return semantics. Ordinary lists still require
+one final zero-argument `gsSPEndDisplayList()`.
+
+Focused GREEN:
+
+```text
+Ran 6 tests in 1.600s
+OK
+```
+
+The exact tail fixture pins 358 payload bytes, lane/scratch 104/211, payload
+SHA-256 `216112f7f8b59aeeefe15b86845f3aecfd4caf267f9a63a8d3d01663cbd944e2`,
+source SHA-256 `5336a502acfb2f85072367ae5d0f5cef58f8958b91c54d58d6f31eebe47aa7bd`,
+four exact vertices, RGB `[31,16,8]`, one `[0,1,2,3]` primitive, and neutral
+pose channels. Mutations cover End/state suffixes, wrong/empty/computed target,
+ordinary missing End, missing and duplicate selected definitions, a cycle,
+and a 300-list acyclic chain.
+
+Complete pre-commit GREEN:
+
+```text
+actor variant/source: Ran 32 tests in 6.580s, OK
+rigid groups: Ran 27 tests in 0.003s, OK
+tools/saturn/test_scene_closure.py: Ran 33 tests in 4.488s, OK
+tools/saturn/test_bob_scene_closure.py: Ran 2 tests in 26.587s, OK
+historical generic-family report: Ran 4 tests in 20.593s, OK
+native-root variant/pose/meshlet Make wave: exit 0 (32 Python tests)
+compileall: exit 0
+```
+
+The real closure-selected `(family 4, model 0x00cd)` record no longer raises a
+false terminator error and advances to the deliberately unchanged boundary:
+
+```text
+UnsupportedActorSourceError: unsupported rigid-group source: textured
+```
+
+Historical outputs remain exact: 562,096-byte Mario JSON and its refactor copy
+hash to `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`;
+596,896-byte Mario S64B and its refactor copy hash to
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`.
+Task 4 files remain unmodified. Behavior commit and final committed-HEAD
+evidence are recorded in the following transition; scoped same-reviewer
+rereview, Task 4, Task 16 Tasks 2-5, target/release/manual, and total-game gates
+remain open.

@@ -56,6 +56,7 @@ from typing import NamedTuple
 # rigid-group neutral.
 _KNOWN = {
     "gsSPVertex", "gsSP1Triangle", "gsSP2Triangles", "gsSPDisplayList",
+    "gsSPBranchList",
     "gsSPMatrix", "gsSPPopMatrix", "gsSPEndDisplayList",
     "gsSPLight", "gsSPSetGeometryMode", "gsSPClearGeometryMode",
     "gsSPTexture", "gsDPPipeSync", "gsDPSetCombineMode",
@@ -213,6 +214,8 @@ class _Walker:
             raise ValueError(
                 f"recursive display list: {' -> '.join(stack + (name,))}"
             )
+        if len(stack) >= 256:
+            raise ValueError(f"display-list traversal depth exceeds 256 at {name}")
         body = self.lists.get(name)
         if body is None:
             raise ValueError(f"missing display list {name}")
@@ -220,7 +223,7 @@ class _Walker:
         current_reasons = set(reasons)
         matrix_stack: list[int] = []
         local_ordinal = 0
-        for macro, args in body:
+        for position, (macro, args) in enumerate(body):
             if macro not in _KNOWN:
                 # Unmodelled command: everything after it in this list is
                 # suspect. Poison rather than guess, and break the group so a
@@ -268,6 +271,17 @@ class _Walker:
                     child.group(1), current, poisoned,
                     frozenset(current_reasons), stack + (name,),
                 )
+            elif macro == "gsSPBranchList":
+                child = _IDENTIFIER.fullmatch(args.strip())
+                if child is None:
+                    raise ValueError(f"unreadable gsSPBranchList in {name}: {args}")
+                if position != len(body) - 1:
+                    raise ValueError(f"gsSPBranchList must be final in {name}")
+                self.walk_list(
+                    child.group(0), current, poisoned,
+                    frozenset(current_reasons), stack + (name,),
+                )
+                return
             elif macro in ("gsSP1Triangle", "gsSP2Triangles"):
                 values = _ints(args)
                 triples = (

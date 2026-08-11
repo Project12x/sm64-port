@@ -12,6 +12,16 @@
 
 ### Fixed
 
+- Modeled repository-valid terminal `gsSPBranchList` actor display lists as
+  unconditional tail transfers. This fixes strict generic S64B selection
+  misclassifying the real explosion actor's final branch as a missing
+  `gsSPEndDisplayList`, while preserving ordinary `gsSPDisplayList` call/return
+  behavior. Tail targets must be one exact closure-resolved identifier in the
+  final command position; suffixes, bad arity, missing/ambiguous targets,
+  cycles, and depth overflow fail named, and downstream state/geometry is
+  walked rather than omitted. S64B v1's textured-state rejection and the
+  historical Mario bytes remain unchanged.
+
 - Hardened actor-source closure discovery after scoped review found three ways
   strict provenance could be bypassed: repository-valid conditional display-
   list branches now seal their reached Gfx sources, with missing/computed/

@@ -140,6 +140,23 @@
   reopened narrowly for exact tail-transfer semantics; Task 4 remains paused
   with zero edits.
 
+## Task 3 real-source tail-branch repair round 6
+
+- Status: `source-complete; scoped rereview pending; Task 4 paused with zero
+  edits`.
+- Repair: one final one-identifier `gsSPBranchList` is an unconditional
+  closure-only tail transfer in collection, structural walking, and Fast3D
+  extraction. Suffix, arity/expression, missing/duplicate source, recursion,
+  and depth-over-256 cases fail named. `gsSPDisplayList` call/return and
+  ordinary final-End rules are unchanged.
+- Evidence: focused RED was 3 failures/5 errors and focused GREEN is 6/6.
+  Complete GREEN is 32/32 variant/source, 27/27 rigid, 33/33 closure, 2/2 real
+  BOB, 4/4 generic-family, native-root Make, compileall, and exact historical
+  Mario JSON/S64B hashes. Real `bhvExplosion` advances to the preserved named
+  `textured` unsupported boundary rather than fabricated S64B semantics.
+- Open: scoped rereview, Task 4, Task 16 Tasks 2-5, and all target/release/
+  manual gates.
+
 ## Task 2: source-complete, independent review pending
 
 - Behavior commit: `b1133026` (`feat(saturn): define generic actor family
