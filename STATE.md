@@ -5,19 +5,18 @@ Active plan:
 
 ## Current lane: hermetic integrated release candidate
 
-Task 9 is active in independent-review repair round 1. The previous candidate
-at source `44b78627`, manifest `b75ba5f0...a2ddf`, and identity
-`id-9a051d30880c78f0` correctly described the then-installed topology, but its
-acceptance is invalid for closeout because the `gcc-nm` wrapper's actual
-`sh-elf-nm` backend was not sealed. Cleanup containment, LF audit checkout
-identity, direct archive/nm backend attestation, final closure-digest/HEAD
-revalidation, and one-index-per-repository scaling are source-repaired. Two
-clean candidates must still rebuild at one common repaired commit, reproduce,
-remeasure, reseal audit v4, recompute capacity/package facts, and restage before
-Task 9 can return to controller-owned rereview.
+Task 9 repair round 1 is source-complete and awaiting controller-owned evidence
+and code-quality rereviews. Clean candidates A/B at common source `04d6a2a3`
+reproduced manifest `5e04e252...11c1df` and identity
+`id-264ab4203c268487`; direct archive/nm backends, cleanup containment, LF audit
+checkout identity, final closure-digest/HEAD revalidation, and one-index-per-
+repository scaling are sealed. Exact v4 passed at total 700 with both forbidden
+callers absent, capacity/package checks passed, and the repaired five-file
+manual candidate was transactionally restaged and verified. Task 9 is not
+complete until both rereviews clear.
 
-Task 10 is the next active acceptance lane after Task 9 rereview, and is paused
-until the repaired candidate exists. It owns the 20,100-frame smoke, visual
+Task 10 is the next active acceptance lane after Task 9 rereview, and remains
+paused. It owns the 20,100-frame smoke, visual
 capture, desktop launch, and owner manual-play result. The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system

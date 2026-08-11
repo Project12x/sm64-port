@@ -2,73 +2,81 @@
 
 ## Status
 
-Task 9 is source-complete: release construction, two-candidate reproducibility,
-exact audit v4, memory margin, cart payload, package inventory, and
-transactional staging pass. Independent evidence/code-quality reviews remain
-open, so Task 9 is not yet complete. Task 10's 20,100-frame
-smoke, visual capture, desktop launch, and owner manual play have not run.
+Task 9 repair round 1 is `source-complete` pending both controller-owned
+independent rereviews. Two clean, owned candidates reproduced, the repaired
+tool topology and final provenance are sealed, exact audit v4 passed, capacity
+and package facts passed, and the canonical manual candidate was restaged and
+verified. Task 9 is not `complete`. Task 10's 20,100-frame smoke, visual
+capture, desktop launch, and owner manual play have not run.
 
 ## Immutable candidate identity
 
-- Candidate source commit: `44b786276f73c3dbd7dc91d9f39c332b2b51bf65`
-- Identity version/tag: `2` / `id-9a051d30880c78f0`
-- Identity SHA-256: `f5fd613bb06036b57ec4da18bd88112cd413fbbb0e7e6a044f6d700ede048da9`
-- Effective-config SHA-256: `9a051d30880c78f08394fc3d3b08c3daa9b5224957b8c455b0180108dde71c5b`
-- Source-closure SHA-256: `8bc5261a132694c55f3c96edb33e9c4f349807ea6a6eefc5f5244ad6ea79853d`
+- Candidate source commit: `04d6a2a3ff08577e64497132a4a77726fb33cc24`
+- Identity version/tag: `2` / `id-264ab4203c268487`
+- Identity SHA-256: `db522ebda6942e017f61316f478b4ac3d3513d9e402f2644db73439cac10c172`
+- Effective-config SHA-256: `264ab4203c268487dabf3b573c48b80c5a434ad2c69fc3d486b735acf64eb2b2`
+- Source-closure SHA-256: `3a5756b523ccdf5a055b630eb58b462de0f8fc92f4992f0f35257426b415fb8f`
 - Target-profile SHA-256: `fe090885efa5245d08a5d09a4e03ba923b5b61d083b0c4763dc4745c9e211dd2`
 - Package-set SHA-256: `85a5a1903c0ab04fab3f1fa2009e36e84a7537f2a975fea996cb9b20b0f4c266`
-- Toolchain-attestation SHA-256: `e1360ab552a218f351965ca380afc494f96c87682f365536e4882aa56e60fa76`
-- Release-manifest SHA-256: `b75ba5f073d8c7d03b64db47e6eed3e34d7fa8c70392ffe340a8ed208aca2ddf`
+- Toolchain-attestation SHA-256: `e74c5bad3adcf9f5207c99776ce13292ed3c4a97889aee0f315a4794bfda48db`
+- Release-manifest SHA-256: `5e04e2527e2373f30521bfcaaa63b56b061b74291cf1a4a3fd6e427aa311c1df`
 
-Candidates A and B were independent owned worktrees with independently copied
-and inventoried ignored prerequisites. Their exact serial release builds took
-968.4 and 963.1 seconds. Both manifests and every normalized input/output field
-are identical; comparison report SHA-256 is
-`9c3b179f4ef699c69c4a0727d2046757a68824805a94f277bb63a2b604b9b231`.
+Candidates A and B were detached owned worktrees at the same source commit,
+with independent prerequisite copies. Each prerequisite inventory contains
+1,977 `build/us_pc` files and 42,663,369 bytes, hashes to
+`ce37312358ecfd1fd537b36442b8905343e5f9e82f50e8839b7656e9d05ae7e7`,
+contains no reparse point, and uses baserom SHA-256
+`17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91`.
+Their exact serial `-j1` release builds took 911.7 and 938.6 seconds. Direct
+manifest verification passed for each; both manifests and every compared
+field are identical. Reproducibility report SHA-256 is
+`505004566b6dd842a43119427be9df53d2c2fe325c1c79e9616e4bb00cf11f8a`.
+
+The toolchain attestation contains the directly invoked
+`bin/sh-elf-ar.exe` (`6ea97810d5e686c029d5c279b437b6f08d2d729fa3220a2dd4a798739771024a`)
+and `bin/sh-elf-nm.exe` (`d6ed58af94b350368ce4e064ce5fd63ade56839300d9ad5d6188587e11dd7bb2`).
+No `gcc-ar` or `gcc-nm` wrapper row remains because sourceboot bypasses those
+delegating wrappers and invokes the attested backends directly.
 
 ## Artifact and audit facts
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
-| ELF | 9,445,220 | `f3e01ff2ccd2dde46f30a47b2a7201e70ea429a4332701612de4aaef4a881c1b` |
+| ELF | 9,445,220 | `21570fce4d68138e7d8d2089e0bb71d809ce964b0d59013dec792c2a7f923b6c` |
 | `SOURCE.DAT` | 3,565,696 | `f0d3781cfce7ea1f58813de9b7b9d6e2076438fe772d4bcf2868b9918f0fde6c` |
-| ISO | 4,968,448 | `b0589b7860020701226bc9ae9df9a6c65945590bc14cde7197fc11708e76b989` |
+| ISO | 4,968,448 | `93825c9c8ceb826f5c044a859364f9fa4104d2d9714b9cbe51243e915016635a` |
 | CUE | 88 | `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7` |
 
 The linked cart span is `0x22400000..0x22766880`, exactly 3,565,696
-bytes. `obj/SOURCE.DAT`, staged `cd/SOURCE.DAT`, and xorriso-extracted ISO
-member `/SOURCE.DAT` are byte-identical at the hash above. The ISO directory
-places it at LBA 534 for 1,742 blocks. Against the 32-Mbit/4,194,304-byte cart
-limit, payload headroom is 628,608 bytes.
+bytes. `obj/SOURCE.DAT`, `cd/SOURCE.DAT`, and xorriso-extracted ISO member
+`/SOURCE.DAT` are byte-identical at the hash above. The ISO directory lists it
+at LBA 534 for 1,742 blocks. Against the 32-Mbit/4,194,304-byte cart limit,
+payload headroom is 628,608 bytes.
 
-Audit-v4 contract SHA-256 is
-`2c23ce448c6495e552461bf2e5b75e596d57a5a292a9c8bef8f71d1edf7f7265`.
-The exact acceptance rerun took 274.0 seconds and passed with root
-`_game_loop_one_iteration`, total 700, and both `_atan2_lookup` and `_atan2s`
-verified absent. Acceptance-report SHA-256 is
-`1fe9d585bf5385b33a038081ffe37b9cfc054f2ebcab174858f0e0b27ff4ddbf`.
-The earlier measurement report remains explicitly `measured-unsealed` and is
-not acceptance.
+Unsealed measurement against candidate B exited 0 in 330.3 seconds and
+published report SHA-256
+`d875fdc8b5d8fbcbbf4e5cddfda04d61c98f8c7d7f3c3ff6a1c2fb79e3d7680a`.
+Only after it established root `_game_loop_one_iteration`, total 700, and both
+forbidden callers absent was the canonical 606-byte v4 contract generated and
+pinned. Contract SHA-256 is
+`d52ecdb1d2a4f4847143af3d5e13629760ae8141f3fcecb413ad739b61ed7072`.
+The exact v4 rerun exited 0 in 327.7 seconds and published acceptance report
+SHA-256 `f4b90798bede749144ca92a6dba318e70dde09c90145423524b9abe93a7787aa`.
+It binds the contract, manifest, ELF, identity, config, and profile hashes,
+passes at total 700, and verifies `_atan2_lookup` and `_atan2s` absent.
+Historical contracts remain unchanged: v2
+`87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2`
+and v3 `80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5`.
 
-## Memory and object-pool capacity
+## Capacity and package facts
 
-- `___end`: `0x060fca38`
-- Physical HWRAM margin to `0x06100000`: 13,768 bytes
-- Reserved runtime allowance: `0x1B00` / 6,912 bytes
-- Usable HWRAM margin after allowance: 6,856 bytes
-- Sealed object-pool capacity: 208 slots
-- Prior artifact-bound 20,100-post-BIOS-frame peak: 138 slots
-- Prior allocation failures: 0
-- Capacity margin over measured peak: 70 slots
-
-Coverage remains limited: the 138-slot result is an idle-boot measurement and
-is a floor, not a worst-case ceiling. It did not cover pickup/hold interaction
-or action-particle pressure. This Task 9 target enables route replay and live
-input in its identity, but Task 9 did not execute a new occupancy route or idle
-capture; build/audit evidence is not substitute occupancy evidence. Task 10's
-artifact-bound combined smoke remains required.
-
-## Exact ten-class package inventory
+- `___end=0x060fca38`; physical HWRAM margin is 13,768 bytes and usable
+  margin after `0x1B00` is 6,856 bytes.
+- The object-pool capacity remains 208. Prior artifact-bound idle-boot evidence
+  peaked at 138 with zero allocation failures, leaving 70 slots; that is a
+  floor and does not cover pickup/hold or action-particle pressure.
+- The package set contains exactly the ten BOB rows below. It is not a
+  complete-game inventory.
 
 | Class | Package | Manifest SHA-256 | Class root SHA-256 |
 |---|---|---|---|
@@ -83,31 +91,44 @@ artifact-bound combined smoke remains required.
 | shared-data | `bob-dependencies` | `90e02577c18c69449b03d9ce98bea0ee73436826a335ea81b66f1425ddc01f45` | `326fe783fb20b1fa503c7f9b410c75bed76d17628dee3811bafb453e8cc4fe54` |
 | texture | `bob` | `89bc006d6ad2718c67bf47e5e14b72e63fac2d3ad9c2caf054e4ebbc61d16c44` | `2f8b159c6e31f51c81755b5a5d6052c85ec3917c58625802a9ffd986ecb94c2e` |
 
-This is the complete reviewed BOB demo package set, not the complete SM64 game
-inventory. The `sm64-saturn-full` profile remains intentionally non-releasable
-until its full content/system packages are populated and independently proved.
+## Staging evidence
 
-## Remaining gates
+The previous invalid candidate directory was verified as an owned,
+non-reparse generated directory containing five files and was moved
+recoverably to `sourceboot-bob-demo-v2-manual-candidate.superseded-b75ba5f0`.
+The repaired candidate was then staged to
+`build/saturn/releases/sourceboot-bob-demo-v2-manual-candidate`.
 
-- Obtain both controller-owned Task 9 independent reviews; fix and rereview any
-  finding before marking Task 9 complete.
-- Run Task 10's exact staged-release smoke, visual, desktop, and owner manual
-  gates. No Ymir or manual gate was run in Task 9.
+Direct `release_manifest.py verify` returned manifest
+`5e04e252...11c1df`. The staged inventory has exactly five files and
+17,982,718 bytes: the manifest plus the four artifact rows above. A second
+identical staging attempt exited 1 with `release destination is not empty`;
+the canonical before/after file-size/hash inventory was unchanged, and direct
+manifest verification again returned the same digest.
 
-## Transactional staging
+## Repair verification and open gates
 
-The staged manual candidate is
-`build/saturn/releases/sourceboot-bob-demo-v2-manual-candidate`. A clean
-implementation worktree lacked the publisher's required existing parent
-namespace, so the first invocation failed before copying. After verifying
-`build` and `build/saturn` were owned real directories, execution created only
-the missing real `build/saturn/releases` parent and retained an absent final
-destination. This records the Task 7 publisher boundary: it atomically
-publishes a missing destination inside an existing locked parent namespace.
+Review-repair behavior commits are `ac037740` (cleanup containment),
+`6e3291e9` (LF checkout identity), `3d37349b` (direct ar/nm topology),
+`0959af40` (final provenance and one-index scaling), and `04d6a2a3` (isolated
+gitlink fixture). Documentation reconciliation is `9d097b0b`; v4 pin/integrity
+is `18bd3941`. Every behavior commit includes its `CHANGELOG.md` update.
 
-Staging then copied exactly five files totaling 17,982,718 bytes and direct
-manifest verification returned the reviewed SHA
-`b75ba5f073d8c7d03b64db47e6eed3e34d7fa8c70392ffe340a8ed208aca2ddf`.
-A second identical staging command exited 1 with `release destination is not
-empty`; all five relative paths, sizes, and SHA-256 values remained unchanged,
-and the staged manifest verified again.
+Focused repair results before closeout were extractor 5/5 with one capability
+skip, filtered-checkout 1/1, attestation 17/17, hermetic Make 19/19, bootstrap
+15/15, closure 27/27 with one capability skip, release manifest 28/28,
+staging 20/20, and v4 sealer 12/12. The full native-math verifier retained
+exactly its approved baseline: 243/244, with only
+`test_pinned_bob_null_camera_trigger_proof_removes_only_exact_two_sites`
+failing. The release-manifest and staging suites required the established
+unsandboxed Windows ancestor-handle environment; sandboxed attempts failed in
+setup at `C:\Users` and did not exercise product behavior. Scoped syntax,
+JSON, direct-manifest, whitespace, and commit checks complete the evidence
+closeout.
+
+Task 9 remains incomplete until independent evidence and code-quality rereviews
+both clear. Task 10 is the next active acceptance lane, but remains paused; no
+Ymir, 20,100-frame smoke, visual, desktop, or manual-play claim is made here.
+The integrated BOB slice is not the total game. `sm64-saturn-full` remains
+non-releasable until its full package inventory and game-wide target evidence
+exist.

@@ -1539,15 +1539,16 @@ Do not create or pin the real v4 contract in this task. Reviewers must verify me
 
 ### Task 9: Reproducible identity-v2 BOB target, release seal, and audit-v4 contract
 
-**Closeout status (2026-08-10):** `source-complete`; first independent evidence
-and code-quality reviews returned `Needs fixes`, so Task 9 is not yet
-`complete`. Isolated candidates A/B at common source `44b78627` reproduced
-manifest `b75ba5f0...a2ddf` and identity `id-9a051d30880c78f0`; measurement,
-exclusive v4 seal/pin, exact v4 acceptance, package/capacity facts, direct
-manifest verification, transactional staging, and overwrite refusal passed.
-Steps 1–10 are complete. Step 11 and every Task 10/Ymir/manual gate remain
-unchecked. The old v3 failure is retained as history and superseded only for
-the forward candidate path. Full details and discarded-run accounting are in
+**Closeout status (2026-08-11):** `source-complete` after independent-review
+repair round 1; both controller-owned rereviews remain open, so Task 9 is not
+yet `complete`. Isolated candidates A/B at common source `04d6a2a3` reproduced
+manifest `5e04e252...11c1df` and identity `id-264ab4203c268487`; repaired
+direct ar/nm topology and final provenance are sealed. Measurement, exclusive
+v4 seal/pin, exact v4 acceptance, package/capacity facts, direct manifest
+verification, transactional restaging, and overwrite refusal passed. Steps
+1–10 are complete. Step 11 and every Task 10/Ymir/manual gate remain
+unchecked. The old v3 failure and superseded Task 9 candidate are retained as
+history. Full details and discarded-run accounting are in
 `.superpowers/sdd/2026-08-10-hermetic-full-game-release-identity/task-9-report.md`.
 Final full-suite verification exposed and corrected one stale Task 8 pre-pin
 test that expected v4's digest to remain absent after Task 9 deliberately
@@ -2835,3 +2836,39 @@ as the same canonical 606-byte contract and pinned at
 Historical v2/v3 hashes remain `87dabb51...6127e2` and
 `80f66286...9cba5`. Exact-v4 execution, capacity/package, restaging, scoped
 closeout commit, and rereview remain open.
+
+### Repair round 1 — exact v4, capacity, package, and restaging (2026-08-11)
+
+Exact v4 against candidate B exited 0 in 327.7 seconds. Acceptance report
+`f4b90798...7aa` binds contract `d52ecdb1...7072`, repaired manifest
+`5e04e252...11c1df`, ELF `21570fce...b6c`, identity
+`db522ebd...172`, config `264ab420...2b2`, and profile
+`fe090885...1dd2`; root is `_game_loop_one_iteration`, total is 700, and both
+forbidden callers are verified absent. `___end=0x060fca38` leaves 13,768
+physical HWRAM bytes and 6,856 bytes after the `0x1B00` reserve. The cart span
+is 3,565,696 bytes with 628,608 bytes headroom. Object, CD, and ISO-extracted
+`SOURCE.DAT` are equal at `f0d3781c...fde6c`; the ISO hashes to
+`93825c9c...635a` and lists the payload at LBA 534 for 1,742 blocks. Package
+set `85a5a190...c266` contains exactly the ten BOB classes and is explicitly
+not a whole-game inventory.
+
+The superseded staged candidate was verified as an owned, non-reparse
+five-file generated directory and moved recoverably to a digest-suffixed
+archive. The repaired candidate now occupies the canonical manual-candidate
+path with exactly five files/17,982,718 bytes; direct manifest verification
+returns `5e04e252...11c1df`. A second stage exited 1 on the non-empty
+destination, left the canonical hash inventory unchanged, and the manifest
+reverified. Task 9 is `source-complete` pending independent evidence and
+code-quality rereviews. Task 10 is the next active acceptance lane but remains
+paused; no Ymir, smoke, visual, desktop, or manual gate has run.
+
+Fresh closeout verification is GREEN for extractor 5/5 (one capability skip),
+filtered checkout 1/1, tool attestation 17/17, hermetic Make 19/19, identity
+bootstrap 15/15, closure 27/27 (one capability skip), release manifest 28/28,
+staging 20/20, and v4 sealer 12/12. The release-manifest and staging suites
+required their established unsandboxed Windows ancestor-handle environment;
+their sandboxed setup failures did not exercise product behavior. The full
+native-math verifier ran 244 tests and retained exactly one approved baseline
+failure, the pinned BOB null-camera-trigger proof; there are no new failures.
+Scoped syntax, JSON, manifest, whitespace, and commit checks are the final
+closeout gate before rereview.

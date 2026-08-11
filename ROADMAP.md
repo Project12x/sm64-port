@@ -2,15 +2,15 @@
 
 ## Now — verify and play the hermetic integrated BOB candidate
 
-Task 9 of the hermetic full-game release-identity plan is active in review
-repair round 1. Its prior `44b78627` candidate evidence is invalid for
-closeout after review found an unsealed nm backend. Source repairs now cover
-tool topology, cleanup containment, LF audit checkout identity, final
-digest/HEAD provenance, and bounded Git index inventory. Next rebuild two clean
-candidates at one common repaired commit, reproduce, remeasure/reseal v4,
-recompute capacity/package facts, and restage for rereview. Task 10 is the next
-active acceptance lane after that rereview: bind the repaired staged artifact
-to the 20,100-frame smoke, visual proof, desktop launch, and owner manual test.
+Task 9 of the hermetic full-game release-identity plan is source-complete after
+review repair round 1 and awaits controller-owned evidence and code-quality
+rereviews. Candidates A/B at common source `04d6a2a3` reproduce manifest
+`5e04e252...11c1df` and identity `id-264ab4203c268487`; repaired tool topology,
+cleanup, checkout identity, final provenance, bounded index inventory, exact
+v4, capacity/package facts, and transactional restaging pass. Task 10 is the
+next active acceptance lane after those rereviews: bind the repaired staged
+artifact to the 20,100-frame smoke, visual proof, desktop launch, and owner
+manual test. Task 10 remains paused until Task 9 clears.
 
 The staged result is the integrated BOB demo candidate only. The same profile,
 closure, identity-v2, audit, release-manifest, capture-binding, and staging
