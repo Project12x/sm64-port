@@ -2245,6 +2245,17 @@ Manifest-bound artifacts are ELF `f3e01ff2...81c1b`, `SOURCE.DAT`
 Task 9 Steps 2–3 are complete; candidate B remains empty at the exact same
 source commit, and reproducibility plus every later gate remain open.
 
+Final candidate B completed the same exact `-j1` release command from empty
+owned output in 963.1 seconds at source `44b78627`; direct verification of A
+and B each returned manifest SHA-256
+`b75ba5f073d8c7d03b64db47e6eed3e34d7fa8c70392ffe340a8ed208aca2ddf`.
+Canonical comparison is `identical:true` with an empty differing-field list;
+the comparison report SHA-256 is
+`9c3b179f4ef699c69c4a0727d2046757a68824805a94f277bb63a2b604b9b231`.
+Both manifests bind the same identity, closure, profile, package set,
+toolchain, ELF, `SOURCE.DAT`, ISO, and CUE. Task 9 Step 4 is complete.
+Measurement remains unstarted and cannot be reported as acceptance.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2342,7 +2353,7 @@ $candidateA = Get-SealedCandidate $candidateARoot
 
 The report records canonical profile, closure, package-set, toolchain, identity, ELF, `SOURCE.DAT`, ISO, CUE, and release-manifest hashes.
 
-- [ ] **Step 4: Rebuild candidate B from a fresh identity-tagged output directory**
+- [x] **Step 4: Rebuild candidate B from a fresh identity-tagged output directory**
 
 Use `superpowers:using-git-worktrees` to create a clean detached sibling
 worktree named `hermetic-release-repro-b` at the exact source commit used by

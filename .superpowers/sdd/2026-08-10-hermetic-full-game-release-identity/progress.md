@@ -1470,6 +1470,14 @@
   Task 9 Steps 2–3 are complete; candidate B is still an empty independent
   output tree at the same source commit, so reproducibility, measurement,
   sealing, package, capacity, and staging gates remain open.
+- Final candidate B completed the same exact release tuple and `-j1` command
+  from empty owned output in 963.1 seconds at source `44b78627`. Independent
+  verification of A and B each printed manifest SHA-256 `b75ba5f0...a2ddf`.
+  Canonical comparison returned `identical:true` and `differing_fields:[]`;
+  report SHA-256 is `9c3b179f...9b231`. Both candidates bind identical
+  identity, closure, profile, package set, toolchain, ELF, `SOURCE.DAT`, ISO,
+  and CUE. Task 9 Step 4 is complete. Measurement, sealing, exact-v4,
+  package/capacity, staging, and Task 10 target gates remain open.
 
 ## Task 5 review repair round 2
 
