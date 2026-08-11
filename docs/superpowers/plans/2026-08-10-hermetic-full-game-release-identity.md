@@ -2256,6 +2256,16 @@ Both manifests bind the same identity, closure, profile, package set,
 toolchain, ELF, `SOURCE.DAT`, ISO, and CUE. Task 9 Step 4 is complete.
 Measurement remains unstarted and cannot be reported as acceptance.
 
+The one-shot candidate-B measurement then exited 0 in 273 seconds and
+atomically published schema `sm64-saturn-native-math-measurement-v1`, status
+`measured-unsealed`, root `_game_loop_one_iteration`, and measured total `700`.
+Its 75 audited callers contain neither `_atan2_lookup` nor `_atan2s`. Report
+SHA-256 is
+`ad79a992e76d26dfeae7fdc7b9cb9c1e97e546f1df2be8dd3119e97065fa8075`,
+bound to manifest `b75ba5f0...a2ddf` and ELF `f3e01ff2...81c1b`.
+Task 9 Step 5 is complete as measurement only; it is not acceptance. No v4
+contract or digest pin existed before this result, and exact v4 remains open.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2390,7 +2400,7 @@ Compare the two verified manifests:
 
 Expected: byte-identical target profile, source closure, package/class roots, toolchain attestation, embedded identity, ELF, `SOURCE.DAT`, ISO, CUE, and normalized release-manifest identity/output records. If any output differs, stop; do not seal v4 around nondeterminism.
 
-- [ ] **Step 5: Measure native math from candidate B without claiming acceptance**
+- [x] **Step 5: Measure native math from candidate B without claiming acceptance**
 
 Run `verify_sh2_native_math.py` with the existing baseline, route oracle,
 simulation audit route oracle, SH tools from the verified Task 3 toolchain,

@@ -1478,6 +1478,14 @@
   identity, closure, profile, package set, toolchain, ELF, `SOURCE.DAT`, ISO,
   and CUE. Task 9 Step 4 is complete. Measurement, sealing, exact-v4,
   package/capacity, staging, and Task 10 target gates remain open.
+- One-shot candidate-B measurement exited 0 in 273 seconds and published
+  schema `sm64-saturn-native-math-measurement-v1`, status
+  `measured-unsealed`, root `_game_loop_one_iteration`, and total `700`.
+  Neither `_atan2_lookup` nor `_atan2s` appears among its 75 callers. Report
+  SHA-256 is `ad79a992...fa8075`, bound to release manifest
+  `b75ba5f0...a2ddf` and ELF `f3e01ff2...81c1b`. This closes Step 5 only as
+  measurement; it is not acceptance. No v4 contract or pin was created before
+  validation, and sealing/exact-v4 plus all later gates remain open.
 
 ## Task 5 review repair round 2
 
