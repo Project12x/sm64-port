@@ -139,6 +139,18 @@ Independent two-stage review before Task 2.
 
 ### Task 2: Production handoff wiring — populate and claim (requires Task 14 registry)
 
+**2026-08-11 status: blocked before RED/production edits.** Approved base
+`a189820f` contains no actor-identity registry implementation or interface
+that can resolve a nonzero `actor_bank_id` plus the exact active
+`scene_package_generation` to an immutable `sm64_saturn_actor_bank_view_t` and
+its residency-owned dependency/scratch span. The only discoverable related
+object is unreachable `2d28214c`, explicitly labelled incomplete and
+unreviewed, and it changes only `src/game/rendering_graph_node.c`; it cannot
+be used as the reviewed Task 14 prerequisite. Do not substitute the compiled
+Mario bank or invent the missing contract. Resume only after the approved Task
+14 registry handoff (interface, source, build wiring, and reviewed commit) is
+provided.
+
 **Files:**
 - Modify: `src/port/saturn/sourceboot/main.c` (the per-frame bank lifecycle at :368-389/:492 and retirement at :1238-1284)
 - Modify: `src/port/saturn/gfx/saturn_demo_render.c` (feature-on prepare path)

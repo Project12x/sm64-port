@@ -187,3 +187,35 @@
   `90fdfa43` (`test(saturn): align actor overlap fixture`) records the M1 fix.
   Task 2 was not started. Tasks 2-5 and all target, P2, Ymir, manual, reseal,
   and smoke evidence remain open.
+
+## 2026-08-11 Task 2 prerequisite reconciliation
+
+- Status: `blocked before RED/production edits`. The authoritative Task 2
+  brief requires the reviewed Task 14 registry to resolve every nonzero
+  numeric `actor_bank_id` together with the exact active
+  `scene_package_generation` to an immutable `sm64_saturn_actor_bank_view_t`,
+  its dependency payload scratch reservation, and the matching generation.
+- Evidence: at approved base `a189820f`, `rg --files src/port/saturn | rg
+  "actor.*registry|registry.*actor"` returns no registry source/header. The
+  production lifecycle only directly calls
+  `sm64_saturn_actor_instance_bank_acquire` at `sourceboot/main.c:375` and
+  direct `complete`/`retire` at `:1279-1281`; it has neither a registry call
+  nor the required scene-package-generation mapping. The separately
+  discoverable unreachable `2d28214c` is explicitly titled `WIP: Task14 Task3
+  actor identity registry (incomplete, unreviewed)` and changes only
+  `src/game/rendering_graph_node.c`, so it is not an eligible reference or
+  dependency.
+- References inspected: reviewed same-repository lifecycle handoff commits
+  `963e10d4` and `e82759ce`, current
+  `src/port/saturn/gfx/saturn_actor_runtime_handoff.h/.c`, Task 1 handoff
+  state at `a189820f`, `saturn_actor_batch.h` fixed storage contract, and
+  `runtime/saturn_scene_residency.h/.c`. Reuse mode would be direct use of the
+  reviewed handoff state machine; no lifecycle logic was duplicated.
+- RED/GREEN/tests: no test was added or run because its mandatory
+  registry-resolved nonzero fixture has no approved implementation contract.
+  No production files, `CHANGELOG.md`, or behavior commit were changed.
+- Remaining gates: approved Task 14 registry handoff (interface, source,
+  build wiring, and review); Task 2 RED/GREEN and host gates; independent
+  two-stage review; Tasks 3-5; feature-off identity; all target/P2/Ymir,
+  visual/manual, Task 9 reseal, and Task 10 smoke gates. No target evidence
+  is claimed.
