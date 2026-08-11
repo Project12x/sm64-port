@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Pinned native-math audit contracts and route oracles to LF checkouts so
+  Windows `core.autocrlf` cannot alter release-identity bytes. A filtered Git
+  checkout test now exercises the effective Windows representation rather
+  than assuming the current worktree happens to be canonical.
+
 ### Added
 
 - Made normal release-bound audit-v4 acceptance publish a canonical,

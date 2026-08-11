@@ -2742,3 +2742,16 @@ Independent evidence review must confirm every report binds the same release man
 ## Completion criteria
 
 This plan is complete only when Tasks 1–10 and both reviews per task clear; the BOB identity-v2 target reproduces across two clean builds; v4 passes against the exact release manifest; release staging verifies; the 20,100-frame smoke passes; visual evidence is accepted; and the owner's manual result is recorded. The full-game profile remains explicitly incomplete until its full package inventory and game-wide target gates are implemented, but adding that inventory must require no second identity, audit-binding, release-manifest, capture-binding, or deployment-staging architecture.
+
+### Repair round 1 — audit checkout identity (2026-08-10)
+
+Task 9 remains **active** and Task 10 remains paused. The immutable
+native-math audit contracts and route oracles are now explicitly pinned to LF
+checkout bytes, including a filtered-checkout regression under
+`core.autocrlf=true`. The focused checkout test is GREEN (1/1), the v4 sealer
+suite is GREEN (12/12), and the broader native-math verifier retains its known
+single baseline failure in
+`test_pinned_bob_null_camera_trigger_proof_removes_only_exact_two_sites`
+(243/244). No old candidate identity or acceptance evidence is reinstated;
+tool-topology, final-provenance, index-scaling, clean A/B rebuild, measurement,
+v4 reseal, capacity/package, and rereview gates remain open.
