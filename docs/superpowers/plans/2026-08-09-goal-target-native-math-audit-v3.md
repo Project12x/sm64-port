@@ -1,5 +1,15 @@
 # Goal-Target Native-Math Audit V3 Implementation Plan
 
+**Current supersession note (2026-08-10):** preserve every v3 byte, pin,
+digest, and historical blocked-reproduction fact below. The current candidate
+uses the separately measured and exclusively pinned v4 contract against a
+reproducible identity-v2 release manifest. Hermetic Task 9 reproduced manifest
+`b75ba5f0...a2ddf` twice at source `44b78627`, then passed v4 at total 700 with
+both forbidden callers absent. This supersedes v3 as the forward release gate;
+it does not rewrite or retroactively pass v3. Task 9 is source-complete pending
+independent review, while its Task 10 smoke, visual, desktop, and owner-manual
+gates remain open.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Preserve the historical v2 audit, bind the corrected 700-helper census to the exact fully integrated Task 5 ELF, and produce the build, package, 20,000-frame smoke, and visual evidence required for a new owner manual test.

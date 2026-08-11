@@ -1539,6 +1539,24 @@ Do not create or pin the real v4 contract in this task. Reviewers must verify me
 
 ### Task 9: Reproducible identity-v2 BOB target, release seal, and audit-v4 contract
 
+**Closeout status (2026-08-10):** `source-complete`; controller-owned
+independent evidence and code-quality reviews remain open, so Task 9 is not yet
+`complete`. Isolated candidates A/B at common source `44b78627` reproduced
+manifest `b75ba5f0...a2ddf` and identity `id-9a051d30880c78f0`; measurement,
+exclusive v4 seal/pin, exact v4 acceptance, package/capacity facts, direct
+manifest verification, transactional staging, and overwrite refusal passed.
+Steps 1–10 are complete. Step 11 and every Task 10/Ymir/manual gate remain
+unchecked. The old v3 failure is retained as history and superseded only for
+the forward candidate path. Full details and discarded-run accounting are in
+`.superpowers/sdd/2026-08-10-hermetic-full-game-release-identity/task-9-report.md`.
+Final full-suite verification exposed and corrected one stale Task 8 pre-pin
+test that expected v4's digest to remain absent after Task 9 deliberately
+pinned it. The corrected negative test now proves noncanonical v4 bytes fail
+against the real pin; the checked-in v2/v3/v4 integrity tests remain separate.
+Focused integrity is GREEN 3/3. The final full verifier is 243/244 with only
+the plan-approved unrelated null-camera proof failure. Release staging,
+manifest, and hermetic-Make suites are GREEN 20/20, 28/28, and 18/18.
+
 **Files:**
 - Create: `tools/saturn/sh2_native_math_goal_audit_contract_v4.txt`
 - Modify: `tools/saturn/verify_sh2_native_math.py` (pin only the generated v4 contract digest)
@@ -1559,7 +1577,7 @@ Do not create or pin the real v4 contract in this task. Reviewers must verify me
 - Consumes: all Tasks 1–8 and the exact accepted BOB flag tuple.
 - Produces: two clean release-mode builds with byte-identical canonical manifests and artifacts, one exact release manifest, one generated/pinned v4 contract, a passing v4 audit, measured low-RAM/cart/package facts, and a deployment-staged manual candidate.
 
-**Live status (2026-08-10):** `active` from reviewed Task 8 closeout
+**Historical dispatch status (2026-08-10):** `active` from reviewed Task 8 closeout
 `038391a4`. Required local prerequisites are present: the Saturn-tools Python
 environment, `baserom.us.z64`, generated `build/us_pc` inputs, and pinned Yaul
 SH-2 toolchain. The v4 contract, measurement report, reproducibility report,
@@ -2564,7 +2582,7 @@ if ((Get-Item $sourceDat).Length -ne ($cartEnd - $cartStart)) {
 
 Expected: stage verifier passes and the staged manifest hashes its own copied ELF, `SOURCE.DAT`, ISO, and CUE.
 
-- [ ] **Step 10: Update evidence and status docs, then commit exact contract/evidence**
+- [x] **Step 10: Update evidence and status docs, then commit exact contract/evidence**
 
 Mark the old v3 Task 3 blocked path superseded by this new v2/v4 target without changing historical v3 facts. Mark reproducibility, release sealing, package, margin, and v4 gates with measured evidence. Keep 20,100-frame smoke, visual, and manual gates open.
 

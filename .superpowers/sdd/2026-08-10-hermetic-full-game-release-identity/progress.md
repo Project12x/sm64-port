@@ -1536,6 +1536,53 @@
   destination; all five hashes were unchanged and reverified. Step 9 is
   complete. Closeout and both reviews remain open; Task 10 was not run.
 
+## Task 9 source closeout
+
+- Status: `source-complete` at candidate source `44b78627`; Steps 1–10 are
+  complete. Step 11's controller-owned evidence and code-quality reviews remain
+  open, so Task 9 is not `complete`.
+- Final full-suite RED ran 244 tests with two failures: the documented unrelated
+  null-camera proof plus a stale Task 8 test that still expected the v4 pin to
+  be absent. The scoped correction renames that test and requires synthetic
+  noncanonical bytes to fail with an immutable-digest mismatch, while an
+  explicit synthetic digest continues to pass. This is test maintenance only;
+  it does not change candidate/runtime behavior or the pinned contract.
+- Final verification: corrected integrity slice 3/3; release staging 20/20;
+  release manifest 28/28; hermetic Make 18/18; v4/measurement focused slice
+  5/5; full verifier 243/244 with only the approved unrelated null-camera proof
+  failure. All three evidence JSON files parse, relevant Python files compile,
+  direct staged-manifest verification returns `b75ba5f0...a2ddf`, and scoped
+  `git diff --check` passes.
+- A/B exact serial builds passed in 968.4/963.1 seconds. Both independently
+  verified manifests hash to `b75ba5f0...a2ddf`; normalized comparison is
+  `identical:true` with report `9c3b179f...9b231`. Identity is
+  `id-9a051d30880c78f0`.
+- Unsealed measurement `ad79a99...fa8075` found total 700 and no forbidden
+  caller. The exclusively sealed 606-byte v4 contract hashes to
+  `2c23ce44...f7265`; exact-v4 result `1fe9d585...f4ddbf` is `passed` and
+  binds the same manifest/ELF/identity/config/profile hashes. Historical v2/v3
+  digests remain unchanged.
+- Candidate B leaves 13,768 physical and 6,856 usable HWRAM bytes; its
+  3,565,696-byte cart payload leaves 628,608 bytes. All three `SOURCE.DAT`
+  copies are equal, and the package set is exactly the ten required BOB
+  classes. Capacity 208 exceeds the prior artifact-bound idle-boot peak 138 by
+  70 slots; pickup/hold/action-particle coverage remains open.
+- Transactional staging published exactly five files/17,982,718 bytes at the
+  manual-candidate destination. Direct verification passed and a repeated
+  publication refused overwrite without changing inventory or hashes.
+- Required status reconciliation was completed in the active plan, release
+  report, `STATE.md`, `ROADMAP.md`, and additive supersession notes in the two
+  pre-existing dirty legacy plans. Their older uncommitted blocked-v3 hunks are
+  user-owned and are excluded from the Task 9 closeout commit through scoped
+  index staging.
+- Complete execution/discarded-run/reference record:
+  `.superpowers/sdd/2026-08-10-hermetic-full-game-release-identity/task-9-report.md`.
+- Open gates: both independent Task 9 reviews; then Task 10's exact staged
+  20,100-frame smoke, visual inspection, desktop launch, and owner manual play.
+  No Ymir, smoke, visual, or manual claim was made by Task 9. The full-game
+  profile remains non-releasable pending complete content/system inventory and
+  game-wide evidence.
+
 ## Task 5 review repair round 2
 
 - Status: `source-complete`; repair round 2 is implemented and controller-owned rereview remains open. The first `Needs fixes` verdict remains effective until both remaining findings clear.

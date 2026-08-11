@@ -2,9 +2,10 @@
 
 ## Status
 
-Task 9 release construction, two-candidate reproducibility, exact audit v4,
-memory margin, cart payload, package inventory, and transactional staging pass.
-Independent evidence/code-quality reviews remain open. Task 10's 20,100-frame
+Task 9 is source-complete: release construction, two-candidate reproducibility,
+exact audit v4, memory margin, cart payload, package inventory, and
+transactional staging pass. Independent evidence/code-quality reviews remain
+open, so Task 9 is not yet complete. Task 10's 20,100-frame
 smoke, visual capture, desktop launch, and owner manual play have not run.
 
 ## Immutable candidate identity
@@ -88,8 +89,8 @@ until its full content/system packages are populated and independently proved.
 
 ## Remaining gates
 
-- Complete Task 9 documentation/status reconciliation and both independent
-  reviews.
+- Obtain both controller-owned Task 9 independent reviews; fix and rereview any
+  finding before marking Task 9 complete.
 - Run Task 10's exact staged-release smoke, visual, desktop, and owner manual
   gates. No Ymir or manual gate was run in Task 9.
 

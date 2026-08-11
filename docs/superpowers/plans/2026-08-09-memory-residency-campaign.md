@@ -174,6 +174,20 @@ Makefile: `SATURN_OBJECT_POOL_CAPACITY ?=` empty → no define (byte-identical p
 
 ### Task 5: Flags-on textured build — link gate + combined smoke
 
+**Task 9 supersession note (2026-08-10): source-complete pending independent
+review.** The historical exact-v3 reproduction failure below remains factual,
+but it no longer defines the current candidate path. Hermetic Task 9 rebuilt
+the accepted flags-on tuple twice from isolated source commit `44b78627` and
+produced byte-identical identity-v2 release manifests at
+`b75ba5f0...a2ddf`, identity `id-9a051d30880c78f0`. Candidate B passed the
+new exclusively sealed audit-v4 contract at total 700 with `_atan2_lookup` and
+`_atan2s` absent, leaves 6,856 usable HWRAM bytes and 628,608 cart bytes, and
+was transactionally staged without overwrite. This closes the fresh build,
+reproducibility, release sealing, package, capacity, and native-math gates only.
+The 20,100-frame combined smoke, visual proof, desktop launch, and owner manual
+play remain open under hermetic Task 10. The prior 138-slot idle-boot peak is
+still a floor without pickup/hold/action-particle coverage.
+
 **Combined-smoke harness ledger (2026-08-10):** Task 2's capture extension is
 **complete for host scope; independent review cleared.** Its TDD RED
 observed the requested absent decoder/acceptance entry points, then the

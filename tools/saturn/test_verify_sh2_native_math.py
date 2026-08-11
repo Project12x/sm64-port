@@ -2333,10 +2333,10 @@ static bool demo_detached_start_decoy(uint32_t generation)
                     with self.assertRaisesRegex(ValueError, f"v{version}.*{directive}"):
                         parse_audit_contract(base + f"{directive} {'a' * 64}\n")
 
-    def test_v4_integrity_requires_a_real_pinned_digest(self) -> None:
+    def test_v4_integrity_rejects_noncanonical_contract_after_pin(self) -> None:
         text = self._v4_contract_text()
         contract = parse_audit_contract(text)
-        with self.assertRaisesRegex(ValueError, "v4 audit contract is not pinned"):
+        with self.assertRaisesRegex(ValueError, "immutable audit contract digest mismatch"):
             verify_audit_contract_integrity(text, contract)
         verify_audit_contract_integrity(
             text, contract, expected_digest=hashlib.sha256(text.encode("utf-8")).hexdigest()

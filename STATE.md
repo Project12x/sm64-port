@@ -1,7 +1,24 @@
 # State
 
 Active plan:
-`docs/superpowers/plans/2026-08-05-saturn-full-game-completeness-parallel-optimization.md`.
+`docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md`.
+
+## Current lane: hermetic integrated release candidate
+
+Task 9 is source-complete pending its two controller-owned independent reviews.
+Two isolated release builds at source `44b78627` produced the same canonical
+manifest (`b75ba5f0...a2ddf`), identity `id-9a051d30880c78f0`, and exact ELF,
+`SOURCE.DAT`, ISO, and CUE bytes. The sealed audit-v4 result passed at total 700
+with both forbidden callers absent. The verified five-file candidate is staged
+at `build/saturn/releases/sourceboot-bob-demo-v2-manual-candidate`; a second
+publication correctly refused to overwrite it.
+
+This is a release-bound integrated BOB demo candidate, not yet a playable-demo
+acceptance and not the total game. Task 10 still owns the 20,100-frame smoke,
+visual capture, desktop launch, and owner manual-play result. The reusable
+`sm64-saturn-full` profile and identity/release architecture exist, but that
+profile remains deliberately non-releasable until its complete content/system
+inventory and game-wide target gates are implemented and reviewed.
 
 The full-game completeness sprint supersedes active Task 10 tracking while
 preserving every completed A9A/Task 10 commit and evidence item. It interleaves

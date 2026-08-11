@@ -1,5 +1,21 @@
 # Roadmap
 
+## Now — verify and play the hermetic integrated BOB candidate
+
+Task 9 of the hermetic full-game release-identity plan is source-complete and
+awaits independent evidence/code-quality review. Two clean, isolated builds at
+`44b78627` reproduced manifest `b75ba5f0...a2ddf` and identity
+`id-9a051d30880c78f0`; exact audit v4, HWRAM/cart capacity, the ten-class BOB
+package set, release verification, transactional staging, and overwrite
+refusal all passed. Task 10 is next: bind the staged artifact to the 20,100-
+frame smoke, visual proof, desktop launch, and owner manual test.
+
+The staged result is the integrated BOB demo candidate only. The same profile,
+closure, identity-v2, audit, release-manifest, capture-binding, and staging
+architecture is the deployment path for the eventual total game, but
+`sm64-saturn-full` remains non-releasable until all level/shared-data/actor/
+animation/audio/texture packages and game-wide target evidence are complete.
+
 ## Now — full-game completeness and parallel optimization
 
 Execute
