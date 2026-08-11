@@ -28,7 +28,8 @@
 ## 2026-08-11 generic actor bundle Task 1 — shared SHA-256
 
 - Status: `source-complete; independent review pending` at behavior commit
-  `1faa2ffb` (`refactor(saturn): share target SHA-256 validation`). Task 2 must not start until its independent
+  `1faa2ffb` (`refactor(saturn): share target SHA-256 validation`), with evidence
+  documentation at `eba1e1ba` (`docs(saturn): record shared SHA-256 task evidence`). Task 2 must not start until its independent
   review passes. No target, P2, Ymir, manual, release, or byte-on-hardware
   evidence is claimed.
 - Implementation: close-ported the private S64P SHA block/update/final path

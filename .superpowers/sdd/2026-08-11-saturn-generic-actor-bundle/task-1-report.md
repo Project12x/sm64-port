@@ -7,6 +7,9 @@ Scoped self-review passes; independent review is still required before Task 2.
 This is host/source evidence only and makes no target, P2, Ymir, manual, reseal,
 release, or S64F v3 behavior claim.
 
+Commits: `1faa2ffb` (`refactor(saturn): share target SHA-256 validation`) and
+`eba1e1ba` (`docs(saturn): record shared SHA-256 task evidence`).
+
 ## Implementation
 
 - Added `src/port/saturn/runtime/saturn_sha256.h/.c`, a freestanding

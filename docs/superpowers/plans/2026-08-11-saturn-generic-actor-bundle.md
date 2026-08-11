@@ -136,7 +136,8 @@ Add a Keep-a-Changelog `Changed` entry explaining removal of duplicate target SH
   `1faa2ffb` (`refactor(saturn): share target SHA-256 validation`). The close-port creates
   one freestanding incremental API consumed by the existing S64P and S64F v2
   validators; no S64F v3 behavior, target completion, or release claim is
-  introduced.
+  introduced. Evidence/report documentation is commit `eba1e1ba`
+  (`docs(saturn): record shared SHA-256 task evidence`).
 - TDD: the new public-header/vector fixture first failed exactly because
   `saturn_sha256.h` and `saturn_sha256.c` did not exist. GREEN passes empty,
   `"abc"`, 64-byte, segmented, null/nonzero, and `UINT32_MAX` accounting
