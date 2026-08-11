@@ -74,3 +74,56 @@
   Tasks 2–5 production wiring and target/P2/Ymir/manual/reseal/smoke evidence.
   Scene-package-generation freshness is specifically a Task 2 handoff gate.
   No target, P2, Ymir, manual, FPS, Task 2 wiring, or target-byte claim is made.
+
+## 2026-08-11 Task 1 independent-review repair round 1
+
+- Review verdict on behavior `3d5e6ff8` plus status `863faa8d`: `CHANGES
+  REQUIRED C0/I4/M2`; Task 2 remains blocked. The status commit's actual subject
+  is `docs(saturn): record actor meshlet source status` (the original report's
+  different subject text was incorrect).
+- Status: `source-complete-review-repair` from base `ec8ef844` in the repair
+  behavior commit containing this status. RED compile evidence reports the missing
+  workspace query/binder/types and an incompatible assignment from actual
+  `sm64_saturn_actor_runtime_storage_t.outputs` to the distinct meshlet draw-ref
+  pointer. Production edits followed that RED.
+- Design decision: one renderer-neutral header owns the eight-byte record ABI
+  and quarantine enum. Meshlet names are compatibility aliases. The 65,536-byte
+  actor runtime arena remains queue/batch/output-only with all 2,718 records.
+- Scratch ownership: residency already reserves each dependency's
+  `maximum_scratch` immediately after its payload. The registry-selected S64B
+  dependency owns two non-overlapping four-byte-aligned claimant lanes because
+  master and slave may process separate descriptors concurrently. Per-lane
+  bytes are `6V + V + align4 + 64J + align2 + 2V + V`, rounded to four bytes;
+  generated Mario is 5,520 bytes/lane and 11,040 total. The type-safe binder
+  takes that raw residency span, lane, and the real arena output pointer; exact
+  fit succeeds while short/invalid-lane/output-overlap fails.
+- Boundary handoff: Task 2 must map numeric `actor_bank_id` and exact
+  scene-package generation to the immutable validated S64B view and expose the
+  corresponding dependency scratch. Task 3 must gate simultaneous claimant
+  lane ownership. Task 5 target map/capacity evidence remains open. Current
+  combined Mario S64B metadata calls the payload `ANIMATION_DEPENDENCIES`; the
+  Task 1 binder is payload-kind-neutral and does not rename/reseal it.
+- Validation policy: `prepare_bank` no longer repeats full-bank validation; it
+  consumes the immutable validated view and performs O(1) family/model/hash/
+  generation and bounded geometry checks plus only the selected pose traversal.
+  Numeric bank ID is intentionally absent because S64B has no such field.
+- Fixture proof: the derived non-Mario bank uses distinct family/model/source
+  identity, binds all vertices to one joint/branch (rigid), and marks every
+  meshlet opaque. Its exact tier-0 sequence/partition oracle rejects duplicate,
+  omitted, and wrongly-associated meshlet/primitive records. Numeric bank ID
+  zero succeeds because Task 2, not S64B, owns that mapping.
+- No-rescan mutation: temporarily restoring full
+  `sm64_saturn_actor_bank_validate` made the fixture fail with `prepare
+  traversed an unrelated animation record`; restoring the immutable-view path
+  returns GREEN. This proves the regression detects traversal of unrelated
+  animation records.
+- Verification: the forced MSYS/DLL wrapper run of `verify-actor-meshlets
+  verify-actor-pose-bank verify-actor-instance-queue verify-actor-batches
+  verify-actor-feature-off-wrapper` passes, including invalid-span mutation,
+  queue/batch gates, neutrality 2/2, and feature-off 6/6. Python bytecode
+  compilation for the actor compiler/wrapper/neutrality scripts passes;
+  scoped `git diff --check` and unchanged Task 2 production paths pass. The
+  exact repair SHA will be recorded in a scoped status follow-up.
+- Remaining gates: controller-owned independent rereview; then Tasks 2-5 and
+  all target/P2/Ymir/manual/reseal/smoke evidence. Task 2 is not authorized
+  before rereview and no target-complete claim is made.

@@ -57,6 +57,8 @@ PART_RECORD_STRUCT = struct.Struct(">HH")
 MATERIAL_RECORD_STRUCT = struct.Struct(">BBBB")
 MESHLET_RECORD_STRUCT = struct.Struct(">HHBB6h12I")
 PRIMITIVE_RECORD_STRUCT = struct.Struct(">5H")
+ACTOR_WORK_LANE_COUNT = 2
+ACTOR_WORK_ALIGNMENT = 4
 
 # Generic family-bank container.  It intentionally carries JSON metadata as
 # bounded byte spans; the Saturn runtime never publishes pointers into it.
@@ -96,6 +98,24 @@ def _align(data: bytearray, alignment: int = 4) -> int:
     while len(data) % alignment:
         data.append(0)
     return len(data)
+
+
+def _align_value(value: int, alignment: int) -> int:
+    return (value + alignment - 1) & ~(alignment - 1)
+
+
+def _actor_workspace_bytes(vertex_count: int, joint_count: int) -> int:
+    lane = 0
+    lane = _align_value(lane, 2)
+    lane += vertex_count * 3 * 2       # posed int16 xyz
+    lane += vertex_count               # light intensity
+    lane = _align_value(lane, 4)
+    lane += joint_count * 16 * 4       # 4x4 Q16.16 matrices
+    lane = _align_value(lane, 2)
+    lane += vertex_count * 2           # admitted position indices
+    lane += vertex_count               # uniqueness bitmap
+    lane = _align_value(lane, ACTOR_WORK_ALIGNMENT)
+    return lane * ACTOR_WORK_LANE_COUNT
 
 
 def _canonical_json(value: object) -> bytes:
@@ -675,8 +695,7 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
             "last_channel_samples": last_samples,
         })
 
-    max_scratch = (len(geometry["vertices"]) * 3 * 2 +
-                   len(geometry["vertices"]) + 20 * 12 * 4)
+    max_scratch = _actor_workspace_bytes(len(geometry["vertices"]), 20)
     header = HEADER_STRUCT.pack(
         MAGIC, VERSION, int(manifest["family_id"]), int(manifest["model_id"]), 20,
         len(inventory.records), len(geometry["meshlets"]["meshlets"]),

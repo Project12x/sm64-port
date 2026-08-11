@@ -31,6 +31,46 @@ static bool span(uint32_t offset, uint32_t size, size_t byte_count)
     return offset <= byte_count && size <= byte_count - offset;
 }
 
+static bool workspace_add(uint32_t *cursor, uint32_t size)
+{
+    if (cursor == NULL || size > UINT32_MAX - *cursor) return false;
+    *cursor += size;
+    return true;
+}
+
+static bool workspace_align(uint32_t *cursor, uint32_t alignment)
+{
+    if (cursor == NULL || alignment == 0U ||
+        *cursor > UINT32_MAX - (alignment - 1U))
+        return false;
+    *cursor = (*cursor + alignment - 1U) & ~(alignment - 1U);
+    return true;
+}
+
+bool sm64_saturn_actor_bank_workspace_requirements(
+    uint16_t vertex_count, uint16_t joint_count, uint32_t *lane_bytes,
+    uint32_t *total_bytes)
+{
+    uint32_t cursor = 0U;
+    if (vertex_count == 0U || joint_count == 0U || lane_bytes == NULL ||
+        total_bytes == NULL ||
+        !workspace_align(&cursor, _Alignof(int16_t)) ||
+        !workspace_add(&cursor, (uint32_t)vertex_count * 3U * sizeof(int16_t)) ||
+        !workspace_add(&cursor, (uint32_t)vertex_count * sizeof(uint8_t)) ||
+        !workspace_align(&cursor, _Alignof(int32_t)) ||
+        !workspace_add(&cursor,
+                       (uint32_t)joint_count * 16U * sizeof(int32_t)) ||
+        !workspace_align(&cursor, _Alignof(uint16_t)) ||
+        !workspace_add(&cursor, (uint32_t)vertex_count * sizeof(uint16_t)) ||
+        !workspace_add(&cursor, (uint32_t)vertex_count * sizeof(uint8_t)) ||
+        !workspace_align(&cursor, SM64_SATURN_ACTOR_BANK_WORK_ALIGNMENT) ||
+        cursor > UINT32_MAX / SM64_SATURN_ACTOR_BANK_WORK_LANE_COUNT)
+        return false;
+    *lane_bytes = cursor;
+    *total_bytes = cursor * SM64_SATURN_ACTOR_BANK_WORK_LANE_COUNT;
+    return true;
+}
+
 static bool validate_meshlet_tier(const uint8_t *geometry,
                                   uint32_t primitive_offset,
                                   uint32_t primitive_ref_offset,
@@ -124,7 +164,7 @@ bool sm64_saturn_actor_bank_validate_expected(
     uint32_t geometry_primitive_ref_offset, geometry_vertex_ref_offset;
     uint32_t primitive_cursor = 0U, vertex_cursor = 0U;
     uint32_t source_primitive_cursor = 0U;
-    uint32_t minimum_scratch;
+    uint32_t lane_scratch, minimum_scratch;
     int16_t previous_node = -1;
     bool hash_nonzero = false;
     if (bytes == NULL || view == NULL || byte_count < SM64_SATURN_ACTOR_BANK_HEADER_SIZE)
@@ -170,9 +210,9 @@ bool sm64_saturn_actor_bank_validate_expected(
         parsed.bank.vertex_count == 0U || parsed.bank.max_instances == 0U ||
         parsed.max_scratch == 0U)
         return false;
-    minimum_scratch = (uint32_t)parsed.bank.vertex_count * 7U +
-                      (uint32_t)parsed.bank.joint_count * 48U;
-    if (parsed.max_scratch < minimum_scratch)
+    if (!sm64_saturn_actor_bank_workspace_requirements(
+            parsed.bank.vertex_count, parsed.bank.joint_count, &lane_scratch,
+            &minimum_scratch) || parsed.max_scratch < minimum_scratch)
         return false;
     records_size = (uint32_t)parsed.bank.animation_count * record_size;
     if (!span(parsed.records_offset, records_size, byte_count) ||

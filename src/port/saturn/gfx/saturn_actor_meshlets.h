@@ -7,23 +7,25 @@
 #include <stdint.h>
 
 #include "saturn_actor_instance.h"
+#include "saturn_actor_output.h"
 #include "saturn_actor_pose.h"
 #include "saturn_fast3d_frontend.h"
 #include "saturn_render_snapshot.h"
 
-typedef enum sm64_saturn_actor_meshlet_quarantine_reason {
-    SM64_SATURN_ACTOR_MESHLET_QUARANTINE_NONE = 0U,
-    SM64_SATURN_ACTOR_MESHLET_QUARANTINE_CLAIMANT_FAILURE = 1U,
-    SM64_SATURN_ACTOR_MESHLET_QUARANTINE_STALE_GENERATION = 2U,
-    SM64_SATURN_ACTOR_MESHLET_QUARANTINE_STALE_BANK = 5U,
-    SM64_SATURN_ACTOR_MESHLET_QUARANTINE_OUTPUT_OVERFLOW = 6U,
-} sm64_saturn_actor_meshlet_quarantine_reason_t;
+typedef sm64_saturn_actor_quarantine_reason_t
+    sm64_saturn_actor_meshlet_quarantine_reason_t;
+typedef sm64_saturn_actor_output_record_t sm64_saturn_actor_draw_ref_t;
 
-typedef struct sm64_saturn_actor_draw_ref {
-    uint16_t meshlet_id;
-    uint16_t primitive_id;
-    uint32_t sort_key;
-} sm64_saturn_actor_draw_ref_t;
+#define SM64_SATURN_ACTOR_MESHLET_QUARANTINE_NONE \
+    SM64_SATURN_ACTOR_QUARANTINE_NONE
+#define SM64_SATURN_ACTOR_MESHLET_QUARANTINE_CLAIMANT_FAILURE \
+    SM64_SATURN_ACTOR_QUARANTINE_CLAIMANT_FAILURE
+#define SM64_SATURN_ACTOR_MESHLET_QUARANTINE_STALE_GENERATION \
+    SM64_SATURN_ACTOR_QUARANTINE_STALE_GENERATION
+#define SM64_SATURN_ACTOR_MESHLET_QUARANTINE_STALE_BANK \
+    SM64_SATURN_ACTOR_QUARANTINE_STALE_BANK
+#define SM64_SATURN_ACTOR_MESHLET_QUARANTINE_OUTPUT_OVERFLOW \
+    SM64_SATURN_ACTOR_QUARANTINE_OUTPUT_OVERFLOW
 
 _Static_assert(sizeof(sm64_saturn_actor_draw_ref_t) == 8U,
                "actor meshlet draw-ref ABI changed");
@@ -58,13 +60,17 @@ _Static_assert(sizeof(sm64_saturn_actor_meshlet_output_t) == 32U,
 #endif
 
 #define SM64_SATURN_ACTOR_MESHLET_BANK_OUTPUT_ABI 0x4D4F4231UL
+#define SM64_SATURN_ACTOR_MESHLET_WORK_LANE_COUNT \
+    SM64_SATURN_ACTOR_BANK_WORK_LANE_COUNT
+#define SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT \
+    SM64_SATURN_ACTOR_BANK_WORK_ALIGNMENT
 
 /* Type-safe extension for prepare_bank. Keeping the legacy output as the
  * unchanged first member lets the shared core publish the familiar result
  * view without changing any feature-off field offset or sizeof contract. */
 typedef struct sm64_saturn_actor_meshlet_bank_output {
     sm64_saturn_actor_meshlet_output_t output;
-    sm64_saturn_actor_draw_ref_t *records;
+    sm64_saturn_actor_output_record_t *records;
     uint8_t *position_seen;
     uint32_t abi;
     uint16_t draw_capacity;
@@ -72,6 +78,27 @@ typedef struct sm64_saturn_actor_meshlet_bank_output {
     uint8_t quarantine_reason;
     uint8_t reserved;
 } sm64_saturn_actor_meshlet_bank_output_t;
+
+typedef struct sm64_saturn_actor_meshlet_workspace {
+    sm64_saturn_actor_pose_work_t pose_work;
+    sm64_saturn_actor_meshlet_bank_output_t output;
+    uint32_t scratch_offset;
+    uint32_t scratch_size;
+    uint8_t lane;
+    uint8_t reserved[3];
+} sm64_saturn_actor_meshlet_workspace_t;
+
+/* S64B maximum_scratch owns both fixed claimant lanes. The raw span is the
+ * package-resident dependency scratch immediately following its payload, not
+ * the fixed actor queue/output arena. */
+bool sm64_saturn_actor_meshlets_workspace_query(
+    const sm64_saturn_actor_bank_view_t *bank, uint32_t *lane_bytes,
+    uint32_t *total_bytes);
+bool sm64_saturn_actor_meshlets_bind_workspace(
+    const sm64_saturn_actor_bank_view_t *bank, void *scratch,
+    uint32_t scratch_capacity, uint8_t lane,
+    sm64_saturn_actor_output_record_t *records, uint16_t draw_capacity,
+    sm64_saturn_actor_meshlet_workspace_t *workspace);
 
 /* Compatibility entry point. It shares the bank-neutral admission core while
  * retaining the exact Mario snapshot/pose/capacity contract. */

@@ -42,13 +42,19 @@
 
 ### Added
 
-- Added bank-driven actor meshlet preparation over validated S64B geometry and
-  pose records, with instance identity/generation checks, caller-owned
-  uniqueness scratch, and one deterministic opaque-then-translucent output
-  span. Capacity or stale-input failures now quarantine before any draw or
-  position write so the production queue can adapt descriptor capacity safely;
-  the legacy Mario API, split output layout, and feature-off call sites remain
-  unchanged while later tasks own queue wiring and scene-package freshness.
+- Added bank-driven actor meshlet preparation over immutable validated S64B
+  geometry and selected pose records. Queue and meshlet paths now share one
+  renderer-neutral eight-byte output/quarantine ABI, so the fixed 2,718-record
+  arena binds directly without casts or copies. Package-declared scratch now
+  accounts for two aligned claimant lanes containing pose vertices, lights,
+  4x4 joint matrices, positions, and uniqueness bytes; exact/short/overlap
+  binding fails closed without consuming the 65,536-byte actor arena. Per-draw
+  preparation checks family/model/source hash and render generation without
+  rescanning unrelated bank records; Task 2 still owns numeric bank-ID/view and
+  scene-generation selection, while the legacy Mario API, split output layout,
+  behavior bytes, and feature-off call sites remain unchanged.
+  Queue/batch host gates now execute their MSYS-built binaries directly so a
+  Windows Python launcher cannot reinterpret `/d/...` fixture paths.
 
 - Made normal release-bound audit-v4 acceptance publish a canonical,
   no-overwrite JSON result after every audit gate passes. This closes the gap

@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "saturn_actor_instance.h"
+#include "saturn_actor_output.h"
 
 #define SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT 16U
 #define SM64_SATURN_ACTOR_BATCH_ABI_BYTES 16U
@@ -31,25 +32,6 @@ typedef enum sm64_saturn_actor_output_class {
     SM64_SATURN_ACTOR_OUTPUT_OPAQUE = 1U,
     SM64_SATURN_ACTOR_OUTPUT_TRANSLUCENT = 2U,
 } sm64_saturn_actor_output_class_t;
-
-typedef enum sm64_saturn_actor_quarantine_reason {
-    SM64_SATURN_ACTOR_QUARANTINE_NONE = 0U,
-    SM64_SATURN_ACTOR_QUARANTINE_CLAIMANT_FAILURE = 1U,
-    SM64_SATURN_ACTOR_QUARANTINE_STALE_GENERATION = 2U,
-    SM64_SATURN_ACTOR_QUARANTINE_STALE_PACKAGE_GENERATION = 3U,
-    SM64_SATURN_ACTOR_QUARANTINE_STALE_INSTANCE = 4U,
-    SM64_SATURN_ACTOR_QUARANTINE_STALE_BANK = 5U,
-    SM64_SATURN_ACTOR_QUARANTINE_OUTPUT_OVERFLOW = 6U,
-} sm64_saturn_actor_quarantine_reason_t;
-
-/* One claimant-owned, renderer-neutral draw reference. The later actor-bank
- * processor supplies the IDs and painter key; this task only budgets and owns
- * the shared output span. */
-typedef struct sm64_saturn_actor_output_record {
-    uint16_t meshlet_id;
-    uint16_t primitive_id;
-    uint32_t sort_key;
-} sm64_saturn_actor_output_record_t;
 
 /* This pointer-free descriptor is an adapter over Task 14's canonical
  * snapshot ABI.  The full snapshot remains in its immutable generation bank;
@@ -167,8 +149,6 @@ _Static_assert(sizeof(sm64_saturn_actor_instance_release_t) == 12U,
                "actor-instance release ABI changed");
 _Static_assert(sizeof(sm64_saturn_actor_instance_result_t) == 12U,
                "actor-instance result ABI changed");
-_Static_assert(sizeof(sm64_saturn_actor_output_record_t) == 8U,
-               "actor output-record ABI changed");
 _Static_assert(SM64_SATURN_ACTOR_RUNTIME_FIXED_BYTES <=
                    SM64_SATURN_ACTOR_RUNTIME_LWRAM_BUDGET,
                "actor fixed runtime storage exceeds its LWRAM budget");

@@ -128,6 +128,99 @@ static void actor_output_reset(sm64_saturn_actor_meshlet_output_t *output)
     output->position_count = 0U;
 }
 
+bool sm64_saturn_actor_meshlets_workspace_query(
+    const sm64_saturn_actor_bank_view_t *bank, uint32_t *lane_bytes,
+    uint32_t *total_bytes)
+{
+    uint32_t lane, total;
+    if (bank == NULL || lane_bytes == NULL || total_bytes == NULL ||
+        bank->bytes == NULL || bank->bank.magic != SM64_SATURN_ACTOR_BANK_MAGIC ||
+        bank->bank.version != SM64_SATURN_ACTOR_BANK_VERSION ||
+        !sm64_saturn_actor_bank_workspace_requirements(
+            bank->bank.vertex_count, bank->bank.joint_count, &lane, &total) ||
+        bank->max_scratch < total)
+        return false;
+    *lane_bytes = lane;
+    *total_bytes = total;
+    return true;
+}
+
+static uint32_t actor_align_u32(uint32_t value, uint32_t alignment)
+{
+    return (value + alignment - 1U) & ~(alignment - 1U);
+}
+
+static bool actor_pointer_spans_overlap(const void *left, uint32_t left_size,
+                                        const void *right,
+                                        uint32_t right_size)
+{
+    const uintptr_t left_start = (uintptr_t)left;
+    const uintptr_t right_start = (uintptr_t)right;
+    uintptr_t left_end, right_end;
+    if (left_size > UINTPTR_MAX - left_start ||
+        right_size > UINTPTR_MAX - right_start)
+        return true;
+    left_end = left_start + left_size;
+    right_end = right_start + right_size;
+    return left_start < right_end && right_start < left_end;
+}
+
+bool sm64_saturn_actor_meshlets_bind_workspace(
+    const sm64_saturn_actor_bank_view_t *bank, void *scratch,
+    uint32_t scratch_capacity, uint8_t lane,
+    sm64_saturn_actor_output_record_t *records, uint16_t draw_capacity,
+    sm64_saturn_actor_meshlet_workspace_t *workspace)
+{
+    uint8_t *bytes = (uint8_t *)scratch;
+    uint32_t lane_bytes, total_bytes, cursor;
+    uint32_t record_bytes = (uint32_t)draw_capacity * sizeof(*records);
+    if (workspace == NULL || scratch == NULL || records == NULL ||
+        draw_capacity == 0U ||
+        ((uintptr_t)scratch & (SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT - 1U)) !=
+            0U ||
+        lane >= SM64_SATURN_ACTOR_MESHLET_WORK_LANE_COUNT ||
+        !sm64_saturn_actor_meshlets_workspace_query(
+            bank, &lane_bytes, &total_bytes) ||
+        scratch_capacity < bank->max_scratch ||
+        actor_pointer_spans_overlap(
+            scratch, bank->max_scratch, records, record_bytes))
+        return false;
+
+    memset(workspace, 0, sizeof(*workspace));
+    cursor = (uint32_t)lane * lane_bytes;
+    workspace->scratch_offset = cursor;
+    workspace->scratch_size = lane_bytes;
+    workspace->lane = lane;
+    cursor = actor_align_u32(cursor, _Alignof(int16_t));
+    workspace->pose_work.vertices = (int16_t (*)[3])(void *)(bytes + cursor);
+    cursor += (uint32_t)bank->bank.vertex_count * 3U * sizeof(int16_t);
+    workspace->pose_work.light_intensity = bytes + cursor;
+    cursor += (uint32_t)bank->bank.vertex_count * sizeof(uint8_t);
+    cursor = actor_align_u32(cursor, _Alignof(int32_t));
+    workspace->pose_work.joint_matrices_q16 =
+        (int32_t *)(void *)(bytes + cursor);
+    cursor += (uint32_t)bank->bank.joint_count * 16U * sizeof(int32_t);
+    cursor = actor_align_u32(cursor, _Alignof(uint16_t));
+    workspace->output.output.positions = (uint16_t *)(void *)(bytes + cursor);
+    cursor += (uint32_t)bank->bank.vertex_count * sizeof(uint16_t);
+    workspace->output.position_seen = bytes + cursor;
+    cursor += (uint32_t)bank->bank.vertex_count * sizeof(uint8_t);
+    if (actor_align_u32(cursor, SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT) !=
+            workspace->scratch_offset + workspace->scratch_size)
+        return false;
+    workspace->pose_work.vertex_capacity = bank->bank.vertex_count;
+    workspace->pose_work.joint_capacity = bank->bank.joint_count;
+    workspace->pose_work.light_capacity = bank->bank.vertex_count;
+    workspace->output.output.position_capacity = bank->bank.vertex_count;
+    workspace->output.records = records;
+    workspace->output.abi = SM64_SATURN_ACTOR_MESHLET_BANK_OUTPUT_ABI;
+    workspace->output.draw_capacity = draw_capacity;
+    workspace->output.position_seen_capacity = bank->bank.vertex_count;
+    workspace->output.quarantine_reason =
+        SM64_SATURN_ACTOR_MESHLET_QUARANTINE_NONE;
+    return true;
+}
+
 static actor_meshlet_source_t actor_mario_source(void)
 {
     actor_meshlet_source_t source;
@@ -514,7 +607,6 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
     sm64_saturn_actor_meshlet_bank_output_t *output,
     sm64_saturn_fast3d_profile_t *stats)
 {
-    sm64_saturn_actor_bank_view_t validated;
     sm64_saturn_actor_pose_view_t pose;
     actor_meshlet_source_t source;
     actor_meshlet_transform_t transform;
@@ -531,6 +623,8 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
             SM64_SATURN_ACTOR_MESHLET_BANK_OUTPUT_ABI ||
         output->records == NULL || output->position_seen == NULL ||
         output->position_seen_capacity == 0U || bank->bytes == NULL ||
+        bank->bank.magic != SM64_SATURN_ACTOR_BANK_MAGIC ||
+        bank->bank.version != SM64_SATURN_ACTOR_BANK_VERSION ||
         instance->generation == 0U ||
         instance->generation != view->generation) {
         if (output != NULL && output->abi ==
@@ -541,13 +635,10 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
                 SM64_SATURN_ACTOR_MESHLET_QUARANTINE_STALE_GENERATION;
         return false;
     }
-    if (!sm64_saturn_actor_bank_validate(bank->bytes, bank->byte_count,
-                                         &validated) ||
-        instance->actor_bank_id == 0U ||
-        instance->family_id != validated.bank.family_id ||
-        instance->model_id != validated.bank.model_id ||
+    if (instance->family_id != bank->bank.family_id ||
+        instance->model_id != bank->bank.model_id ||
         !actor_hash_equal(instance->actor_bank_hash_words,
-                          validated.bank.source_hash_words)) {
+                          bank->bank.source_hash_words)) {
         output->quarantine_reason =
             SM64_SATURN_ACTOR_MESHLET_QUARANTINE_STALE_BANK;
         return false;
@@ -555,11 +646,11 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
     if (instance->active == 0U || instance->render_active == 0U ||
         instance->scale_q16[0] == 0 || instance->scale_q16[1] == 0 ||
         instance->scale_q16[2] == 0 || pose_work->light_intensity == NULL ||
-        pose_work->light_capacity < validated.bank.vertex_count ||
+        pose_work->light_capacity < bank->bank.vertex_count ||
         pose_work->joint_matrices_q16 == NULL ||
-        !actor_bank_source(&validated, &source) ||
+        !actor_bank_source(bank, &source) ||
         !sm64_saturn_actor_pose_evaluate(
-            &validated, instance->animation_id, instance->animation_frame,
+            bank, instance->animation_id, instance->animation_frame,
             pose_work, &pose))
         return false;
     memset(&transform, 0, sizeof(transform));

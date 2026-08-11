@@ -979,7 +979,7 @@ verify-actor-instance-queue:
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_instance_queue_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_instance_queue.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-instance-queue-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-instance-queue-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-instance-queue-test$(HOST_EXEEXT)"
 
 verify-actor-batches:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
@@ -989,7 +989,7 @@ verify-actor-batches:
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_batch.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_instance_queue.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-batch-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-batch-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-batch-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_actor_runtime_neutrality.py"
 
 verify-actor-effects: compile-actor-banks

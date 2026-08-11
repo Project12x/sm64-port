@@ -9,6 +9,8 @@
 #define SM64_SATURN_ACTOR_BANK_VERSION 1U
 #define SM64_SATURN_ACTOR_BANK_HEADER_SIZE 104U
 #define SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE 16U
+#define SM64_SATURN_ACTOR_BANK_WORK_LANE_COUNT 2U
+#define SM64_SATURN_ACTOR_BANK_WORK_ALIGNMENT 4U
 #define SM64_SATURN_ACTOR_FAMILY_BANK_MAGIC 0x53363446UL
 #define SM64_SATURN_ACTOR_FAMILY_BANK_VERSION 2U
 #define SM64_SATURN_ACTOR_FAMILY_BANK_HEADER_SIZE 56U
@@ -123,6 +125,9 @@ typedef struct sm64_saturn_actor_family_record {
 
 bool sm64_saturn_actor_bank_validate(const void *data, size_t byte_count,
                                      sm64_saturn_actor_bank_view_t *view);
+bool sm64_saturn_actor_bank_workspace_requirements(
+    uint16_t vertex_count, uint16_t joint_count, uint32_t *lane_bytes,
+    uint32_t *total_bytes);
 bool sm64_saturn_actor_bank_validate_expected(
     const void *data, size_t byte_count, const uint32_t expected_source_hash[8],
     sm64_saturn_actor_bank_view_t *view);

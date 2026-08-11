@@ -164,6 +164,18 @@ int main(int argc, char **argv)
     uint16_t material_count, primitive_count, vertex_count;
     uint16_t first_material, first_source, first_primitive, first_vertex;
     uint32_t expected_source_hash[8];
+    uint32_t lane_bytes, total_bytes;
+    if (!sm64_saturn_actor_bank_workspace_requirements(
+            1U, 1U, &lane_bytes, &total_bytes) || lane_bytes != 76U ||
+        total_bytes != 152U ||
+        !sm64_saturn_actor_bank_workspace_requirements(
+            2U, 1U, &lane_bytes, &total_bytes) || lane_bytes != 88U ||
+        total_bytes != 176U ||
+        sm64_saturn_actor_bank_workspace_requirements(
+            0U, 1U, &lane_bytes, &total_bytes)) {
+        fprintf(stderr, "package-derived actor workspace accounting failed\n");
+        return 1;
+    }
     if (argc != 2 || (bytes = read_file(argv[1], &size)) == NULL) {
         fprintf(stderr, "usage: actor-pose-bank-test actor-bank.s64b\n");
         return 1;
@@ -171,7 +183,7 @@ int main(int argc, char **argv)
     if (!sm64_saturn_actor_bank_validate(bytes, size, &view) ||
         view.bank.animation_count != 209U || view.bank.joint_count != 20U ||
         view.bank.vertex_count != 424U || view.bank.primitive_count != 644U ||
-        view.bank.meshlet_count != 31U || view.max_scratch < 3928U) {
+        view.bank.meshlet_count != 31U || view.max_scratch != 11040U) {
         fprintf(stderr, "complete actor bank did not validate\n");
         free(bytes);
         return 1;

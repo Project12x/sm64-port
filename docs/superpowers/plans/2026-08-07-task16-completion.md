@@ -17,7 +17,8 @@ VBlank callbacks, but render generation 1 terminates
 `DONE,DONE,FAILED,QUARANTINED`: the sealed feature-on actor-admission wrapper
 still intentionally fails closed. Disabling dynamic actor closure is rejected
 because the same production actor path must scale to the total game. Task 1 is
-source-complete on its isolated branch with independent review still open;
+source-complete after review repair on its isolated branch with independent
+rereview still open;
 Tasks 2–5, target proof, Task 9 reseal, and Task 10 smoke/visual/manual
 acceptance remain open.
 
@@ -28,7 +29,9 @@ acceptance remain open.
 geometry spans. The six-argument shape remains binding; the Task-1-owned
 meshlet output binding therefore carries draw capacity and an established
 quarantine reason for Task 2/3 to adapt from each queue descriptor. Bank
-identity/hash/family/model mismatches fail before output writes. Scene-package
+family/model/source-hash mismatches fail before output writes. Numeric
+`actor_bank_id` is not encoded in S64B; Task 2 must map that ID plus exact
+scene-package generation to the immutable validated view. Scene-package
 generation freshness remains a Task 2 handoff precondition because it is not
 represented by the S64B bank view. S64F v2's 56-byte records establish family
 registration/capability metadata upstream; they are not geometry records. The
@@ -40,6 +43,27 @@ entry point and output struct retain their separate arrays and frozen ABI. The
 generalized entry point is type-safe: its output parameter is
 `sm64_saturn_actor_meshlet_bank_output_t *`, and the shared core receives that
 binding's unchanged legacy `output` member internally.
+
+**Task 1 review repair (2026-08-11):** independent review of `3d5e6ff8` /
+`863faa8d` returned `CHANGES REQUIRED C0/I4/M2`, so Task 2 remains blocked.
+The repair centralizes the eight-byte output record and quarantine values in a
+renderer-neutral ABI header: queue-arena records and legacy meshlet draw refs
+are the same typedef, permitting direct binding without casts or copies. The
+fixed 65,536-byte actor runtime arena and its 2,718 output records do not absorb
+pose scratch. Instead, the registry-selected S64B dependency's already-reserved
+`maximum_scratch` owns two aligned, non-overlapping claimant lanes because
+either SH-2 may process a descriptor concurrently. Each package-derived lane
+contains posed vertices (`6V`), lights (`V`), 4x4 Q16 matrices (`64J`),
+positions (`2V`), and uniqueness bytes (`V`), with four-byte alignment; the
+Mario bank therefore declares 5,520 bytes per lane / 11,040 total. Task 2 must
+expose this dependency scratch at the exact scene generation and map numeric
+bank ID to its validated view; Task 3 must gate live lane ownership; Task 5
+retains target map/capacity proof. `prepare_bank` trusts that immutable
+validated view and performs only cheap identity/bounded selected-record checks,
+never a full-bank validation pass. The combined Mario S64B currently advertises
+its dependency as `ANIMATION_DEPENDENCIES`; the binder is payload-kind-neutral
+and Task 2 must expose the scratch belonging to the registry-selected S64B
+rather than changing package identity in Task 1.
 
 **Current ground truth (2026-08-07 research pass):**
 - Arena reality (post-`c1e8e73e`, supersedes older ledger numbers): bank 24,088 + observer 13,024 (240-slot identity sidecars) + queue 5,644 + batches 1,024 + alignment + outputs = 65,536 B; output-record ceiling **2,718**; 64 live instances.
@@ -54,10 +78,10 @@ binding's unchanged legacy `output` member internally.
 
 ### Task 1: Generalize meshlet preparation to bank instances (registry-independent — start immediately)
 
-**Status:** `source-complete` from isolated base `ec8ef844` in the behavior
-commit containing this status; implementation and host gates are green, while
-controller-owned independent two-stage review remains open. No target-complete
-claim is made.
+**Status:** `source-complete-review-repair` from base `ec8ef844` in the repair
+behavior commit containing this status; round-1 RED/GREEN and all focused host
+gates are complete. Task 2 remains blocked until independent rereview passes.
+No target-complete claim is made.
 
 **Files:**
 - Modify: `src/port/saturn/gfx/saturn_actor_meshlets.h/.c`
