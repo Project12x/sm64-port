@@ -300,6 +300,15 @@ Explicitly OUT of this plan's scope. Prerequisites before planning it: G3 fideli
 
 ## Follow-on backlog (mined, ledgered, NOT in this campaign)
 
+**Task 10 exact-smoke correction (2026-08-11): blocked.** The flags-on target
+links and loads, and its measured object-pool peak remains 138/208 with zero
+allocation failures, but it does not satisfy this campaign's run/play goal.
+Live queue evidence shows the intentional feature-on Task 16 ACTOR_ADMIT stub
+failing generation 1 and quarantining ACTOR_LOWER, after which source ticks
+remain at 2. Therefore Steps 5–6 remain unchecked; no owner pickup/hold test is
+authorized. Complete the Task 16 production generic actor drain, then reopen
+hermetic Task 9 sealing before retrying this campaign gate.
+
 | Lever | Source | Benefit class | Reuse mode |
 |---|---|---|---|
 | Per-Object fat trim (64 B resident `Mat4`, 320 B worst-case `rawData`) | Both engines recompute transforms transiently | HWRAM, scales with capacity | behavior-lesson |

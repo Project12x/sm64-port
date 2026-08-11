@@ -7,6 +7,14 @@ remains available as a bring-up diagnostic. The reusable `sm64-saturn-full`
 profile is deliberately non-releasable until its complete content/system
 inventory and game-wide target gates are implemented and reviewed.
 
+The current `sourceboot-bob-demo-v2-manual-candidate` is not a playable manual
+candidate despite passing release-manifest and exact-v4 checks. Its sealed
+feature tuple enables `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1`, but the
+production feature-on ACTOR_ADMIT/ACTOR_LOWER cutover is still intentionally
+fail-closed. Exact Task 10 smoke therefore stops after two source ticks. Do not
+launch it for owner acceptance or reuse manifest `9110b40d...b99` after the
+Task 16 actor repair; rebuild, reproduce, rerun v4, and restage first.
+
 ## Pinned dependency
 
 The repository pins libyaul 0.3.1 as a Git submodule:

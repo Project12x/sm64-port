@@ -6,9 +6,13 @@ Task 9 of the hermetic full-game release-identity plan is complete after both
 same-reviewer rereviews passed. Source
 `df7894ac` reproduced two clean `-j1` candidates at manifest
 `9110b40d...b99` / identity `id-a40f992c085da2f0`; exact v4,
-capacity/package, guarded staging, and overwrite refusal pass. Task 10 is now
-the active acceptance lane—20,100-frame smoke, visual proof, desktop launch,
-and owner manual test.
+capacity/package, guarded staging, and overwrite refusal pass. Task 10 reached
+the exact 20,100-frame smoke and is blocked there: the flags-on target
+intentionally fails the first ACTOR_ADMIT callback because the Task 16 generic
+actor production drain is not implemented, then quarantines ACTOR_LOWER and
+stops after two source ticks. Visual proof, desktop launch, and owner manual
+test remain unopened. Complete the Task 16 production generic actor cutover,
+then rerun Task 9's build/repro/v4/staging chain before Task 10.
 
 The staged result is the integrated BOB demo candidate only. The same profile,
 closure, identity-v2, audit, release-manifest, capture-binding, and staging

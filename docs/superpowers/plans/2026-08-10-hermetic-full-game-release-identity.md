@@ -2629,10 +2629,12 @@ Reviewers independently recompute the v4 contract digest, release-manifest/artif
 
 ### Task 10: Exact-target 20,100-frame smoke, visual proof, and manual-test handoff
 
-**Current status (2026-08-11):** `active`. Task 9 is complete after evidence
-PASS and code-quality APPROVED rereviews. Re-verify the canonical staged
-manifest `9110b40d...b99` before any emulator execution. Smoke, visual,
-desktop-launch, owner manual-play, and total-game gates remain open.
+**Current status (2026-08-11):** `blocked-on-prerequisite` at the exact smoke. Task 9 remains
+historically complete for manifest `9110b40d...b99`, but the sealed target's
+feature-on actor renderer intentionally fails ACTOR_ADMIT because the Task 16
+production actor cutover is incomplete. Visual, desktop, and owner gates did
+not run. The required Task 16 production actor cutover changes target bytes,
+so Task 9 rebuild/repro/v4/staging must reopen before Task 10 resumes.
 
 **Files:**
 - Create: `docs/saturn/evidence/reports/hermetic-sourceboot-combined-smoke-2026-08-10.json`
@@ -2754,10 +2756,30 @@ within a 3,600-VBlank bound until both code and build identity match, then runs
 the full requested interval. TDD RED was the missing dual-identity wait API;
 focused GREEN is 13/13 outside the sandbox. A sandboxed full-suite setup run
 had two established Windows ancestor-handle errors at `C:\Users\estee` and is
-discarded as environmental. Target bytes and binding inputs did not change, so
-Task 9 rebuild/repro/v4/staging gates remain closed. The exact smoke rerun,
-visual inspection, desktop launch, owner verdict, closeout verification, and
-both Task 10 independent reviews remain open.
+discarded as environmental. At that transition, target bytes and binding inputs
+had not changed, so Task 9 rebuild/repro/v4/staging stayed closed and the exact
+smoke rerun plus all downstream gates remained open.
+
+**Task 10 repair round 2 (2026-08-11): blocked-on-prerequisite.** Commit `fc036e6e` made the
+loaded-identity wait deterministic; its full focused capture suite passed
+13/13. The exact rerun then completed all 20,100 requested frames and 67/67
+samples against manifest `9110b40d...b99`, but acceptance failed: presentation
+generation and the prescribed yaw window never advanced. Pool failures were
+zero, peak 138 stayed below 208, cart copy completed, and the exception record
+stayed clear.
+
+Systematic diagnostics ruled out the BIOS pulse sequence, canonical
+profile/`--dram-cart` invocation, immutable target-byte mismatch, stale probe
+addresses, and VBlank delivery. The exact callback remained bound to
+`sourceboot_vblank_out_handler`, its counter advanced once per frame, and the
+slave SH-2 received and retired render sequence 1. At the failure edge the
+four-job queue was WORLD_ADMIT=DONE, WORLD_LOWER=DONE, ACTOR_ADMIT=FAILED,
+ACTOR_LOWER=QUARANTINED; telemetry recorded one slave failure and one
+quarantine. This matches the explicit feature-on `return false` compatibility
+stub in `saturn_demo_render.c` and the unfinished production drain recorded in
+`docs/superpowers/plans/2026-08-07-task16-completion.md`. No honest Task 10-
+local repair exists under the old manifest. Steps 3–6 remain unchecked; no PNG,
+desktop launch, checklist handoff, or owner verdict was produced.
 
 ## Completion criteria
 

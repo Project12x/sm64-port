@@ -416,6 +416,43 @@
   owner manual verdict; final docs/tests; both Task 10 independent reviews.
   The prior peak 138 remains only an idle-boot floor without pickup/hold or
   action-particle coverage. `sm64-saturn-full` remains non-releasable.
+
+## Task 10 execution ledger — repair round 2 / blocked smoke
+
+- Status: `blocked-on-prerequisite`. Tooling repair commit `fc036e6e` is present. The staged
+  manifest reverified at
+  `9110b40da0e890b7b03dc5748e9ead4a47865ea4f9e3df21869b47de33679b99`
+  before the rerun; no rebuild/restage occurred.
+- Exact rerun: exit 1 after 172.985 s, all 20,100 requested post-BIOS frames,
+  67/67 valid samples, and 22,177 total frames including the 1,500-frame macro
+  plus 577-frame loaded-identity wait. Report SHA-256 is
+  `75e4ffc666de54f81808c6b98beb59edb499aff15d623063f9499eedb24d2ac6`.
+  Identity/code match, pool failures 0, peak 138/208, cart 3,565,696 of
+  3,565,696 status 0, and exception 0 passed. Yaw-window change and advancing
+  presentation generations failed; source ticks stopped at 2.
+- Root cause: callback/SCU diagnostics prove VBlank-out handler
+  `0x0607db14`, counter 1427→1517 over 90 frames, and IMS `0x0000a17c`.
+  Master is in `_sm64_saturn_source_runtime_wait_vblank`; slave is normally in
+  Yaul `__slave_polling_entry`. At +1,820 post-BIOS frames, queue generation 1
+  is `[DONE,DONE,FAILED,QUARANTINED]` for
+  `[WORLD_ADMIT,WORLD_LOWER,ACTOR_ADMIT,ACTOR_LOWER]`; notify/retire are both 1
+  and telemetry is slave-failures 1/quarantined 1. Edge-diagnostic SHA-256 is
+  `6953227593a13e580e09a396189e83bd476a577cdd99cf5e3620bbf1481344b6`.
+- Source match: the sealed feature bits enable dynamic actor closure, while
+  `saturn_demo_render.c` intentionally returns false in the feature-on actor
+  compatibility wrappers until the Task 16 production drain exists. This is
+  target/config completeness, not BIOS, emulator profile, stale symbol/probe,
+  target identity, VBlank, or capture timing.
+- Discarded setup runs: two diagnostics used a wrong BIOS path before the
+  canonical `.ymir-profile` path was corrected; one completed diagnostic could
+  not write because its ignored report directory did not yet exist; one slave
+  register read correctly returned `target_disabled` before slave enablement.
+  None is acceptance evidence.
+- Reopen rule: completing the Task 16 production generic actor cutover changes
+  target/binding inputs. Task 9 build, A/B reproducibility, exact-v4,
+  staging, and both reviews must rerun against a replacement manifest before
+  Task 10 smoke resumes. Visual, PNG inspection, desktop launch, owner
+  checklist/verdict, final closeout, and Task 10 reviews remain open.
 ## Task 7 execution ledger
 
 - Initial dispatch base: `48f5a61a` (`docs(saturn): start exact release

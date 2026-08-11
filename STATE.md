@@ -12,8 +12,16 @@ identical `-j1` releases at manifest `9110b40d...b99` and identity
 callers absent, and capacity/package/staging/overwrite-refusal gates pass. The
 previous release/audit/stage evidence is superseded.
 
-Task 10 is now the active acceptance lane. It owns the 20,100-frame smoke, visual
-capture, desktop launch, and owner manual-play result. The reusable
+Task 10 is `blocked-on-prerequisite` at its exact 20,100-frame smoke. The manifest-bound target
+boots with exact code/identity, completes cart loading, and keeps a clear
+exception record, but the first feature-on ACTOR_ADMIT job fails and its
+dependent ACTOR_LOWER job is quarantined. The sealed profile enables
+`SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1`, while that production renderer path
+is still the intentional fail-closed stub documented by the Task 16 completion
+plan. Visual capture, desktop launch, and owner play remain stopped. The
+required fix is the Task 16 production generic actor cutover; it changes target
+bytes and therefore reopens Task 9 rebuild, reproducibility, v4, and staging.
+The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system
 inventory and game-wide target gates are implemented and reviewed.
