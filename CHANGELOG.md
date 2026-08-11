@@ -11,11 +11,11 @@
   an outside file before `unlink`; missing platform capability now fails
   closed, and empty-directory pruning still stops below the output root.
 
-- Regenerated and pinned audit v4 around the reproducible repaired release
-  identity after direct archive/nm attestation changed the toolchain root. The
-  measured total remains 700 with both forbidden atan2 callers absent, while
-  the contract now fails closed against the new manifest, identity, profile,
-  effective configuration, and ELF hashes.
+- Regenerated and pinned audit v4 around the reproducible round-2 release
+  identity after the sealed asset-cleanup generator gained pinned-namespace
+  deletion. The measured total remains 700 with both forbidden atan2 callers
+  absent, while the contract now fails closed against the new manifest,
+  identity, profile, effective configuration, and ELF hashes.
 
 - Revalidated every declared source-closure digest and an unchanged Git HEAD
   at the final release-manifest publication boundary. Release cleanliness now

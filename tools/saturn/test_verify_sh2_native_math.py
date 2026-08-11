@@ -3071,13 +3071,13 @@ static bool demo_detached_start_decoy(uint32_t generation)
         contract = parse_audit_contract(text)
         self.assertEqual(
             GOAL_AUDIT_CONTRACT_V4_SHA256,
-            "d52ecdb1d2a4f4847143af3d5e13629760ae8141f3fcecb413ad739b61ed7072",
+            "14db6bfb5ab01239dd63aa4e11f767245c1f026f25836da73cf26fbc0d977b8b",
         )
         verify_audit_contract_integrity(text, contract)
         self.assertEqual(contract.expected_total, 700)
         self.assertEqual(
             contract.expected_release_manifest_sha256,
-            "5e04e2527e2373f30521bfcaaa63b56b061b74291cf1a4a3fd6e427aa311c1df",
+            "9110b40da0e890b7b03dc5748e9ead4a47865ea4f9e3df21869b47de33679b99",
         )
         with self.assertRaisesRegex(ValueError, "immutable audit contract digest mismatch"):
             verify_audit_contract_integrity(text.replace("700", "701"), contract)
