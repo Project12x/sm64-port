@@ -646,7 +646,7 @@
 ## 2026-08-11 generic actor bundle Task 3 provenance repair round 5
 
 - Status: `source-complete-review-repair-round-5; scoped rereview pending;
-  Task 4 paused with zero edits`; behavior commit pending.
+  Task 4 paused with zero edits` at behavior commit `416c3a34`.
 - Review input: round 4 returned C0/I3/M0. Repository-valid
   `gsSPBranchLessZraw` references were ignored, the definition index was
   process-cached only by root, and a 1,200-list acyclic chain leaked raw

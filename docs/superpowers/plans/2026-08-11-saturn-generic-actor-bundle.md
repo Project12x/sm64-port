@@ -531,7 +531,7 @@ Task 4 has made zero edits and remains paused for scoped rereview; all target,
 release, smoke, visual, desktop, manual, and total-game gates remain open.
 
 **Task 3 source-provenance repair round 5 (2026-08-11):** source-complete;
-scoped rereview pending, behavior commit pending. Four exact REDs reproduced
+scoped rereview pending at behavior commit `416c3a34`. Four exact REDs reproduced
 all three review findings: `gsSPBranchLessZraw` omitted its reached Gfx source,
 an unmodeled command carrying a known Gfx symbol compiled without error, a
 same-process duplicate definition remained invisible after index priming, and
