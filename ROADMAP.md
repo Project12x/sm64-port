@@ -30,10 +30,10 @@ repair also passed C0/I0/M0; the real explosion record now reaches the
 preserved textured-state unsupported boundary instead of a false terminator
 error. The full-key replay then exposed an unselected `MODEL_NONE` alternate
 poisoning selected drawable provenance. That selection-order repair is now
-source-complete and awaiting scoped rereview; the real chain-part key advances
+source-complete with scoped rereview PASS C0/I0/M0; the real chain-part key advances
 to the preserved `GEO_SHADOW` unsupported boundary without fabricating
-model-less geometry. After rereview,
-resume Task 4 and build/review the scene-local DRAM-cart bundle and fixed
+model-less geometry. Resume Task 4 from zero edits and build/review the
+scene-local DRAM-cart bundle and fixed
 dual-SH-2 LWRAM
 workspace and complete the Task 16 production generic actor cutover. After
 those target-byte changes, rerun Task 9's build/repro/v4/staging chain before

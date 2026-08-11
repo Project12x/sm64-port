@@ -737,8 +737,8 @@
 
 ## 2026-08-11 generic actor bundle Task 3 model-less alternate round 7
 
-- Status: `source-complete; scoped rereview pending; Task 4 paused before
-  edits`. Real family 36 legitimately
+- Status: `source-complete; scoped rereview PASS C0/I0/M0; Task 4 unblocked
+  from zero edits`. Real family 36 legitimately
   contains drawable `MODEL_METALLIC_BALL` and non-drawable `MODEL_NONE`, but
   the variant selector validated the unselected model-less GeoLayout first.
 - Repair: resolve attested numeric IDs before drawable GeoLayout fields; accept
@@ -749,5 +749,6 @@
   generic-family, native-root Make, compileall, and exact Mario artifacts. The
   real chain-part key reaches named `GEO_SHADOW` unsupported evidence.
 - Behavior commit `6c0c4d45`; committed-HEAD reruns repeated the same complete
-  gate set. Evidence commit and scoped same-reviewer verdict remain open.
+  gate set. Evidence commit `c68d44fb`; the same reviewer independently
+  repeated focused adversarial checks and every full gate with no drift.
 - Task 16 Tasks 2-5 and every target/release/manual gate remain open.

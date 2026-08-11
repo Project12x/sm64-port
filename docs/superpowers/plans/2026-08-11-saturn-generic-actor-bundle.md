@@ -614,7 +614,7 @@ full suites, finding no schema, ABI, Makefile, `src`/`include`, or Task 4 drift.
 Task 4 resumes from zero edits; all target/release/manual gates remain open.
 
 **Task 3 real-source model-less alternate repair round 7 (2026-08-11):**
-source-complete; scoped rereview pending.
+source-complete; scoped rereview PASS C0/I0/M0.
 Task 4's full BOB replay reached family 36/model `0x0065`, where the valid
 drawable `MODEL_METALLIC_BALL` shares a family record with non-drawable
 `MODEL_NONE`. `_record_selection` required complete GeoLayout provenance for
@@ -630,7 +630,10 @@ compileall, and exact Mario identity. The real chain-part key now advances to
 the preserved `UnsupportedActorSourceError: unsupported GeoLayout node:
 GEO_SHADOW`. Behavior commit `6c0c4d45` changes only the compiler, focused
 tests, and changelog; the same full gate set was repeated from committed HEAD.
-Task 4 remains zero-edit and paused for scoped rereview.
+Evidence commit is `c68d44fb`. The same reviewer independently repeated the
+focused adversarial checks, all 37/27/33/2/4 suites, native-root Make,
+compileall, the real key probe, and exact Mario artifacts, finding no schema,
+ABI, runtime, or Task 4 drift. Task 4 is unblocked to resume from zero edits.
 
 ---
 

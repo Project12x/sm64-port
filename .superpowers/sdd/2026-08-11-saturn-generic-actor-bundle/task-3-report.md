@@ -1549,8 +1549,27 @@ GeoLayout node: GEO_SHADOW`. Committed Mario and refactor JSON remain 562,096
 bytes with SHA-256 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`;
 both S64B files remain 596,896 bytes with SHA-256
 `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`.
-Task 4 remains zero-edit. Evidence commit and scoped same-reviewer rereview
-remain open.
+Task 4 remains zero-edit. Evidence commit is `c68d44fb`; the scoped
+same-reviewer verdict is recorded below.
+
+### Real-source model-less alternate final rereview
+
+The same reviewer passed behavior `6c0c4d45` and evidence `c68d44fb` at
+C0/I0/M0. Independent review confirmed numeric IDs are attested before
+drawable GeoLayout validation; only exact `MODEL_NONE`/`none`/null source with
+`binding_source == source` skips drawable provenance; and a selected sentinel
+raises named before `_compile_geometry`. Independent alias, duplicate variant,
+duplicate CRLF definition, selected/unselected malformed provenance, and
+unchanged cross-record conflict checks all fail named.
+
+The reviewer repeated the focused five tests, all 37/27/33/2/4 full suites,
+native-root Make, compileall, exact Mario JSON/S64B identity, and the real
+family-36/model-`0x0065` probe. The real probe retains the exact drawable and
+model-less typed variants and reaches `UnsupportedActorSourceError:
+unsupported GeoLayout node: GEO_SHADOW`. No Make/schema/public ABI/actor core/
+closure/rigid/`src`/`include`/runtime/Task 4 drift was found. Task 3 remains
+source-complete; Task 4 is unblocked to resume from zero edits. Task 16 Tasks
+2-5 and every target/release/manual gate remain open.
 
 ### Real-source tail-branch repair round 6 — source-complete
 
