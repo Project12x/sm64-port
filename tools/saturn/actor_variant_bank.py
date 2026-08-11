@@ -1043,6 +1043,80 @@ def _source_model_id(index: _SourceIndex, path: str, symbol: str) -> int:
     return value
 
 
+def _levelscript_model_bindings(index: _SourceIndex, path: str) -> list[tuple[str, str]]:
+    """Return every exact LOAD_MODEL_FROM_GEO/DL binding in one attested source."""
+    path = _normal_path(path)
+    index.require_attested(path, "model binding source")
+    clean = _strip_comments(index.text(path), path)
+    pattern = re.compile(r"\bLOAD_MODEL_FROM_(?:GEO|DL)\b")
+    bindings: list[tuple[str, str]] = []
+    for match in pattern.finditer(clean):
+        cursor = match.end()
+        whitespace = re.match(r"\s*", clean[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(clean) or clean[cursor] != "(":
+            raise ActorSourceSelectionError(
+                f"malformed model binding command in {path}")
+        start = cursor + 1
+        depth = 1
+        cursor += 1
+        while cursor < len(clean) and depth:
+            if clean[cursor] in "\"'":
+                raise ActorSourceSelectionError(
+                    f"unsupported literal in model binding command in {path}")
+            if clean[cursor] == "(":
+                depth += 1
+            elif clean[cursor] == ")":
+                depth -= 1
+            cursor += 1
+        if depth:
+            raise ActorSourceSelectionError(
+                f"unterminated model binding command in {path}")
+        fields = _arguments(clean[start:cursor - 1])
+        if (len(fields) != 2 or
+                re.fullmatch(r"MODEL_[A-Z0-9_]+", fields[0]) is None or
+                re.fullmatch(r"[A-Za-z_]\w*", fields[1]) is None):
+            raise ActorSourceSelectionError(
+                f"malformed model binding command in {path}")
+        boundary = cursor
+        while boundary < len(clean) and clean[boundary] in " \t":
+            boundary += 1
+        if (boundary < len(clean) and
+                clean[boundary] not in ",;\r\n"):
+            raise ActorSourceSelectionError(
+                f"unexplained token after model binding command in {path}")
+        bindings.append((fields[0], fields[1]))
+    return bindings
+
+
+def _source_model_binding(index: _SourceIndex, model_source: str,
+                          binding_source: str, model: str,
+                          geo_root: str) -> None:
+    """Require source bytes, not provenance metadata, to bind model to root."""
+    model_source = _normal_path(model_source)
+    binding_source = _normal_path(binding_source)
+    if binding_source == model_source:
+        index.require_attested(binding_source, "model binding source")
+        pattern = re.compile(
+            r"^[ \t]*#define[ \t]+" + re.escape(model) +
+            r"[ \t]+" + _C_INTEGER.pattern +
+            r"[ \t]*//[ \t]*([A-Za-z_]\w*)[ \t]*$",
+            re.MULTILINE,
+        )
+        roots = pattern.findall(index.text(binding_source))
+    else:
+        roots = [root for bound_model, root in
+                 _levelscript_model_bindings(index, binding_source)
+                 if bound_model == model]
+    if len(roots) != 1:
+        detail = "missing" if not roots else "duplicate/conflicting"
+        raise ActorSourceSelectionError(
+            f"{detail} model binding for {model} in {binding_source}")
+    if roots[0] != geo_root:
+        raise ActorSourceSelectionError(
+            f"model binding for {model} selects {roots[0]}, not {geo_root}")
+
+
 def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
                       requested_model_id: int) -> tuple[str, str, str,
                                                          list[dict[str, object]]]:
@@ -1082,6 +1156,9 @@ def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
                         f"closure model {label} is incomplete: {model}")
             value = _source_model_id(index, binding["source"], model)
             if value == requested_model_id:
+                _source_model_binding(
+                    index, binding["source"], binding["binding_source"],
+                    model, geo_root)
                 record_matches.append(
                     (model, geo_root, _normal_path(binding["geo_source"])))
         if not record_matches:

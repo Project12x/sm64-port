@@ -14,8 +14,9 @@ approved. Task 2 repair `f1799118` passed scoped rereview with both Important
 findings addressed and no new breakage; its malformed-path error-type Minor is
 deferred to the final branch review. Task 3 review repair round 1 is
 source-complete at the scoped behavior commit described below and awaits
-independent rereview before Task 4. Target, release, smoke, visual, desktop,
-manual, and total-game gates remain open.
+independent rereview before Task 4. Review repair round 2 is source-complete at
+the scoped behavior commit described below. Target, release, smoke, visual,
+desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
 
@@ -423,6 +424,35 @@ and its JSON remains
 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
 No Task 4, Task 16 production, target, release, smoke, visual, desktop,
 owner-manual, transition, or total-game gate is claimed.
+
+**Task 3 review repair round 2 (2026-08-11):** source-complete; independent
+rereview pending. The selected numeric model symbol is now checked against the
+actual closure-attested binding-source bytes. One exact
+`LOAD_MODEL_FROM_GEO/DL(model, geo_root)` mapping is required, with balanced
+syntax, two exact identifier arguments, and a clean command boundary; the
+collector's model-ID-source comment fallback is also verified exactly.
+Missing, duplicate, conflicting, unterminated, suffix-contaminated, and
+consistent-metadata-but-source-contradicting bindings raise
+`ActorSourceSelectionError`. A real two-record same-ID/different-GeoLayout
+fixture pins the existing cross-record conflict rejection. Selected generic
+animation table/header splitting now retains comma positions and rejects
+leading, trailing, and doubled empty fields; historical Mario parsing is
+untouched. RED was 3 tests with 5 failures for the contradiction and exact
+table/header double/trailing mutations, followed by a one-test trailing-token
+RED; GREEN is 25/25 focused, 25/25 rigid-group, compileall, and combined
+variant/pose/meshlet Make gates. The strict synthetic formatting repins only
+the articulated fixture to payload/source
+`2a4af81303a523a26f6ed3e9df2ac1a7aeb600a1b2c129158d3a6dc79231b93e` /
+`d5a472a4f4f90145e2882adf997b75912f205f82fc51d718ede704c329c3929d`;
+its 468-byte payload, 192-byte lane, 387-byte scratch, geometry, ownership,
+and pose samples are unchanged. Rigid remains at its round-1 exact hashes.
+The behavior commit is recorded by subject as
+`fix(saturn): verify actor model binding sources` until the evidence
+transition pins its exact SHA. Mario remains exactly 596,896 bytes at
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`
+and its JSON remains
+`3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+No target/release/manual gate is claimed.
 
 ---
 

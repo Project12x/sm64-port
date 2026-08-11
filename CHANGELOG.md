@@ -12,6 +12,16 @@
 
 ### Fixed
 
+- Bound generic actor model selection to the attested binding-source bytes,
+  not just closure metadata: the selected numeric model must now have one
+  exact `LOAD_MODEL_FROM_GEO/DL` (or model-ID comment) mapping to the declared
+  GeoLayout, while missing, duplicate, conflicting, malformed, and trailing-
+  token bindings fail closed. Selected generic animation table and header
+  parsers also preserve comma positions and reject leading, trailing, or
+  doubled empty fields, preventing malformed source from being normalized into
+  a valid S64B identity. Historical Mario parsing and artifact bytes remain
+  unchanged.
+
 - Hardened the generic S64B variant compiler after review: the requested
   numeric model ID now selects exactly one attested model/GeoLayout provenance
   instead of merely labeling the primary model's bytes; declared root layouts

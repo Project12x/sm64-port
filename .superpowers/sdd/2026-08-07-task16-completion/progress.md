@@ -514,3 +514,40 @@
   workspace; Task 16 Tasks 2-5; target/P2/Ymir/map/capacity; feature-off,
   transition, release/reseal, smoke, visual, desktop, owner-manual, and
   total-game gates. None is claimed by this source-only repair.
+
+## 2026-08-11 generic actor bundle Task 3 review repair round 2
+
+- Status: `source-complete-review-repair-round-2; independent rereview
+  pending`. The behavior commit is recorded by subject as
+  `fix(saturn): verify actor model binding sources` until the evidence
+  transition pins its exact SHA. Task 4 has not started and Task 16 Tasks 2-5
+  remain blocked/open.
+- Binding-source correction: selected numeric model metadata is no longer
+  authoritative by itself. The compiler parses the attested
+  `LOAD_MODEL_FROM_GEO/DL` source (or exact model-ID comment fallback), requires
+  exactly one clean model-to-GeoLayout mapping, and rejects missing, duplicate,
+  conflicting, malformed, unterminated, and trailing-token bindings. Exact
+  tests include a fully consistent provenance mutation contradicted only by
+  source bytes and a real two-record same-ID/different-root conflict.
+- Animation correction: selected table/header comma positions are retained;
+  doubled or trailing empty fields raise `ValueError` and are translated to
+  the actor animation binding boundary. Historical Mario parsing is unchanged.
+- TDD: the initial targeted RED ran three tests with five failures (binding
+  contradiction plus table/header double/trailing fields); the additional
+  command-boundary RED ran one test with the trailing-token subtest failing.
+  Targeted GREEN is 3/3.
+- Verification: 25/25 focused variant/source tests, 25/25 rigid-group tests,
+  compileall, and the native-root combined variant/pose/meshlet Make wave pass.
+  The articulated synthetic fixture is still 468 bytes with lane/scratch
+  192/387 and exact geometry/pose, but its stricter source formatting repins
+  payload/source SHA-256 to
+  `2a4af81303a523a26f6ed3e9df2ac1a7aeb600a1b2c129158d3a6dc79231b93e` /
+  `d5a472a4f4f90145e2882adf997b75912f205f82fc51d718ede704c329c3929d`.
+  Mario remains byte-identical at 596,896 bytes and
+  `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
+  exact JSON remains
+  `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+- Remaining: independent Task 3 rereview and all real BOB/whole-game,
+  S64F/registry/cart/workspace, Task 16 Tasks 2-5, feature-off, target/P2/Ymir,
+  transition, release/reseal, smoke/visual/desktop/owner-manual, and total-game
+  gates. None is claimed by this source-only repair.

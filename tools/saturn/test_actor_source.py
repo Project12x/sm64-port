@@ -28,12 +28,52 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ActorSourceTest(unittest.TestCase):
+    def test_generic_animation_table_and_header_reject_empty_fields(self) -> None:
+        for label, table in {
+            "double": (
+                "const struct Animation *const test_anims[] = "
+                "{ &walk_anim,, NULL };"
+            ),
+            "trailing": (
+                "const struct Animation *const test_anims[] = "
+                "{ &walk_anim, NULL, };"
+            ),
+        }.items():
+            with self.subTest(boundary="table", label=label), \
+                    self.assertRaisesRegex(ValueError, "empty animation table field"):
+                parse_animation_table_text("table.inc.c", table, "test_anims")
+
+        template = """
+static const s16 idle_values[] = { 0, 1, 2, 3, 4, 5 };
+static const u16 idle_indices[] = {
+    1, 0, 1, 1, 1, 2, 1, 3, 1, 4, 1, 5,
+};
+static const struct Animation idle_anim[] = {
+    %s
+};
+"""
+        for label, header in {
+            "double": (
+                "1,, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(idle_indices), "
+                "idle_values, idle_indices, 0"
+            ),
+            "trailing": (
+                "1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(idle_indices), "
+                "idle_values, idle_indices, 0,"
+            ),
+        }.items():
+            with self.subTest(boundary="header", label=label), \
+                    self.assertRaisesRegex(ValueError, "empty Animation header field"):
+                parse_generic_animation_file_text(
+                    "anim.inc.c", template % header, {"idle_anim": 1}
+                )
+
     def test_generic_animation_table_and_source_preserve_selected_order(self) -> None:
         table = """
 const struct Animation *const test_anims[] = {
     &walk_anim,
     &idle_anim,
-    NULL,
+    NULL
 };
 """
         self.assertEqual(
@@ -47,7 +87,7 @@ static const u16 idle_indices[] = {
 };
 static const struct Animation idle_anim[] = {
     1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(idle_indices),
-    idle_values, idle_indices, 0,
+    idle_values, idle_indices, 0
 };
 """
         record, = parse_generic_animation_file_text(
@@ -71,7 +111,7 @@ static const u16 bad_indices[] = {
 };
 static const struct Animation bad_anim[] = {
     1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(bad_indices),
-    bad_values, bad_indices, 0,
+    bad_values, bad_indices, 0
 };
 """
         with self.assertRaisesRegex(ValueError, "channel span"):
@@ -94,7 +134,7 @@ static const u16 bad_indices[] = {
 };
 static const struct Animation bad_anim[] = {
     1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(bad_indices),
-    bad_values, bad_indices, 0,
+    bad_values, bad_indices, 0
 };
 """
         with self.assertRaisesRegex(ValueError, "numeric initializer"):

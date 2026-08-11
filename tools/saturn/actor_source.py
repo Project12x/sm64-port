@@ -306,7 +306,8 @@ def parse_animation_table_text(filename: str, source: str,
         re.escape(table_symbol) + r"\s*\[\]",
         f"animation table {table_symbol}",
     )
-    entries = [item.strip() for item in body.split(",") if item.strip()]
+    entries = _selected_comma_fields(
+        filename, body, "animation table field")
     if not entries or entries[-1] != "NULL":
         raise ValueError(f"{filename}: animation table requires one trailing NULL")
     symbols: list[str] = []
@@ -345,6 +346,14 @@ def _strip_c_comments(filename: str, source: str) -> str:
             output.append(source[cursor])
             cursor += 1
     return "".join(output)
+
+
+def _selected_comma_fields(filename: str, body: str, label: str) -> list[str]:
+    """Split one flat selected initializer without erasing empty positions."""
+    fields = [field.strip() for field in body.split(",")]
+    if any(not field for field in fields):
+        raise ValueError(f"{filename}: empty {label}")
+    return fields
 
 
 def _selected_initializer(filename: str, source: str, declaration: str,
@@ -451,7 +460,8 @@ def parse_generic_animation_file_text(
             re.escape(symbol) + r"\s*\[\]",
             f"Animation {symbol}",
         )
-        fields = [field.strip() for field in body.split(",") if field.strip()]
+        fields = _selected_comma_fields(
+            filename, body, "Animation header field")
         if len(fields) != 9:
             raise ValueError(f"{filename}: incomplete Animation header for {symbol}")
         header = [_integer_literal(filename, fields[index],

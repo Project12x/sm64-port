@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import sys
 import tempfile
@@ -77,7 +78,7 @@ const Gfx test_case_b_dl[] = {
 _ANIMATION_TABLE = """
 const struct Animation *const test_anims[] = {
     &test_anim,
-    NULL,
+    NULL
 };
 """
 
@@ -101,7 +102,7 @@ static const struct Animation test_anim[] = {
     ANIMINDEX_NUMPARTS(test_anim_indices),
     test_anim_values,
     test_anim_indices,
-    0,
+    0
 };
 """
 
@@ -195,6 +196,97 @@ const GeoLayout test_geo[] = {
 
 
 class ActorVariantBankTest(unittest.TestCase):
+    def test_model_binding_source_must_match_selected_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            alternate_geo = fixture.root / "actors/test/alternate_geo.inc.c"
+            alternate_geo.write_text(
+                _RIGID_GEO.replace("test_geo", "alternate_geo"),
+                encoding="utf-8", newline="\n",
+            )
+            fixture.record["geo_root"] = "alternate_geo"
+            fixture.record["model_variants"][0]["geo_root"] = "alternate_geo"
+            binding = fixture.record["root_provenance"]["models"]["MODEL_TEST"]
+            binding["geo_symbol"] = "alternate_geo"
+            binding["geo_source"] = "actors/test/alternate_geo.inc.c"
+            fixture.rehash()
+            with self.assertRaisesRegex(ActorSourceSelectionError, "binding"):
+                fixture.compile(model=1)
+
+        mutations = {
+            "missing": "/* selected binding removed */\n",
+            "duplicate": (
+                "LOAD_MODEL_FROM_GEO(MODEL_TEST, test_geo)\n"
+                "LOAD_MODEL_FROM_GEO(MODEL_TEST, test_geo)\n"
+            ),
+            "conflicting": (
+                "LOAD_MODEL_FROM_GEO(MODEL_TEST, test_geo)\n"
+                "LOAD_MODEL_FROM_GEO(MODEL_TEST, other_geo)\n"
+            ),
+            "unterminated": "LOAD_MODEL_FROM_GEO(MODEL_TEST, test_geo\n",
+            "trailing_token": (
+                "LOAD_MODEL_FROM_GEO(MODEL_TEST, test_geo) BROKEN_TOKEN\n"
+            ),
+        }
+        for label, source in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _RIGID_GEO)
+                script = fixture.root / "levels/test/script.c"
+                script.write_text(source, encoding="utf-8", newline="\n")
+                fixture.rehash()
+                with self.assertRaisesRegex(ActorSourceSelectionError, "binding"):
+                    fixture.compile(model=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            binding = fixture.record["root_provenance"]["models"]["MODEL_TEST"]
+            binding["binding_source"] = "include/model_ids.h"
+            compiled = fixture.compile(model=1)
+            self.assertEqual(
+                (compiled.report["selection"]["model"],
+                 compiled.report["selection"]["geo_root"]),
+                ("MODEL_TEST", "test_geo"),
+            )
+
+    def test_cross_record_model_id_conflict_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            model_ids = fixture.root / "include/model_ids.h"
+            model_ids.write_text(
+                model_ids.read_text(encoding="utf-8") +
+                "#define MODEL_ALT 1 // alternate_geo\n",
+                encoding="utf-8", newline="\n",
+            )
+            script = fixture.root / "levels/test/script.c"
+            script.write_text(
+                script.read_text(encoding="utf-8") +
+                "LOAD_MODEL_FROM_GEO(MODEL_ALT, alternate_geo)\n",
+                encoding="utf-8", newline="\n",
+            )
+            alternate_geo = fixture.root / "actors/test/alternate_geo.inc.c"
+            alternate_geo.write_text(
+                _RIGID_GEO.replace("test_geo", "alternate_geo"),
+                encoding="utf-8", newline="\n",
+            )
+            fixture.rehash()
+            other = copy.deepcopy(fixture.record)
+            other["model"] = "MODEL_ALT"
+            other["geo_root"] = "alternate_geo"
+            other["model_variants"] = [
+                {"model": "MODEL_ALT", "geo_root": "alternate_geo"},
+            ]
+            other["root_provenance"]["models"] = {
+                "MODEL_ALT": {
+                    "source": "include/model_ids.h",
+                    "binding_source": "levels/test/script.c",
+                    "geo_symbol": "alternate_geo",
+                    "geo_source": "actors/test/alternate_geo.inc.c",
+                },
+            }
+            with self.assertRaisesRegex(
+                    ActorSourceSelectionError, "conflicting model/GeoLayout provenance"):
+                compile_actor_variant(fixture.root, 7, 1, [fixture.record, other])
+
     def test_model_id_selects_exact_primary_or_alternate_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = _Fixture(Path(directory), _RIGID_GEO)
@@ -491,11 +583,11 @@ const GeoLayout test_alt_geo[] = {
         self.assertEqual(compiled.maximum_scratch, 387)
         self.assertEqual(
             compiled.payload_sha256,
-            "1bff9db7ae5c3cea3512f748a721706a3709b662cb9c8a88ad3b4c0528b0634e",
+            "2a4af81303a523a26f6ed3e9df2ac1a7aeb600a1b2c129158d3a6dc79231b93e",
         )
         self.assertEqual(
             compiled.source_sha256,
-            "0d617e2444ef50ce6d16e41aaac6572e47eacdff534c5aab8efcc08cdb118a60",
+            "d5a472a4f4f90145e2882adf997b75912f205f82fc51d718ede704c329c3929d",
         )
         geometry = compiled.report["geometry"]
         self.assertEqual(geometry["joints"], [
