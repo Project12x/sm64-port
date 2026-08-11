@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Made the combined object-pool smoke wait, one VBlank at a time and within a
+  fixed startup bound, until both immutable target code and the initialized
+  sealed build identity match before telemetry begins. This fixes exact
+  release captures failing during normal sourceboot CD handoff while keeping
+  the requested 20,100-frame observation interval unchanged and fail-closed.
+
 - Made extracted-asset cleanup hold Task 7's reviewed directory namespace
   guards across validation and mutation, using directory-relative deletion on
   POSIX and exact opened-handle deletion on Windows. This closes the remaining

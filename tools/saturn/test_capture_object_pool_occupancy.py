@@ -144,7 +144,7 @@ class ObjectPoolOccupancyTests(unittest.TestCase):
                 }),
                 mock.patch.object(capture, "YmirClient", return_value=Client()),
                 mock.patch.object(capture, "run_bios_handoff"),
-                mock.patch.object(capture, "prove_sealed_target_identity", return_value={}),
+                mock.patch.object(capture, "wait_for_sealed_target_identity", return_value={}),
                 mock.patch.object(capture, "read_smoke_sample", return_value=sample),
                 mock.patch.object(capture, "smoke_acceptance", return_value={"pass": True}),
                 mock.patch.object(capture, "artifact_identity", return_value={}),
@@ -323,6 +323,51 @@ class ObjectPoolOccupancyTests(unittest.TestCase):
                     Client(b"\x01\x02\x03\x04", sealed), code_probe, build_probe,
                     b"not-the-elf-identity",
                 )
+
+    def test_waits_until_code_and_build_identity_are_both_loaded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            sealed = identity.build_identity(_spec(Path(directory), 208)).raw
+        code_probe = {
+            "address": 0x06001000,
+            "size": 4,
+            "expected_bytes": [1, 2, 3, 4],
+            "expected_sha256": "unused-by-the-fake",
+        }
+        build_probe = {
+            "address": 0x06002000,
+            "size": len(sealed),
+            "expected_bytes": list(sealed),
+        }
+
+        class Client:
+            startup_vblank = 0
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, object]:
+                if method == "exec.run_for":
+                    self.assert_one_frame(params)
+                    self.startup_vblank += 1
+                    return {}
+                if method != "mem.peek":
+                    raise AssertionError(method)
+                if params["address"] == 0x06001000:
+                    return {"data": [1, 2, 3, 4] if self.startup_vblank >= 2 else [0] * 4}
+                if params["address"] == 0x26002000:
+                    return {"data": list(sealed) if self.startup_vblank >= 4 else [0] * len(sealed)}
+                raise AssertionError(params)
+
+            @staticmethod
+            def assert_one_frame(params: dict[str, int]) -> None:
+                if params != {"frames": 1}:
+                    raise AssertionError(params)
+
+        client = Client()
+        result = capture.wait_for_sealed_target_identity(
+            client, code_probe, build_probe, sealed, startup_vblanks=10
+        )
+        self.assertTrue(result["match"])
+        self.assertEqual(result["startup_vblanks_waited"], 4)
+        self.assertEqual(result["startup_identity_attempts"], 4)
+        self.assertEqual(client.startup_vblank, 4)
 
     def test_decode_signed_camera_yaw(self) -> None:
         self.assertEqual(capture.decode_s16_be([0x80, 0x00]), -32768)

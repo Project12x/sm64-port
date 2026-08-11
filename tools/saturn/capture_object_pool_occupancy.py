@@ -35,12 +35,14 @@ from capture_route_views import YmirClient
 from capture_sourceboot_throughput import (
     BOOT_TRACE_BYTES,
     CADENCE_TRACE_BYTES,
+    IDENTITY_MISMATCH_MESSAGE,
     build_elf_build_identity_probe,
     build_elf_identity_probe,
     decode_boot_trace,
     decode_cadence_trace,
     prove_loaded_build_identity,
     prove_target_identity,
+    validate_startup_vblanks,
     validate_release_identity_probe,
 )
 from gen_build_identity import build_identity
@@ -78,6 +80,7 @@ DEFAULT_SAMPLE_INTERVAL_FRAMES = 300
 # that clears the plan's >=20,000-frame measurement floor.
 DEFAULT_POST_BIOS_FRAMES = 20100
 MIN_POST_BIOS_FRAMES = 20000
+STARTUP_IDENTITY_VBLANKS = 3600
 
 def pool_capacity_from_sealed_artifact(identity_spec: Path, elf: Path) -> int:
     """Return capacity only after the matching sealed identity is found in ELF.
@@ -297,6 +300,50 @@ def prove_sealed_target_identity(
     return {"match": bool(target["match"] and loaded["match"]), "code": target, "build": loaded}
 
 
+def wait_for_sealed_target_identity(
+    client: YmirClient,
+    target_probe: dict[str, Any],
+    build_probe: dict[str, Any],
+    sealed_identity: bytes,
+    *,
+    startup_vblanks: int,
+    run_for: Any | None = None,
+) -> dict[str, Any]:
+    """Wait until exact code and initialized build identity match one target."""
+    if bytes(build_probe["expected_bytes"]) != sealed_identity:
+        raise ValueError("sealed build identity does not match capture ELF")
+    startup_vblanks = validate_startup_vblanks(startup_vblanks)
+    advance = run_for or (
+        lambda frames: client.call("exec.run_for", {"frames": frames})
+    )
+    last_build_error: ValueError | None = None
+    for attempt in range(1, startup_vblanks + 1):
+        advance(1)
+        try:
+            target = prove_target_identity(client, target_probe)
+        except ValueError as error:
+            if str(error) != IDENTITY_MISMATCH_MESSAGE:
+                raise
+            continue
+        try:
+            loaded = prove_loaded_build_identity(client, build_probe)
+        except ValueError as error:
+            last_build_error = error
+            continue
+        return {
+            "match": bool(target["match"] and loaded["match"]),
+            "code": target,
+            "build": loaded,
+            "startup_vblanks_waited": attempt,
+            "startup_identity_attempts": attempt,
+        }
+    detail = f": {last_build_error}" if last_build_error is not None else ""
+    raise ValueError(
+        "sealed target identity did not match after "
+        f"{startup_vblanks} one-VBlank startup attempts{detail}"
+    )
+
+
 def smoke_acceptance(samples: list[dict[str, Any]]) -> dict[str, bool]:
     valid = [sample for sample in samples if sample.get("magic_valid")]
     yaw_window = [
@@ -444,8 +491,13 @@ def main(argv: list[str] | None = None) -> int:
             samples.append({"label": label, "emulated_frames": emulated_frames, **smoke})
 
         run_bios_handoff(client, run_for, sample)
-        target_identity = prove_sealed_target_identity(
-            client, target_identity_probe, build_identity_probe, sealed_identity
+        target_identity = wait_for_sealed_target_identity(
+            client,
+            target_identity_probe,
+            build_identity_probe,
+            sealed_identity,
+            startup_vblanks=STARTUP_IDENTITY_VBLANKS,
+            run_for=run_for,
         )
 
         elapsed = 0

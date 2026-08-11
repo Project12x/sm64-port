@@ -2741,6 +2741,24 @@ git commit -m "docs(saturn): record integrated demo acceptance"
 
 Independent evidence review must confirm every report binds the same release manifest and that full-game deployment readiness is described as an architecture/capability with remaining content gates, not as completed game status.
 
+**Task 10 repair round 1 (2026-08-11): active.** The canonical stage verified
+at manifest `9110b40d...b99` before Ymir I/O. The first exact combined-smoke
+attempt stopped at the identity gate after the fixed 1,500-frame BIOS macro:
+code and build-identity memory were not loaded yet, so zero telemetry samples
+were accepted. A diagnostic exact-candidate run isolated normal loader timing:
+immutable code first matched at +540 VBlanks and the initialized sealed build
+identity at +577. Reference-first inspection used the in-tree
+`capture_sourceboot_throughput.py::wait_for_target_identity` at `bb9d3c9f`;
+reuse mode is same-repository close-port. The occupancy capture now advances
+within a 3,600-VBlank bound until both code and build identity match, then runs
+the full requested interval. TDD RED was the missing dual-identity wait API;
+focused GREEN is 13/13 outside the sandbox. A sandboxed full-suite setup run
+had two established Windows ancestor-handle errors at `C:\Users\estee` and is
+discarded as environmental. Target bytes and binding inputs did not change, so
+Task 9 rebuild/repro/v4/staging gates remain closed. The exact smoke rerun,
+visual inspection, desktop launch, owner verdict, closeout verification, and
+both Task 10 independent reviews remain open.
+
 ## Completion criteria
 
 This plan is complete only when Tasks 1–10 and both reviews per task clear; the BOB identity-v2 target reproduces across two clean builds; v4 passes against the exact release manifest; release staging verifies; the 20,100-frame smoke passes; visual evidence is accepted; and the owner's manual result is recorded. The full-game profile remains explicitly incomplete until its full package inventory and game-wide target gates are implemented, but adding that inventory must require no second identity, audit-binding, release-manifest, capture-binding, or deployment-staging architecture.

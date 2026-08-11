@@ -385,6 +385,37 @@
 - Design correction: composition occurs entirely from a captured target-profile snapshot and staged generated outputs. Identity validation reads staged copies with the final relative descriptor hashes; originals and staged bytes are rechecked immediately before the transaction. Publication snapshots every prior target, writes spec last, and restores prior bytes/removes new files on any exception.
 - Repair commits: `ec546de2609708b2c39a343dfc57d4893a6fd87b` (`fix(saturn): publish identity inputs transactionally`) and `9d6a394a1a80cdfda68b1809acd1990349b23a25` (`docs(saturn): record identity publication repair`). Post-commit `git show --check` and full-range `git diff --check b0c7fa03..HEAD` passed; the range remains restricted to the changelog, active plan, bootstrap implementation, and focused bootstrap tests.
 - Independent rereview plus target build, reproducibility, audit v4, complete package inventory, release manifest, 20,100-frame smoke, visual, and manual-play gates remain open.
+
+## Task 10 execution ledger — repair round 1
+
+- Status: `active`. Reconciled Git/plan/ledger at controller base `bb9d3c9f`;
+  Task 9 is complete and the canonical five-file stage independently verified
+  before emulator I/O at manifest SHA-256
+  `9110b40da0e890b7b03dc5748e9ead4a47865ea4f9e3df21869b47de33679b99`.
+- The first prescribed 20,100-frame run exited 1 after 12.8 seconds at 1,500
+  emulated BIOS-macro frames. Failure-report SHA-256 is
+  `9261cc61b624a69e565f81d62a90f08d4c7166e92f0d5d098a1ae8369af8acc2`:
+  zero valid samples and `running target does not contain immutable bytes from
+  the matching ELF`. Visual and desktop evidence chains stopped.
+- Root cause: the capture proved code and initialized identity immediately
+  after the fixed BIOS macro. Exact-candidate diagnostics measured code match
+  at +540 VBlanks and build-identity match at +577. The target/candidate is
+  valid; the sourceboot loader had not finished at the old proof instant.
+- Reference record: `tools/saturn/capture_sourceboot_throughput.py` at
+  `bb9d3c9f`, function `wait_for_target_identity`; reuse mode is
+  same-repository close-port. Occupancy capture now waits up to 3,600 one-frame
+  attempts for both immutable code and sealed build identity before starting
+  the exact observation interval. No target bytes or release inputs changed.
+- TDD RED: the new regression errored because
+  `wait_for_sealed_target_identity` was absent. GREEN: the regression and CLI
+  pair passed 2/2; the full focused suite passed 13/13 with normal Windows
+  ancestor-handle access. The sandboxed full-suite setup run had two
+  environmental `C:\Users\estee` handle errors and is discarded separately.
+- Open gates: behavior commit and independent review; exact smoke rerun;
+  release-bound visual capture and PNG inspection; verified desktop launch;
+  owner manual verdict; final docs/tests; both Task 10 independent reviews.
+  The prior peak 138 remains only an idle-boot floor without pickup/hold or
+  action-particle coverage. `sm64-saturn-full` remains non-releasable.
 ## Task 7 execution ledger
 
 - Initial dispatch base: `48f5a61a` (`docs(saturn): start exact release
