@@ -13,6 +13,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
 
 
 SUPPORTED_GEO_NODES = frozenset({
@@ -290,6 +291,97 @@ def parse_animation_file_text(filename: str, source: str,
         ))
     if not records:
         raise ValueError(f"{filename}: no Animation records")
+    return tuple(records)
+
+
+def parse_animation_table_text(filename: str, source: str,
+                               table_symbol: str) -> tuple[str, ...]:
+    """Parse one closure-selected Animation pointer table without guessing."""
+    if not re.fullmatch(r"[A-Za-z_]\w*", table_symbol):
+        raise ValueError(f"{filename}: invalid animation table symbol")
+    match = re.search(
+        r"(?:static\s+)?const\s+struct\s+Animation\s*\*\s*const\s+" +
+        re.escape(table_symbol) + r"\s*\[\]\s*=\s*\{(.*?)\};",
+        source, re.DOTALL,
+    )
+    if match is None:
+        raise ValueError(f"{filename}: missing animation table {table_symbol}")
+    body = re.sub(r"/\*.*?\*/", "", match.group(1), flags=re.DOTALL)
+    body = re.sub(r"//.*", "", body)
+    entries = [item.strip() for item in body.split(",") if item.strip()]
+    if not entries or entries[-1] != "NULL":
+        raise ValueError(f"{filename}: animation table requires one trailing NULL")
+    symbols: list[str] = []
+    for entry in entries[:-1]:
+        item = re.fullmatch(r"&([A-Za-z_]\w*)", entry)
+        if item is None:
+            raise ValueError(f"{filename}: unsupported animation table entry {entry}")
+        symbol = item.group(1)
+        if symbol in symbols:
+            raise ValueError(f"{filename}: duplicate animation table entry {symbol}")
+        symbols.append(symbol)
+    if not symbols:
+        raise ValueError(f"{filename}: animation table contains no animations")
+    return tuple(symbols)
+
+
+def parse_generic_animation_file_text(
+    filename: str,
+    source: str,
+    symbol_ids: Mapping[str, int],
+) -> tuple[AnimationRecord, ...]:
+    """Parse closure-selected compact Animation definitions by exact symbol."""
+    if (not symbol_ids or any(not re.fullmatch(r"[A-Za-z_]\w*", symbol)
+                              for symbol in symbol_ids)):
+        raise ValueError(f"{filename}: invalid selected animation symbols")
+    ids = tuple(symbol_ids.values())
+    if (any(isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in ids) or len(set(ids)) != len(ids)):
+        raise ValueError(f"{filename}: invalid selected animation IDs")
+    arrays: dict[str, tuple[int, ...]] = {}
+    for kind, name, body in re.findall(
+        r"(?:static\s+)?const\s+(u16|s16)\s+([A-Za-z_]\w*)\[\]\s*=\s*\{(.*?)\};",
+        source, re.DOTALL,
+    ):
+        arrays[name] = _numbers(body, signed=kind == "s16")
+    records: list[AnimationRecord] = []
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    found: set[str] = set()
+    for symbol, body in re.findall(
+        r"(?:static\s+)?const\s+struct\s+Animation\s+([A-Za-z_]\w*)\[\]\s*=\s*\{(.*?)\};",
+        source, re.DOTALL,
+    ):
+        if symbol not in symbol_ids:
+            continue
+        fields = [field.strip() for field in body.split(",") if field.strip()]
+        if len(fields) != 9:
+            raise ValueError(f"{filename}: incomplete Animation header for {symbol}")
+        try:
+            header = [int(fields[index], 0) for index in range(5)]
+        except ValueError as error:
+            raise ValueError(f"{filename}: invalid Animation scalar for {symbol}") from error
+        values_name, indices_name = fields[6], fields[7]
+        if values_name not in arrays or indices_name not in arrays:
+            raise ValueError(f"{filename}: missing channel array for {symbol}")
+        values, indices = arrays[values_name], arrays[indices_name]
+        if len(indices) < 12 or len(indices) % 6:
+            raise ValueError(f"{filename}: corrupt Animation index length for {symbol}")
+        for channel in range(0, len(indices), 2):
+            count, offset = indices[channel:channel + 2]
+            if count <= 0 or offset < 0 or offset + count > len(values):
+                raise ValueError(f"{filename}: corrupt channel span for {symbol}")
+        records.append(AnimationRecord(
+            animation_id=symbol_ids[symbol], enum_name=symbol, symbol=symbol,
+            source_path=filename.replace("\\", "/"), source_sha256=digest,
+            flags=header[0], y_translation_divisor=header[1],
+            start_frame=header[2], loop_start=header[3], frame_count=header[4],
+            joint_count=len(indices) // 6 - 1, indices=indices, values=values,
+        ))
+        found.add(symbol)
+    missing = sorted(set(symbol_ids) - found)
+    if missing:
+        raise ValueError(f"{filename}: missing selected Animation {missing[0]}")
+    records.sort(key=lambda record: record.animation_id)
     return tuple(records)
 
 

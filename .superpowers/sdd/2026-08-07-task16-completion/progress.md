@@ -427,3 +427,48 @@
   Tasks 2-5, and every target/P2/Ymir/map/capacity,
   feature-off, transition, release/reseal, smoke, visual, desktop, manual, and
   total-game gate remain open.
+
+## 2026-08-11 generic actor bundle Task 3 — generic S64B variant banks
+
+- Status: `source-complete; independent review pending`. The behavior commit
+  is the Task 3 transition itself; its exact SHA is recorded in the follow-up
+  evidence commit and Task 3 report. Task 4 has not started, and Task 16 Tasks
+  2-5 remain blocked/open on the rest of the prerequisite lane.
+- TDD: the required variant RED failed at import with
+  `ModuleNotFoundError: No module named 'actor_variant_bank'`; the animation
+  parser RED separately failed because `parse_animation_table_text` did not
+  exist. GREEN is 14 focused variant/source tests, 25 historical rigid-group
+  tests, the existing Mario pose/meshlet Make gates, and Python compileall.
+- Exact fixture evidence: rigid is a 358-byte S64B with 104-byte lane,
+  211-byte scratch, payload
+  `3aa76aa8d63d012e5117ed28748bf21f144e31010ac8aea03038f3fedb57a043`,
+  and source identity
+  `129e2d833160e29caba88e00552512b739484bc8ee14b1861475b3e0da5033f1`.
+  Articulated is 468 bytes with 192-byte lane, 387-byte scratch, payload
+  `1e688dc471c5590c672632377c31d8c3f4906bb31f7c3d476e8cf310069c395e`,
+  and source identity
+  `9efc768508379b3d07c36d76b54171f9382eee42c6c6e423cb8af4c4319f5ef2`.
+  Exact geometry, joints, owners, materials, meshlets, switch/billboard/layer
+  metadata, neutral pose, and two articulated frame samples are asserted.
+- Mutation evidence: raw source drift, unattested source, missing list target,
+  missing switch case, changed joint owner, corrupt animation span, and
+  material-layer changes either raise the named boundary error or change both
+  exact source/payload identity and opacity. There is no first-record or Mario
+  fallback and no output is written by the compiler API.
+- Legacy proof: both shared-encoder outputs are sequence-equal to the
+  historical generated artifacts. Mario remains 596,896 bytes at payload
+  SHA-256
+  `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
+  the exact JSON report remains
+  `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+- Reference reuse: at base `891a77a43d3587f62e21631acd23d6b584a78b58`,
+  directly reused `actor_family_bundle.py` source identity/S64B validation,
+  `dl_rigid_groups.py` structure walking, `saturn_mesh_ir.py` primitive
+  compilation, and `extract_mario_actor.py` block/Vtx/Fast3D helpers; factored
+  only the existing `compile_actor_bank.py` byte encoder and close-ported its
+  deterministic state/meshlet shapes. No external code or new license input.
+- Remaining: independent Task 3 review; real BOB/whole-game compilation and
+  capacity; scene-level S64F orchestration; registry regeneration; cart and
+  fixed two-lane runtime; Task 16 Tasks 2-5; target/P2/Ymir/map/capacity;
+  feature-off identity; transition; release/reseal; smoke, visual, desktop,
+  owner-manual, and total-game gates. None is claimed by host/source evidence.

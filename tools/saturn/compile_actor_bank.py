@@ -8,14 +8,16 @@ import hashlib
 import json
 import re
 import struct
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from actor_source import (
     ACTOR_CAPABILITY_NAMES,
     ACTOR_CAPABILITY_BITS,
     ACTOR_RUNTIME_CAPABILITY_BITS,
     ACTOR_RUNTIME_CAPABILITY_NAMES,
+    AnimationRecord,
     analyze_actor_capabilities,
     load_animation_inventory,
     parse_mario_skeleton,
@@ -59,6 +61,30 @@ MESHLET_RECORD_STRUCT = struct.Struct(">HHBB6h12I")
 PRIMITIVE_RECORD_STRUCT = struct.Struct(">5H")
 ACTOR_WORK_LANE_COUNT = 2
 ACTOR_WORK_ALIGNMENT = 4
+
+
+@dataclass(frozen=True)
+class Joint:
+    joint_ordinal: int
+    parent_ordinal: int
+    translation: tuple[int, int, int]
+    node_ordinal: int
+    branch_ordinal: int = 0xFFFF
+
+
+@dataclass(frozen=True)
+class Vertex:
+    local: tuple[int, int, int]
+    joint_ordinal: int
+    branch_ordinal: int
+
+
+@dataclass(frozen=True)
+class Geometry:
+    parts: Sequence[dict[str, object]]
+    materials: Sequence[dict[str, object]]
+    meshlets: Sequence[dict[str, object]]
+    primitives: Sequence[dict[str, object]]
 
 # Generic family-bank container.  It intentionally carries JSON metadata as
 # bounded byte spans; the Saturn runtime never publishes pointers into it.
@@ -567,12 +593,11 @@ def _compile_geometry(root: Path, manifest: dict[str, object]) -> dict[str, obje
     }
 
 
-def _pack_geometry(geometry: dict[str, object]) -> bytes:
-    joints = geometry["joints"]
-    parts = geometry["parts"]
-    materials = geometry["materials"]
-    meshlets = geometry["meshlets"]["meshlets"]
-    primitives = geometry["primitives"]
+def _pack_geometry(joints: Sequence[Joint], geometry: Geometry) -> bytes:
+    parts = geometry.parts
+    materials = geometry.materials
+    meshlets = geometry.meshlets
+    primitives = geometry.primitives
     primitive_refs: list[int] = []
     vertex_refs: list[int] = []
     meshlet_records: list[bytes] = []
@@ -601,8 +626,8 @@ def _pack_geometry(geometry: dict[str, object]) -> bytes:
         meshlet_offset, primitive_offset, primitive_ref_offset, vertex_ref_offset))
     for joint in joints:
         output.extend(JOINT_RECORD_STRUCT.pack(
-            joint["parent_ordinal"], *joint["translation"],
-            joint["node_ordinal"], joint["branch_ordinal"]))
+            joint.parent_ordinal, *joint.translation,
+            joint.node_ordinal, joint.branch_ordinal))
     for part in parts:
         output.extend(PART_RECORD_STRUCT.pack(part["joint_ordinal"], part["branch_ordinal"]))
     for material in materials:
@@ -614,6 +639,135 @@ def _pack_geometry(geometry: dict[str, object]) -> bytes:
     output.extend(struct.pack(f">{len(primitive_refs)}H", *primitive_refs))
     output.extend(struct.pack(f">{len(vertex_refs)}H", *vertex_refs))
     return bytes(output)
+
+
+def pack_actor_bank(
+    *,
+    family_id: int,
+    model_id: int,
+    max_instances: int,
+    source_digest: bytes,
+    joints: Sequence[Joint],
+    animations: Sequence[AnimationRecord],
+    vertices: Sequence[Vertex],
+    geometry: Geometry,
+) -> tuple[bytes, dict[str, object]]:
+    """Pack the shared deterministic S64B payload used by every actor.
+
+    This function owns only the historical byte layout. Source selection,
+    typed GeoLayout semantics, and report policy stay with the caller.
+    """
+    joints = tuple(joints)
+    animations = tuple(animations)
+    vertices = tuple(vertices)
+    if not 0 < family_id <= 0xFFFF or not 0 < model_id <= 0xFFFF:
+        raise ValueError("actor bank family/model IDs must be nonzero uint16 values")
+    if not 0 < max_instances <= 0xFFFF:
+        raise ValueError("actor bank maximum instances must be a nonzero uint16")
+    if not isinstance(source_digest, bytes) or len(source_digest) != 32 or not any(source_digest):
+        raise ValueError("actor bank source digest must be a nonzero SHA-256")
+    if not joints or not animations or not vertices:
+        raise ValueError("actor bank requires joints, animations, and vertices")
+    if [joint.joint_ordinal for joint in joints] != list(range(len(joints))):
+        raise ValueError("actor bank joint ordinals must be contiguous")
+    if [record.animation_id for record in animations] != list(range(len(animations))):
+        raise ValueError("actor bank animation IDs must be contiguous")
+    if any(record.joint_count != len(joints) for record in animations):
+        raise ValueError("actor bank animation joint count mismatch")
+
+    payload = bytearray(bytes(HEADER_SIZE))
+    records_offset = _align(payload)
+    payload.extend(bytes(len(animations) * ANIMATION_RECORD_STRUCT.size))
+
+    index_blobs: dict[bytes, int] = {}
+    value_blobs: dict[bytes, int] = {}
+    packed_records: list[dict[str, object]] = []
+    indices_offset = _align(payload)
+    for record in animations:
+        blob = struct.pack(f">{len(record.indices)}H", *record.indices)
+        if blob not in index_blobs:
+            payload.extend(struct.pack(">I", len(record.indices)))
+            index_blobs[blob] = len(payload)
+            payload.extend(blob)
+        packed_records.append({"record": record, "indices_offset": index_blobs[blob],
+                               "indices_size": len(blob)})
+    indices_size = len(payload) - indices_offset
+    values_offset = _align(payload)
+    for item in packed_records:
+        record = item["record"]
+        blob = struct.pack(f">{len(record.values)}h", *record.values)
+        if blob not in value_blobs:
+            payload.extend(struct.pack(">I", len(record.values)))
+            value_blobs[blob] = len(payload)
+            payload.extend(blob)
+        item["values_offset"] = value_blobs[blob]
+        item["values_size"] = len(blob)
+    values_size = len(payload) - values_offset
+    vertices_offset = _align(payload)
+    for vertex in vertices:
+        payload.extend(VERTEX_RECORD_STRUCT.pack(
+            *vertex.local, vertex.joint_ordinal, vertex.branch_ordinal))
+    vertices_size = len(payload) - vertices_offset
+    meshlets_offset = _align(payload)
+    geometry_blob = _pack_geometry(joints, geometry)
+    payload.extend(geometry_blob)
+    meshlets_size = len(geometry_blob)
+
+    animation_documents: list[dict[str, object]] = []
+    for item in packed_records:
+        record = item["record"]
+        record_offset = records_offset + record.animation_id * ANIMATION_RECORD_STRUCT.size
+        encoded = ANIMATION_RECORD_STRUCT.pack(
+            item["values_offset"], item["indices_offset"], record.frame_count,
+            record.joint_count, record.flags, record.y_translation_divisor)
+        payload[record_offset:record_offset + len(encoded)] = encoded
+        last_samples = [
+            record.values[offset + min(record.frame_count - 1, count - 1)]
+            for count, offset in zip(record.indices[0::2], record.indices[1::2])
+        ]
+        animation_documents.append({
+            "animation_id": record.animation_id, "enum_name": record.enum_name,
+            "symbol": record.symbol, "source_path": record.source_path,
+            "source_sha256": record.source_sha256, "values_offset": item["values_offset"],
+            "values_size": item["values_size"], "indices_offset": item["indices_offset"],
+            "indices_size": item["indices_size"], "frame_count": record.frame_count,
+            "joint_count": record.joint_count, "channel_count": len(record.indices) // 2,
+            "flags": record.flags, "y_translation_divisor": record.y_translation_divisor,
+            "start_frame": record.start_frame, "loop_start": record.loop_start,
+            "last_channel_samples": last_samples,
+        })
+
+    lane_bytes, _usable, max_scratch = _actor_workspace_sizes(len(vertices), len(joints))
+    header = HEADER_STRUCT.pack(
+        MAGIC, VERSION, family_id, model_id, len(joints), len(animations),
+        len(geometry.meshlets), len(geometry.primitives), len(vertices),
+        max_instances, FEATURE_MASK, source_digest,
+        HEADER_SIZE, ANIMATION_RECORD_STRUCT.size, records_offset,
+        indices_offset, indices_size, values_offset, values_size,
+        vertices_offset, vertices_size, meshlets_offset, meshlets_size, max_scratch)
+    payload[:len(header)] = header
+    packed = bytes(payload)
+    return packed, {
+        "animations": animation_documents,
+        "lane_bytes": lane_bytes,
+        "max_scratch": max_scratch,
+        "payload_sha256": hashlib.sha256(packed).hexdigest(),
+        "payload_size": len(packed),
+        "compact_channel_bytes": indices_size + values_size,
+        "format": {
+            "header_size": HEADER_SIZE,
+            "animation_record_size": ANIMATION_RECORD_STRUCT.size,
+            "records_offset": records_offset,
+            "indices_offset": indices_offset,
+            "indices_size": indices_size,
+            "values_offset": values_offset,
+            "values_size": values_size,
+            "vertices_offset": vertices_offset,
+            "vertices_size": vertices_size,
+            "meshlets_offset": meshlets_offset,
+            "meshlets_size": meshlets_size,
+        },
+    }
 
 
 def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str, object], bytes]:
@@ -642,80 +796,38 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
     source_entries.sort(key=lambda item: item["path"])
     source_digest = _source_digest(source_entries)
 
-    payload = bytearray(bytes(HEADER_SIZE))
-    records_offset = _align(payload)
-    payload.extend(bytes(len(inventory.records) * ANIMATION_RECORD_STRUCT.size))
+    joints = tuple(Joint(
+        joint_ordinal=int(item["joint_ordinal"]),
+        parent_ordinal=int(item["parent_ordinal"]),
+        translation=tuple(item["translation"]),
+        node_ordinal=int(item["node_ordinal"]),
+        branch_ordinal=int(item["branch_ordinal"]),
+    ) for item in geometry["joints"])
+    vertices = tuple(Vertex(
+        local=tuple(item["local"]),
+        joint_ordinal=int(item["joint_ordinal"]),
+        branch_ordinal=int(item["branch_ordinal"]),
+    ) for item in geometry["vertices"])
+    shared_geometry = Geometry(
+        parts=tuple(geometry["parts"]),
+        materials=tuple(geometry["materials"]),
+        meshlets=tuple(geometry["meshlets"]["meshlets"]),
+        primitives=tuple(geometry["primitives"]),
+    )
+    payload, packed = pack_actor_bank(
+        family_id=int(manifest["family_id"]),
+        model_id=int(manifest["model_id"]),
+        max_instances=int(manifest["max_instances"]),
+        source_digest=source_digest,
+        joints=joints,
+        animations=inventory.records,
+        vertices=vertices,
+        geometry=shared_geometry,
+    )
 
-    index_blobs: dict[bytes, int] = {}
-    value_blobs: dict[bytes, int] = {}
-    packed_records: list[dict[str, object]] = []
-    indices_offset = _align(payload)
-    for record in inventory.records:
-        blob = struct.pack(f">{len(record.indices)}H", *record.indices)
-        if blob not in index_blobs:
-            payload.extend(struct.pack(">I", len(record.indices)))
-            index_blobs[blob] = len(payload)
-            payload.extend(blob)
-        packed_records.append({"record": record, "indices_offset": index_blobs[blob],
-                               "indices_size": len(blob)})
-    indices_size = len(payload) - indices_offset
-    values_offset = _align(payload)
-    for item in packed_records:
-        record = item["record"]
-        blob = struct.pack(f">{len(record.values)}h", *record.values)
-        if blob not in value_blobs:
-            payload.extend(struct.pack(">I", len(record.values)))
-            value_blobs[blob] = len(payload)
-            payload.extend(blob)
-        item["values_offset"] = value_blobs[blob]
-        item["values_size"] = len(blob)
-    values_size = len(payload) - values_offset
-    vertices_offset = _align(payload)
-    for vertex in geometry["vertices"]:
-        payload.extend(VERTEX_RECORD_STRUCT.pack(
-            *vertex["local"], vertex["joint_ordinal"], vertex["branch_ordinal"]))
-    vertices_size = len(payload) - vertices_offset
-    meshlets_offset = _align(payload)
-    geometry_blob = _pack_geometry(geometry)
-    payload.extend(geometry_blob)
-    meshlets_size = len(geometry_blob)
-
-    animation_documents: list[dict[str, object]] = []
-    for item in packed_records:
-        record = item["record"]
-        record_offset = records_offset + record.animation_id * ANIMATION_RECORD_STRUCT.size
-        encoded = ANIMATION_RECORD_STRUCT.pack(
-            item["values_offset"], item["indices_offset"], record.frame_count,
-            record.joint_count, record.flags, record.y_translation_divisor)
-        payload[record_offset:record_offset + len(encoded)] = encoded
-        last_samples = [
-            record.values[offset + min(record.frame_count - 1, count - 1)]
-            for count, offset in zip(record.indices[0::2], record.indices[1::2])
-        ]
-        animation_documents.append({
-            "animation_id": record.animation_id, "enum_name": record.enum_name,
-            "symbol": record.symbol, "source_path": record.source_path,
-            "source_sha256": record.source_sha256, "values_offset": item["values_offset"],
-            "values_size": item["values_size"], "indices_offset": item["indices_offset"],
-            "indices_size": item["indices_size"], "frame_count": record.frame_count,
-            "joint_count": record.joint_count, "channel_count": len(record.indices) // 2,
-            "flags": record.flags, "y_translation_divisor": record.y_translation_divisor,
-            "start_frame": record.start_frame, "loop_start": record.loop_start,
-            "last_channel_samples": last_samples,
-        })
-
-    _, _, max_scratch = _actor_workspace_sizes(len(geometry["vertices"]), 20)
-    header = HEADER_STRUCT.pack(
-        MAGIC, VERSION, int(manifest["family_id"]), int(manifest["model_id"]), 20,
-        len(inventory.records), len(geometry["meshlets"]["meshlets"]),
-        len(geometry["primitives"]), len(geometry["vertices"]),
-        int(manifest["max_instances"]), FEATURE_MASK, source_digest,
-        HEADER_SIZE, ANIMATION_RECORD_STRUCT.size, records_offset,
-        indices_offset, indices_size, values_offset, values_size,
-        vertices_offset, vertices_size, meshlets_offset, meshlets_size, max_scratch)
-    payload[:len(header)] = header
-
-    payload_sha256 = hashlib.sha256(payload).hexdigest()
+    payload_sha256 = str(packed["payload_sha256"])
+    max_scratch = int(packed["max_scratch"])
+    animation_documents = packed["animations"]
     full_prebake_bytes = sum(record.frame_count for record in inventory.records) * len(geometry["vertices"]) * 7
     document: dict[str, object] = {
         "schema": "sm64-saturn-actor-bank-v1", "version": VERSION,
@@ -738,7 +850,7 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
         "materials": geometry["materials"], "meshlets": geometry["meshlets"]["meshlets"],
         "primitives": geometry["primitives"],
         "payload_sha256": payload_sha256, "payload_size": len(payload),
-        "compact_channel_bytes": indices_size + values_size,
+        "compact_channel_bytes": packed["compact_channel_bytes"],
         "full_prebake_vertex_light_bytes": full_prebake_bytes,
         "s64p_dependency": {
             "kind": "ANIMATION_DEPENDENCIES", "stable_id": "mario-animation-bank-v1",
@@ -746,16 +858,11 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
             "alignment": 4, "max_scratch": max_scratch, "byte_count": len(payload),
             "sha256": payload_sha256,
         },
-        "format": {"header_size": HEADER_SIZE, "animation_record_size": ANIMATION_RECORD_STRUCT.size,
-                   "records_offset": records_offset, "indices_offset": indices_offset,
-                   "indices_size": indices_size, "values_offset": values_offset,
-                   "values_size": values_size, "vertices_offset": vertices_offset,
-                   "vertices_size": vertices_size, "meshlets_offset": meshlets_offset,
-                   "meshlets_size": meshlets_size},
+        "format": packed["format"],
         "legacy_validation": manifest["legacy_validation"],
     }
-    validate_actor_bank_document(document, bytes(payload))
-    return document, bytes(payload)
+    validate_actor_bank_document(document, payload)
+    return document, payload
 
 
 def validate_actor_bank_document(document: dict[str, object], payload: bytes) -> None:

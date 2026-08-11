@@ -65,6 +65,16 @@
 
 ### Added
 
+- Added a deterministic, source-closure-selected generic S64B compiler for
+  rigid, articulated, switch, billboard, alpha, and translucent actor
+  variants. Reached GeoLayout, display-list, vertex, animation, and binding
+  sources now form the canonical per-variant source identity, while malformed,
+  unattested, ambiguous, or unsupported source constructs fail by named error
+  instead of dropping geometry or selecting a fallback. The shared big-endian
+  encoder preserves the historical Mario payload and report bytes exactly;
+  scene-level S64F orchestration and production sourceboot wiring remain
+  intentionally deferred.
+
 - Added the canonical, deterministic S64F v3 scene-local actor-family bundle
   writer and matching host/SH-2 validators. The additive format binds sorted
   family and drawable-variant directories, canonical metadata, complete S64B

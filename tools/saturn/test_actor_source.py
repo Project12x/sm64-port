@@ -16,6 +16,8 @@ from actor_source import (  # noqa: E402
     load_animation_inventory,
     parse_animation_file_text,
     parse_animation_id_header_text,
+    parse_animation_table_text,
+    parse_generic_animation_file_text,
     parse_mario_skeleton,
     render_legacy_mario_anims,
     validate_geo_node_vocabulary,
@@ -26,6 +28,55 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ActorSourceTest(unittest.TestCase):
+    def test_generic_animation_table_and_source_preserve_selected_order(self) -> None:
+        table = """
+const struct Animation *const test_anims[] = {
+    &walk_anim,
+    &idle_anim,
+    NULL,
+};
+"""
+        self.assertEqual(
+            parse_animation_table_text("table.inc.c", table, "test_anims"),
+            ("walk_anim", "idle_anim"),
+        )
+        source = """
+static const s16 idle_values[] = { 0, 1, 2, 3, 4, 5 };
+static const u16 idle_indices[] = {
+    1, 0, 1, 1, 1, 2, 1, 3, 1, 4, 1, 5,
+};
+static const struct Animation idle_anim[] = {
+    1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(idle_indices),
+    idle_values, idle_indices, 0,
+};
+"""
+        record, = parse_generic_animation_file_text(
+            "anim.inc.c", source, {"idle_anim": 1}
+        )
+        self.assertEqual((record.animation_id, record.symbol, record.joint_count),
+                         (1, "idle_anim", 1))
+        self.assertEqual(record.values, (0, 1, 2, 3, 4, 5))
+
+    def test_generic_animation_binding_rejects_unknown_entries_and_bad_spans(self) -> None:
+        with self.assertRaisesRegex(ValueError, "animation table entry"):
+            parse_animation_table_text(
+                "table.inc.c",
+                "const struct Animation *const test_anims[] = { SELECT_ANIM(), NULL };",
+                "test_anims",
+            )
+        source = """
+static const s16 bad_values[] = { 0 };
+static const u16 bad_indices[] = {
+    1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 2, 8,
+};
+static const struct Animation bad_anim[] = {
+    1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(bad_indices),
+    bad_values, bad_indices, 0,
+};
+"""
+        with self.assertRaisesRegex(ValueError, "channel span"):
+            parse_generic_animation_file_text("bad.inc.c", source, {"bad_anim": 0})
+
     def test_complete_mario_inventory_has_stable_ids_and_hashes(self) -> None:
         inventory = load_animation_inventory(ROOT)
         self.assertEqual(len(inventory.animation_ids), 209)

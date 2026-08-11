@@ -12,8 +12,10 @@
 subagent-driven workflow. Tasks 1 and 2 are complete and independently
 approved. Task 2 repair `f1799118` passed scoped rereview with both Important
 findings addressed and no new breakage; its malformed-path error-type Minor is
-deferred to the final branch review. Task 3 is the next RED. Target, release,
-smoke, visual, desktop, manual, and total-game gates remain open.
+deferred to the final branch review. Task 3 is source-complete in its behavior
+commit (exact SHA recorded by the follow-up evidence transition) and awaits
+independent review before Task 4. Target, release, smoke, visual, desktop,
+manual, and total-game gates remain open.
 
 ## Global Constraints
 
@@ -340,15 +342,15 @@ family_ordinal: int, model_id: int, records: Sequence[dict[str, object]]) ->
 CompiledActorVariant`. It either returns a fully validated artifact/report or
 raises a named unsupported/malformed-source exception without writing output.
 
-- [ ] **Step 1: RED with synthetic rigid and articulated fixtures**
+- [x] **Step 1: RED with synthetic rigid and articulated fixtures**
 
 The rigid fixture has one GeoLayout, nested display list, one material, and no animation table; require one root joint and one neutral one-frame animation. The articulated fixture has two `GEO_ANIMATED_PART` joints and a real compact animation source; require joint-local vertices and exact animation samples. Add separate switch, billboard, alpha, and translucent fixtures whose typed selection remains metadata while their variant geometry is exact.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `python -m unittest tools.saturn.test_actor_variant_bank -v`. Expected: import failure for `actor_variant_bank`.
 
-- [ ] **Step 3: Expose one shared S64B encoder**
+- [x] **Step 3: Expose one shared S64B encoder**
 
 Refactor `compile_actor_bank.py` so Mario and generic variants call:
 
@@ -359,17 +361,36 @@ Sequence[Vertex], geometry: Geometry) -> tuple[bytes, dict[str, object]]`.
 
 Run the existing Mario bank tests immediately; payload bytes and legacy hashes must remain exact.
 
-- [ ] **Step 4: Implement source-selected generic extraction**
+- [x] **Step 4: Implement source-selected generic extraction**
 
 Resolve the exact GeoLayout/model/animation sources from closure provenance; walk reached lists in source order; preserve Fast3D vertex-cache and material state; map each rigid group to one joint; emit joint-local vertices; compile primitives through Mesh IR; and parse only closure-selected animation tables. Unknown nodes, lists, vertices, animation bindings, or source-hash drift raise a named error rather than dropping geometry.
 
-- [ ] **Step 5: Run GREEN and mutation gates**
+- [x] **Step 5: Run GREEN and mutation gates**
 
 Run variant tests, `verify-actor-pose-bank verify-actor-meshlets`, and existing actor-source/rigid-group tests. Mutate a source byte, list target, joint owner, switch variant, animation span, and material layer; each must either change the exact identity/output or fail closed.
 
 - [ ] **Step 6: Commit and review**
 
 CHANGELOG explains the new generic compiler and strict unsupported boundary. Commit `feat(saturn): compile source-selected actor variant banks`; independent review before Task 4.
+
+**Task 3 source transition (2026-08-11):** source-complete; independent review
+pending. The new compiler consumes exact closure provenance, searches only
+attested sources, feeds joint-local geometry through the historical Mesh IR
+and S64B contracts, and preserves switch/billboard/layer selection as typed
+metadata. Synthetic rigid and articulated payloads are pinned at 358 and 468
+bytes with exact source/payload hashes, geometry, material, meshlet, joint, and
+pose assertions; switch, billboard, alpha, translucent, drift, target, joint,
+animation-span, and material-layer mutations are covered. The shared encoder
+leaves Mario's 596,896-byte payload at
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`
+and its exact JSON report hash at
+`3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+Focused Python, historical pose/meshlet, and rigid-group gates pass; the
+behavior commit is this transition and its exact SHA is recorded by the
+follow-up evidence commit/report. No `dl_rigid_groups.py` change was required:
+the existing walker exposed every modeled token needed by the fixtures.
+Sourceboot, scene-level S64F orchestration, target/release, whole-game, smoke,
+visual, desktop, and manual gates remain open and unclaimed.
 
 ---
 
