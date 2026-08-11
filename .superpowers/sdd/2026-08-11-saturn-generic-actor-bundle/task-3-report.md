@@ -934,3 +934,488 @@ is absent from the closure record. Task 4 made zero edits. Task 3 is reopened
 only to extend the authoritative hash-bound provenance chain; consuming an
 unsealed repository source is explicitly forbidden. RED/GREEN, exact Mario
 preservation, and independent scoped rereview remain open.
+
+### Real-source provenance repair round 4 — source complete
+
+#### Diagnosis and schema-compatible correction
+
+The authoritative source chain failed upstream, not in the strict variant
+compiler. `collect_scene_closure.py::_asset_root_source` found only the file
+that defines each selected model root, and the per-record collector added only
+that `geo_source`. Consequently the closure sealed
+`actors/wooden_signpost/geo.inc.c` but not the reached
+`actors/wooden_signpost/model.inc.c`. `scene_package_schema.py` already permits
+additional entries in `record.sources`; its fixed
+`root_provenance.models[*].geo_source` field must remain the singular source
+that defines the selected root symbol. No schema extension or downstream
+repository search was needed.
+
+Behavior commit `1274c08b` (`fix(saturn): seal reached actor closure sources`)
+adds a bounded, deterministic sealing-side definition index and a strict
+coverage walk from the declared GeoLayout or direct-Gfx root through Geo
+branches, display-list nodes, nested/tail lists, Vtx, and `Lights1`. Every
+uniquely reached path enters the existing sorted `record.sources` array and
+top-level `source_hashes`; missing, ambiguous, recursive, malformed, and
+computed references raise `ClosureError`. Downstream `_SourceIndex` remains
+closure-only and unchanged. Evidence commit `420d0223`
+(`docs(saturn): record actor provenance repair evidence`) pins the behavior
+commit in the active plan and tracked Task 16 ledger. Task 4 files remain
+untouched.
+
+Reference-code-first work stayed entirely in-tree at the Task 3 base. The
+reachability resolution mirrors the strict closure-only selection in
+`tools/saturn/actor_variant_bank.py`; initializer/token coverage is a close
+port of selected-source parsing in `tools/saturn/actor_source.py`; the reached
+Geo/Gfx/Vtx/light command shapes were checked against
+`tools/saturn/dl_rigid_groups.py`, `tools/saturn/extract_mario_actor.py`, and
+`tools/saturn/saturn_mesh_ir.py`. The historical
+`tools/saturn/compile_actor_bank.py` pack/validate behavior is reused directly
+and was not changed. Reuse mode is direct dependency plus close-port; no
+external code or license input was used.
+
+#### RED evidence and exact mutations
+
+The first correctly rooted real BOB test was added before production edits:
+
+```text
+> .venv-saturn-tools\Scripts\python.exe tools/saturn/test_bob_scene_closure.py BobSceneClosureTest.test_real_bob_actor_sources_include_reached_model_data -v
+ERROR: test_real_bob_actor_sources_include_reached_model_data
+KeyError: 'actors/wooden_signpost/model.inc.c'
+Ran 1 test in 54.517s
+FAILED (errors=1)
+```
+
+An earlier module-style invocation failed during import and exercised no
+closure code; it is deliberately not counted as the RED. The focused synthetic
+RED then ran these five exact tests: reached exact-source/hash collection,
+missing reached Gfx, ambiguous duplicate reached Gfx, computed nested Gfx, and
+reached-source hash drift.
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest \
+    test_scene_closure.SceneClosureTest.test_collects_reached_actor_asset_sources_and_hashes \
+    test_scene_closure.SceneClosureTest.test_missing_reached_actor_source_fails_closed \
+    test_scene_closure.SceneClosureTest.test_ambiguous_reached_actor_source_fails_closed \
+    test_scene_closure.SceneClosureTest.test_computed_reached_actor_source_fails_closed \
+    test_scene_closure.SceneClosureTest.test_reached_actor_source_hash_drift_fails_closed -v
+Ran 5 tests in 0.391s
+FAILED (failures=5)
+```
+
+The exact synthetic graph asserts the root Geo source plus parent Gfx,
+branched Geo, nested Gfx, tail-branch Gfx, and shared Vtx/light source paths and
+their file SHA-256 values in both the record and closure hash map. Mutations
+replace the nested list with `missing_dl`, add a second
+`parent_child_dl` definition, replace a target with
+`select_parent_dl(1)`, and append a byte to the reached Vtx/light source before
+schema validation. A separate mutation temporarily removed Geo-branch and
+`gsSPBranchList` traversal from production while leaving those exact source
+assertions in place:
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest \
+    test_scene_closure.SceneClosureTest.test_collects_reached_actor_asset_sources_and_hashes -v
+Ran 1 test in 0.116s
+FAILED (failures=1)
+```
+
+The production mutation was immediately restored. The first implementation
+pass then failed closed on real BOB at `missing reached Gfx dl_billboard_num_0`.
+That symbol is authoritatively defined in `bin/segment2.c`, proving the bounded
+game-source index also had to include original `bin/**/*.c` and non-port
+`src/**/*.c`; no downstream fallback was added.
+
+#### GREEN and regression evidence
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest [the five focused SceneClosureTest cases above] -v
+Ran 5 tests in 0.305s
+OK
+
+> .venv-saturn-tools\Scripts\python.exe tools/saturn/test_bob_scene_closure.py BobSceneClosureTest.test_real_bob_actor_sources_include_reached_model_data -v
+Ran 1 test in 58.529s
+OK
+
+> .venv-saturn-tools\Scripts\python.exe tools/saturn/test_scene_closure.py -v
+Ran 24 tests in 2.440s
+OK
+
+> .venv-saturn-tools\Scripts\python.exe tools/saturn/test_bob_scene_closure.py -v
+Ran 2 tests in 64.144s
+OK
+
+> .venv-saturn-tools\Scripts\python.exe -m unittest tools.saturn.test_actor_variant_bank tools.saturn.test_actor_source -v
+Ran 28 tests in 4.330s
+OK
+
+> .venv-saturn-tools\Scripts\python.exe -m unittest tools.saturn.test_tools.DisplayListRigidGroupTests tools.saturn.test_tools.GeoLayoutRigidGroupTests -v
+Ran 25 tests in 0.002s
+OK
+
+> .venv-saturn-tools\Scripts\python.exe tools/saturn/test_generic_actor_bank.py -v
+Ran 4 tests in 60.526s
+OK
+```
+
+A post-commit package-style selector from the repository root repeated the
+known local-import failure and exercised no implementation. The valid owning-
+directory rerun was immediately green:
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest [the five focused SceneClosureTest cases above] -v
+Ran 5 tests in 0.299s
+OK
+```
+
+The required Make wave used the exact absolute native forward-slash root:
+
+```text
+> powershell -ExecutionPolicy Bypass -File tools/saturn/with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 SATURN_REPO_ROOT=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge verify-actor-variant-bank verify-actor-pose-bank verify-actor-meshlets
+actor pose bank fixture: PASS
+actor meshlet fixture: PASS
+actor meshlet invalid-span mutation caught by fixture
+Ran 28 tests
+OK
+legacy Mario output/object bytes changed
+Exit code: 0
+```
+
+The final line is the intentional negative meshlet mutation. Final compileall
+exited zero:
+
+```text
+> .venv-saturn-tools\Scripts\python.exe -m compileall -q tools/saturn/collect_scene_closure.py tools/saturn/test_scene_closure.py tools/saturn/test_bob_scene_closure.py tools/saturn/actor_variant_bank.py tools/saturn/test_actor_variant_bank.py
+Exit code: 0
+```
+
+The repaired real `bhvMessagePanel` record now seals exactly these sorted
+paths for this selected variant:
+
+```text
+['actors/wooden_signpost/geo.inc.c',
+ 'actors/wooden_signpost/model.inc.c',
+ 'data/behavior_data.c',
+ 'include/model_ids.h',
+ 'levels/scripts.c']
+```
+
+Strict compilation no longer raises missing Gfx. It advances to the next
+honest named boundary:
+
+```text
+UnsupportedActorSourceError: unsupported GeoLayout node: GEO_SHADOW
+```
+
+Historical encoder identity remains exact:
+
+```text
+mario-actor-bank.json size=562096 sha=3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0
+mario.s64b size=596896 sha=242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539
+task3-refactor.json size=562096 sha=3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0
+task3-refactor.s64b size=596896 sha=242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539
+```
+
+#### Changed files, self-review, and open gates
+
+Behavior commit `1274c08b` changes exactly
+`tools/saturn/collect_scene_closure.py`,
+`tools/saturn/test_scene_closure.py`,
+`tools/saturn/test_bob_scene_closure.py`, `CHANGELOG.md`, `STATE.md`,
+`ROADMAP.md`, the active implementation plan, and the tracked Task 16 ledger.
+Evidence commit `420d0223` changes only the plan and ledger. This ignored
+report is not staged.
+
+Scoped self-review confirmed root provenance remains strict and singular,
+resolution prefers the referring source then requires a globally unique
+definition, every returned path is hash-bound before downstream use,
+unterminated/malformed commands and non-literal reachability fail named,
+recursion is rejected, output ordering is deterministic, Task 4 files are
+untouched, and no unrelated dirt was staged, reset, cleaned, checked out, or
+stashed.
+
+Independent scoped rereview remains open. `GEO_SHADOW` is the next real BOB
+unsupported-semantics boundary and is not silently omitted or broadened here.
+Task 4 S64F work remains paused with zero edits. Target/P2/Ymir/map,
+whole-game/capacity, registry, cart/workspace, Task 16 Tasks 2-5, feature-off,
+transition, Task 9 rebuild/reseal, Task 10 smoke/visual/desktop/owner-manual,
+release, and total-game gates remain open and unclaimed.
+
+### Source-provenance repair round 5 — C0/I3/M0 review repair
+
+The scoped round-4 rereview returned NEEDS FIXES with C0/I3/M0. Inspection
+confirmed all three Important findings against behavior commit `1274c08b`:
+
+1. `_reached_actor_sources` handled only direct/branch display lists, Vtx, and
+   light forms; every other coverage-tokenized Gfx command fell through. A
+   repository-valid `gsSPBranchLessZraw(child_dl, 0, 0)` therefore omitted its
+   reached child source.
+2. `_actor_asset_definition_index` was `lru_cache`-keyed only by `root`, so a
+   same-process source edit or new duplicate definition did not enter the
+   selection snapshot.
+3. recursive `visit` had cycle detection but no acyclic depth bound; a
+   1,200-list chain exhausted the Python stack before a domain error.
+
+Four tests were added before production edits. Their expectations are literal
+and consumer-visible: the exact branch target path must be in the record, an
+unmodeled command carrying a real indexed Gfx symbol must raise the named
+domain error, a duplicate written after a priming collection must be observed,
+and depth 1,200 must raise bounded `ClosureError` rather than
+`RecursionError`.
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest \
+    test_scene_closure.SceneClosureTest.test_branch_less_zraw_reached_gfx_source_is_sealed \
+    test_scene_closure.SceneClosureTest.test_unmodeled_reference_bearing_gfx_macro_fails_closed \
+    test_scene_closure.SceneClosureTest.test_actor_definition_index_refreshes_after_same_process_change \
+    test_scene_closure.SceneClosureTest.test_deep_acyclic_display_list_chain_fails_bounded -v
+branch-less source: FAIL (actors/branch_z/model.inc.c absent)
+unmodeled reference-bearing command: FAIL (ClosureError not raised)
+same-process duplicate: FAIL (ClosureError not raised)
+deep acyclic chain: ERROR (RecursionError; previous line repeated 968 times)
+Ran 4 tests in 4.701s
+FAILED (failures=3, errors=1)
+```
+
+The minimal fixes are confined to authoritative closure generation. Exact
+three-argument `gsSPBranchLessZraw` targets now walk as Gfx dependencies; an
+otherwise unmodeled Gfx command that carries any indexed GeoLayout/Gfx/Vtx/
+`Lights1` symbol raises `ClosureError` rather than omitting it. The unsafe
+process cache was removed: one fresh deterministic definition index is built
+per top-level collection and shared across its records. Recursive traversal
+now has a fixed depth-256 bound and raises
+`reached actor asset traversal depth limit exceeded: 256`. Closure schema,
+public ABI, singular root `geo_source`, downstream closure-only lookup, and
+Task 4 files are unchanged.
+
+Focused GREEN after each isolated fix and then together:
+
+```text
+cache refresh: Ran 1 test in 0.095s, OK
+branch/raw + unknown reference: Ran 2 tests in 0.137s, OK
+depth bound: Ran 1 test in 1.188s, OK
+all four: Ran 4 tests in 1.426s, OK
+```
+
+Complete pre-commit regression evidence:
+
+```text
+tools/saturn/test_scene_closure.py: Ran 28 tests in 3.693s, OK
+tools/saturn/test_bob_scene_closure.py: Ran 2 tests in 66.449s, OK
+actor variant/source: Ran 28 tests in 4.418s, OK
+rigid groups: Ran 25 tests in 0.002s, OK
+historical generic-family report: Ran 4 tests in 62.336s, OK
+native-root variant/pose/meshlet Make wave: exit 0
+compileall: exit 0
+```
+
+The real BOB signpost record still seals
+`actors/wooden_signpost/model.inc.c`; full generic-family compilation retains
+explicit unsupported records. Exact historical artifacts remain:
+
+```text
+mario-actor-bank.json size=562096 sha=3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0
+mario.s64b size=596896 sha=242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539
+task3-refactor.json size=562096 sha=3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0
+task3-refactor.s64b size=596896 sha=242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539
+```
+
+Behavior commit `416c3a34` (`fix(saturn): bound actor source reachability`)
+changes exactly `tools/saturn/collect_scene_closure.py`,
+`tools/saturn/test_scene_closure.py`, `CHANGELOG.md`, `STATE.md`, `ROADMAP.md`,
+the active plan, and the tracked Task 16 ledger. The evidence commit is
+`1f4dccd5` (`docs(saturn): record bounded provenance repair`) and changes only
+the plan and ledger. Final-code reruns were 28/28 closure in 3.615s, 2/2 real BOB in
+64.508s, 28/28 variant/source in 4.164s, 25/25 rigid-group in 0.002s, 4/4
+generic-family in 61.632s, plus successful Make, compileall, exact hashes, and
+scoped diff check. Scoped rereview remains open;
+real BOB `GEO_SHADOW`, Task 4, Task 16 Tasks 2-5, target/P2/Ymir/map,
+whole-game/capacity, release/reseal, smoke/visual/desktop/owner-manual, and
+total-game gates remain open and unclaimed.
+
+#### Same round-5 residual rereview repair
+
+The same reviewer kept round 5 open with I2 after `416c3a34`/`1f4dccd5`.
+The first residual was structural: the fallback classified a Gfx reference
+only when an argument token already existed in the current definition index.
+Thus valid `gsSPBranchLessZ`/`gsSPBranchLessZrg` commands were rejected only
+when their target happened to exist, while missing or computed targets were
+silently ignored. The second residual was the older
+`_asset_root_source(root, symbol)` `lru_cache`, which hid a duplicate
+`parent_geo` added after a priming collection.
+
+Tests preceded production edits. Exact RED:
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest \
+    test_scene_closure.SceneClosureTest.test_branch_less_z_and_zrg_reached_gfx_sources_are_sealed \
+    test_scene_closure.SceneClosureTest.test_branch_less_z_missing_computed_and_arity_fail_closed \
+    test_scene_closure.SceneClosureTest.test_scalar_and_state_identifiers_are_not_source_references \
+    test_scene_closure.SceneClosureTest.test_asset_root_lookup_refreshes_after_same_process_change -v
+valid Z/Zrg sealing: ERROR (unsupported reference-bearing command because target existed)
+missing Z target: FAIL (ClosureError not raised)
+computed Z target: FAIL (ClosureError not raised)
+wrong Z arity: FAIL (ClosureError not raised)
+scalar/state identifiers: ok
+same-process duplicate parent_geo: FAIL (ClosureError not raised)
+Ran 4 tests in 0.477s
+FAILED (failures=4, errors=1)
+```
+
+A fifth RED used repository-valid `gsSPMatrix(missing_mtx, flags)` to prove a
+known but unsupported source-address form must fail from command semantics,
+even when its target is absent:
+
+```text
+Ran 1 test in 0.086s
+FAILED (failures=1; ClosureError not raised)
+```
+
+The correction replaces indexed-token guessing with explicit command specs.
+The table gives every supported Geo/Gfx/Vtx/`Lights1` Fast3D source-bearing
+form its exact target type, argument position, arity, and accepted expression.
+All raw/scaled/region branch-Z variants now resolve and seal their Gfx target;
+missing targets reach normal named resolution, and computed or malformed forms
+fail expression validation. A separate explicit standard-command table names
+source-address forms outside Task 3's approved source types (`gsSPMatrix`,
+viewport/look-at/ucode/DMA/unsupported light-count forms, and related RSP
+forms), which fail named without inspecting argument spelling. Scalar/state
+identifiers are never treated as references by heuristic.
+
+The root-symbol process cache is removed. A fresh bounded root/animation
+definition inventory is built once per top-level collection and shared only
+inside that collection, matching the already-fresh actor definition snapshot.
+A direct no-cache implementation was semantically green but made the full BOB
+test exceed its 180-second command timeout after the first test passed; the
+per-collection inventory restores bounded performance without weakening
+freshness.
+
+Focused GREEN:
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest [five residual cases] -v
+Ran 5 tests in 0.423s
+OK
+```
+
+Complete continuation GREEN:
+
+```text
+tools/saturn/test_scene_closure.py: Ran 32 tests in 3.828s, OK
+tools/saturn/test_bob_scene_closure.py: Ran 2 tests in 25.501s, OK
+actor variant/source: Ran 28 tests in 4.105s, OK
+rigid groups: Ran 25 tests in 0.002s, OK
+historical generic-family report: Ran 4 tests in 19.255s, OK
+native-root variant/pose/meshlet Make wave: exit 0
+compileall: exit 0
+```
+
+Mario remains exactly 562,096-byte JSON at
+`3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`
+and 596,896-byte S64B at
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
+the refactor copies match exactly. The real wooden-signpost model source stays
+sealed, the depth-256 bound remains, schema/public ABI/downstream closure-only
+selection are unchanged, and Task 4 still has zero edits.
+
+Continuation behavior commit `56155516`
+(`fix(saturn): classify actor source references`) changes exactly
+`tools/saturn/collect_scene_closure.py`, `tools/saturn/test_scene_closure.py`,
+`CHANGELOG.md`, `STATE.md`, `ROADMAP.md`, the active plan, and the tracked Task
+16 ledger. Evidence commit `4bbed7c7`
+(`docs(saturn): record semantic provenance repair`) changes only the plan and
+ledger. Same-reviewer scoped
+rereview, real BOB `GEO_SHADOW`, Task 4, Task 16 Tasks 2-5, all target/release/
+manual gates, and total-game completion remain open.
+
+#### Same round-5 exhaustive-command continuation
+
+The same reviewer retained one Important after `56155516`/`4bbed7c7`:
+commands absent from both explicit reference tables still reached the end of
+the Gfx loop without a decision. The prior indexed-symbol heuristic was gone,
+but the replacement was not exhaustive.
+
+TDD RED used the same entirely unmodeled macro with three independent target
+shapes. A known scalar/state fixture used only compiler-modeled
+`gsSPSetGeometryMode` and `gsDPSetCombineMode` and remained green, constraining
+the repair against token guessing:
+
+```text
+> cd tools/saturn
+> ..\..\.venv-saturn-tools\Scripts\python.exe -m unittest \
+    test_scene_closure.SceneClosureTest.test_entirely_unmodeled_gfx_commands_fail_closed \
+    test_scene_closure.SceneClosureTest.test_scalar_and_state_identifiers_are_not_source_references -v
+indexed gsSPUnhandledReference(parent_child_dl): FAIL (ClosureError not raised)
+missing gsSPUnhandledReference(missing_dl): FAIL (ClosureError not raised)
+computed gsSPUnhandledReference(select_parent_dl(1)): FAIL (ClosureError not raised)
+scalar/state fixture: ok
+Ran 2 tests in 0.271s
+FAILED (failures=3)
+```
+
+The final boundary adds `_ACTOR_GFX_NON_REFERENCE_COMMANDS`, close-ported from
+the exact command vocabulary handled by
+`actor_variant_bank._Fast3DCompiler`: triangles, pop-matrix, pipe/end, and its
+typed S64B-v1-unrepresentable render states. An instrumented closure-only BOB
+walk then identified six additional reached scalar states (`gsDPSetCycleType`,
+`gsDPSetDepthSource`, `gsDPSetFogColor`, `gsDPSetRenderMode`,
+`gsSPFogPosition`, and `gsSPNumLights`); they are explicitly source-address-
+free and were added individually. No macro name or argument is inferred from
+tokens. Commands absent from the supported-reference table, unsupported-
+reference table, and non-reference/state allowlist now raise
+`unknown reached Gfx command <macro>` unconditionally.
+
+Focused GREEN:
+
+```text
+Ran 2 tests in 0.196s
+OK
+```
+
+The first real BOB run correctly exposed missing `gsDPSetCycleType` in the
+initial narrow allowlist (2 errors in 14.365s). The full reached-command trace
+produced the six exact scalar additions above; final GREEN is:
+
+```text
+tools/saturn/test_scene_closure.py: Ran 33 tests in 3.905s, OK
+tools/saturn/test_bob_scene_closure.py: Ran 2 tests in 24.903s, OK
+actor variant/source: Ran 28 tests in 4.475s, OK
+rigid groups: Ran 25 tests in 0.002s, OK
+historical generic-family report: Ran 4 tests in 19.195s, OK
+native-root variant/pose/meshlet Make wave: exit 0
+compileall: exit 0
+```
+
+Mario JSON/S64B and refactor artifacts retain the exact sizes and SHA-256
+values recorded above. The wooden-signpost model source, fresh inventories,
+semantic branch/reference handling, depth-256 bound, singular `geo_source`,
+schema/public ABI, and downstream closure-only selection are unchanged. Task 4
+still has zero edits.
+
+Final continuation behavior commit `2d8c4479`
+(`fix(saturn): reject unknown actor source commands`) changes exactly the two
+closure source/test files, `CHANGELOG.md`, `STATE.md`, `ROADMAP.md`, the active
+plan, and tracked Task 16 ledger. Evidence commit `d902438e`
+(`docs(saturn): record exhaustive actor command evidence`) changes only the
+plan and ledger. Same-reviewer
+rereview, real BOB `GEO_SHADOW`, Task 4, Task 16 Tasks 2-5, target/release/
+manual, and total-game gates remain open.
+
+### Final same-reviewer provenance verdict
+
+The complete round-5 repair passed its final same-reviewer rereview with
+C0/I0/M0. The reviewer independently confirmed unconditional named failure for
+indexed, missing, and computed unknown Gfx commands; exact Z/Zraw/Zrg child
+sealing; missing/computed/wrong-arity rejection; fresh same-process root and
+child definition inventories; the depth-256 bound; singular signpost
+`geo_source` plus sealed `model.inc.c`; closure-only downstream lookup; exact
+Mario artifacts; and all 33/2/28/25/4 focused suites plus Make, compileall, and
+diff checks. No schema, public ABI, actor compiler, Makefile, or Task 4 drift
+was found. Task 4 is unblocked; `GEO_SHADOW` remains explicit unsupported
+evidence rather than a repaired or discarded semantic.

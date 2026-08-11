@@ -701,3 +701,17 @@
   25/25 rigid-group, 4/4 generic-family, native-root Make, compileall, and exact
   Mario hashes. Final continuation behavior commit `2d8c4479`; same-reviewer
   rereview and all prior open gates remain open.
+
+## 2026-08-11 generic actor bundle Task 3 provenance final rereview
+
+- Status: `complete-review-passed`, C0/I0/M0. Round-5 behavior commits
+  `416c3a34`, `56155516`, and `2d8c4479`, ending at evidence `d902438e`, close
+  conditional references, stale root/child inventories, depth overflow,
+  index-dependent classification, and unknown-command fallthrough.
+- Verification: 33/33 closure, 2/2 BOB, 28/28 variant/source, 25/25 rigid,
+  4/4 generic-family, native-root Make, compileall, exact Mario hashes, and
+  scoped diff checks pass. The schema/ABI and closure-only consumer remain
+  unchanged.
+- Transition: Task 4 resumes from zero edits and must inventory `GEO_SHADOW`
+  as an explicit unsupported capability gap. Task 16 Tasks 2-5 and every
+  target/release/manual gate remain open.

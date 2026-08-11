@@ -20,10 +20,11 @@ alter the selected variant. Task 4's resumed zero-edit probe then reached the
 next strict boundary: the BOB closure attested the wooden-signpost GeoLayout but
 not the Gfx/model source it reaches. Task 3's narrow round-4 provenance repair
 received C0/I3/M0 for conditional Gfx references, stale same-process source
-indices, and unbounded traversal. The same round-5 repair continued after I2
-found index-dependent reference classification and the older stale root-symbol
-cache. The semantic/fresh-inventory correction is source-complete and awaits
-scoped rereview; Task 4 remains paused without edits. Target, release, smoke,
+indices, and unbounded traversal. Round 5 closed those findings plus two
+rereview continuations for index-independent reference semantics and exhaustive
+unknown-command rejection. The same reviewer now passes the complete repair at
+C0/I0/M0. Task 4 resumes with `GEO_SHADOW` retained as an explicit unsupported
+capability gap, not silently dropped geometry. Target, release, smoke,
 visual, desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
@@ -378,7 +379,7 @@ Resolve the exact GeoLayout/model/animation sources from closure provenance; wal
 
 Run variant tests, `verify-actor-pose-bank verify-actor-meshlets`, and existing actor-source/rigid-group tests. Mutate a source byte, list target, joint owner, switch variant, animation span, and material layer; each must either change the exact identity/output or fail closed.
 
-- [ ] **Step 6: Commit and review**
+- [x] **Step 6: Commit and review**
 
 CHANGELOG explains the new generic compiler and strict unsupported boundary. Commit `feat(saturn): compile source-selected actor variant banks`; independent review before Task 4.
 
@@ -532,8 +533,8 @@ its 562,096-byte JSON remains
 Task 4 has made zero edits and remains paused for scoped rereview; all target,
 release, smoke, visual, desktop, manual, and total-game gates remain open.
 
-**Task 3 source-provenance repair round 5 (2026-08-11):** source-complete;
-scoped rereview pending at continuation behavior commit `56155516`. Four exact REDs reproduced
+**Task 3 source-provenance repair round 5 (2026-08-11):** complete; final
+same-reviewer PASS C0/I0/M0 at continuation behavior commit `2d8c4479`. Four exact REDs reproduced
 all three review findings: `gsSPBranchLessZraw` omitted its reached Gfx source,
 an unmodeled command carrying a known Gfx symbol compiled without error, a
 same-process duplicate definition remained invisible after index priming, and
@@ -577,7 +578,13 @@ reached by real BOB; any macro absent from that allowlist and the two reference
 tables raises `ClosureError` without inspecting tokens. GREEN is 33/33
 synthetic closure, 2/2 BOB, 28/28 variant/source, 25/25 rigid-group, 4/4
 generic-family, Make, compileall, and exact Mario identity. Continuation
-behavior commit `2d8c4479`; Task 4 remains zero-edit and all broader gates open.
+behavior commit `2d8c4479`. The final same-reviewer rereview verified 33/33
+closure, 2/2 BOB, 28/28 variant/source, 25/25 rigid-group, 4/4 generic-family,
+Make, compileall, exact Mario artifacts, fresh root/child indexes, depth-256
+failure, exact Z/Zraw/Zrg reachability, unconditional unknown-command failure,
+and no schema/ABI/Task 4 drift. Task 4 resumes from its zero-edit preflight;
+`GEO_SHADOW` is an explicit unsupported semantic for Task 4 inventory, and all
+broader gates remain open.
 
 ---
 

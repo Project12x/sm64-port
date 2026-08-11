@@ -129,7 +129,11 @@
   wooden_signpost_seg3_dl_0302DA48`. The closure record does not attest the
   reached model/display-list definition source. Task 3 is reopened for a
   narrow hash-bound provenance repair; ad hoc repository search/consumption is
-  forbidden. Task 4 remains paused with zero edits.
+  forbidden. Task 3 round 5 completed through behavior commits `416c3a34`,
+  `56155516`, and `2d8c4479`, with final evidence `d902438e`. Same-reviewer
+  rereview PASS C0/I0/M0 after 33/33 closure, 2/2 BOB, 28/28 variant/source,
+  25/25 rigid, 4/4 generic, Make, compileall, and exact Mario gates. Task 4
+  resumes; named `GEO_SHADOW` remains explicit unsupported evidence.
 
 ## Task 2: source-complete, independent review pending
 

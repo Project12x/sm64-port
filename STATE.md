@@ -41,11 +41,10 @@ selected semantics. The resumed Task 4 zero-edit probe then exposed missing
 hash-bound provenance for the wooden-signpost display-list source. Task 3's
 narrow upstream closure repair then received C0/I3/M0: conditional Gfx
 references, stale same-process definition indices, and unbounded recursive
-walking required correction. The same round-5 hardening continued after I2
-found symbol-index-dependent reference classification and an older stale root-
-source cache; the semantic/fresh-inventory repair is source-complete and awaits
-scoped rereview after its same-round exhaustive unknown-command correction.
-Task 4 remains paused without edits.
+walking required correction. Round 5 closed those findings plus rereview
+continuations for index-independent command semantics and exhaustive unknown-
+command rejection; final same-reviewer verdict is C0/I0/M0. Task 4 resumes
+from zero edits and retains `GEO_SHADOW` as explicit unsupported evidence.
 Completing and reviewing the full prerequisite remains the gate before Task 16
 Task 2 resumes.
 The reusable
