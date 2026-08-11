@@ -22,8 +22,10 @@ complete after its binding-parser repair passed scoped rereview with C0/I0/M0.
 Task 4's resumed zero-edit BOB probe exposed one further strict prerequisite:
 the reached wooden-signpost display-list source was not closure-attested. Its
 first repair received C0/I3/M0 for conditional Gfx references, stale index
-state, and unbounded traversal; round-5 hardening is source-complete and awaits
-scoped rereview. After it passes, build/review the scene-local DRAM-cart bundle and fixed
+state, and unbounded traversal. The same round continued after I2 found index-
+dependent reference classification and a stale root-symbol cache; semantic
+classification and fresh per-collection inventories are source-complete and
+await scoped rereview. After it passes, build/review the scene-local DRAM-cart bundle and fixed
 dual-SH-2 LWRAM
 workspace and complete the Task 16 production generic actor cutover. After
 those target-byte changes, rerun Task 9's build/repro/v4/staging chain before

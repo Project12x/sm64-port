@@ -122,7 +122,12 @@ def _object_roots(level_text: str, macro_text: str, presets: dict[str, tuple[str
     return roots
 
 
-def _load_model_roots(root: Path, level_text: str, model_geos: dict[str, str]) -> set[str]:
+def _load_model_roots(
+        root: Path,
+        level_text: str,
+        model_geos: dict[str, str],
+        asset_roots: dict[str, tuple[str, ...]],
+) -> set[str]:
     sources: set[str] = set()
     for macro, root_index in (("LOAD_MODEL_FROM_GEO", 1), ("LOAD_MODEL_FROM_DL", 1)):
         for call in _extract_calls(level_text, macro):
@@ -130,7 +135,7 @@ def _load_model_roots(root: Path, level_text: str, model_geos: dict[str, str]) -
             if len(args) <= root_index or not re.fullmatch(r"MODEL_[A-Z0-9_]+", args[0]):
                 raise ClosureError(f"malformed {macro}")
             model_geos[args[0]] = args[root_index]
-            source = _asset_root_source(root, args[root_index])
+            source = _asset_root_source(root, args[root_index], asset_roots)
             if not source:
                 raise ClosureError(f"unresolved model/geo root {args[0]} {args[root_index]}")
             sources.add(source)
@@ -223,16 +228,38 @@ def _scoped_levelscript(root: Path, level: str, level_text: str, area: int) -> t
     return _comment_free(area_text), _comment_free(model_text), area_sources
 
 
-@lru_cache(maxsize=None)
-def _asset_root_source(root: Path, asset_root: str) -> str | None:
-    if asset_root == "none": return None
+def _asset_root_definition_index(root: Path) -> dict[str, tuple[str, ...]]:
     candidates = sorted(root.glob("actors/**/*.c")) + sorted(root.glob("levels/**/*.c"))
-    definition = re.compile(r"\b" + re.escape(asset_root) + r"\s*(?:\[[^]]*\])?\s*=")
-    matches = [path for path in candidates if definition.search(path.read_text(encoding="utf-8", errors="ignore"))]
+    if len(candidates) > 4096:
+        raise ClosureError(
+            f"repository asset root source index limit exceeded: {len(candidates)} C sources")
+    definition = re.compile(r"\b([A-Za-z_]\w*)\s*(?:\[[^]]*\])?\s*=")
+    found: dict[str, list[str]] = defaultdict(list)
+    count = 0
+    for path in candidates:
+        relative = _relative(root, path)
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for symbol in definition.findall(text):
+            found[symbol].append(relative)
+            count += 1
+            if count > 65536:
+                raise ClosureError("repository asset root definition limit exceeded")
+    return {symbol: tuple(paths) for symbol, paths in found.items()}
+
+
+def _asset_root_source(
+        root: Path,
+        asset_root: str,
+        asset_roots: dict[str, tuple[str, ...]] | None = None,
+) -> str | None:
+    if asset_root == "none": return None
+    if asset_roots is None:
+        asset_roots = _asset_root_definition_index(root)
+    matches = asset_roots.get(asset_root, ())
     if len(matches) > 1:
-        raise ClosureError(f"ambiguous asset root {asset_root}: {', '.join(_relative(root, path) for path in matches)}")
+        raise ClosureError(f"ambiguous asset root {asset_root}: {', '.join(matches)}")
     if matches:
-        return _relative(root, matches[0])
+        return matches[0]
     return None
 
 
@@ -327,6 +354,48 @@ def _actor_asset_commands(body: str, prefix: str, label: str) -> list[tuple[str,
     if not tokens:
         raise ClosureError(f"empty reached command initializer in {label}")
     return tokens
+
+
+_ACTOR_GFX_SOURCE_REFERENCE_COMMANDS = {
+    "gsSPDisplayList": ("Gfx", 0, 1, r"([A-Za-z_]\w*)"),
+    "gsSPBranchList": ("Gfx", 0, 1, r"([A-Za-z_]\w*)"),
+    "gsSPBranchLessZraw": ("Gfx", 0, 3, r"([A-Za-z_]\w*)"),
+    "gsSPBranchLessZ": ("Gfx", 0, 6, r"([A-Za-z_]\w*)"),
+    "gsSPBranchLessZrg": ("Gfx", 0, 8, r"([A-Za-z_]\w*)"),
+    "gsSPVertex": (
+        "Vtx", 0, 3,
+        r"([A-Za-z_]\w*)(?:\s*\+\s*(?:0[xX][0-9A-Fa-f]+|\d+))?",
+    ),
+    "gsSPLight": ("Lights1", 0, 2, r"&?([A-Za-z_]\w*)(?:\.(?:l|a))?"),
+    "gsSPSetLights1": ("Lights1", 0, 1, r"([A-Za-z_]\w*)"),
+}
+
+# These standard Fast3D forms carry source addresses outside Task 3's exact
+# Geo/Gfx/Vtx/Lights1 contract.  They are classified by command semantics,
+# never by guessing whether an argument happens to match the current index.
+_ACTOR_GFX_UNMODELED_REFERENCE_COMMANDS = {
+    "gsDma0p": (1,),
+    "gsDma1p": (1,),
+    "gsDma2p": (1,),
+    "gsSPSprite2DBase": (0,),
+    "gsSPMatrix": (0,),
+    "gsSPViewport": (0,),
+    "gsSPSegment": (1,),
+    "gsSPForceMatrix": (0,),
+    "gsSPLoadUcodeEx": (0, 1),
+    "gsSPLoadUcode": (0, 1),
+    "gsSPLoadUcodeL": (0,),
+    "gsSPDma_io": (2,),
+    "gsSPDmaRead": (1,),
+    "gsSPDmaWrite": (1,),
+    "gsSPSetLights2": (0,),
+    "gsSPSetLights3": (0,),
+    "gsSPSetLights4": (0,),
+    "gsSPSetLights5": (0,),
+    "gsSPSetLights6": (0,),
+    "gsSPSetLights7": (0,),
+    "gsSPLookAt": (0,),
+}
 
 
 def _reached_actor_sources(
@@ -435,50 +504,17 @@ def _reached_actor_sources(
         else:
             for macro, arguments in commands:
                 fields = _arguments(arguments)
-                if macro in ("gsSPDisplayList", "gsSPBranchList"):
-                    if len(fields) != 1:
-                        raise ClosureError("unsupported reached Gfx expression")
-                    target = identifier(fields[0], "Gfx")
-                    visit("Gfx", target, path, next_stack)
-                elif macro == "gsSPBranchLessZraw":
-                    if len(fields) != 3:
-                        raise ClosureError("unsupported reached Gfx expression")
-                    target = identifier(fields[0], "Gfx")
-                    visit("Gfx", target, path, next_stack)
-                elif macro == "gsSPVertex":
-                    if len(fields) != 3:
-                        raise ClosureError("unsupported reached Vtx expression")
-                    target = identifier(
-                        fields[0], "Vtx",
-                        r"([A-Za-z_]\w*)(?:\s*\+\s*(?:0[xX][0-9A-Fa-f]+|\d+))?",
-                    )
-                    visit("Vtx", target, path, next_stack)
-                elif macro == "gsSPLight":
-                    if len(fields) != 2:
-                        raise ClosureError("unsupported reached Lights1 expression")
-                    target = identifier(
-                        fields[0], "Lights1",
-                        r"&?([A-Za-z_]\w*)(?:\.(?:l|a))?",
-                    )
-                    visit("Lights1", target, path, next_stack)
-                elif macro == "gsSPSetLights1":
-                    if len(fields) != 1:
-                        raise ClosureError("unsupported reached Lights1 expression")
-                    target = identifier(fields[0], "Lights1")
-                    visit("Lights1", target, path, next_stack)
-                else:
-                    referenced = sorted({
-                        (reference_kind, token)
-                        for field in fields
-                        for token in re.findall(r"\b[A-Za-z_]\w*\b", field)
-                        for reference_kind in ("GeoLayout", "Gfx", "Vtx", "Lights1")
-                        if (reference_kind, token) in index
-                    })
-                    if referenced:
+                reference = _ACTOR_GFX_SOURCE_REFERENCE_COMMANDS.get(macro)
+                if reference is not None:
+                    target_kind, target_index, expected_fields, pattern = reference
+                    if len(fields) != expected_fields:
                         raise ClosureError(
-                            f"unsupported reference-bearing Gfx command {macro}: " +
-                            ", ".join(f"{kind} {symbol}"
-                                      for kind, symbol in referenced))
+                            f"unsupported reached {target_kind} expression")
+                    target = identifier(fields[target_index], target_kind, pattern)
+                    visit(target_kind, target, path, next_stack)
+                elif macro in _ACTOR_GFX_UNMODELED_REFERENCE_COMMANDS:
+                    raise ClosureError(
+                        f"unsupported reference-bearing Gfx command {macro}")
 
     visit(root_kinds[0], entry, declared_source, declared=True)
     return sources
@@ -1133,8 +1169,10 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
     macro_path = f"levels/{level}/areas/{area}/macro.inc.c"
     level_text, macro_text = _read(root, script_path), _read(root, macro_path)
     area_text, model_scope_text, levelscript_sources = _scoped_levelscript(root, level, level_text, area)
+    asset_roots = _asset_root_definition_index(root)
     model_geos, model_ids_path = _model_geos(root)
-    loaded_geo_sources = _load_model_roots(root, model_scope_text, model_geos)
+    loaded_geo_sources = _load_model_roots(
+        root, model_scope_text, model_geos, asset_roots)
     presets, presets_path = _macro_presets(root)
     behavior_path = "data/behavior_data.c"
     behavior_text = _read(root, behavior_path)
@@ -1239,7 +1277,7 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
         material_features: set[str] = set()
         for variant_model in sorted(declared_models[behavior]):
             variant_geo = "none" if variant_model == "MODEL_NONE" else model_geos[variant_model]
-            variant_geo_source = _asset_root_source(root, variant_geo)
+            variant_geo_source = _asset_root_source(root, variant_geo, asset_roots)
             if variant_model != "MODEL_NONE" and not variant_geo_source:
                 raise ClosureError(f"unresolved model/geo root {variant_model} {variant_geo}")
             variants.append({"model": variant_model, "geo_root": variant_geo})
@@ -1266,7 +1304,7 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
         animations = sorted(set(re.findall(r"LOAD_ANIMATIONS\s*\(\s*[^,]+,\s*([A-Za-z0-9_]+)", block)))
         animation_sources: dict[str, str] = {}
         for animation in animations:
-            animation_source = _asset_root_source(root, animation)
+            animation_source = _asset_root_source(root, animation, asset_roots)
             if not animation_source:
                 raise ClosureError(f"unresolved animation root {animation}")
             animation_sources[animation] = animation_source

@@ -668,3 +668,23 @@
   `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`.
 - Remaining: scoped rereview, real BOB `GEO_SHADOW`, Task 4, Task 16 Tasks 2-5,
   and all target/release/manual gates remain open and unclaimed.
+
+- Same round-5 rereview continuation: I2 remained after `416c3a34`. Reference
+  detection depended on a target already existing in the actor index, so valid
+  Z/Zrg branches failed while missing/computed/malformed targets disappeared;
+  `_asset_root_source` also retained a process-stale root/symbol cache.
+- Continuation RED: valid Z/Zrg sealing errored; missing, computed, and wrong-
+  arity Z targets produced three no-error failures; a duplicate `parent_geo`
+  written after a priming collection remained invisible; a known unmodeled
+  `gsSPMatrix` address form also published without a named failure. A scalar/
+  state identifier characterization stayed green and constrains the repair.
+- Continuation repair: exact source-bearing Fast3D command tables define target
+  type, argument position, and arity independently of the repository index.
+  Supported targets resolve and seal; missing/computed/malformed targets and
+  known unmodeled source-address forms fail named. One fresh bounded root/
+  animation definition inventory is shared within each collection; no process-
+  global source-selection cache remains. The depth-256 bound is unchanged.
+- Continuation GREEN: 32/32 complete synthetic closure, 2/2 real BOB closure,
+  28/28 variant/source, 25/25 rigid-group, 4/4 generic-family, native-root Make,
+  compileall, and exact Mario hashes. Continuation behavior commit pending;
+  same-reviewer rereview and every previously open gate remain open.

@@ -204,18 +204,76 @@ class SceneClosureTest(unittest.TestCase):
         sources = {source["path"] for source in record["sources"]}
         self.assertIn("actors/branch_z/model.inc.c", sources)
 
-    def test_unmodeled_reference_bearing_gfx_macro_fails_closed(self) -> None:
+    def test_branch_less_z_and_zrg_reached_gfx_sources_are_sealed(self) -> None:
         root = self.fixture()
         write(root / "actors/parent/model.inc.c", """
             const Gfx parent_dl[] = {
-                gsSPUnhandledReference(parent_child_dl),
+                gsSPBranchLessZ(parent_branch_z_dl, 0, 1, 2, 3, G_BZ_PERSP),
+                gsSPBranchLessZrg(parent_branch_zrg_dl, 0, 1, 2, 3,
+                                  G_BZ_ORTHO, 0, 1023),
+                gsSPEndDisplayList(),
+            };
+        """)
+        write(root / "actors/branch_z/model.inc.c",
+              "const Gfx parent_branch_z_dl[] = { gsSPEndDisplayList(), };\n")
+        write(root / "actors/branch_zrg/model.inc.c",
+              "const Gfx parent_branch_zrg_dl[] = { gsSPEndDisplayList(), };\n")
+
+        closure = self.collect(root)
+        record = next(record for record in closure["records"]
+                      if record["stable_id"] == "bhvParent")
+        sources = {source["path"] for source in record["sources"]}
+        self.assertIn("actors/branch_z/model.inc.c", sources)
+        self.assertIn("actors/branch_zrg/model.inc.c", sources)
+
+    def test_branch_less_z_missing_computed_and_arity_fail_closed(self) -> None:
+        cases = (
+            ("missing",
+             "gsSPBranchLessZ(missing_dl, 0, 1, 2, 3, G_BZ_PERSP)",
+             "missing reached Gfx missing_dl"),
+            ("computed",
+             "gsSPBranchLessZ(select_parent_dl(1), 0, 1, 2, 3, G_BZ_PERSP)",
+             "unsupported reached Gfx expression"),
+            ("arity",
+             "gsSPBranchLessZ(missing_dl, 0, 1)",
+             "unsupported reached Gfx expression"),
+        )
+        for label, command, message in cases:
+            with self.subTest(label=label):
+                root = self.fixture()
+                write(root / "actors/parent/model.inc.c",
+                      f"const Gfx parent_dl[] = {{ {command}, gsSPEndDisplayList(), }};\n")
+                with self.assertRaisesRegex(ClosureError, message):
+                    self.collect(root)
+
+    def test_scalar_and_state_identifiers_are_not_source_references(self) -> None:
+        root = self.fixture()
+        write(root / "actors/parent/model.inc.c", """
+            const Gfx parent_dl[] = {
+                gsSPGeometryMode(G_CULL_BACK, G_LIGHTING),
+                gsDPSetCombineMode(G_CC_SHADE, G_CC_SHADE),
+                gsSPEndDisplayList(),
+            };
+        """)
+
+        closure = self.collect(root)
+        record = next(record for record in closure["records"]
+                      if record["stable_id"] == "bhvParent")
+        sources = {source["path"] for source in record["sources"]}
+        self.assertIn("actors/parent/model.inc.c", sources)
+
+    def test_known_unmodeled_source_reference_command_fails_closed(self) -> None:
+        root = self.fixture()
+        write(root / "actors/parent/model.inc.c", """
+            const Gfx parent_dl[] = {
+                gsSPMatrix(missing_mtx, G_MTX_MODELVIEW | G_MTX_LOAD),
                 gsSPEndDisplayList(),
             };
         """)
 
         with self.assertRaisesRegex(
                 ClosureError,
-                "unsupported reference-bearing Gfx command gsSPUnhandledReference"):
+                "unsupported reference-bearing Gfx command gsSPMatrix"):
             self.collect(root)
 
     def test_actor_definition_index_refreshes_after_same_process_change(self) -> None:
@@ -226,6 +284,16 @@ class SceneClosureTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ClosureError,
                                     "ambiguous reached Gfx parent_child_dl"):
+            self.collect(root)
+
+    def test_asset_root_lookup_refreshes_after_same_process_change(self) -> None:
+        root = self.fixture()
+        self.collect(root)
+        write(root / "actors/duplicate/geo.inc.c",
+              "const GeoLayout parent_geo[] = { GEO_END(), };\n")
+
+        with self.assertRaisesRegex(ClosureError,
+                                    "ambiguous asset root parent_geo"):
             self.collect(root)
 
     def test_deep_acyclic_display_list_chain_fails_bounded(self) -> None:

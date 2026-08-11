@@ -14,10 +14,12 @@
 
 - Hardened actor-source closure discovery after scoped review found three ways
   strict provenance could be bypassed: repository-valid conditional display-
-  list branches now seal their reached Gfx sources, unmodeled Fast3D commands
-  carrying known Geo/Gfx/Vtx/light symbols fail named instead of dropping the
-  reference, and each collection uses one fresh definition index rather than
-  process-stale root-only cached results. Actor-asset traversal now also fails
+  list branches now seal their reached Gfx sources, with missing/computed/
+  malformed targets rejected from exact macro semantics rather than a
+  successful symbol-index lookup. Known unmodeled Fast3D source-address forms
+  fail named while scalar/state identifiers remain passive. Each collection
+  now uses fresh actor-definition and root/animation-definition inventories
+  rather than process-stale root-only caches. Actor-asset traversal also fails
   with a bounded domain error at depth 256 instead of leaking Python
   `RecursionError`; the closure schema, public ABI, and historical Mario bytes
   remain unchanged.

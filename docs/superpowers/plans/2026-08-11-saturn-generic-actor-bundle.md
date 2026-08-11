@@ -20,9 +20,11 @@ alter the selected variant. Task 4's resumed zero-edit probe then reached the
 next strict boundary: the BOB closure attested the wooden-signpost GeoLayout but
 not the Gfx/model source it reaches. Task 3's narrow round-4 provenance repair
 received C0/I3/M0 for conditional Gfx references, stale same-process source
-indices, and unbounded traversal. Round 5 is source-complete and awaits scoped
-rereview; Task 4 remains paused without edits. Target, release, smoke, visual,
-desktop, manual, and total-game gates remain open.
+indices, and unbounded traversal. The same round-5 repair continued after I2
+found index-dependent reference classification and the older stale root-symbol
+cache. The semantic/fresh-inventory correction is source-complete and awaits
+scoped rereview; Task 4 remains paused without edits. Target, release, smoke,
+visual, desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
 
@@ -531,7 +533,7 @@ Task 4 has made zero edits and remains paused for scoped rereview; all target,
 release, smoke, visual, desktop, manual, and total-game gates remain open.
 
 **Task 3 source-provenance repair round 5 (2026-08-11):** source-complete;
-scoped rereview pending at behavior commit `416c3a34`. Four exact REDs reproduced
+scoped rereview pending; continuation behavior commit pending. Four exact REDs reproduced
 all three review findings: `gsSPBranchLessZraw` omitted its reached Gfx source,
 an unmodeled command carrying a known Gfx symbol compiled without error, a
 same-process duplicate definition remained invisible after index priming, and
@@ -548,6 +550,22 @@ compileall, and the exact-native-root combined variant/pose/meshlet Make wave.
 The signpost model source remains sealed and historical Mario sizes/hashes are
 unchanged. The schema/public ABI remain unchanged; Task 4 has zero edits and
 all target/release/manual gates remain open.
+
+The same round-5 rereview then found I2. RED proved that valid
+`gsSPBranchLessZ`/`gsSPBranchLessZrg` targets were rejected by the indexed-
+symbol fallback while missing, computed, and wrong-arity targets were silently
+accepted; a same-process duplicate `parent_geo` also remained hidden by the
+older `_asset_root_source` cache. A scalar/state command fixture remained
+accepted and guards against identifier heuristics. The correction uses an
+explicit table of standard source-bearing Fast3D command semantics, target
+argument positions, arities, and types. All three branch-Z forms resolve and
+seal; missing/computed/malformed forms fail named; known source-address forms
+outside the approved Geo/Gfx/Vtx/`Lights1` contract fail named without looking
+up their target. Root and animation lookup now share one freshly built,
+bounded definition inventory per top-level collection; no process-global
+source-selection cache remains. GREEN is 32/32 complete synthetic closure,
+2/2 real BOB, 28/28 variant/source, 25/25 rigid-group, 4/4 generic-family,
+Make, compileall, and exact Mario hashes. The depth-256 bound is retained.
 
 ---
 
