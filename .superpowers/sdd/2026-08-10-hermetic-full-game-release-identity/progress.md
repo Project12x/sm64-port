@@ -1515,6 +1515,16 @@
   `fe090885...1dd2`, with both forbidden callers explicitly absent. Task 9
   Step 7 is complete. Capacity/package, staging, docs closeout, and both
   independent reviews remain open; no Task 10 gate was run.
+- Candidate-B facts pass: `___end=0x060fca38`; HWRAM physical/usable margins
+  are 13,768/6,856 bytes. Cart span `0x22400000..0x22766880` is 3,565,696
+  bytes with 628,608 bytes headroom. Object, staged-CD, and xorriso-extracted
+  ISO `/SOURCE.DAT` are equal at SHA `f0d3781c...fde6c`; ISO listing is LBA
+  534/1,742 blocks. The package set contains exactly ten required records and
+  ten classes at root `85a5a190...c266`. Identity-v2 seals capacity 208; the
+  prior artifact-bound idle-boot peak 138/failures 0 leaves 70 slots. The
+  coverage gap remains explicit: idle 138 lacks pickup/hold/action particles,
+  and Task 9 did not run a new route or idle occupancy capture. Step 8 is
+  complete; staging, closeout, reviews, and Task 10 remain open.
 
 ## Task 5 review repair round 2
 

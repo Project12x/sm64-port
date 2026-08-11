@@ -2301,6 +2301,18 @@ records both `_atan2_lookup` and `_atan2s` absent. Task 9 Step 7 is complete.
 Capacity, package, staging, documentation closeout, and both independent
 reviews remain open; Task 10 gates remain untouched.
 
+Candidate-B measurement records `___end=0x060fca38`, 13,768 bytes physical
+HWRAM margin and 6,856 bytes usable after the required `0x1B00` allowance.
+Cart span `0x22400000..0x22766880` is 3,565,696 bytes, leaving 628,608
+bytes below the 32-Mbit limit. Object, staged-CD, and ISO-extracted
+`SOURCE.DAT` bytes all hash to `f0d3781c...fde6c`; the ISO directory reports
+LBA 534, 1,742 blocks. The package set is exactly ten records/classes at root
+`85a5a190...c266`. Sealed capacity is 208; the prior artifact-bound idle-boot
+peak remains 138 with zero failures and 70-slot margin. That 138 is an idle
+floor without pickup/hold or action-particle coverage, and Task 9 did not run a
+new route or idle occupancy capture. Task 9 Step 8 is complete; staging and
+later gates remain open.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2487,7 +2499,7 @@ Run the verifier with candidate-B ELF, candidate-B release manifest, existing ba
 
 Expected: exit 0; reported actual total equals the generated contract total; exact ELF/release/identity/profile preflight passes; forbidden callers are absent.
 
-- [ ] **Step 8: Measure memory and package facts from the sealed artifact**
+- [x] **Step 8: Measure memory and package facts from the sealed artifact**
 
 Record:
 
