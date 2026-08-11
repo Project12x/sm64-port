@@ -791,19 +791,24 @@ bool sm64_saturn_actor_instances_capture(sm64_saturn_actor_instance_snapshot_t *
 
 The original geo walk records already selected switch/render-range/billboard/shadow state by generated node ordinal. Resolve family from `(sharedChild, behavior)` against the generated registry and `gLoadedGraphNodes[]` on the master. Publish no source pointers. `instance_key` is object-pool slot plus a Saturn incarnation sidecar.
 
-**Task 3 prerequisite status (2026-08-11): source-complete at `8a9ff531`,
-review pending.** The generated registry binds 54 supported drawable
+**Task 3 prerequisite status (2026-08-11): review fix round 1 source-complete
+at `d0a9868b` after `8a9ff531`, scoped rereview pending.** The generated registry binds 54 supported drawable
 `(model/geo, behavior)` rows from the current 47-family/86-record Task 11
 products. Fourteen supported `MODEL_NONE` controller records are deliberately
 absent because the object seam has no drawable `sharedChild` identity for
 them; unsupported and unknown pairs also miss, leaving all identity fields
-zero. Shared geometry is disambiguated by exact behavior equality. The first
+zero. Shared geometry is disambiguated by exact behavior equality. The
+registry now reuses the full Task 11 S64F validator, cross-checks payload
+records against the report and the build-owned scene generation, and drives
+an executable lookup-to-observer-to-capture admission fixture. Authoritative
+frustum, selected LOD/range, switch, and opacity evaluations update typed
+observation fields at their source-owned seams; held/parent remains
+`NO_PARENT`. The exact combined registry/actor/render Make gate passes after
+the affected MSYS recipes were corrected to execute their fresh host binaries
+directly. The first
 broad RED checkbox below remains open because it covers substantially more
 than this prerequisite (held/parent, billboard, shadow, effects, and full
-fixture mutation coverage), and the combined Make gate at :798-800 remains
-open because its MSYS-built executables are handed to native Python as
-unusable `/d/...` paths. Both exact freshly compiled binaries pass when run by
-native Windows path; no target/reseal/smoke evidence is claimed.
+fixture mutation coverage); no target/reseal/smoke evidence is claimed.
 
 - [ ] RED cases: Mario, active ordinary object, `MODEL_NONE` controller, parent/held child and offset, switch state, opacity, render-active and render-range-min/max/draw-distance rejection, billboard, shadow, effect kind/params/lifetime, package/bank/hash identity, pool-slot reuse/incarnation, despawn between captures, stale generation, unknown family, and capacity overflow. Each typed field receives a source-observer fixture and a mutation proving the snapshot changes or fails closed; generic `feature_state` bits never substitute for source-owned values consumed at runtime. Assert the exact ABI size/alignment and that two maximum-live snapshot banks plus observer state fit the package-declared LWRAM budget.
 - [ ] Hook `observer_begin_object/record_switch/end_object` only around already authoritative geo evaluation. Capture after `sourceboot_run_source_tick()` completes and before render-snapshot publication; observer code must not select cases or mutate gameplay.

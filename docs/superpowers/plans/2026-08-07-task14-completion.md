@@ -179,19 +179,22 @@ Dispatch a spec-compliance reviewer per wave (fresh subagent, diff-scoped) befor
 
 ### Task 3: Actor identity registry generator + observer-seam wiring
 
-**Status (2026-08-11): source-complete at `8a9ff531`, independent review
-pending.** Generator and observer RED/GREEN are recorded in
+**Status (2026-08-11): review fix round 1 source-complete at `d0a9868b`
+after `8a9ff531`;
+scoped rereview pending.** Generator and observer RED/GREEN are recorded in
 `.superpowers/sdd/2026-08-07-task14-completion/task-3-report.md`. Current Task
 11 inputs differ from the historical measurements below: 47 families / 86
 closure records now produce a 104,840-byte S64F payload with SHA-256
-`3e86389b330f3803dcd51bd6f05f8c86b0be6f5e71f012ce5735904742554dea`
+`00e5754c80762a15b5482fb1f2e88f4bc1fc7ab847f3463944e2e6689d412ee8`
 and a 54-entry supported drawable registry. `MODEL_NONE` controller records
 remain absent because there is no drawable `sharedChild` key; misses remain
-fully zero/fail-closed. The prescribed combined Make gate remains unchecked:
-both host executables compile, but the existing recipes pass MSYS `/d/...`
-executable paths to native Windows Python and fail with `WinError 2`; direct
-native-path execution of those exact fresh binaries passes. No target,
-reseal, smoke, or Task 16 Task 2 work was performed.
+fully zero/fail-closed. Review round 1 repaired four acceptance gaps: actual
+frustum/LOD/switch/opacity seams now update the typed observation; generation
+reuses Task 11's full S64F validator and cross-checks every report record and
+the build-owned scene generation; an executable generated-lookup-to-capture
+fixture proves both admission and miss rejection; and the two affected MSYS
+recipes directly execute their binaries. The exact combined Make gate now
+passes. No target, reseal, smoke, or Task 16 Task 2 work was performed.
 
 **Files:**
 - Create: `tools/saturn/gen_actor_identity_registry.py`
@@ -216,15 +219,16 @@ Emit a generated header (`build/saturn/sourceboot/generated/actor_identity_regis
 
 First extend `test_actor_snapshot_source.py` with the plan-doc checkbox-1 cases (each typed field sourced from the authoritative game state; `feature_state` substitution attempt must fail). Run; confirm RED. Then modify `saturn_source_observe_object_begin()`: replace the identity-memset block (:111-143) with a registry lookup on `(node->sharedChild, node->behavior-equivalent)` — populating the four identity fields on hit, leaving them zero on miss (preserving fail-closed for unsupported families, which stays correct per Task 16's research) — and capture the typed source fields the plan's checkbox names (visibility/render-range/switch/opacity; `held/parent` stays `NO_PARENT` per the Task 19 design correction, cite it in a comment).
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify** *(review-fix combined gate PASS: registry 9/9 plus
+  both executable/source snapshot gates)*
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-actor-instance-snapshot verify-render-snapshot-bank
+powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-actor-identity-registry verify-actor-instance-snapshot verify-render-snapshot-bank
 ```
 Plus `python -m unittest test_gen_actor_identity_registry -v` and the extended `test_actor_snapshot_source.py`. Expected: all PASS; the snapshot tests must now show nonzero admission for a fixture object with a registered family.
 
-- [ ] **Step 6: Commit + review** *(behavior committed as `8a9ff531`;
-  independent spec/quality review remains pending)*
+- [ ] **Step 6: Commit + review** *(initial behavior `8a9ff531`; review-fix
+  behavior `d0a9868b`; independent scoped rereview remains pending)*
 
 ```bash
 git add tools/saturn/gen_actor_identity_registry.py tools/saturn/test_gen_actor_identity_registry.py src/game/rendering_graph_node.c tools/saturn/test_actor_snapshot_source.py src/port/saturn/sourceboot/Makefile Makefile.saturn.mk CHANGELOG.md
