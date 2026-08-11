@@ -179,6 +179,20 @@ Dispatch a spec-compliance reviewer per wave (fresh subagent, diff-scoped) befor
 
 ### Task 3: Actor identity registry generator + observer-seam wiring
 
+**Status (2026-08-11): source-complete at `8a9ff531`, independent review
+pending.** Generator and observer RED/GREEN are recorded in
+`.superpowers/sdd/2026-08-07-task14-completion/task-3-report.md`. Current Task
+11 inputs differ from the historical measurements below: 47 families / 86
+closure records now produce a 104,840-byte S64F payload with SHA-256
+`3e86389b330f3803dcd51bd6f05f8c86b0be6f5e71f012ce5735904742554dea`
+and a 54-entry supported drawable registry. `MODEL_NONE` controller records
+remain absent because there is no drawable `sharedChild` key; misses remain
+fully zero/fail-closed. The prescribed combined Make gate remains unchecked:
+both host executables compile, but the existing recipes pass MSYS `/d/...`
+executable paths to native Windows Python and fail with `WinError 2`; direct
+native-path execution of those exact fresh binaries passes. No target,
+reseal, smoke, or Task 16 Task 2 work was performed.
+
 **Files:**
 - Create: `tools/saturn/gen_actor_identity_registry.py`
 - Create: `tools/saturn/test_gen_actor_identity_registry.py`
@@ -186,19 +200,19 @@ Dispatch a spec-compliance reviewer per wave (fresh subagent, diff-scoped) befor
 - Modify: `src/port/saturn/sourceboot/Makefile` + `Makefile.saturn.mk` (generated-header wiring, mirroring the `SOURCEBOOT_HUD_GLYPH_HEADER` / order-only-prerequisite pattern at `sourceboot/Makefile:855-857`)
 - Test: extend `tools/saturn/test_actor_snapshot_source.py` (this is plan-doc acceptance checkbox 1 — RED cases per typed field, including "generic `feature_state` bits never substitute for source-owned values")
 
-- [ ] **Step 1: Read the real inputs first**
+- [x] **Step 1: Read the real inputs first**
 
 Read Task 11's generator and its outputs to learn the authoritative schema: the family bank build products (find via `Makefile.saturn.mk`'s `compile-actor-banks` target), the 47-family S64F bank (99,105 B, SHA `97dc231b…`, from the 86-record BOB closure), and the closure JSON (`build/saturn/packages/bob/1/closure.json`). The registry key is `(sharedChild geo layout, behavior script)` resolved the way plan:792 specifies (via `gLoadedGraphNodes[]`); the values are exactly the four fields `valid_observation()` gates on: `family_id`, `actor_bank_id`, `actor_bank_hash_words[8]`, `scene_package_generation`.
 
-- [ ] **Step 2: RED tests for the generator**
+- [x] **Step 2: RED tests for the generator**
 
 `test_gen_actor_identity_registry.py` (unittest, house style of `test_gen_sourceboot_sky_gradient.py`): deterministic output byte-stability across two runs; every closure record with a supported family resolves to a nonzero (family_id, bank_id) pair; unsupported/unknown behaviors are explicitly ABSENT from the table (so the seam's lookup miss keeps them fail-closed — never emit a zero-identity row); bank hash words match the real bank manifest's SHA-256 split big-endian into 8×u32.
 
-- [ ] **Step 3: Implement the generator**
+- [x] **Step 3: Implement the generator**
 
 Emit a generated header (`build/saturn/sourceboot/generated/actor_identity_registry.h`) containing a sorted-by-key `static const` table plus a binary-search lookup function declaration, following the established generated-header conventions (banner comment, `#pragma once`, gitignored build output). The table is `const`, so the linker's existing cart rule places it on cart — zero HWRAM cost.
 
-- [ ] **Step 4: RED tests at the seam, then wire it**
+- [x] **Step 4: RED tests at the seam, then wire it**
 
 First extend `test_actor_snapshot_source.py` with the plan-doc checkbox-1 cases (each typed field sourced from the authoritative game state; `feature_state` substitution attempt must fail). Run; confirm RED. Then modify `saturn_source_observe_object_begin()`: replace the identity-memset block (:111-143) with a registry lookup on `(node->sharedChild, node->behavior-equivalent)` — populating the four identity fields on hit, leaving them zero on miss (preserving fail-closed for unsupported families, which stays correct per Task 16's research) — and capture the typed source fields the plan's checkbox names (visibility/render-range/switch/opacity; `held/parent` stays `NO_PARENT` per the Task 19 design correction, cite it in a comment).
 
@@ -209,7 +223,8 @@ powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mi
 ```
 Plus `python -m unittest test_gen_actor_identity_registry -v` and the extended `test_actor_snapshot_source.py`. Expected: all PASS; the snapshot tests must now show nonzero admission for a fixture object with a registered family.
 
-- [ ] **Step 6: Commit + review**
+- [ ] **Step 6: Commit + review** *(behavior committed as `8a9ff531`;
+  independent spec/quality review remains pending)*
 
 ```bash
 git add tools/saturn/gen_actor_identity_registry.py tools/saturn/test_gen_actor_identity_registry.py src/game/rendering_graph_node.c tools/saturn/test_actor_snapshot_source.py src/port/saturn/sourceboot/Makefile Makefile.saturn.mk CHANGELOG.md
