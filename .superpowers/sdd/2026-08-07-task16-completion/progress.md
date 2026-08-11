@@ -371,3 +371,27 @@
 - Next: generic actor bundle Task 2 canonical S64F-v3 host/target validation.
   Tasks 2-11 and every target/release/smoke/visual/desktop/manual gate remain
   open; Task 16 Task 2 stays blocked.
+
+## 2026-08-11 generic actor bundle Task 2 — S64F v3 boundary
+
+- Status: `source-complete; independent review pending` at `b1133026`
+  (`feat(saturn): define generic actor family bundle v3`). This prerequisite
+  does not resume Task 16 production handoff: sourceboot selection and Task 16
+  Tasks 2-5 remain blocked/open until the whole prerequisite lane is reviewed.
+- Implementation: canonical big-endian 96/64/88-byte S64F v3 host writer and
+  validator; bounded 64-family/128-variant target validator; full one-pass S64B
+  validation; and binary-search scalar resolver with zeroed failure outputs.
+  Historical S64F v2 remains tooling-only and byte-compatible.
+- TDD/evidence: missing Python module and C header/source REDs; seven Python
+  tests pass with a pinned 1,580-byte digest and 46 malformed-input assertions.
+  The C fixture passes 53 resealed mutations. The required Make regression wave
+  passes v3, historical v2 (47/13/14), Mario pose-bank, and S64P runtime gates
+  using the command-line native forward-slash worktree root.
+- Reference record: same-repository direct use/close-port of
+  `gfx/saturn_actor_bank.h/.c`, `runtime/saturn_scene_package.c`, and
+  `tools/saturn/compile_actor_bank.py` from base `e7b1c2bc`; no external code or
+  new license obligation. The repository has no root license file.
+- Remaining: independent task review; generic bank compiler/bundle/registry;
+  cart residency and fixed workspace; Task 16 Tasks 2-5; feature-off identity;
+  target/P2/Ymir/map/capacity; Task 9 clean rebuild/repro/v4/staging; Task 10
+  smoke/visual/desktop/owner-manual; release and total-game gates.

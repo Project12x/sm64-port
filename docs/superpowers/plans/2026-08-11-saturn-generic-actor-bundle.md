@@ -9,9 +9,10 @@
 **Tech Stack:** Python 3 deterministic asset compilers and `unittest`; freestanding C11 for SH-2 runtime/host fixtures; GNU Make 4.3+ through `tools/saturn/with-msys-toolchain.ps1`; existing S64P/S64B formats, scene residency, DRAM-cart/CDFS loader, P2/TAS.B ownership, and hermetic release tooling.
 
 **Execution status (2026-08-11):** active under the owner-selected
-subagent-driven workflow. Task 1 is source-complete and independently approved
-at `1faa2ffb` with no review findings; Task 2 is the next RED. Target, release,
-smoke, visual, desktop, manual, and total-game gates remain open.
+subagent-driven workflow. Task 1 is complete and independently approved. Task
+2 is source-complete at `b1133026`; its independent task review remains the
+gate before Task 3. Target, release, smoke, visual, desktop, manual, and
+total-game gates remain open.
 
 ## Global Constraints
 
@@ -221,7 +222,7 @@ bool sm64_saturn_actor_bundle_resolve(const sm64_saturn_actor_bundle_view_t *vie
                                       sm64_saturn_actor_bank_view_t *out);
 ```
 
-- [ ] **Step 1: Write Python RED tests**
+- [x] **Step 1: Write Python RED tests**
 
 Cover exact 96/64/88 sizes, deterministic bytes, source-identity canonicalization, zero padding, 64/128 acceptance, 65/129 rejection, ordering, duplicate keys, zero/colliding bank IDs, every span overflow, hash mutation, S64B family/model/source/scratch mismatch, and v2 rejection by the v3 API.
 
@@ -233,25 +234,62 @@ with self.assertRaisesRegex(ValueError, "variant limit"):
     pack_bundle(document_with_variants(129), banks)
 ```
 
-- [ ] **Step 2: Write C RED tests and Make target**
+- [x] **Step 2: Write C RED tests and Make target**
 
 The C fixture receives one generated valid v3 file, validates all banks once, resolves an exact variant, and applies one mutation for each serialized field class. Assert output views remain zeroed on failure.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 Run `python -m unittest tools.saturn.test_actor_family_bundle -v` and `verify-actor-family-bundle`. Expected: missing module/header failures.
 
-- [ ] **Step 4: Implement minimal canonical writer and both validators**
+- [x] **Step 4: Implement minimal canonical writer and both validators**
 
 Use overflow-safe add/multiply/alignment helpers. Target validation must hash the bundle with bytes 64..95 treated as zero, validate every embedded S64B during the one master pass, and make `resolve` perform only binary search plus scalar/span checks.
 
-- [ ] **Step 5: Run GREEN plus historical gates**
+- [x] **Step 5: Run GREEN plus historical gates**
 
 Run Python tests, `verify-actor-family-bundle verify-actor-family-bank verify-actor-pose-bank verify-scene-package-runtime`. Expected: all pass, including unchanged S64F v2 behavior.
 
 - [ ] **Step 6: Update docs, commit, and review**
 
 CHANGELOG states v3 is additive and feature-on selection is not wired yet. Commit `feat(saturn): define generic actor family bundle v3`; independent spec/code review before Task 3.
+
+---
+
+#### Task 2 live status (2026-08-11)
+
+- Status: `source-complete; independent review pending` at behavior commit
+  `b1133026` (`feat(saturn): define generic actor family bundle v3`). Task 3
+  remains blocked on the controller-owned task review. No sourceboot selection,
+  target build, P2, Ymir, release, smoke, visual, desktop, or manual claim is
+  made.
+- TDD: the Python RED failed with `ModuleNotFoundError: No module named
+  'actor_family_bundle'`; the C RED failed on absent
+  `saturn_actor_bundle.h/.c`. GREEN passes seven Python cases and the
+  freestanding target fixture's 53 resealed field/identity/span mutations.
+  Python covers 46 malformed-input assertions, for 99 mutation/rejection
+  assertions across both boundaries.
+- Verification: the required native-forward-slash-root Make wave passes
+  `verify-actor-family-bundle verify-actor-family-bank
+  verify-actor-pose-bank verify-scene-package-runtime`. This preserves the
+  historical S64F-v2 47-family fixture (13 unsupported representatives across
+  14 closure records), the Mario S64B pose fixture, and S64P runtime behavior.
+- Design decision: v3 canonicalizes metadata by first appearance with exact
+  byte aliases, packs sorted non-aliased variant banks at four-byte boundaries,
+  and requires exact `3 + 2 * lane` scratch. Master validation fully validates
+  every S64B before publishing a view; resolve is binary search plus immutable
+  scalar/span reconstruction only. Failure zeros every C output view.
+- Reference reuse: same-repository direct use/close-port from base
+  `e7b1c2bcb04705e5454684cea4487b3ff9c8692f`, specifically
+  `src/port/saturn/gfx/saturn_actor_bank.h/.c`,
+  `src/port/saturn/runtime/saturn_scene_package.c`, and
+  `tools/saturn/compile_actor_bank.py`. No external code was used and no new
+  license/notice obligation was introduced; the repository has no root
+  license file.
+- Open: independent review, Tasks 3-11, real BOB/all-scene inventory, target
+  link/map/capacity, heterogeneous dual-SH-2 lanes, sourceboot production
+  selection, feature-off identity, transition, Task 9 reseal/repro/v4/staging,
+  and Task 10 smoke/visual/desktop/manual gates.
 
 ---
 
