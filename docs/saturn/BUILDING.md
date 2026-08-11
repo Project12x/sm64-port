@@ -1,8 +1,11 @@
 # Building the Saturn Bring-up Target
 
 The Saturn build is intentionally separate from the existing N64 and PC
-Makefile. It currently produces a small 320x224 VDP2 hello-screen disc and does
-not compile SM64 game code.
+Makefile. Its sourceboot profile compiles integrated SM64 game code and can
+produce a release-bound BOB demo candidate; the historical VDP2 hello target
+remains available as a bring-up diagnostic. The reusable `sm64-saturn-full`
+profile is deliberately non-releasable until its complete content/system
+inventory and game-wide target gates are implemented and reviewed.
 
 ## Pinned dependency
 
@@ -55,13 +58,15 @@ The outer `sourceboot` target now has one fail-closed sequence:
 4. `build` compiles and links into that sealed directory.
 5. `verify-sealed-inputs` compares the real C/C++ depfiles and freshly rescanned
    `.sx` dependencies with discovery, rehashes the closure, enforces release
-   cleanliness when requested, and remeasures the live toolchain before a later
-   release-manifest stage may publish artifacts.
+   cleanliness when requested, and remeasures the live toolchain. Archive and
+   nm gates invoke the exact attested binutils backends directly, without
+   PATH-resolved GCC wrapper delegation.
 6. `seal-release` verifies those inputs again, then writes
    `saturn-release-manifest-v1.json` beside the CUE. The canonical manifest
    binds the resolved profile, identity-v2 effective configuration, source
    closure, package set, toolchain attestation, ELF, `SOURCE.DAT`, ISO, and CUE
-   without timestamps or absolute paths. `verify-release` independently
+   without timestamps or absolute paths. Immediately before publication it
+   rehashes every closure row and proves Git HEAD unchanged; `verify-release` independently
    rehashes every output, extracts the exact identity symbol from the ELF, and
    requires the CUE's single `FILE` directive to resolve to the hashed ISO.
 

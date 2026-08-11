@@ -5,23 +5,27 @@ Active plan:
 
 ## Current lane: hermetic integrated release candidate
 
-Task 9 is source-complete pending its two controller-owned independent reviews.
-Two isolated release builds at source `44b78627` produced the same canonical
-manifest (`b75ba5f0...a2ddf`), identity `id-9a051d30880c78f0`, and exact ELF,
-`SOURCE.DAT`, ISO, and CUE bytes. The sealed audit-v4 result passed at total 700
-with both forbidden callers absent. The verified five-file candidate is staged
-at `build/saturn/releases/sourceboot-bob-demo-v2-manual-candidate`; a second
-publication correctly refused to overwrite it.
+Task 9 is active in independent-review repair round 1. The previous candidate
+at source `44b78627`, manifest `b75ba5f0...a2ddf`, and identity
+`id-9a051d30880c78f0` correctly described the then-installed topology, but its
+acceptance is invalid for closeout because the `gcc-nm` wrapper's actual
+`sh-elf-nm` backend was not sealed. Cleanup containment, LF audit checkout
+identity, direct archive/nm backend attestation, final closure-digest/HEAD
+revalidation, and one-index-per-repository scaling are source-repaired. Two
+clean candidates must still rebuild at one common repaired commit, reproduce,
+remeasure, reseal audit v4, recompute capacity/package facts, and restage before
+Task 9 can return to controller-owned rereview.
 
-This is a release-bound integrated BOB demo candidate, not yet a playable-demo
-acceptance and not the total game. Task 10 still owns the 20,100-frame smoke,
-visual capture, desktop launch, and owner manual-play result. The reusable
+Task 10 is the next active acceptance lane after Task 9 rereview, and is paused
+until the repaired candidate exists. It owns the 20,100-frame smoke, visual
+capture, desktop launch, and owner manual-play result. The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system
 inventory and game-wide target gates are implemented and reviewed.
 
-The full-game completeness sprint supersedes active Task 10 tracking while
-preserving every completed A9A/Task 10 commit and evidence item. It interleaves
+The full-game completeness sprint preserves every completed A9A/Task 10 commit
+and evidence item, but does not supersede Task 10's next-acceptance ownership.
+It interleaves
 complete source-selected Mario animation, generated BOB actor/effect closure,
 full semantic music/SFX, and continued renderer/runtime optimization through
 one reviewed integration spine. Whomp's Fortress area 1 is the second-level
@@ -128,8 +132,10 @@ desktop Ymir with the profile-managed 32-Mbit DRAM cart; the window remains
 alive/responding. Owner reports the scene looks okay and holds 4--6 FPS,
 better than the prior 3--4 FPS range.
 
-Task 10/A10 is now active at its source-contract hardening step. Broad
-native-math verification and non-BOB/full-game coverage remain open.
+Task 10/A10 source-contract hardening evidence is retained, but execution is
+paused behind Task 9 repair/rereview. Task 10 is the next active acceptance
+lane; broad native-math verification and non-BOB/full-game coverage remain
+open.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's

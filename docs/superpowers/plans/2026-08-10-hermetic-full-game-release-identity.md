@@ -2786,3 +2786,14 @@ checks. GREEN is closure 27/27 with one capability skip and release-manifest
 28/28 (the latter required normal Windows temporary-directory access). Old
 candidate evidence remains invalid; documentation reconciliation and the full
 clean A/B/reseal wave remain open.
+
+### Repair round 1 — status/build-guide reconciliation (2026-08-10)
+
+Task 9 remains **active**. `STATE.md` and `ROADMAP.md` now invalidate the old
+candidate for closeout, identify Task 10 as the next active acceptance lane
+after Task 9 rereview, and keep Task 10 execution paused during this repair.
+`BUILDING.md` no longer describes Saturn as hello-only: it distinguishes the
+integrated release-bound BOB sourceboot path from the retained hello diagnostic
+and keeps `sm64-saturn-full` explicitly non-releasable until total-game content
+and game-wide target gates exist. The clean A/B/reseal wave and both independent
+rereviews remain open.
