@@ -163,3 +163,26 @@
   `a99fded7`; this scoped follow-up records the exact SHA. Controller-owned
   independent rereview remains, while Task 2 and all target evidence stay
   blocked/open.
+
+## 2026-08-11 Task 1 final rereview closure
+
+- Independent rereview of `16cd2570` plus `40cd970e`: `PASS C0/I0/M1`. The
+  original C0/I4/M2 and round-2 I1 remain closed.
+- M1 was valid and test-only: after deliberately selecting a residue-one raw
+  residency pointer for the worst-case headroom test, the overlap case cast
+  that same misaligned address to `sm64_saturn_actor_output_record_t *`.
+  Production never dereferenced it, but the conversion itself did not satisfy
+  the pointed-to type's alignment contract.
+- RED/closure: an explicit fixture-validity assertion failed with `overlap
+  fixture formed a misaligned record pointer`. The overlap probe now uses the
+  aligned `scratch + 3` address inside the same reservation, asserts alignment,
+  and still receives the expected overlap rejection. No production, compiler,
+  package, residency, queue, or Task 2 file changed.
+- Verification: focused `verify-actor-meshlets` passes, including the invalid-
+  span mutation and permanent legacy hashes. A fresh forced five-target wave
+  (`verify-actor-meshlets verify-actor-pose-bank verify-actor-instance-queue
+  verify-actor-batches verify-actor-feature-off-wrapper`) passes, including
+  pose bank, actual queue/batch storage, neutrality 2/2, and feature-off 6/6.
+- Status: `source-complete-review-passed`; the scoped test/docs commit and
+  exact SHA recording remain. Task 2 was not started. Tasks 2-5 and all target,
+  P2, Ymir, manual, reseal, and smoke evidence remain open.

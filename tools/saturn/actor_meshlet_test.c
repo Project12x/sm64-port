@@ -185,6 +185,7 @@ static int bank_driven_cases(const char *path)
     sm64_saturn_actor_meshlet_workspace_t rejected;
     sm64_saturn_fast3d_profile_t stats = {0};
     sm64_saturn_actor_draw_ref_t *records = runtime_storage.outputs;
+    sm64_saturn_actor_output_record_t *overlap_records = NULL;
     int32_t *expected_joint_matrices = NULL;
     uint8_t *scratch_storage = NULL;
     uint8_t *scratch = NULL;
@@ -319,6 +320,13 @@ static int bank_driven_cases(const char *path)
             payload_byte_count++;
         scratch = scratch_storage + payload_byte_count;
     }
+    overlap_records = (sm64_saturn_actor_output_record_t *)(void *)(scratch + 3U);
+    if (((uintptr_t)overlap_records &
+         (_Alignof(sm64_saturn_actor_output_record_t) - 1U)) != 0U) {
+        fprintf(stderr, "overlap fixture formed a misaligned record pointer\n");
+        result = 0;
+        goto cleanup;
+    }
     if (sm64_saturn_actor_meshlets_bind_workspace(
             &bank, scratch, bank.max_scratch - 1U, 0U, records,
             bank.bank.primitive_count, &rejected) ||
@@ -328,7 +336,7 @@ static int bank_driven_cases(const char *path)
             bank.bank.primitive_count, &rejected) ||
         sm64_saturn_actor_meshlets_bind_workspace(
             &bank, scratch, bank.max_scratch, 0U,
-            (sm64_saturn_actor_output_record_t *)(void *)scratch,
+            overlap_records,
             bank.bank.primitive_count, &rejected)) {
         fprintf(stderr, "actor workspace lane ownership/capacity gate failed\n");
         result = 0;

@@ -79,6 +79,18 @@ reviewer's two-mod-four case); one byte short or output overlap fails closed.
 No residency allocator, package kind/stable ID, fixed actor arena, or Task 2
 production path changes in this repair.
 
+**Task 1 final rereview closure (2026-08-11):** independent rereview of
+`16cd2570` / `40cd970e` returned `PASS C0/I0/M1`. The minor was test-only: the
+overlap probe converted the deliberately residue-one raw scratch pointer to an
+output-record pointer even though that address did not satisfy the record
+type's alignment. The fixture now chooses the four-byte-aligned `scratch + 3`
+address inside the same reservation, asserts its alignment, and still proves
+the production binder rejects scratch/output overlap. Focused RED failed with
+`overlap fixture formed a misaligned record pointer`; the corrected focused
+meshlet gate and full five-target wave pass. No production source or package
+behavior changed. Task 1 independent review is complete; Task 2 remains not
+started pending the controller's transition.
+
 **Current ground truth (2026-08-07 research pass):**
 - Arena reality (post-`c1e8e73e`, supersedes older ledger numbers): bank 24,088 + observer 13,024 (240-slot identity sidecars) + queue 5,644 + batches 1,024 + alignment + outputs = 65,536 B; output-record ceiling **2,718**; 64 live instances.
 - The replacement point: `demo_render_prepare_publish()` (`src/port/saturn/gfx/saturn_demo_render.c:3834-3974`) publishes a fixed 4-job graph — WORLD_ADMIT, WORLD_LOWER, ACTOR_ADMIT (:3939-3943), ACTOR_LOWER (:3945-3949), deps `{0, 1<<0, 0, 1<<2}` (:3952-3954), job count 4 if Mario visible else 2 (:3955) — via `sm64_saturn_render_job_graph_publish` (:3958). The ACTOR slots route through `demo_actor_admit_compat_wrapper` / `demo_actor_lower_compat_wrapper` (:2936-2962; wired :2964-2974): feature-off → exact Mario `demo_actor_queue_transform`/`demo_actor_queue_classify`; feature-on → `return false` (quarantine). The comment at :2931-2935 marks this as the "one auditable replacement point."
@@ -92,10 +104,10 @@ production path changes in this repair.
 
 ### Task 1: Generalize meshlet preparation to bank instances (registry-independent — start immediately)
 
-**Status:** `source-complete-review-repair-round-2` at `16cd2570` from
-`a99fded7`; modulo-four RED/GREEN and the forced focused host suite are
-complete. Task 2 remains blocked until independent rereview passes. No
-target-complete claim is made.
+**Status:** `source-complete-review-passed` at `16cd2570` / `40cd970e`, with
+the final test-fixture closure in the scoped commit containing this status.
+Independent review is `PASS C0/I0/M1` with M1 closed. Task 2 remains not
+started and no target-complete claim is made.
 
 **Files:**
 - Modify: `src/port/saturn/gfx/saturn_actor_meshlets.h/.c`
