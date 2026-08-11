@@ -3,7 +3,8 @@ import sys
 import os
 import json
 import argparse
-from pathlib import Path
+import stat
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 def read_asset_map():
@@ -39,14 +40,59 @@ def asset_needs_update(asset, version):
     return False
 
 
-def remove_file(fname, output_root=Path(".")):
-    path = output_root / fname
-    os.remove(path)
-    print("deleting", path)
+def _is_symlink_or_reparse(path):
+    if path.is_symlink():
+        return True
     try:
-        os.removedirs(path.parent)
-    except OSError:
-        pass
+        attributes = os.lstat(path).st_file_attributes
+    except (AttributeError, FileNotFoundError, OSError):
+        return False
+    return bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def _clean_asset_path(fname, output_root):
+    if not isinstance(fname, str) or not fname or fname != fname.strip() or "\x00" in fname:
+        raise ValueError("clean asset path is empty or noncanonical")
+    if "\\" in fname:
+        raise ValueError(f"clean asset path is not canonical relative POSIX: {fname!r}")
+    posix = PurePosixPath(fname)
+    windows = PureWindowsPath(fname)
+    if (posix.is_absolute() or windows.is_absolute() or windows.drive
+            or any(part in ("", ".", "..") for part in posix.parts)
+            or posix.as_posix() != fname):
+        raise ValueError(f"clean asset path must be strict relative without traversal: {fname!r}")
+
+    root = Path(output_root).resolve()
+    candidate = root.joinpath(*posix.parts)
+    try:
+        candidate.resolve(strict=False).relative_to(root)
+    except ValueError as error:
+        raise ValueError(f"clean asset path escapes output root: {fname!r}") from error
+
+    current = root
+    for part in posix.parts:
+        current = current / part
+        if current.exists() or current.is_symlink():
+            if _is_symlink_or_reparse(current):
+                raise ValueError(f"clean asset path uses a symlink or reparse point: {fname!r}")
+            try:
+                current.resolve().relative_to(root)
+            except ValueError as error:
+                raise ValueError(f"clean asset path escapes output root: {fname!r}") from error
+    return root, candidate
+
+
+def remove_file(fname, output_root=Path(".")):
+    root, path = _clean_asset_path(fname, output_root)
+    path.unlink()
+    print("deleting", path)
+    parent = path.parent
+    while parent != root:
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
 
 
 def clean_assets(local_asset_file, output_root=Path(".")):
@@ -54,9 +100,10 @@ def clean_assets(local_asset_file, output_root=Path(".")):
     assets.update(read_local_asset_list(local_asset_file))
     if local_asset_file is not None:
         local_asset_file.close()
-    for fname in list(assets) + [".assets-local.txt"]:
-        if fname.startswith("@"):
-            continue
+    names = [fname for fname in assets if not fname.startswith("@")] + [".assets-local.txt"]
+    for fname in names:
+        _clean_asset_path(fname, output_root)
+    for fname in names:
         try:
             remove_file(fname, output_root)
         except FileNotFoundError:

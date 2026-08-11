@@ -192,3 +192,13 @@ final prepublication closure-digest and HEAD revalidation; one-shot Git index
 inventory instead of per-path `ls-files`; consistent Task 10 ownership in
 `STATE.md`; and a current sourceboot description in `docs/saturn/BUILDING.md`.
 Task 10/Ymir/manual execution remains paused pending repair and scoped rereview.
+
+### Repair round 1 — cleanup safety
+
+The extractor now validates the complete cleanup inventory before deleting any
+path, accepts only strict relative POSIX rows, rejects absolute/drive/NUL/dot/
+backslash forms and symlink/reparse ancestors, and stops empty-directory
+pruning below the resolved output root. TDD RED demonstrated both an outside
+traversal deletion and output-root pruning; focused GREEN is 5/5 with the link
+case skipped on a host that cannot create symlinks. This slice does not restore
+the invalidated candidate evidence.

@@ -1610,6 +1610,13 @@
 - Open gates: repaired host/source verification, rebuilt reproducible pair,
   regenerated v4/capacity/package/staging evidence, scoped rereviews, then all
   Task 10 smoke/visual/desktop/manual gates.
+- Cleanup-safety TDD RED: the 5-test extractor suite failed because traversal
+  deleted an outside file and `os.removedirs` removed the output root. GREEN is
+  5/5 with one host-capability symlink skip. Cleanup validates every row before
+  deletion, rejects noncanonical/absolute/traversal/NUL/symlink/reparse paths,
+  proves resolved containment, and prunes only empty descendants strictly below
+  the root. This behavior slice updates CHANGELOG; aggregate rereview and every
+  rebuilt target/evidence gate remain open.
 
 ## Task 5 review repair round 2
 

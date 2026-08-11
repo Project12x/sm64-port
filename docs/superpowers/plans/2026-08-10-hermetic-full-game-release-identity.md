@@ -1581,6 +1581,15 @@ inventory. `STATE.md` must consistently name Task 10 as the next active lane,
 and `docs/saturn/BUILDING.md` must stop describing Saturn as hello-screen-only.
 No Task 10/Ymir/manual gate may start while rereview is open.
 
+Repair round 1 cleanup-safety slice is source-complete pending the aggregate
+rereview. TDD RED showed traversal deleting outside the output root and
+`os.removedirs` pruning the root itself. The extractor now validates the whole
+cleanup inventory before mutation, accepts only strict relative POSIX rows,
+rejects absolute/drive/NUL/dot/backslash forms and symlink/reparse ancestors,
+and prunes empty descendants only while the parent remains below the resolved
+output root. The focused suite is GREEN 5/5 (one symlink case skipped where the
+host cannot create links). No target/evidence gate is restored by this slice.
+
 **Files:**
 - Create: `tools/saturn/sh2_native_math_goal_audit_contract_v4.txt`
 - Modify: `tools/saturn/verify_sh2_native_math.py` (pin only the generated v4 contract digest)

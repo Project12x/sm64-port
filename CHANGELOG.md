@@ -106,6 +106,12 @@
 
 ### Fixed
 
+- Bounded candidate-local asset cleanup to strict relative manifest rows and
+  the resolved output-root namespace. Absolute, traversal, NUL, symlink, and
+  Windows reparse escapes now fail before any deletion, and empty-directory
+  pruning stops below the output root; this prevents a malformed extraction
+  manifest from deleting or pruning unrelated checkout/host paths.
+
 - Applied the repository prefix-map contract to the separately compiled
   software-float runtime. Main sourceboot objects were already normalized, but
   soft-fp's deliberately independent flags retained absolute checkout paths in

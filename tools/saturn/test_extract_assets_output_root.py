@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 import importlib.util
+import os
 from pathlib import Path
 
 
@@ -78,6 +79,68 @@ class ExtractAssetsOutputRootTests(unittest.TestCase):
             self.assertFalse(generated.exists())
             self.assertFalse((output_root / ".assets-local.txt").exists())
             self.assertEqual(source_sentinel.exists(), source_existed)
+
+    def test_clean_rejects_absolute_traversal_and_nul_rows_before_deleting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            output_root = base / "generated"
+            sentinel = output_root / "levels" / "bob" / "keep.png"
+            sentinel.parent.mkdir(parents=True)
+            sentinel.write_bytes(b"keep")
+            outside = base / "outside.png"
+            outside.write_bytes(b"outside")
+            for row in ("../outside.png", str(outside.resolve()), "bad\x00name"):
+                with self.subTest(row=row):
+                    manifest = output_root / ".assets-local.txt"
+                    manifest.write_text(
+                        "# This file tracks the assets currently extracted by extract_assets.py.\n"
+                        f"7\nlevels/bob/keep.png\n{row}\n",
+                        encoding="utf-8",
+                    )
+                    with self.assertRaisesRegex(ValueError, "clean asset path"):
+                        EXTRACT_ASSETS.clean_assets(manifest.open(), output_root)
+                    self.assertTrue(sentinel.is_file())
+                    self.assertEqual(outside.read_bytes(), b"outside")
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unsupported")
+    def test_clean_rejects_symlink_ancestor_without_touching_outside_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            output_root = base / "generated"
+            outside = base / "outside"
+            outside.mkdir()
+            victim = outside / "victim.png"
+            victim.write_bytes(b"outside")
+            output_root.mkdir()
+            link = output_root / "escape"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symlink creation unavailable: {error}")
+            manifest = output_root / ".assets-local.txt"
+            manifest.write_text(
+                "# This file tracks the assets currently extracted by extract_assets.py.\n"
+                "7\nescape/victim.png\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "symlink|reparse|escapes"):
+                EXTRACT_ASSETS.clean_assets(manifest.open(), output_root)
+            self.assertEqual(victim.read_bytes(), b"outside")
+
+    def test_remove_file_prunes_only_empty_descendants_and_preserves_root_and_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            output_root = base / "generated"
+            target = output_root / "levels" / "bob" / "asset.png"
+            target.parent.mkdir(parents=True)
+            target.write_bytes(b"asset")
+
+            EXTRACT_ASSETS.remove_file("levels/bob/asset.png", output_root)
+
+            self.assertFalse(target.exists())
+            self.assertFalse((output_root / "levels").exists())
+            self.assertTrue(output_root.is_dir())
+            self.assertTrue(base.is_dir())
 
 
 if __name__ == "__main__":
