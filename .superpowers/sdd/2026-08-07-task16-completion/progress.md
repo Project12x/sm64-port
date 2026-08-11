@@ -95,7 +95,8 @@
   dependency owns two non-overlapping four-byte-aligned claimant lanes because
   master and slave may process separate descriptors concurrently. Per-lane
   bytes are `6V + V + align4 + 64J + align2 + 2V + V`, rounded to four bytes;
-  generated Mario is 5,520 bytes/lane and 11,040 total. The type-safe binder
+  generated Mario is 5,520 bytes/lane and 11,040 usable for both lanes (round 2
+  below corrects the larger reserved total). The type-safe binder
   takes that raw residency span, lane, and the real arena output pointer; exact
   fit succeeds while short/invalid-lane/output-overlap fails.
 - Boundary handoff: Task 2 must map numeric `actor_bank_id` and exact
@@ -128,3 +129,36 @@
 - Remaining gates: controller-owned independent rereview; then Tasks 2-5 and
   all target/P2/Ymir/manual/reseal/smoke evidence. Task 2 is not authorized
   before rereview and no target-complete claim is made.
+
+## 2026-08-11 Task 1 independent-review repair round 2
+
+- Rereview verdict on `c4cefaad` plus `a99fded7`: `CHANGES REQUIRED C0/I1/M0`;
+  all original C0/I4/M2 findings remain addressed, but Task 2 stays blocked.
+- Finding: residency hands consumers the raw byte address immediately after a
+  dependency payload. Round 1 incorrectly required that address itself to be
+  four-byte aligned, so valid future payload sizes (specifically a two-mod-four
+  end) could not bind despite the package's advertised scratch capacity.
+- TDD RED: the fixture models residency as `payload + byte_count`, exercises
+  raw bases modulo four, and requires literal sizes of 5,520 bytes/lane,
+  11,040 usable bytes, and 11,043 reserved bytes. Before production edits it
+  failed to compile because the query did not expose usable versus reserved
+  totals; the old binder would also reject residues one through three.
+- Design correction: S64B `maximum_scratch` includes three bytes of worst-case
+  leading headroom before two aligned lanes. The binder aligns upward within
+  that reservation with overflow-safe pointer arithmetic. Exact advertised
+  capacity must succeed at residues 0-3; one-byte-short, invalid lane, lane
+  overlap, and output/scratch overlap fail closed. The fixed arena remains
+  65,536 bytes/2,718 output records. Package kind, stable ID, residency
+  allocator, and Task 2 paths remain unchanged.
+- Verification: the forced MSYS/DLL run of `compile-mario-actor-bank
+  verify-actor-meshlets verify-actor-pose-bank verify-actor-instance-queue
+  verify-actor-batches verify-actor-feature-off-wrapper` passes. It covers
+  generated S64B `max_scratch=11043`, raw residues 0-3, exact/short/overlap
+  bindings, invalid-span mutation, the round-1 exact fixture/no-rescan gates,
+  pose bank, actual queue/batch storage, neutrality 2/2, legacy hashes, and
+  feature-off 6/6. Python bytecode syntax, scoped diff check, and unchanged
+  renderer/main/residency/package/wrapper paths also pass.
+- Status: `source-complete-review-repair-round-2` from `a99fded7` in the
+  behavior commit containing this status. Behavior commit and exact-SHA
+  follow-up remain, then controller-owned independent rereview; Task 2 and all
+  target evidence remain blocked/open.

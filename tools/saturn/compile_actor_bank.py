@@ -104,7 +104,8 @@ def _align_value(value: int, alignment: int) -> int:
     return (value + alignment - 1) & ~(alignment - 1)
 
 
-def _actor_workspace_bytes(vertex_count: int, joint_count: int) -> int:
+def _actor_workspace_sizes(vertex_count: int,
+                           joint_count: int) -> tuple[int, int, int]:
     lane = 0
     lane = _align_value(lane, 2)
     lane += vertex_count * 3 * 2       # posed int16 xyz
@@ -115,7 +116,9 @@ def _actor_workspace_bytes(vertex_count: int, joint_count: int) -> int:
     lane += vertex_count * 2           # admitted position indices
     lane += vertex_count               # uniqueness bitmap
     lane = _align_value(lane, ACTOR_WORK_ALIGNMENT)
-    return lane * ACTOR_WORK_LANE_COUNT
+    usable = lane * ACTOR_WORK_LANE_COUNT
+    reserved = usable + ACTOR_WORK_ALIGNMENT - 1
+    return lane, usable, reserved
 
 
 def _canonical_json(value: object) -> bytes:
@@ -695,7 +698,7 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
             "last_channel_samples": last_samples,
         })
 
-    max_scratch = _actor_workspace_bytes(len(geometry["vertices"]), 20)
+    _, _, max_scratch = _actor_workspace_sizes(len(geometry["vertices"]), 20)
     header = HEADER_STRUCT.pack(
         MAGIC, VERSION, int(manifest["family_id"]), int(manifest["model_id"]), 20,
         len(inventory.records), len(geometry["meshlets"]["meshlets"]),

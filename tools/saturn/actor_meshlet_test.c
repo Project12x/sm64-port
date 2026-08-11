@@ -186,10 +186,11 @@ static int bank_driven_cases(const char *path)
     sm64_saturn_fast3d_profile_t stats = {0};
     sm64_saturn_actor_draw_ref_t *records = runtime_storage.outputs;
     int32_t *expected_joint_matrices = NULL;
+    uint8_t *scratch_storage = NULL;
     uint8_t *scratch = NULL;
     uint8_t *family_bytes = NULL;
     uint8_t *bytes = NULL;
-    uint32_t lane_bytes = 0U, total_bytes = 0U;
+    uint32_t lane_bytes = 0U, usable_bytes = 0U, reserved_bytes = 0U;
     long file_size;
     int result = 1;
 
@@ -248,51 +249,77 @@ static int bank_driven_cases(const char *path)
     if ((uint32_t)bank.bank.primitive_count * 2U >
             SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING ||
         !sm64_saturn_actor_meshlets_workspace_query(
-            &bank, &lane_bytes, &total_bytes) ||
-        lane_bytes == 0U || total_bytes != lane_bytes * 2U ||
-        total_bytes != bank.max_scratch) {
+            &bank, &lane_bytes, &usable_bytes, &reserved_bytes) ||
+        lane_bytes != 5520U || usable_bytes != 11040U ||
+        reserved_bytes != 11043U || reserved_bytes != bank.max_scratch) {
         fprintf(stderr, "actor workspace query disagrees with S64B scratch\n");
         result = 0;
         goto cleanup;
     }
-    scratch = (uint8_t *)malloc(bank.max_scratch);
+    scratch_storage = (uint8_t *)malloc((size_t)bank.max_scratch + 16U);
     expected_joint_matrices = (int32_t *)malloc(
         (size_t)bank.bank.joint_count * 16U *
         sizeof(*expected_joint_matrices));
-    if (scratch == NULL || expected_joint_matrices == NULL) {
+    if (scratch_storage == NULL || expected_joint_matrices == NULL) {
         fprintf(stderr, "cannot allocate actor bank fixture spans\n");
         result = 0;
         goto cleanup;
     }
-    if (!sm64_saturn_actor_meshlets_bind_workspace(
-            &bank, scratch, bank.max_scratch, 0U, records,
-            bank.bank.primitive_count, &workspace[0]) ||
-        !sm64_saturn_actor_meshlets_bind_workspace(
-            &bank, scratch, bank.max_scratch, 1U,
-            records + bank.bank.primitive_count,
-            bank.bank.primitive_count, &workspace[1]) ||
-        workspace[0].output.records != runtime_storage.outputs ||
-        workspace[0].scratch_offset + workspace[0].scratch_size >
-            workspace[1].scratch_offset ||
-        workspace[1].scratch_offset + workspace[1].scratch_size >
-            bank.max_scratch ||
-        (uint8_t *)(void *)workspace[0].pose_work.vertices +
-                (uint32_t)bank.bank.vertex_count * 3U * sizeof(int16_t) >
-            workspace[0].pose_work.light_intensity ||
-        workspace[0].pose_work.light_intensity + bank.bank.vertex_count >
-            (uint8_t *)(void *)workspace[0].pose_work.joint_matrices_q16 ||
-        (uint8_t *)(void *)workspace[0].pose_work.joint_matrices_q16 +
-                (uint32_t)bank.bank.joint_count * 16U * sizeof(int32_t) >
-            (uint8_t *)(void *)workspace[0].output.output.positions ||
-        (uint8_t *)(void *)workspace[0].output.output.positions +
-                (uint32_t)bank.bank.vertex_count * sizeof(uint16_t) >
-            workspace[0].output.position_seen ||
-        workspace[0].output.position_seen + bank.bank.vertex_count >
-            scratch + workspace[0].scratch_offset +
-                workspace[0].scratch_size ||
-        ((uintptr_t)workspace[0].pose_work.joint_matrices_q16 & 3U) != 0U ||
-        ((uintptr_t)workspace[0].output.output.positions & 1U) != 0U ||
-        sm64_saturn_actor_meshlets_bind_workspace(
+    for (uint8_t residue = 0U; residue < 4U; residue++) {
+        const uint32_t leading_bytes = (4U - residue) & 3U;
+        uint32_t payload_byte_count = 13U;
+        while ((((uintptr_t)scratch_storage + payload_byte_count) & 3U) !=
+               residue)
+            payload_byte_count++;
+        scratch = scratch_storage + payload_byte_count;
+        if (!sm64_saturn_actor_meshlets_bind_workspace(
+                &bank, scratch, bank.max_scratch, 0U, records,
+                bank.bank.primitive_count, &workspace[0]) ||
+            !sm64_saturn_actor_meshlets_bind_workspace(
+                &bank, scratch, bank.max_scratch, 1U,
+                records + bank.bank.primitive_count,
+                bank.bank.primitive_count, &workspace[1]) ||
+            workspace[0].output.records != runtime_storage.outputs ||
+            workspace[0].scratch_offset != leading_bytes ||
+            workspace[1].scratch_offset != leading_bytes + lane_bytes ||
+            ((uintptr_t)(scratch + workspace[0].scratch_offset) & 3U) != 0U ||
+            ((uintptr_t)(scratch + workspace[1].scratch_offset) & 3U) != 0U ||
+            workspace[0].scratch_offset + workspace[0].scratch_size >
+                workspace[1].scratch_offset ||
+            workspace[1].scratch_offset + workspace[1].scratch_size >
+                bank.max_scratch ||
+            (uint8_t *)(void *)workspace[0].pose_work.vertices +
+                    (uint32_t)bank.bank.vertex_count * 3U * sizeof(int16_t) >
+                workspace[0].pose_work.light_intensity ||
+            workspace[0].pose_work.light_intensity + bank.bank.vertex_count >
+                (uint8_t *)(void *)workspace[0].pose_work.joint_matrices_q16 ||
+            (uint8_t *)(void *)workspace[0].pose_work.joint_matrices_q16 +
+                    (uint32_t)bank.bank.joint_count * 16U * sizeof(int32_t) >
+                (uint8_t *)(void *)workspace[0].output.output.positions ||
+            (uint8_t *)(void *)workspace[0].output.output.positions +
+                    (uint32_t)bank.bank.vertex_count * sizeof(uint16_t) >
+                workspace[0].output.position_seen ||
+            workspace[0].output.position_seen + bank.bank.vertex_count >
+                scratch + workspace[0].scratch_offset +
+                    workspace[0].scratch_size ||
+            ((uintptr_t)workspace[0].pose_work.joint_matrices_q16 & 3U) != 0U ||
+            ((uintptr_t)workspace[1].pose_work.joint_matrices_q16 & 3U) != 0U ||
+            ((uintptr_t)workspace[0].output.output.positions & 3U) != 0U ||
+            ((uintptr_t)workspace[1].output.output.positions & 3U) != 0U) {
+            fprintf(stderr,
+                    "actor workspace base-residue %u alignment gate failed\n",
+                    residue);
+            result = 0;
+            goto cleanup;
+        }
+    }
+    {
+        uint32_t payload_byte_count = 13U;
+        while ((((uintptr_t)scratch_storage + payload_byte_count) & 3U) != 1U)
+            payload_byte_count++;
+        scratch = scratch_storage + payload_byte_count;
+    }
+    if (sm64_saturn_actor_meshlets_bind_workspace(
             &bank, scratch, bank.max_scratch - 1U, 0U, records,
             bank.bank.primitive_count, &rejected) ||
         sm64_saturn_actor_meshlets_bind_workspace(
@@ -493,7 +520,7 @@ static int bank_driven_cases(const char *path)
 cleanup:
     if (file != NULL) fclose(file);
     free(expected_joint_matrices);
-    free(scratch);
+    free(scratch_storage);
     free(family_bytes);
     free(bytes);
     return result;

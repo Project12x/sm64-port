@@ -125,9 +125,11 @@ typedef struct sm64_saturn_actor_family_record {
 
 bool sm64_saturn_actor_bank_validate(const void *data, size_t byte_count,
                                      sm64_saturn_actor_bank_view_t *view);
+/* Returns one aligned lane, both usable lanes, and the worst-case reservation
+ * including leading headroom for an arbitrarily aligned raw payload end. */
 bool sm64_saturn_actor_bank_workspace_requirements(
     uint16_t vertex_count, uint16_t joint_count, uint32_t *lane_bytes,
-    uint32_t *total_bytes);
+    uint32_t *usable_bytes, uint32_t *reserved_bytes);
 bool sm64_saturn_actor_bank_validate_expected(
     const void *data, size_t byte_count, const uint32_t expected_source_hash[8],
     sm64_saturn_actor_bank_view_t *view);

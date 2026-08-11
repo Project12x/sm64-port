@@ -88,12 +88,14 @@ typedef struct sm64_saturn_actor_meshlet_workspace {
     uint8_t reserved[3];
 } sm64_saturn_actor_meshlet_workspace_t;
 
-/* S64B maximum_scratch owns both fixed claimant lanes. The raw span is the
- * package-resident dependency scratch immediately following its payload, not
- * the fixed actor queue/output arena. */
+/* S64B maximum_scratch owns worst-case leading alignment headroom plus both
+ * fixed claimant lanes. The raw span begins immediately after the package-
+ * resident dependency payload and need not already be aligned; it is not the
+ * fixed actor queue/output arena. Query returns per-lane usable bytes, both-
+ * lane usable bytes, and the complete advertised reservation respectively. */
 bool sm64_saturn_actor_meshlets_workspace_query(
     const sm64_saturn_actor_bank_view_t *bank, uint32_t *lane_bytes,
-    uint32_t *total_bytes);
+    uint32_t *usable_bytes, uint32_t *reserved_bytes);
 bool sm64_saturn_actor_meshlets_bind_workspace(
     const sm64_saturn_actor_bank_view_t *bank, void *scratch,
     uint32_t scratch_capacity, uint8_t lane,

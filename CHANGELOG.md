@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- Reserved worst-case leading alignment headroom in actor-bank dependency
+  scratch and aligned the raw `payload + byte_count` address inside that span.
+  Either SH-2 lane now binds safely for every address modulo four with the
+  exact advertised capacity; one-byte-short and scratch/output overlap remain
+  fail-closed. Mario keeps 5,520 usable bytes per lane (11,040 for both) while
+  S64B now advertises the honest 11,043-byte worst-case reservation. This
+  removes an accidental dependency on the current payload-end alignment
+  without moving scratch into the fixed actor arena or changing package kind.
+
 - Made the combined object-pool smoke wait, one VBlank at a time and within a
   fixed startup bound, until both immutable target code and the initialized
   sealed build identity match before telemetry begins. This fixes exact

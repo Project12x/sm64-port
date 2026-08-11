@@ -55,7 +55,8 @@ pose scratch. Instead, the registry-selected S64B dependency's already-reserved
 either SH-2 may process a descriptor concurrently. Each package-derived lane
 contains posed vertices (`6V`), lights (`V`), 4x4 Q16 matrices (`64J`),
 positions (`2V`), and uniqueness bytes (`V`), with four-byte alignment; the
-Mario bank therefore declares 5,520 bytes per lane / 11,040 total. Task 2 must
+Mario bank therefore needs 5,520 bytes per lane / 11,040 usable for both lanes
+(round 2 below corrects the larger reserved total). Task 2 must
 expose this dependency scratch at the exact scene generation and map numeric
 bank ID to its validated view; Task 3 must gate live lane ownership; Task 5
 retains target map/capacity proof. `prepare_bank` trusts that immutable
@@ -64,6 +65,19 @@ never a full-bank validation pass. The combined Mario S64B currently advertises
 its dependency as `ANIMATION_DEPENDENCIES`; the binder is payload-kind-neutral
 and Task 2 must expose the scratch belonging to the registry-selected S64B
 rather than changing package identity in Task 1.
+
+**Task 1 review repair round 2 (2026-08-11):** rereview of `c4cefaad` /
+`a99fded7` returned `CHANGES REQUIRED C0/I1/M0`: residency exposes dependency
+scratch at `payload + byte_count`, which is not guaranteed four-byte aligned.
+The S64B reservation now distinguishes a 5,520-byte usable lane, 11,040 bytes
+usable by both lanes, and 11,043 bytes of advertised `maximum_scratch`; the
+extra three bytes are worst-case leading alignment headroom. The binder aligns
+the raw pointer upward inside that reservation using overflow-safe arithmetic,
+then lays out both lanes relative to the aligned base. Exact advertised
+capacity works for raw addresses at every residue modulo four (including the
+reviewer's two-mod-four case); one byte short or output overlap fails closed.
+No residency allocator, package kind/stable ID, fixed actor arena, or Task 2
+production path changes in this repair.
 
 **Current ground truth (2026-08-07 research pass):**
 - Arena reality (post-`c1e8e73e`, supersedes older ledger numbers): bank 24,088 + observer 13,024 (240-slot identity sidecars) + queue 5,644 + batches 1,024 + alignment + outputs = 65,536 B; output-record ceiling **2,718**; 64 live instances.
@@ -78,10 +92,10 @@ rather than changing package identity in Task 1.
 
 ### Task 1: Generalize meshlet preparation to bank instances (registry-independent — start immediately)
 
-**Status:** `source-complete-review-repair` at `c4cefaad` from base
-`ec8ef844`; round-1 RED/GREEN and all focused host gates are complete. Task 2
-remains blocked until independent rereview passes. No target-complete claim is
-made.
+**Status:** `source-complete-review-repair-round-2` from `a99fded7` in the
+behavior commit containing this status; modulo-four RED/GREEN and the forced
+focused host suite are complete. Task 2 remains blocked until independent
+rereview passes. No target-complete claim is made.
 
 **Files:**
 - Modify: `src/port/saturn/gfx/saturn_actor_meshlets.h/.c`
