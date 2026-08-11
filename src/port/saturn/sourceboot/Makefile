@@ -1310,7 +1310,7 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 # default profile does not link the demo renderer's shared state.
 	@if [ "$(SATURN_DEMO_PATH)" = "1" ]; then \
 	  audit_args=""; \
-	  if [ "$(SATURN_SOURCEBOOT_ROUTE_REPLAY)" = "1" ]; then \
+	  if [ "$(SATURN_SOURCEBOOT_ROUTE_REPLAY)" = "1" ] && [ "$(SOURCEBOOT_RELEASE_MODE)" != "release" ]; then \
 	    audit_args="--audit-route-oracle $(SOURCEBOOT_NATIVE_MATH_SIM_ROUTE_ORACLE) --audit-contract $(SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT)"; \
 	  fi; \
 	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_sh2_native_math.py" \

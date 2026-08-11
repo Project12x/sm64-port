@@ -1368,6 +1368,28 @@
   verifier; no external source, copied bytes, license, or notice change.
   Candidate A must restart from the resulting common source commit;
   manifest/reproducibility gates remain open.
+- Candidate A from `acf67eef` published identity v2 tag
+  `id-80d7ae1aa3bb0200`, completed compile/link/package, passed external
+  closure equality and root plus pinned-libyaul cleanliness, atomically
+  published its 3,266-byte release manifest, and passed direct manifest
+  verification. Manifest SHA-256 is
+  `c26a73be5006ac62fca03e226821c5c4676d789c17686250a8aeadff27bcc3f0`.
+  The enclosing exact `verify-sourceboot` command then failed the historical
+  v2 exact-total overlay: expected 582, found 700. Because v4 is not selected
+  until reproducibility and measurement, neither the candidate-A nor audit
+  gate is claimed and 700 is not copied into v4.
+- Audit-sequencing correction: release-mode ordinary `verify` continues to
+  require the native-math baseline and route oracle but does not inject the
+  immutable historical v2 audit overlay before reproducibility. Development
+  `verify` and explicit `verify-sim-math-route` retain v2. Task 9 still must
+  measure candidate B unsealed, reject forbidden callers, exclusively seal and
+  pin exact v4, and rerun v4 before staging. TDD was RED 0/1 and GREEN 1/1;
+  full hermetic Make coverage is GREEN 17/17, and the v2/v3 byte/digest
+  immutability test is GREEN 1/1 (`87dabb51...6127e2`,
+  `80f66286...9cba5`). Reference: close-port of the active plan's explicit
+  historical-audit and release-candidate phase split; no external source,
+  copied bytes, license, or notice change. Candidate A must restart from the
+  resulting common commit; all later Task 9 gates remain open.
 
 ## Task 5 review repair round 2
 

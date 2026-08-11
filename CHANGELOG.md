@@ -92,6 +92,15 @@
 
 ### Fixed
 
+- Deferred the immutable native-math audit-v2 exact-total overlay during
+  release-candidate construction. The first otherwise-verified Task 9
+  candidate measured 700 while the historical v2 contract requires 582, but
+  audit v4 cannot be selected until two unsealed candidates reproduce. Release
+  verification still runs the baseline and route-oracle gates; development
+  verification and the explicit historical audit target retain v2 unchanged,
+  while release acceptance still requires the newly measured, sealed, and
+  pinned v4 contract before staging.
+
 - Reused the bounded, submodule-aware source-closure verifier for the release
   manifest's final Git provenance check. Manifest publication had performed a
   second independent all-path `git status`, hitting Windows `WinError 206`

@@ -522,6 +522,33 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             makefile,
         )
 
+    def test_release_verify_defers_historical_exact_math_audit(self) -> None:
+        makefile = self.sourceboot_makefile()
+        verify_recipe = makefile.split(
+            "verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue", 1
+        )[1].split(".PHONY: verify-sim-math-route", 1)[0]
+        explicit_audit = makefile.split(
+            "verify-sim-math-route: verify-sim-math-route-config", 1
+        )[1].split("verify-sim-math-route-config:", 1)[0]
+
+        self.assertIn(
+            'if [ "$(SATURN_SOURCEBOOT_ROUTE_REPLAY)" = "1" ] '
+            '&& [ "$(SOURCEBOOT_RELEASE_MODE)" != "release" ]; then',
+            verify_recipe,
+        )
+        self.assertIn(
+            '--route-oracle "$(SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE)"',
+            verify_recipe,
+        )
+        self.assertIn(
+            "--audit-contract $(SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT)",
+            verify_recipe,
+        )
+        self.assertIn(
+            '--audit-contract "$(SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT)"',
+            explicit_audit,
+        )
+
     def test_second_discovery_rescans_cached_depfile_after_flag_drift(self) -> None:
         dep_root = Path(self.temporary.name) / "discovery-deps"
         dep_root_arg = f"SOURCEBOOT_DISCOVERY_DEPS={dep_root.as_posix()}"

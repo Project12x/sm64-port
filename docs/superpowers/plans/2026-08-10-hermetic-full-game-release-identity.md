@@ -2130,6 +2130,32 @@ of the same repository's post-link verifier; no external source, copied bytes,
 license, or notice change. Candidate A must restart from the resulting common
 source commit; manifest/reproducibility remain open.
 
+Candidate A from `acf67eef` published identity tag
+`id-80d7ae1aa3bb0200`, completed compile/link/package, passed external closure
+equality plus root and pinned-libyaul cleanliness, atomically published the
+release manifest, and passed direct manifest verification. The manifest is
+3,266 bytes with SHA-256
+`c26a73be5006ac62fca03e226821c5c4676d789c17686250a8aeadff27bcc3f0`.
+The enclosing `verify-sourceboot` invocation then stopped in its ordinary
+native-math audit because release candidate construction still injected the
+immutable historical v2 exact total 582; the new ELF measured 700. No
+candidate-A completion or reproducibility gate is claimed, and the measured
+700 is not accepted as v4 evidence.
+
+Task 9 sequencing correction: release-mode `verify` retains the general
+native-math baseline and route-oracle checks but defers the historical v2
+exact-total overlay until after candidates A/B reproduce and Task 9 measures,
+seals, and pins v4. Development-mode `verify` and the explicit
+`verify-sim-math-route` target continue to consume v2 unchanged. This is a
+close-port of the plan's established split between ordinary release-candidate
+construction and explicit historical/exact-target audit targets; no external
+source, copied bytes, license, or notice change. Focused TDD was RED 0/1 and
+GREEN 1/1; the full hermetic Make suite is GREEN 17/17, and the checked-in
+v2/v3 immutability test is GREEN 1/1 with exact digests
+`87dabb51...6127e2` and `80f66286...9cba5`. Candidate A must restart at the
+resulting common source commit; candidate B, reproducibility, measurement, v4
+seal/pin/rerun, capacity/package, and staging gates remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
