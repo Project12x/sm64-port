@@ -1390,6 +1390,24 @@
   historical-audit and release-candidate phase split; no external source,
   copied bytes, license, or notice change. Candidate A must restart from the
   resulting common commit; all later Task 9 gates remain open.
+- Candidate A succeeded from common detached source commit
+  `081c8575280a07b80e9e7164155aacfa6cc40ab1`. The exact release tuple and
+  `-j1` command exited 0 after 968.2 seconds; direct manifest verification also
+  exited 0. Identity is `id-03b0d87ea1993a5a`; the 3,266-byte manifest
+  SHA-256 is
+  `9e57fbf376151938f59519c3d5b0865fb818dcec8687960fc083e08a4fd18759`.
+  Manifest-bound artifact hashes are ELF `c1567a35...2f3655`, `SOURCE.DAT`
+  `f0d3781c...0fde6c`, ISO `2f1e5fd0...2c69c80`, and CUE
+  `cdbf0bfa...f46dba7`; closure cleanliness is true and provenance names the
+  exact common commit. Task 9 Steps 1–3 are complete.
+- Performance inspection before B: the general code-only native-math analysis
+  ran approximately 238 seconds (20:55:04–20:59:02). The 3,397 function
+  symbols are grouped/sorted; alias overlap scans only active nesting, while
+  the only owner-wide local-island collision scan has two candidate symbols.
+  No whole-symbol quadratic alias/collision hot path was found. The existing
+  dataflow traversal is the scale-sensitive phase and remains unchanged so A/B
+  execute identical gates. Candidate B and every later Task 9 gate remain
+  open.
 
 ## Task 5 review repair round 2
 

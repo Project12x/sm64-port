@@ -2156,7 +2156,23 @@ v2/v3 immutability test is GREEN 1/1 with exact digests
 resulting common source commit; candidate B, reproducibility, measurement, v4
 seal/pin/rerun, capacity/package, and staging gates remain open.
 
-- [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
+Candidate A from `081c8575` completed the exact serial release command in
+968.2 seconds and direct release-manifest verification also exited 0. Its
+identity is `id-03b0d87ea1993a5a`; the 3,266-byte manifest SHA-256 is
+`9e57fbf376151938f59519c3d5b0865fb818dcec8687960fc083e08a4fd18759`.
+The manifest records the exact source commit, clean closure, identity/profile/
+package/toolchain roots, and artifact hashes: ELF
+`c1567a35...2f3655`, `SOURCE.DAT` `f0d3781c...0fde6c`, ISO
+`2f1e5fd0...2c69c80`, and CUE `cdbf0bfa...f46dba7`. The general native-math
+analysis occupied approximately 238 seconds (20:55:04–20:59:02). Its
+alias/collision setup is not a whole-symbol quadratic boundary: 3,397 function
+symbols are grouped and sorted, overlap checks scan only the active nesting
+set, and the owner-wide local-island scan has only two candidate symbols.
+The expensive phase is the existing code-only dataflow traversal, so candidate
+B retains the exact analyzer and gates rather than changing behavior between
+the reproducibility pair.
+
+- [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
 git status --short
@@ -2166,7 +2182,7 @@ git diff --check
 
 Confirm Tasks 1–8 and both reviews per task are recorded. Preserve unrelated dirt. Release mode may proceed only if every checked-in source-closure input is tracked and clean; if a relevant file is dirty, stop and reconcile ownership instead of hiding it.
 
-- [ ] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
+- [x] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
 
 ```powershell
 $implementationRoot = (Get-Location).Path
@@ -2228,7 +2244,7 @@ Invoke-HermeticBobBuild $candidateARoot
 
 Expected: ordinary sourceboot gates, post-link closure verification, and release-manifest verification pass. Audit v4 is not yet selected.
 
-- [ ] **Step 3: Verify and retain candidate A's immutable manifest**
+- [x] **Step 3: Verify and retain candidate A's immutable manifest**
 
 Resolve the current identity-tagged directory from the generated identity JSON,
 then verify its manifest:
