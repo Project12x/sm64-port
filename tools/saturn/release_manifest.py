@@ -22,7 +22,7 @@ if os.name == "nt":
     from ctypes import wintypes
 
 import gen_build_identity as identity
-from gen_source_closure import CLASS_PRECEDENCE
+from gen_source_closure import CLASS_PRECEDENCE, verify_release_cleanliness
 from hermetic_manifest import canonical_json_bytes, write_if_changed
 from target_profile import PACKAGE_CLASSES
 
@@ -833,6 +833,19 @@ def _git_provenance(
     ]
     if len(paths) != len(set(paths)) or any(not path for path in paths):
         raise ValueError("source closure provenance paths are invalid")
+    if mode == "release":
+        sealed_rows = {
+            (row["path"], row["class"]): row
+            for row in source_closure["inputs"]
+        }
+        try:
+            verify_release_cleanliness(root, sealed_rows)
+        except ValueError as error:
+            raise ValueError("release source closure is not clean") from error
+        return {
+            "git_revision": revision.stdout.strip().lower(),
+            "closure_clean": True,
+        }
     status = subprocess.run(
         ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *paths],
         cwd=root, check=False, capture_output=True, text=True,

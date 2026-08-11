@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Reused the bounded, submodule-aware source-closure verifier for the release
+  manifest's final Git provenance check. Manifest publication had performed a
+  second independent all-path `git status`, hitting Windows `WinError 206`
+  after post-link cleanliness already passed; release provenance now reruns
+  the exact tracked/clean, pinned-gitlink, and CRLF-normalized checks in bounded
+  batches immediately before publication instead of trusting a stale boolean.
+
 - Corrected the release-enabled BOB profile's declared ELF, ISO, and CUE
   basenames to the sourceboot program's real `-e2` outputs. The profile had
   named nonexistent unsuffixed files, so a fully compiled and cleanliness-

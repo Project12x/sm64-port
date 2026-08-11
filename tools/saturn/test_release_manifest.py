@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -402,6 +403,35 @@ class ReleaseManifestTests(unittest.TestCase):
         })
         self.fixture.rebuild_identity(2)
         self.fixture.build()
+
+    def test_release_provenance_uses_shared_final_cleanliness_verifier(self) -> None:
+        closure = {
+            "schema": "sm64-saturn-source-closure-v2",
+            "inputs": [{
+                "path": "src/main.c", "sha256": "1" * 64,
+                "class": "compiled-source", "owners": ["compiler"],
+            }],
+        }
+        revision = subprocess.CompletedProcess([], 0, "a" * 40 + "\n", "")
+        with (
+            mock.patch.object(
+                release_manifest, "verify_release_cleanliness"
+            ) as cleanliness,
+            mock.patch.object(
+                release_manifest.subprocess, "run", return_value=revision
+            ) as run,
+        ):
+            provenance = release_manifest._git_provenance(
+                self.fixture.root, closure, "release"
+            )
+
+        self.assertEqual(
+            provenance, {"git_revision": "a" * 40, "closure_clean": True}
+        )
+        cleanliness.assert_called_once()
+        sealed_rows = cleanliness.call_args.args[1]
+        self.assertEqual(set(sealed_rows), {("src/main.c", "compiled-source")})
+        self.assertEqual(run.call_count, 1)
 
     def test_builder_binds_profile_output_names_to_artifact_basenames(self) -> None:
         profile = json.loads(self.fixture.profile.read_text(encoding="ascii"))

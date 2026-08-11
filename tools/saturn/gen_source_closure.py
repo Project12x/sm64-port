@@ -172,7 +172,7 @@ def verify_source_closure(
     if actual_external_tuple != expected_external:
         raise ValueError("actual external dependency set differs from sealed discovery")
     if release_mode:
-        _verify_release_cleanliness(root, sealed_rows)
+        verify_release_cleanliness(root, sealed_rows)
     for _key, row in sealed_rows.items():
         actual = sha256_file(root / row["path"])
         if actual != row["sha256"]:
@@ -572,7 +572,9 @@ def _owners(row: Mapping[str, Any] | None) -> tuple[str, ...]:
     return tuple(sorted(row["owners"]))
 
 
-def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str], dict[str, Any]]) -> None:
+def verify_release_cleanliness(
+    root: Path, sealed_rows: Mapping[tuple[str, str], dict[str, Any]]
+) -> None:
     checked_in = sorted(
         row["path"] for row in sealed_rows.values()
         if row["class"] != "generated-input" or not row["path"].startswith("build/")

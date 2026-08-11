@@ -1351,6 +1351,23 @@
   evidence paths; no external source, copied bytes, license, or notice change.
   Candidate A must restart from the resulting common source commit and new
   canonical profile digest; manifest/reproducibility gates remain open.
+- Candidate A from `6188a5a4` published identity v2 tag
+  `id-14026551f0ffa64e`, completed compile/link/package, external equality,
+  root plus nested cleanliness, schema-owner validation, and profile/output
+  binding. Manifest Git provenance then raised Windows `WinError 206` because
+  it independently expanded the complete closure into one `git status` argv.
+  No manifest or reproducibility gate is claimed.
+- Final-provenance correction: release manifest construction reconstructs the
+  exact sealed rows and reruns the shared bounded, tracked/clean, pinned-
+  gitlink, and CRLF-normalized verifier immediately before publication; no
+  cached boolean substitutes for that final check. Focused TDD was RED 0/1 and
+  GREEN 1/1. Source-closure 24/24 with one existing case-filesystem skip,
+  release-manifest 28/28, and staging 20/20 are GREEN (72/72 total); existing
+  coverage places dirt in the last bounded batch and proves failure after all
+  earlier batches. Reference: direct reuse of the same repository's post-link
+  verifier; no external source, copied bytes, license, or notice change.
+  Candidate A must restart from the resulting common source commit;
+  manifest/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

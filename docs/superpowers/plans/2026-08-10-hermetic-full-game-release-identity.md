@@ -2114,6 +2114,22 @@ historical target evidence; no external source, copied bytes, license, or
 notice change. Candidate A must restart from the resulting common source
 commit and new canonical profile digest; manifest/reproducibility remain open.
 
+Candidate A from `6188a5a4` published identity tag
+`id-14026551f0ffa64e`, completed compile/link/package, external equality, root
+plus nested cleanliness, schema-owner validation, and profile/output binding.
+Manifest Git provenance then raised Windows `WinError 206` because it repeated
+the complete closure as one independent `git status` argv. No manifest or
+reproducibility gate is claimed. Release provenance now reconstructs exact
+sealed rows and invokes the same bounded, tracked/clean, pinned-gitlink, and
+CRLF-normalized verifier immediately before publication; it does not accept a
+cached cleanliness assertion. Focused TDD was RED 0/1 and GREEN 1/1. Source-
+closure 24/24 with one existing case-filesystem skip, release-manifest 28/28,
+and staging 20/20 are GREEN (72/72 total); existing coverage puts dirt in the
+final batch and proves failure after all prior batches. Reference: direct reuse
+of the same repository's post-link verifier; no external source, copied bytes,
+license, or notice change. Candidate A must restart from the resulting common
+source commit; manifest/reproducibility remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
