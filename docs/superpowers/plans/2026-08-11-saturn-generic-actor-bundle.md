@@ -613,15 +613,24 @@ reviewer repeated the six tail-branch mutations, real explosion probe, and all
 full suites, finding no schema, ABI, Makefile, `src`/`include`, or Task 4 drift.
 Task 4 resumes from zero edits; all target/release/manual gates remain open.
 
-**Task 3 real-source model-less alternate repair round 7 (2026-08-11):** active.
+**Task 3 real-source model-less alternate repair round 7 (2026-08-11):**
+source-complete; scoped rereview pending.
 Task 4's full BOB replay reached family 36/model `0x0065`, where the valid
 drawable `MODEL_METALLIC_BALL` shares a family record with non-drawable
 `MODEL_NONE`. `_record_selection` required complete GeoLayout provenance for
 the unselected model-less alternate before numeric selection and rejected the
-drawable. The repair must select exact numeric identity before requiring
-drawable provenance, retain duplicate/conflicting selected-model rejection,
-and never fabricate geometry for `MODEL_NONE`. Task 4 remains zero-edit and
-paused for RED/GREEN plus scoped rereview.
+drawable. The repair first resolves every numeric identity from its attested
+model-ID source, including uncommented repository CRLF lines, then validates
+all drawable provenance even when unselected. Only exact
+`MODEL_NONE`/`none`/null-GeoLayout metadata is accepted as non-drawable, and a
+selected sentinel fails named before geometry. Duplicate/conflicting selected
+IDs remain rejected by the existing tests. GREEN is 37/37 variant/source,
+27/27 rigid, 33/33 closure, 2/2 real BOB, 4/4 generic-family, native-root Make,
+compileall, and exact Mario identity. The real chain-part key now advances to
+the preserved `UnsupportedActorSourceError: unsupported GeoLayout node:
+GEO_SHADOW`. Behavior commit `6c0c4d45` changes only the compiler, focused
+tests, and changelog; the same full gate set was repeated from committed HEAD.
+Task 4 remains zero-edit and paused for scoped rereview.
 
 ---
 

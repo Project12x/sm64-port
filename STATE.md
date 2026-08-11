@@ -52,7 +52,11 @@ while malformed/suffix/cycle/depth cases fail named. The real explosion key
 advances to the existing honest textured-state unsupported boundary. Task 4's
 full-key zero-edit replay then exposed an unselected non-drawable `MODEL_NONE`
 alternate poisoning selected `MODEL_METALLIC_BALL` provenance. Task 3 is
-narrowly reopened for selection-order correctness; Task 4 is paused.
+narrowly source-complete for selection-order correctness and awaits scoped
+rereview: model identities are resolved first, only the exact model-less
+sentinel may omit GeoLayout provenance, and no sentinel can produce geometry.
+The real chain-part key now reaches the existing `GEO_SHADOW` unsupported
+boundary. Task 4 remains paused with zero edits.
 Completing and reviewing the full prerequisite remains the gate before Task 16
 Task 2 resumes.
 The reusable

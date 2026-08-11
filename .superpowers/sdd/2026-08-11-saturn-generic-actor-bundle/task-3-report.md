@@ -1453,6 +1453,105 @@ model-less alternate first. Task 3 is reopened only to correct that selection
 order while retaining selected-model conflict/malformed checks and zero
 geometry for `MODEL_NONE`. RED/GREEN and scoped rereview remain open.
 
+### Real-source model-less alternate repair round 7 — source-complete
+
+Base is operational stop `ced9c7d2`. The root cause is validation order in
+`_record_selection`: every `model_variants` entry had to carry three drawable
+source paths before `_source_model_id` could decide whether it matched. The
+closure generator intentionally emits the non-drawable sentinel as
+`MODEL_NONE`, `geo_symbol: none`, and `geo_source: null`, so the unselected
+alternate rejected a valid selected drawable.
+
+Pre-production focused RED used a real-shaped selected `MODEL_TEST` plus
+unselected exact `MODEL_NONE`, a nonzero selected-sentinel characterization,
+and selected/unselected malformed drawable provenance:
+
+```text
+Ran 3 tests in 0.098s
+FAILED (failures=1, errors=1)
+```
+
+The drawable failed at `closure model geo_source is incomplete: MODEL_NONE`;
+the selected sentinel also reported that incidental error rather than the
+non-drawable boundary. The malformed drawable characterization was already
+green and guards against over-filtering. The first real BOB RED reproduced the
+same error for family 36/model `0x0065`.
+
+After numeric-first selection exposed the repository's uncommented
+`MODEL_NONE` line, a separate CRLF RED failed with `missing model ID
+definition: MODEL_NONE` (`Ran 1 test`, one error). The source parser now accepts
+an optional CR before the exact line end rather than inventing a model value.
+Scoped self-review added a sentinel binding-source mismatch mutation before
+the production equality check; it failed `Ran 1 test in 0.080s` because no
+named error was raised. The exact sentinel now requires its binding provenance
+to be the same attested model-ID source.
+
+The repair resolves all model IDs from attested source first, then validates
+every drawable variant's symbol and source-field shape whether selected or
+not. Only exact `MODEL_NONE` + `none` + null `geo_source` metadata may omit
+geometry; selecting that sentinel raises `ActorSourceSelectionError` before
+any geometry walk. Existing alias ambiguity, duplicate variant, and
+cross-record conflict tests remain unchanged.
+
+Focused GREEN is five tests in 0.145s. The exact drawable fixture retains both
+typed variants and pins 358 payload bytes, 104-byte lane, 211-byte scratch,
+payload SHA-256 `d2dd087722cda6e1e9e76c56e87bca50d0624facf3a83830a5e07bc682c1dc15`,
+source SHA-256 `cab8055779d39b1738fe117a605f47d70b950234242b12548dcccc89fcdd5149`,
+four exact vertices, and one `[0,1,2,3]` primitive. Mutations cover malformed
+sentinel root/symbol/source/missing-or-mismatched binding, selected drawable
+missing/mismatched provenance, and an unselected drawable missing
+`geo_source`.
+
+Complete pre-commit GREEN:
+
+```text
+actor variant/source: Ran 37 tests in 6.054s, OK
+rigid groups: Ran 27 tests in 0.003s, OK
+tools/saturn/test_scene_closure.py: Ran 33 tests in 4.553s, OK
+tools/saturn/test_bob_scene_closure.py: Ran 2 tests in 26.380s, OK
+historical generic-family report: Ran 4 tests in 20.070s, OK
+native-root variant/pose/meshlet Make wave: exit 0 (37 Python tests)
+compileall: exit 0
+```
+
+Real family 36/model `0x0065` now passes exact selection and reaches the
+existing named boundary `UnsupportedActorSourceError: unsupported GeoLayout
+node: GEO_SHADOW`. Mario JSON/refactor copies remain 562,096 bytes at
+`3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`;
+Mario S64B/refactor copies remain 596,896 bytes at
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`.
+Reference reuse remains the same in-tree `actor_family_bundle` identity and
+historical actor source/S64B/rigid/Mesh-IR contracts; no external code, schema,
+ABI, runtime, sourceboot, or Task 4 file changed. Behavior/evidence commits
+follow. Scoped rereview, Task 4, Task 16 Tasks 2-5, and all target/release/
+manual gates remain open.
+
+Behavior commit `6c0c4d45` (`fix(saturn): select drawable actor models before
+geometry`) changes exactly `CHANGELOG.md`, `tools/saturn/actor_variant_bank.py`,
+and `tools/saturn/test_actor_variant_bank.py`. Fresh committed-HEAD
+verification is:
+
+```text
+actor variant/source: Ran 37 tests in 6.406s, OK
+rigid groups: Ran 27 tests in 0.002s, OK
+tools/saturn/test_scene_closure.py: Ran 33 tests in 4.361s, OK
+tools/saturn/test_bob_scene_closure.py: Ran 2 tests in 28.159s, OK
+historical generic-family report: Ran 4 tests in 22.044s, OK
+native-root variant/pose/meshlet Make wave: exit 0 (37 Python tests)
+compileall: exit 0
+git show --check 6c0c4d45: exit 0
+```
+
+The committed real probe prints exact typed variants
+`[(MODEL_METALLIC_BALL, metallic_ball_geo), (MODEL_NONE, none)]`, exact null
+sentinel provenance, then reaches `UnsupportedActorSourceError: unsupported
+GeoLayout node: GEO_SHADOW`. Committed Mario and refactor JSON remain 562,096
+bytes with SHA-256 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`;
+both S64B files remain 596,896 bytes with SHA-256
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`.
+Task 4 remains zero-edit. Evidence commit and scoped same-reviewer rereview
+remain open.
+
 ### Real-source tail-branch repair round 6 — source-complete
 
 Base is docs-only operational stop `0e2f03b9`. Reference reuse remains wholly

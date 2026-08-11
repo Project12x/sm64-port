@@ -160,7 +160,14 @@
 - Task 4 full-key replay then inventoried 25 named unsupported variants and
   stopped before edits at family 36/model `0x0065`: unselected non-drawable
   `MODEL_NONE` was incorrectly required to carry GeoLayout provenance before
-  selecting `MODEL_METALLIC_BALL`. Task 3 round 7 is active; Task 4 is paused.
+  selecting `MODEL_METALLIC_BALL`. Task 3 round 7 is source-complete with
+  scoped rereview pending: numeric IDs are resolved first, the exact
+  model-less sentinel is retained only as typed metadata, selected sentinels
+  fail before geometry, and malformed drawable alternates still fail. GREEN is
+  37/27/33/2/4 plus native-root Make, compileall, exact Mario, and real
+  `GEO_SHADOW` advancement. Behavior commit is `6c0c4d45`; the full gate set
+  was repeated from committed HEAD. Evidence commit and scoped rereview remain
+  open. Task 4 remains zero-edit and paused.
 
 ## Task 2: source-complete, independent review pending
 
