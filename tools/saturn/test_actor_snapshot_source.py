@@ -401,6 +401,66 @@ def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
     )
 
 
+def object_observer_body() -> str:
+    return body(RENDERING, "static bool saturn_source_observe_object_begin")
+
+
+def test_object_observer_resolves_the_behavior_geo_pair_and_fails_closed_on_miss() -> None:
+    rendering = RENDERING.read_text(encoding="utf-8")
+    observe = object_observer_body()
+    assert '#include "actor_identity_registry.h"' in rendering
+    assert "saturn_actor_identity_registry_lookup(model_id, node->behavior)" in observe
+    branch_start = observe.index("if (identity != NULL)")
+    branch = body_text(observe[branch_start:], "if (identity != NULL)")
+    for assignment in (
+        "source.family_id = identity->family_id;",
+        "source.actor_bank_id = identity->actor_bank_id;",
+        "source.actor_bank_hash_words[axis] =",
+        "source.scene_package_generation = identity->scene_package_generation;",
+    ):
+        assert assignment in branch
+    outside = observe[:branch_start] + observe[branch_start + observe[branch_start:].index("}") + 1:]
+    assert "source.family_id =" not in outside
+    assert "source.actor_bank_id =" not in outside
+    assert "source.scene_package_generation =" not in outside
+
+
+def test_object_observer_sources_visibility_and_draw_distance_from_graph_state() -> None:
+    observe = object_observer_body()
+    culling = body(RENDERING, "static s16 saturn_source_object_culling_radius")
+    assert (
+        "source.render_active =\n"
+        "        (node->header.gfx.node.flags & GRAPH_RENDER_INVISIBLE) ? 0U : 1U;"
+        in observe
+    )
+    assert "GRAPH_NODE_TYPE_CULLING_RADIUS" in culling
+    assert "return 300;" in culling
+    assert (
+        "source.draw_distance_q16 = sm64_saturn_float_to_q16(\n"
+        "        (f32) saturn_source_object_culling_radius("
+        "node->header.gfx.sharedChild));"
+        in observe
+    )
+
+
+def test_object_observer_uses_typed_neutral_values_without_feature_state_substitution() -> None:
+    observe = object_observer_body()
+    assert "source.opacity = 255U;" in observe
+    assert "source.switch_count = 0U;" in observe
+    assert "source.render_range_min_q16 =" not in observe
+    assert "source.render_range_max_q16 =" not in observe
+    assert "source.feature_state" not in observe
+    assert "->feature_state" not in observe
+    assert "sm64_saturn_geo_state_observer_record_switch" in observe
+
+
+def test_object_observer_preserves_task19_no_parent_design_correction() -> None:
+    observe = object_observer_body()
+    assert "source.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;" in observe
+    assert "source.parent_node_ordinal = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;" in observe
+    assert "Task 19" in observe
+
+
 if __name__ == "__main__":
     test_sourceboot_uses_one_skip_zero_generation_for_observer_and_consumers()
     test_snapshot_and_observation_are_pointer_free()
@@ -412,3 +472,7 @@ if __name__ == "__main__":
     test_bank_capture_payload_uses_cache_through_alias_and_rejects_cached_mutation()
     test_observer_only_records_geo_decisions_at_source_boundary()
     test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture()
+    test_object_observer_resolves_the_behavior_geo_pair_and_fails_closed_on_miss()
+    test_object_observer_sources_visibility_and_draw_distance_from_graph_state()
+    test_object_observer_uses_typed_neutral_values_without_feature_state_substitution()
+    test_object_observer_preserves_task19_no_parent_design_correction()

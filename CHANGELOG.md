@@ -51,6 +51,16 @@
 
 ### Added
 
+- Added a generated, immutable BOB actor-identity registry that binds each
+  supported drawable `(model/geo, behavior)` pair to the current S64F family
+  record, payload identity, and scene-package generation. The Saturn object
+  observer now admits registry hits with the complete four-field identity and
+  leaves misses—including unsupported families and `MODEL_NONE` controllers—
+  fully zero/fail-closed; shared geometry is disambiguated by exact behavior
+  identity rather than a model-only fallback. The seam also records typed
+  graph visibility and culling distance, preserves the reviewed no-parent
+  rule, and never substitutes generic feature bits for unresolved state.
+
 - Added bank-driven actor meshlet preparation over immutable validated S64B
   geometry and selected pose records. Queue and meshlet paths now share one
   renderer-neutral eight-byte output/quarantine ABI, so the fixed 2,718-record

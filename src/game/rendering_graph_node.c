@@ -52,6 +52,7 @@ Mtx *gMatStackFixed[32];
 #include "object_fields.h"
 #include "object_list_processor.h"
 #include "model_ids.h"
+#include "actor_identity_registry.h"
 
 /* Task 14 wave 1: bounded iterative geo-walk integration. Converted
  * handlers call this instead of recursing through
@@ -85,11 +86,10 @@ static bool saturn_geo_walk_process_children(struct GraphNode *children);
  * task). */
 static sm64_saturn_mtx_t gMatStackQ[32];
 
-/* Resolve only source-owned scalar identity at the geo seam.  The generated
- * actor-family registry is not linked into this source closure yet, so the
- * family/bank fields intentionally remain zero and capture fails closed.  A
- * future registry binding can fill those fields without changing the object
- * walk or snapshot ABI. */
+/* Resolve source-owned scalar identity at the geo seam. The generated table
+ * is keyed by the sharedChild model resolved through gLoadedGraphNodes[] plus
+ * the exact behavior script. A miss leaves all identity fields zero so the
+ * snapshot capture remains fail-closed. */
 static uint16_t saturn_source_object_pool_slot(const struct Object *object)
 {
     uint16_t slot;
@@ -110,6 +110,18 @@ static uint16_t saturn_source_model_id(const struct GraphNode *shared_child)
     return MODEL_NONE;
 }
 
+/* Match obj_is_in_view()'s authoritative culling-radius source: a root
+ * GraphNodeCullingRadius when present, otherwise the engine's 300-unit
+ * default. This is a typed draw-distance source, never feature_state. */
+static s16 saturn_source_object_culling_radius(
+    const struct GraphNode *shared_child)
+{
+    if (shared_child != NULL &&
+        shared_child->type == GRAPH_NODE_TYPE_CULLING_RADIUS)
+        return ((const struct GraphNodeCullingRadius *) shared_child)->cullingRadius;
+    return 300;
+}
+
 static bool saturn_source_observe_object_begin(struct Object *node)
 {
     sm64_saturn_actor_source_observation_t source;
@@ -117,14 +129,29 @@ static bool saturn_source_observe_object_begin(struct Object *node)
         sm64_saturn_geo_state_observer_bound();
     uint16_t axis;
     const uint16_t pool_slot = saturn_source_object_pool_slot(node);
+    const uint16_t model_id =
+        saturn_source_model_id(node->header.gfx.sharedChild);
+    const saturn_actor_identity_registry_entry_t *identity;
     if (pool_slot == UINT16_MAX) return false;
+    identity = saturn_actor_identity_registry_lookup(model_id, node->behavior);
     memset(&source, 0, sizeof(source));
     source.source_generation = sm64_saturn_geo_state_observer_generation(
         observer);
     source.pool_slot = pool_slot;
-    source.model_id = saturn_source_model_id(node->header.gfx.sharedChild);
+    source.model_id = model_id;
+    /* Task 19's reviewed correction keeps held/parent identity explicitly
+     * absent at this narrow single-Object seam; no generic bit may stand in
+     * for a typed immutable parent source. */
     source.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
     source.parent_node_ordinal = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+    if (identity != NULL) {
+        source.family_id = identity->family_id;
+        source.actor_bank_id = identity->actor_bank_id;
+        for (axis = 0U; axis < 8U; axis++)
+            source.actor_bank_hash_words[axis] =
+                identity->actor_bank_hash_words[axis];
+        source.scene_package_generation = identity->scene_package_generation;
+    }
     source.position_q16[0] = sm64_saturn_float_to_q16(
         node->header.gfx.pos[0]);
     source.position_q16[1] = sm64_saturn_float_to_q16(
@@ -145,12 +172,18 @@ static bool saturn_source_observe_object_begin(struct Object *node)
     source.anim_state = ((struct Object *)node)->oAnimState;
     source.area_index = node->header.gfx.areaIndex;
     source.active = 1U;
-    source.render_active = 1U;
-    /* Visibility/range/switch/opacity/held/parent/effect fields are not
-     * source-owned at this narrow object seam, so their zero/default values
-     * (and render_active=1) are never admitted. Scene/family/bank identity is
-     * deliberately unresolved until the generated actor registry is
-     * authoritative for this source object. */
+    source.render_active =
+        (node->header.gfx.node.flags & GRAPH_RENDER_INVISIBLE) ? 0U : 1U;
+    source.draw_distance_q16 = sm64_saturn_float_to_q16(
+        (f32) saturn_source_object_culling_radius(node->header.gfx.sharedChild));
+    /* Render-range nodes and switch cases are descendants evaluated after
+     * object-begin. Their typed neutral state remains zero here; switch state
+     * is then populated only by sm64_saturn_geo_state_observer_record_switch
+     * during the authoritative walk. Opacity is fully opaque unless a later
+     * tree-aware source proves an opacity callback applies. None of these
+     * fields may be inferred from generic feature_state bits. */
+    source.opacity = 255U;
+    source.switch_count = 0U;
     return sm64_saturn_geo_state_observer_begin_object(observer, &source);
 }
 

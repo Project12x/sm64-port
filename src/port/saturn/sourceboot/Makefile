@@ -308,6 +308,9 @@ SOURCEBOOT_MARIO_TEXTURE_REPORT := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_
 SOURCEBOOT_HUD_GLYPH_HEADER := $(SOURCEBOOT_GENERATED)/saturn_hud_glyphs_generated.h
 SOURCEBOOT_HUD_GLYPH_MANIFEST := $(SOURCEBOOT_GENERATED)/saturn_hud_glyphs_manifest.json
 SOURCEBOOT_SKY_GRADIENT_HEADER := $(SOURCEBOOT_GENERATED)/saturn_sky_gradient_generated.h
+SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER := $(SOURCEBOOT_GENERATED)/actor_identity_registry.h
+SOURCEBOOT_ACTOR_FAMILY_REPORT := $(ROOT)/build/saturn/packages/bob/1/actors/actor-families.json
+SOURCEBOOT_ACTOR_CLOSURE := $(ROOT)/build/saturn/packages/bob/1/closure.json
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
@@ -822,6 +825,7 @@ endif
 .PHONY: identity-assets
 identity-assets: source-assets source-geo-depth $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
   $(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_ACTOR_BANK) \
+  $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER) \
   $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C))
 
 # Emits only the seal-stage identity directory tag, so an orchestrating make
@@ -937,6 +941,24 @@ $(SOURCEBOOT_SKY_GRADIENT_HEADER): $(ROOT)/tools/saturn/gen_sourceboot_sky_gradi
 .PHONY: source-sky-gradient
 source-sky-gradient: $(SOURCEBOOT_SKY_GRADIENT_HEADER)
 
+.PHONY: source-actor-families
+source-actor-families:
+	$(MAKE) -C "$(ROOT)" -f Makefile.saturn.mk -j1 compile-actor-banks
+
+$(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER): source-actor-families \
+    $(ROOT)/tools/saturn/gen_actor_identity_registry.py \
+    $(ROOT)/include/model_ids.h
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/gen_actor_identity_registry.py" \
+	  --family-report "$(SOURCEBOOT_ACTOR_FAMILY_REPORT)" \
+	  --closure "$(SOURCEBOOT_ACTOR_CLOSURE)" \
+	  --model-ids "$(ROOT)/include/model_ids.h" \
+	  --scene-generation 1 \
+	  --output "$(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER)"
+
+.PHONY: source-actor-identity-registry
+source-actor-identity-registry: $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER)
+
 # Keep the large baked bank binary, rather than a generated C initializer, so
 # the source cart remains compact and the linker can place it in .cart_rodata
 # alongside the other immutable source assets.  The generated assembly is in
@@ -1051,6 +1073,9 @@ SOURCEBOOT_GENERATOR_INPUTS := $(sort \
   $(ROOT)/tools/saturn/emit_actor_bank_c.py \
   $(ROOT)/tools/saturn/extract_hud_glyphs.py \
   $(ROOT)/tools/saturn/gen_sourceboot_sky_gradient.py \
+  $(ROOT)/tools/saturn/gen_actor_identity_registry.py \
+  $(ROOT)/tools/saturn/compile_actor_bank.py \
+  $(ROOT)/tools/saturn/collect_scene_closure.py \
   $(SOURCEBOOT_GEO_DEPTH_TOOL) $(SOURCEBOOT_QUAD_MAP_TOOLS) \
   $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_TILE_TOOLS) $(SOURCEBOOT_BOB_SCENE_TOOL))
 SOURCEBOOT_PC_ASSET_REQUIRED_INPUTS := $(SOURCEBOOT_WATER_SKYBOX) $(ROOT)/$(SOURCEBOOT_TEXT_STRINGS)
@@ -1061,6 +1086,8 @@ SOURCEBOOT_GENERATED_INPUTS := $(filter-out $(SOURCEBOOT_PC_ASSET_REQUIRED_INPUT
   $(SOURCEBOOT_BOB_BSP_HEADER) $(SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER) \
   $(SOURCEBOOT_BOB_SCENE) $(SOURCEBOOT_MARIO_TEXTURE_HEADER) \
   $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_SKY_GRADIENT_HEADER) \
+  $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER) \
+  $(SOURCEBOOT_ACTOR_FAMILY_REPORT) $(SOURCEBOOT_ACTOR_CLOSURE) \
   $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) \
   $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) \
   $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_ACTOR_BANK) \
@@ -1246,6 +1273,7 @@ $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso
 # here from Task 2, which created source-hud-glyphs but not this ordering).
 $(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_MARIO_TEXTURE_HEADER) \
   $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_SKY_GRADIENT_HEADER) \
+  $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER) \
   $(SOURCEBOOT_BUILD_IDENTITY_INC) source-geo-depth
 
 # The link resolves -lsm64softfp out of $(SOFTFP_BUILD_DIR) (both the -L and
