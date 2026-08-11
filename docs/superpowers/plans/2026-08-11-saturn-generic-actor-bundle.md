@@ -8,11 +8,10 @@
 
 **Tech Stack:** Python 3 deterministic asset compilers and `unittest`; freestanding C11 for SH-2 runtime/host fixtures; GNU Make 4.3+ through `tools/saturn/with-msys-toolchain.ps1`; existing S64P/S64B formats, scene residency, DRAM-cart/CDFS loader, P2/TAS.B ownership, and hermetic release tooling.
 
-**Planning status (2026-08-11):** written and self-reviewed at
-`a74a30808db9efb39bf953f8a910308196241489`; implementation has not started.
-Task 1 is the first authorized RED after the owner selects the execution
-workflow. All source, target, release, smoke, visual, desktop, and manual gates
-remain open.
+**Execution status (2026-08-11):** active under the owner-selected
+subagent-driven workflow. Task 1 is source-complete and independently approved
+at `1faa2ffb` with no review findings; Task 2 is the next RED. Target, release,
+smoke, visual, desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
 
@@ -132,7 +131,7 @@ Add a Keep-a-Changelog `Changed` entry explaining removal of duplicate target SH
 
 #### Task 1 live status (2026-08-11)
 
-- Status: `source-complete; independent review pending` at behavior commit
+- Status: `complete; independent review PASS C0/I0/M0` at behavior commit
   `1faa2ffb` (`refactor(saturn): share target SHA-256 validation`). The close-port creates
   one freestanding incremental API consumed by the existing S64P and S64F v2
   validators; no S64F v3 behavior, target completion, or release claim is
@@ -156,8 +155,11 @@ Add a Keep-a-Changelog `Changed` entry explaining removal of duplicate target SH
 - Evidence: the required MSYS wrapper invocation with native forward-slash
   `SATURN_REPO_ROOT` passes `verify-saturn-sha256`,
   `verify-scene-package-runtime`, and `verify-actor-family-bank` (47 families,
-  13 unsupported representatives across 14 records). Independent review,
-  all target/P2/Ymir/manual/reseal/smoke gates, and Tasks 2-11 remain open.
+  13 unsupported representatives across 14 records). Independent task review
+  approved the interface, byte compatibility, tests, and source-list binding
+  with no findings. The real target link remains unclaimed because its dry-run
+  stopped at the pre-existing absent generated source-closure input. All
+  target/P2/Ymir/manual/reseal/smoke gates and Tasks 2-11 remain open.
 
 ### Task 2: Implement canonical S64F v3 host and target validation
 

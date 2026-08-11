@@ -344,3 +344,30 @@
   open. The next authorized action is Task 1 of the written implementation
   plan after the owner chooses subagent-driven or inline execution; source
   implementation has not started.
+
+## 2026-08-11 generic actor bundle Task 1 completion
+
+- Status: `complete; independent review PASS C0/I0/M0`. Behavior commit
+  `1faa2ffb` shares one freestanding incremental SHA-256 implementation across
+  the existing S64P and S64F-v2 validators; evidence/status commits are
+  `eba1e1ba` and `43789630`. No v3 format or target behavior is introduced.
+- TDD/verification: missing public header/source RED; GREEN
+  `verify-saturn-sha256 verify-scene-package-runtime
+  verify-actor-family-bank` through the MSYS wrapper with the same native
+  forward-slash worktree root. Vectors, null/overflow failures, pinned S64P
+  fixture hash, historical S64F-v2 payload hash, 47-family report, and C bank
+  gate pass. The sourceboot source-list assertion proves the shared unit
+  precedes both consumers.
+- Review: fresh task reviewer found no Critical, Important, or Minor issue and
+  approved spec compliance/code quality. It could not verify the real Yaul
+  target link because the dry-run stops before link expansion on an absent
+  generated source-closure input; that remains an explicit target gate, not a
+  Task 1 host/source failure or target claim.
+- Design correction: Task 1's original file list omitted
+  `src/port/saturn/sourceboot/Makefile`; the tracked plan now records the
+  necessary minimal `SH_SRCS` addition. Reference reuse is same-repository
+  close-port/shared-core from the two former private SHA implementations; no
+  external source used.
+- Next: generic actor bundle Task 2 canonical S64F-v3 host/target validation.
+  Tasks 2-11 and every target/release/smoke/visual/desktop/manual gate remain
+  open; Task 16 Task 2 stays blocked.

@@ -13,12 +13,13 @@ actor production drain is not implemented, then quarantines ACTOR_LOWER and
 stops after two source ticks. Visual proof, desktop launch, and owner manual
 test remain unopened. The next gate is the approved S64F v3 generic actor
 bundle design at
-  `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`:
-  execute its written plan at
-  `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md`,
-  build/review the scene-local DRAM-cart bundle and fixed dual-SH-2 LWRAM
-  workspace, then complete the Task 16 production generic actor cutover. After
-  those target-byte changes, rerun Task 9's
+`docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`.
+Its written plan at
+`docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` is active:
+Task 1's shared target SHA-256 primitive is independently approved, and Task 2
+canonical S64F-v3 validation is next. Build/review the scene-local DRAM-cart
+bundle and fixed dual-SH-2 LWRAM workspace, then complete the Task 16
+production generic actor cutover. After those target-byte changes, rerun Task 9's
 build/repro/v4/staging chain before Task 10.
 
 The staged result is the integrated BOB demo candidate only. The same profile,
