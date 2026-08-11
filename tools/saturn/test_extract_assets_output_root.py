@@ -9,6 +9,7 @@ import unittest
 import importlib.util
 import os
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +17,19 @@ SPEC = importlib.util.spec_from_file_location("extract_assets", ROOT / "extract_
 assert SPEC is not None and SPEC.loader is not None
 EXTRACT_ASSETS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(EXTRACT_ASSETS)
+
+
+def make_directory_alias(alias: Path, target: Path) -> None:
+    if os.name == "nt":
+        created = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(alias), str(target)],
+            capture_output=True,
+            text=True,
+        )
+        if created.returncode:
+            raise OSError(created.stderr.strip() or created.stdout.strip())
+    else:
+        alias.symlink_to(target, target_is_directory=True)
 
 
 class ExtractAssetsOutputRootTests(unittest.TestCase):
@@ -141,6 +155,66 @@ class ExtractAssetsOutputRootTests(unittest.TestCase):
             self.assertFalse((output_root / "levels").exists())
             self.assertTrue(output_root.is_dir())
             self.assertTrue(base.is_dir())
+
+    def test_remove_file_rejects_ancestor_swap_after_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            output_root = base / "generated"
+            target = output_root / "levels" / "bob" / "asset.png"
+            target.parent.mkdir(parents=True)
+            target.write_bytes(b"generated")
+            outside = base / "outside"
+            outside_target = outside / "bob" / "asset.png"
+            outside_target.parent.mkdir(parents=True)
+            outside_target.write_bytes(b"outside")
+            displaced = base / "displaced-levels"
+            real_clean = EXTRACT_ASSETS._clean_asset_path
+
+            def validate_then_swap(fname: str, root: Path):
+                result = real_clean(fname, root)
+                (output_root / "levels").rename(displaced)
+                try:
+                    make_directory_alias(output_root / "levels", outside)
+                except OSError as error:
+                    self.skipTest(f"directory alias creation unavailable: {error}")
+                return result
+
+            with (
+                mock.patch.object(
+                    EXTRACT_ASSETS,
+                    "_clean_asset_path",
+                    side_effect=validate_then_swap,
+                ),
+                self.assertRaisesRegex(ValueError, "symlink|junction|reparse|namespace"),
+            ):
+                EXTRACT_ASSETS.remove_file("levels/bob/asset.png", output_root)
+
+            self.assertEqual(outside_target.read_bytes(), b"outside")
+            self.assertEqual(
+                (displaced / "bob" / "asset.png").read_bytes(), b"generated"
+            )
+            self.assertTrue(output_root.is_dir())
+
+    def test_remove_file_fails_closed_when_namespace_capability_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary) / "generated"
+            target = output_root / "levels" / "bob" / "asset.png"
+            target.parent.mkdir(parents=True)
+            target.write_bytes(b"asset")
+
+            with (
+                mock.patch.object(
+                    EXTRACT_ASSETS,
+                    "_cleanup_namespace_primitives",
+                    create=True,
+                    side_effect=RuntimeError("cleanup namespace unsupported"),
+                ),
+                self.assertRaisesRegex(RuntimeError, "namespace unsupported"),
+            ):
+                EXTRACT_ASSETS.remove_file("levels/bob/asset.png", output_root)
+
+            self.assertEqual(target.read_bytes(), b"asset")
+            self.assertTrue(output_root.is_dir())
 
 
 if __name__ == "__main__":

@@ -270,6 +270,73 @@ class DirectoryNamespaceGuard:
         else:
             (self.path / source).rename(self.path / target)
 
+    def remove_child_by_identity(self, name: str, *, directory: bool) -> None:
+        """Remove one validated child while this directory namespace is pinned."""
+        before = self.lstat_child(name)
+        identity = _file_identity(before)
+        if (
+            stat.S_ISLNK(before.st_mode)
+            or _is_reparse(before)
+            or (directory and not stat.S_ISDIR(before.st_mode))
+            or (not directory and not stat.S_ISREG(before.st_mode))
+        ):
+            raise ValueError(f"guarded child has unsafe type: {self.path / name}")
+        self.require_current()
+        if os.name == "nt":
+            handle = _KERNEL32.CreateFileW(
+                str(self.path / name),
+                0x00010000 | 0x00000080,  # DELETE | FILE_READ_ATTRIBUTES
+                0x1 | 0x2 | 0x4,
+                None,
+                3,  # OPEN_EXISTING
+                0x02000000 | 0x00200000,  # BACKUP_SEMANTICS | OPEN_REPARSE_POINT
+                None,
+            )
+            if handle == _INVALID_HANDLE_VALUE:
+                error = ctypes.get_last_error()
+                raise OSError(error, os.strerror(error), str(self.path / name))
+            try:
+                information = _ByHandleFileInformation()
+                if not _KERNEL32.GetFileInformationByHandle(
+                    handle, ctypes.byref(information)
+                ):
+                    error = ctypes.get_last_error()
+                    raise OSError(error, os.strerror(error), str(self.path / name))
+                opened_file_index = (
+                    information.file_index_high << 32
+                ) | information.file_index_low
+                opened_is_directory = bool(information.attributes & 0x10)
+                if (
+                    opened_file_index != identity[1]
+                    or bool(information.attributes & 0x400)
+                    or opened_is_directory != directory
+                ):
+                    raise ValueError(
+                        f"guarded child changed identity: {self.path / name}"
+                    )
+                disposition = _FileDispositionInformation(True)
+                if not _KERNEL32.SetFileInformationByHandle(
+                    handle, 4, ctypes.byref(disposition), ctypes.sizeof(disposition)
+                ):
+                    error = ctypes.get_last_error()
+                    raise OSError(error, os.strerror(error), str(self.path / name))
+            finally:
+                _KERNEL32.CloseHandle(handle)
+        else:
+            assert self._fd is not None
+            operation = os.rmdir if directory else os.unlink
+            if operation not in os.supports_dir_fd:
+                raise RuntimeError(
+                    "directory-relative cleanup is unsupported on this host"
+                )
+            current = self.lstat_child(name)
+            if _file_identity(current) != identity:
+                raise ValueError(
+                    f"guarded child changed identity: {self.path / name}"
+                )
+            operation(name, dir_fd=self._fd)
+        self.require_current()
+
 
 def remove_empty_directory_by_identity(path: Path, identity: FileIdentity) -> bool:
     """Delete only the opened Windows directory object with the expected identity."""

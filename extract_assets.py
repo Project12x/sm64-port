@@ -82,17 +82,34 @@ def _clean_asset_path(fname, output_root):
     return root, candidate
 
 
-def remove_file(fname, output_root=Path(".")):
-    root, path = _clean_asset_path(fname, output_root)
-    path.unlink()
-    print("deleting", path)
-    parent = path.parent
+def _cleanup_namespace_primitives():
+    """Load Task 7's reviewed namespace guard only for destructive cleanup."""
+    saturn_tools = Path(__file__).resolve().parent / "tools" / "saturn"
+    rendered = str(saturn_tools)
+    if rendered not in sys.path:
+        sys.path.insert(0, rendered)
+    from release_manifest import DirectoryNamespaceGuard
+    return DirectoryNamespaceGuard
+
+
+def _prune_empty_parents(parent, root, namespace_guard):
     while parent != root:
         try:
-            parent.rmdir()
+            with namespace_guard(parent.parent) as namespace:
+                namespace.remove_child_by_identity(parent.name, directory=True)
         except OSError:
             break
         parent = parent.parent
+
+
+def remove_file(fname, output_root=Path("."), *, prune=True):
+    root, path = _clean_asset_path(fname, output_root)
+    namespace_guard = _cleanup_namespace_primitives()
+    with namespace_guard(path.parent) as namespace:
+        namespace.remove_child_by_identity(path.name, directory=False)
+    print("deleting", path)
+    if prune:
+        _prune_empty_parents(path.parent, root, namespace_guard)
 
 
 def clean_assets(local_asset_file, output_root=Path(".")):
@@ -101,12 +118,28 @@ def clean_assets(local_asset_file, output_root=Path(".")):
     if local_asset_file is not None:
         local_asset_file.close()
     names = [fname for fname in assets if not fname.startswith("@")] + [".assets-local.txt"]
+    validated = []
     for fname in names:
-        _clean_asset_path(fname, output_root)
-    for fname in names:
+        _root, path = _clean_asset_path(fname, output_root)
+        validated.append((fname, path))
+    for fname, _path in validated:
         try:
-            remove_file(fname, output_root)
+            remove_file(fname, output_root, prune=False)
         except FileNotFoundError:
+            pass
+    namespace_guard = _cleanup_namespace_primitives()
+    root = Path(output_root).resolve()
+    parents = {
+        parent
+        for _fname, path in validated
+        for parent in path.parents
+        if parent != root and root in parent.parents
+    }
+    for parent in sorted(parents, key=lambda value: len(value.parts), reverse=True):
+        try:
+            with namespace_guard(parent.parent) as namespace:
+                namespace.remove_child_by_identity(parent.name, directory=True)
+        except OSError:
             pass
 
 

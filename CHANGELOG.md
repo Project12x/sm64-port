@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Made extracted-asset cleanup hold Task 7's reviewed directory namespace
+  guards across validation and mutation, using directory-relative deletion on
+  POSIX and exact opened-handle deletion on Windows. This closes the remaining
+  ancestor-swap race where a validated generated path could be redirected to
+  an outside file before `unlink`; missing platform capability now fails
+  closed, and empty-directory pruning still stops below the output root.
+
 - Regenerated and pinned audit v4 around the reproducible repaired release
   identity after direct archive/nm attestation changed the toolchain root. The
   measured total remains 700 with both forbidden atan2 callers absent, while

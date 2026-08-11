@@ -5,15 +5,13 @@ Active plan:
 
 ## Current lane: hermetic integrated release candidate
 
-Task 9 repair round 1 is source-complete and awaiting controller-owned evidence
-and code-quality rereviews. Clean candidates A/B at common source `04d6a2a3`
-reproduced manifest `5e04e252...11c1df` and identity
-`id-264ab4203c268487`; direct archive/nm backends, cleanup containment, LF audit
-checkout identity, final closure-digest/HEAD revalidation, and one-index-per-
-repository scaling are sealed. Exact v4 passed at total 700 with both forbidden
-callers absent, capacity/package checks passed, and the repaired five-file
-manual candidate was transactionally restaged and verified. Task 9 is not
-complete until both rereviews clear.
+Task 9 is active in independent-review repair round 2. The round-1 candidate at
+source `04d6a2a3`, manifest `5e04e252...11c1df`, and identity
+`id-264ab4203c268487` is superseded because extracted-asset cleanup retained an
+ancestor-swap window between path validation and unlink. The cleanup source is
+being repaired with Task 7's held namespace primitives; two clean candidates,
+all v4/capacity/package evidence, and the canonical stage must then be rebuilt
+before same-reviewer rereview. Task 9 is not complete.
 
 Task 10 is the next active acceptance lane after Task 9 rereview, and remains
 paused. It owns the 20,100-frame smoke, visual
