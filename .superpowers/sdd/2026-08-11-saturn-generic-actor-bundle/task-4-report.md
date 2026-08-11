@@ -156,11 +156,16 @@ fixture, Mario substitution, stale bank, first record, or empty S64F remains
 invalid. Target bytes will require the Task 9 reproducibility/release/native-
 math chain and Task 10 smoke/visual/manual gates to reopen.
 
+The written specification passed scoped self-review, exact extension-layout
+arithmetic, production-v1-prefix comparison, in-tree reference checks, and
+reconciliation of the prior v1-only design clause. It was committed as
+`62f16de8` (`docs(saturn): design textured actor banks`).
+
 This resolution does not unblock code yet. Task 4 remains
-`blocked-before-RED` until the written specification is self-reviewed,
-committed, approved by the owner as written, and followed by a committed
-implementation plan. No production, test, Make, CLI, CHANGELOG, target, or
-release behavior has changed in this design transition.
+`blocked-before-RED` until the owner approves that committed specification as
+written and a separate implementation plan is committed. No production, test,
+Make, CLI, CHANGELOG, target, or release behavior changed in this design
+transition.
 
 ## Reference/reuse record
 

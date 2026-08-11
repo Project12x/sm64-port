@@ -175,9 +175,15 @@
   non-Mario actor textured through the mixed v1/v2 S64F path in Ymir, followed
   by reopened reproducibility/release/native-math/capacity/stage/smoke/visual/
   manual gates. A synthetic actor or empty bundle is not accepted.
-- Current status remains `blocked-before-RED`: written-spec self-review and
-  owner approval plus a replacement implementation plan are still required.
-  No v2 production/test/Make/CHANGELOG edit or target gate has started.
+- Design transition: the written specification passed scoped self-review,
+  including contiguous byte-104..191 extension arithmetic, shared-prefix
+  comparison with the production v1 parser, in-tree reference existence, and
+  reconciliation of the older v1-only bundle clause. It was committed as
+  `62f16de8` (`docs(saturn): design textured actor banks`).
+- Current status remains `blocked-before-RED`: owner approval of the committed
+  written specification plus a replacement implementation plan are still
+  required. No v2 production/test/Make/CHANGELOG edit or target gate has
+  started.
 - Open: Task 4, Tasks 5-11, Task 16 Tasks 2-5, all target/release/reseal,
   sourceboot, map/capacity, P2/Ymir, transition, smoke/visual/desktop/manual,
   and total-game gates remain unchecked.

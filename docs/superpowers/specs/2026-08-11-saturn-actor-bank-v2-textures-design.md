@@ -1,6 +1,7 @@
 # Saturn Actor Bank v2 Texture Design
 
-**Status:** Owner-approved architecture; written-spec review and implementation
+**Status:** Owner-approved architecture; written specification self-reviewed
+and committed at `62f16de8`; owner written-spec approval and implementation
 plan remain open.
 
 **Date:** 2026-08-11
@@ -533,9 +534,10 @@ external source and introduces no new license obligation.
 
 ## Status and next gate
 
-The verbal architecture was approved by the owner on 2026-08-11. This written
-specification must be self-reviewed, committed, and presented to the owner for
-written-spec approval. Only then may the implementation plan be written and
+The verbal architecture was approved by the owner on 2026-08-11. The written
+specification passed scoped self-review and binary-layout arithmetic/reference
+checks, then was committed as `62f16de8`. It must now be presented to the owner
+for written-spec approval. Only then may the implementation plan be written and
 committed. Task 4 remains `blocked-before-RED`; no v2 production or test change
 is authorized by this design document alone.
 

@@ -45,9 +45,10 @@ CPU and cold cart spans, scene-aggregate texture/CLUT/cart/command budgeting,
 version-owned bank parsing, master-only residency publication, worker-only
 scalar preparation, and a required real BOB actor Ymir demo. The design keeps
 v1 byte-exact and describes v2 as full-game-shaped rather than semantically
-full-game-complete. Task 4 remains blocked pending committed written-spec
-approval and a separate implementation plan; no production RED or code edit
-has begun.
+full-game-complete. The written design passed scoped self-review and exact
+layout/reference checks and was committed as `62f16de8`. Task 4 remains blocked
+pending owner approval of that written specification and a separate committed
+implementation plan; no production RED or code edit has begun.
 
 ## Global Constraints
 
@@ -683,8 +684,8 @@ aggregate cart, texture, CLUT, command, Gouraud, output, and scratch budgets
 before master-only upload and generation publication. Worker output records
 stay unchanged. Acceptance requires at least one normally spawned recognizable
 BOB non-Mario actor through the production mixed v1/v2 path in Ymir. Written-
-spec approval and the replacement implementation plan remain open, so Task 4
-is still `blocked-before-RED`.
+spec owner approval and the replacement implementation plan remain open, so
+Task 4 is still `blocked-before-RED`. Design commit: `62f16de8`.
 
 **Files:**
 - Create: `tools/saturn/compile_actor_family_bundle.py`
