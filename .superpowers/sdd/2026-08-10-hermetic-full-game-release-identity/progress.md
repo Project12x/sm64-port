@@ -1457,6 +1457,19 @@
   recreated exclusively after both empty owned Saturn trees rebuild at the
   resulting common commit. Steps 2–4 are open; measurement and later gates
   remain closed.
+- Final corrected candidate A rebuilt from an empty, owned `build/saturn` at
+  common detached source commit
+  `44b786276f73c3dbd7dc91d9f39c332b2b51bf65`. The exact release tuple and
+  `-j1` command exited 0 in 968.4 seconds, and an independent
+  `release_manifest.py verify` invocation exited 0. Identity is
+  `id-9a051d30880c78f0`; source closure is `8bc5261a...853d`; manifest SHA-256
+  is `b75ba5f0...a2ddf`; and the manifest binds ELF `f3e01ff2...81c1b`,
+  `SOURCE.DAT` `f0d3781c...fde6c`, ISO `b0589b78...b989`, and CUE
+  `cdbf0bfa...dba7`. Profile/package-set/toolchain roots are
+  `fe090885...1dd2`, `85a5a190...c266`, and `e1360ab5...fa76`.
+  Task 9 Steps 2–3 are complete; candidate B is still an empty independent
+  output tree at the same source commit, so reproducibility, measurement,
+  sealing, package, capacity, and staging gates remain open.
 
 ## Task 5 review repair round 2
 

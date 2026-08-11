@@ -2228,6 +2228,23 @@ after both candidates rebuild from empty owned `build/saturn` trees at the
 resulting common source commit. Task 9 Steps 2–4 are reopened; measurement and
 all later gates remain closed.
 
+Final corrected candidate A rebuilt from an empty, owned `build/saturn` at
+common detached source commit `44b786276f73c3dbd7dc91d9f39c332b2b51bf65`.
+The exact release tuple and `-j1` command exited 0 in 968.4 seconds, and a
+separate `release_manifest.py verify` invocation exited 0. Identity is
+`id-9a051d30880c78f0`; effective config is
+`9a051d30880c78f08394fc3d3b08c3daa9b5224957b8c455b0180108dde71c5b`;
+source closure is
+`8bc5261a132694c55f3c96edb33e9c4f349807ea6a6eefc5f5244ad6ea79853d`;
+and manifest SHA-256 is
+`b75ba5f073d8c7d03b64db47e6eed3e34d7fa8c70392ffe340a8ed208aca2ddf`.
+Manifest-bound artifacts are ELF `f3e01ff2...81c1b`, `SOURCE.DAT`
+`f0d3781c...fde6c`, ISO `b0589b78...b989`, and CUE
+`cdbf0bfa...dba7`. Profile, package-set, and toolchain roots are respectively
+`fe090885...1dd2`, `85a5a190...c266`, and `e1360ab5...fa76`.
+Task 9 Steps 2–3 are complete; candidate B remains empty at the exact same
+source commit, and reproducibility plus every later gate remain open.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2238,7 +2255,7 @@ git diff --check
 
 Confirm Tasks 1–8 and both reviews per task are recorded. Preserve unrelated dirt. Release mode may proceed only if every checked-in source-closure input is tracked and clean; if a relevant file is dirty, stop and reconcile ownership instead of hiding it.
 
-- [ ] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
+- [x] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
 
 ```powershell
 $implementationRoot = (Get-Location).Path
@@ -2300,7 +2317,7 @@ Invoke-HermeticBobBuild $candidateARoot
 
 Expected: ordinary sourceboot gates, post-link closure verification, and release-manifest verification pass. Audit v4 is not yet selected.
 
-- [ ] **Step 3: Verify and retain candidate A's immutable manifest**
+- [x] **Step 3: Verify and retain candidate A's immutable manifest**
 
 Resolve the current identity-tagged directory from the generated identity JSON,
 then verify its manifest:
