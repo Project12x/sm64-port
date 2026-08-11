@@ -179,9 +179,10 @@ Dispatch a spec-compliance reviewer per wave (fresh subagent, diff-scoped) befor
 
 ### Task 3: Actor identity registry generator + observer-seam wiring
 
-**Status (2026-08-11): review fix round 1 source-complete at `d0a9868b`
-after `8a9ff531`;
-scoped rereview pending.** Generator and observer RED/GREEN are recorded in
+**Status (2026-08-11): complete as the independently reviewed source
+prerequisite.** Behavior `8a9ff531`, initial status `1a5b8b37`, repair
+`d0a9868b`, and repair status `0e400b15` received final scoped rereview verdict
+`PASS C0/I0/M0`. Generator and observer RED/GREEN are recorded in
 `.superpowers/sdd/2026-08-07-task14-completion/task-3-report.md`. Current Task
 11 inputs differ from the historical measurements below: 47 families / 86
 closure records now produce a 104,840-byte S64F payload with SHA-256
@@ -193,8 +194,10 @@ frustum/LOD/switch/opacity seams now update the typed observation; generation
 reuses Task 11's full S64F validator and cross-checks every report record and
 the build-owned scene generation; an executable generated-lookup-to-capture
 fixture proves both admission and miss rejection; and the two affected MSYS
-recipes directly execute their binaries. The exact combined Make gate now
-passes. No target, reseal, smoke, or Task 16 Task 2 work was performed.
+recipes directly execute their binaries. The exact combined Make gate and
+Task 11 actor-bank regressions pass. Both preserved reference stashes remain
+recoverable. No target cart/HWRAM evidence, Task 16 work, Ymir, reseal, or
+smoke work was performed; every such downstream gate remains open.
 
 **Files:**
 - Create: `tools/saturn/gen_actor_identity_registry.py`
@@ -227,8 +230,9 @@ powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mi
 ```
 Plus `python -m unittest test_gen_actor_identity_registry -v` and the extended `test_actor_snapshot_source.py`. Expected: all PASS; the snapshot tests must now show nonzero admission for a fixture object with a registered family.
 
-- [ ] **Step 6: Commit + review** *(initial behavior `8a9ff531`; review-fix
-  behavior `d0a9868b`; independent scoped rereview remains pending)*
+- [x] **Step 6: Commit + review** *(behavior `8a9ff531`; initial status
+  `1a5b8b37`; repair `d0a9868b`; repair status `0e400b15`; final independent
+  scoped rereview `PASS C0/I0/M0`)*
 
 ```bash
 git add tools/saturn/gen_actor_identity_registry.py tools/saturn/test_gen_actor_identity_registry.py src/game/rendering_graph_node.c tools/saturn/test_actor_snapshot_source.py src/port/saturn/sourceboot/Makefile Makefile.saturn.mk CHANGELOG.md
