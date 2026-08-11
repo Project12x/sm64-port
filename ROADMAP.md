@@ -11,8 +11,13 @@ the exact 20,100-frame smoke and is blocked there: the flags-on target
 intentionally fails the first ACTOR_ADMIT callback because the Task 16 generic
 actor production drain is not implemented, then quarantines ACTOR_LOWER and
 stops after two source ticks. Visual proof, desktop launch, and owner manual
-test remain unopened. Complete the Task 16 production generic actor cutover,
-then rerun Task 9's build/repro/v4/staging chain before Task 10.
+test remain unopened. The next gate is the approved S64F v3 generic actor
+bundle design at
+`docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`:
+write its implementation plan, build/review the scene-local DRAM-cart bundle
+and fixed dual-SH-2 LWRAM workspace, then complete the Task 16 production
+generic actor cutover. After those target-byte changes, rerun Task 9's
+build/repro/v4/staging chain before Task 10.
 
 The staged result is the integrated BOB demo candidate only. The same profile,
 closure, identity-v2, audit, release-manifest, capture-binding, and staging

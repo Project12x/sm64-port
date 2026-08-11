@@ -14,9 +14,11 @@ registry owns exact `(resolved model, behavior)` to nonzero
 family/bank/hash/package-generation identity. It does not materialize an S64B
 geometry dependency. Task 2 therefore still requires a production source for
 mapping each numeric bank ID plus exact active package generation to a
-registry-selected immutable S64B view and its residency scratch span. Target
-(Ymir) evidence additionally requires a completed production binding and green
-link.
+registry-selected immutable S64B view and its workspace span. The approved
+prerequisite architecture is specified in
+`docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`.
+Target (Ymir) evidence additionally requires a completed production binding
+and green link.
 
 **Execution status (2026-08-11):** `active` as the load-bearing prerequisite
 for hermetic release Task 10. Exact manifest-bound smoke at commit `5a72a3aa`
@@ -26,10 +28,31 @@ VBlank callbacks, but render generation 1 terminates
 still intentionally fails closed. Disabling dynamic actor closure is rejected
 because the same production actor path must scale to the total game. Task 1 is
 source-complete and independently approved after review repair. Task 2 is
-`needs-context` before RED because the landed source registry has no matching
-generic-actor S64B/residency materialization;
+blocked before RED while the approved S64F v3 generic-actor bundle prerequisite
+receives its implementation plan, implementation, and independent review;
 Tasks 2–5, target proof, Task 9 reseal, and Task 10 smoke/visual/manual
 acceptance remain open.
+
+**Generic actor bundle design resolution (2026-08-11):** the missing boundary
+is no longer an unspecified context request. The approved design is one
+scene-local S64F v3 bundle, loaded from CD into a fixed high-water region of
+the 32-Mbit DRAM cart. It contains bounded tables (64 families / 128 drawable
+variants) and one S64B per unique supported `(family ordinal, model ID)`.
+Cross-SH-2 records remain scalar and pointer-free. The master validates the
+complete package/bundle/bank chain and publishes the generation last. Two
+fixed LWRAM claimant lanes use a bundle-wide stride; no per-family HWRAM cache
+or heap is introduced. Scene changes drain leases, reclaim the fixed cart
+region, perform a bounded master-owned CD load outside gameplay, validate, and
+then publish. S64F v2 remains historical tooling only; feature-on production
+requires v3. The written specification separates package/bundle identity from
+per-variant S64B source identity so Task 1's bank hash check remains exact.
+This supersedes Task 1's provisional assumption that scratch must be adjacent
+to each selected dependency: the reviewed binder still consumes the same raw
+workspace span, but production supplies it from one generated-capacity,
+bundle-wide LWRAM reservation while the immutable S64F/S64B bytes remain in
+the cart.
+Implementation remains prohibited until the follow-on implementation plan is
+written and reviewed.
 
 **Task 1 interface correction (2026-08-11):** the governing-plan prototype's
 `bank` parameter means the complete validated
@@ -148,7 +171,8 @@ Independent two-stage review before Task 2.
 
 ### Task 2: Production handoff wiring — populate and claim (requires Task 14 registry)
 
-**2026-08-11 resumed status: `needs-context` before RED/production edits.**
+**2026-08-11 resumed status: `blocked-on-approved-S64F-v3-prerequisite` before
+RED/production edits.**
 The Task 14 prerequisite is now landed through `0d765ccb` and approved
 `PASS C0/I0/M0`; it correctly owns source-object identity only. Its BOB entries
 select nonzero numeric bank IDs such as `0x00E5754C`, family IDs, hashes, and
@@ -160,9 +184,13 @@ does not retain or initialize a `sm64_saturn_scene_residency_t`, and the local
 boot package view is discarded after validation. The compiled Mario bank is
 identity-incompatible and the Task 2 brief explicitly forbids using it as a
 fallback. A compliant registry-ID/generation-to-S64B/residency binding is
-therefore impossible without an additional owned artifact/interface. Keep all
-Task 2 steps unchecked until that input is named or supplied; do not duplicate
-Task 14's source registry or start Task 3 worker cutover.
+therefore impossible without an additional owned artifact/interface. That
+input is now specified by
+`docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`, but
+it is not implemented. Keep all Task 2 steps unchecked until the versioned
+bundle, registry regeneration, cart residency, LWRAM workspace, and transition
+owner are implemented and independently reviewed; do not duplicate Task 14's
+source registry or start Task 3 worker cutover.
 
 **Files:**
 - Modify: `src/port/saturn/sourceboot/main.c` (the per-frame bank lifecycle at :368-389/:492 and retirement at :1238-1284)

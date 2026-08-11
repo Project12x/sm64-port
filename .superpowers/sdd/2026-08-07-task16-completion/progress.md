@@ -259,3 +259,43 @@
   two-stage review, and feature-off identity proof. Tasks 3-5 and every target,
   P2, Ymir, visual/manual, Task 9 reseal, and Task 10 smoke gate remain open and
   unclaimed.
+
+## 2026-08-11 generic actor bundle design resolution
+
+- Status: `design-approved; implementation-plan-pending`. Task 16 Task 2 stays
+  blocked before RED/production edits. The missing generic bank owner is now
+  specified at
+  `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`;
+  no format writer, runtime loader, bank, registry regeneration, target byte,
+  or CHANGELOG-visible behavior changed in this transition.
+- Approved architecture: one scene-local S64F v3 bundle in the fixed unused
+  region of the 32-Mbit DRAM cart; fixed big-endian offset tables capped at 64
+  families and 128 drawable variants; one embedded S64B per unique supported
+  `(family ordinal, model ID)`; no serialized pointers, heap, global all-game
+  actor blob, or per-family HWRAM cache.
+- Identity correction: S64P/S64F hashes bind the package and bundle, while
+  actor descriptors bind the selected S64B source SHA-256. `actor_bank_id` is
+  the nonzero leading big-endian source-hash word with collision failure, and
+  Task 14's family ID remains the one-based S64F record ordinal. The identity
+  registry must be regenerated after the v3 bundle exists rather than reusing
+  the outer bundle hash for every actor.
+- SH-2/runtime correction: the master validates S64P, S64F v3, every embedded
+  S64B, hashes, spans, registry rows, and capacities before generation-last
+  publication. Cross-CPU records are scalar and pointer-free. Two fixed LWRAM
+  lanes use the bundle-wide maximum stride so master and slave may process
+  heterogeneous banks safely. This supersedes the provisional same-dependency
+  scratch ownership recorded during Task 1; the reviewed binder API is
+  unchanged, while production supplies its raw span from the fixed bundle
+  workspace and keeps immutable actor data in cart.
+- Transition contract: stop new work, drain all old render/bank/audio leases,
+  reclaim the single fixed cart region, perform bounded master-owned CD reads
+  on a loading screen, validate completely, then publish. No blocking gameplay
+  reads and no seamless double-buffer claim. Failure after reclaim leaves no
+  active generation and never reuses stale pointers.
+- Compatibility and gates: S64F v2 stays historical tooling only; feature-on
+  production requires v3. Whole-game inventory, real BOB bank compilation,
+  strict mutation tests, target cart/LWRAM/HWRAM map proof, heterogeneous
+  dual-SH-2 lanes, feature-off byte identity, CD scene transition, Task 9
+  rebuild/repro/v4/staging, and Task 10 smoke/visual/desktop/manual all remain
+  open. The next authorized action after user review of the written spec is a
+  separate implementation plan; source implementation has not started.

@@ -1,7 +1,10 @@
 # State
 
-Active plan:
-`docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md`.
+Active prerequisite plan:
+`docs/superpowers/plans/2026-08-07-task16-completion.md`.
+The parent acceptance/release plan remains
+`docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md` and
+is paused at Task 10 until this prerequisite changes and reseals the target.
 
 ## Current lane: hermetic integrated release candidate
 
@@ -21,6 +24,13 @@ is still the intentional fail-closed stub documented by the Task 16 completion
 plan. Visual capture, desktop launch, and owner play remain stopped. The
 required fix is the Task 16 production generic actor cutover; it changes target
 bytes and therefore reopens Task 9 rebuild, reproducibility, v4, and staging.
+The cutover's missing data prerequisite now has an approved written design:
+`docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`.
+It is a Saturn-shaped S64F v3 scene bundle in the fixed DRAM-cart residency
+region, with bounded 64-family/128-variant offset tables, embedded S64B banks,
+two fixed LWRAM SH-2 workspace lanes, scalar generation-last publication, and
+lease-drained master-owned CD scene transitions. Implementation has not begun;
+the implementation plan is the next gate before Task 16 Task 2 can resume.
 The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system
