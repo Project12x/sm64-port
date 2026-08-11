@@ -12,6 +12,15 @@
 
 ### Fixed
 
+- Extended the authoritative scene-closure generator to seal every uniquely
+  reached actor GeoLayout, display-list, vertex, and light source into each
+  record's existing sorted source attestations. This fixes generic S64B
+  compilation failing on model data reached from an otherwise attested root
+  GeoLayout, while keeping `root_provenance.geo_source` singular and
+  root-defining. Missing, ambiguous, recursive, malformed, or computed
+  reachability now fails before publication; downstream compilation remains
+  closure-only, and historical Mario artifacts remain byte-identical.
+
 - Distinguished the repository's two-argument `LOAD_MODEL_FROM_GEO` and
   three-argument `LOAD_MODEL_FROM_DL` source bindings in the generic actor
   compiler. Valid neighboring direct-display-list commands no longer reject a

@@ -236,6 +236,229 @@ def _asset_root_source(root: Path, asset_root: str) -> str | None:
     return None
 
 
+@lru_cache(maxsize=None)
+def _actor_asset_definition_index(root: Path) -> dict[tuple[str, str], tuple[str, ...]]:
+    """Index source definitions used by the exact reached-actor source walk."""
+    paths = (sorted(root.glob("actors/**/*.c")) +
+             sorted(root.glob("levels/**/*.c")) +
+             sorted(root.glob("bin/**/*.c")) +
+             ([path for path in sorted((root / "src").rglob("*.c"))
+               if "port" not in path.relative_to(root / "src").parts]
+              if (root / "src").is_dir() else []))
+    if len(paths) > 4096:
+        raise ClosureError(
+            f"repository actor asset source index limit exceeded: {len(paths)} C sources")
+    pattern = re.compile(
+        r"^\s*(?:static\s+)?(?:const\s+)?"
+        r"(GeoLayout|Gfx|Vtx|Lights1)\s+([A-Za-z_]\w*)\s*"
+        r"(?:\[[^]]*\])?\s*=",
+        re.MULTILINE,
+    )
+    found: dict[tuple[str, str], list[str]] = defaultdict(list)
+    count = 0
+    for path in paths:
+        relative = _relative(root, path)
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for kind, symbol in pattern.findall(text):
+            found[(kind, symbol)].append(relative)
+            count += 1
+            if count > 65536:
+                raise ClosureError("repository actor asset definition limit exceeded")
+    return {key: tuple(values) for key, values in found.items()}
+
+
+def _actor_asset_initializer(root: Path, path: str, kind: str,
+                             symbol: str) -> str:
+    """Return one complete brace initializer, close-ported from Task 3."""
+    clean = _comment_free(_read(root, path))
+    declaration = re.compile(
+        r"(?:static\s+)?(?:const\s+)?" + re.escape(kind) + r"\s+" +
+        re.escape(symbol) + r"\s*\[[^]]*\]\s*=\s*\{")
+    bodies: list[str] = []
+    for match in declaration.finditer(clean):
+        depth = 1
+        cursor = match.end()
+        while cursor < len(clean) and depth:
+            depth += (clean[cursor] == "{") - (clean[cursor] == "}")
+            cursor += 1
+        if depth:
+            raise ClosureError(f"unterminated reached {kind} {symbol}: {path}")
+        if re.match(r"\s*;", clean[cursor:]) is None:
+            raise ClosureError(f"malformed reached {kind} terminator {symbol}: {path}")
+        bodies.append(clean[match.end():cursor - 1])
+    if len(bodies) != 1:
+        detail = "missing" if not bodies else "ambiguous"
+        raise ClosureError(f"{detail} reached {kind} {symbol}: {path}")
+    return bodies[0]
+
+
+def _actor_asset_commands(body: str, prefix: str, label: str) -> list[tuple[str, str]]:
+    """Coverage-tokenize one reached GeoLayout or Gfx initializer."""
+    tokens: list[tuple[str, str]] = []
+    cursor = 0
+    while True:
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body):
+            break
+        name = re.match(r"[A-Za-z_]\w*", body[cursor:])
+        if name is None or not name.group(0).startswith(prefix):
+            raise ClosureError(f"unexplained token in reached {label}")
+        macro = name.group(0)
+        cursor += name.end()
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body) or body[cursor] != "(":
+            raise ClosureError(f"malformed reached command {macro} in {label}")
+        start = cursor + 1
+        depth = 1
+        cursor += 1
+        while cursor < len(body) and depth:
+            depth += (body[cursor] == "(") - (body[cursor] == ")")
+            cursor += 1
+        if depth:
+            raise ClosureError(f"unterminated reached command {macro} in {label}")
+        arguments = body[start:cursor - 1]
+        whitespace = re.match(r"\s*", body[cursor:])
+        cursor += whitespace.end()
+        if cursor == len(body) or body[cursor] != ",":
+            raise ClosureError(f"missing reached command comma after {macro} in {label}")
+        cursor += 1
+        tokens.append((macro, arguments))
+    if not tokens:
+        raise ClosureError(f"empty reached command initializer in {label}")
+    return tokens
+
+
+def _reached_actor_sources(root: Path, entry: str,
+                           declared_source: str) -> set[str]:
+    """Return every uniquely reached Geo/Gfx/Vtx/light source for one model.
+
+    This is the sealing-side counterpart to ``actor_variant_bank._SourceIndex``:
+    repository discovery happens only here, and every returned path is hashed
+    into the closure before the downstream compiler may select it.
+    """
+    index = _actor_asset_definition_index(root)
+
+    def matches(kind: str, symbol: str, preferred: str | None) -> tuple[str, ...]:
+        candidates = index.get((kind, symbol), ())
+        local = tuple(path for path in candidates if path == preferred)
+        if len(local) > 1:
+            raise ClosureError(f"ambiguous reached {kind} {symbol}: {preferred}")
+        return local or candidates
+
+    root_kinds = [kind for kind in ("GeoLayout", "Gfx")
+                  if matches(kind, entry, declared_source) == (declared_source,)]
+    if len(root_kinds) != 1:
+        detail = "missing" if not root_kinds else "ambiguous"
+        raise ClosureError(
+            f"{detail} declared actor root {entry}: {declared_source}")
+
+    sources: set[str] = set()
+    visited: set[tuple[str, str, str]] = set()
+
+    def resolve(kind: str, symbol: str, preferred: str,
+                *, declared: bool = False) -> str:
+        candidates = index.get((kind, symbol), ())
+        local = tuple(path for path in candidates if path == preferred)
+        if len(local) > 1:
+            raise ClosureError(f"ambiguous reached {kind} {symbol}: {preferred}")
+        if local:
+            return local[0]
+        if declared:
+            raise ClosureError(f"missing reached {kind} {symbol}: {preferred}")
+        if not candidates:
+            raise ClosureError(f"missing reached {kind} {symbol}")
+        if len(candidates) != 1:
+            raise ClosureError(
+                f"ambiguous reached {kind} {symbol}: {', '.join(candidates)}")
+        return candidates[0]
+
+    def identifier(expression: str, label: str,
+                   pattern: str = r"([A-Za-z_]\w*)") -> str:
+        found = re.fullmatch(r"\s*" + pattern + r"\s*", expression)
+        if found is None:
+            raise ClosureError(f"unsupported reached {label} expression: {expression.strip()}")
+        return found.group(1)
+
+    def visit(kind: str, symbol: str, preferred: str,
+              stack: tuple[tuple[str, str], ...] = (), *, declared: bool = False) -> None:
+        if (kind, symbol) in stack:
+            chain = " -> ".join(item[1] for item in stack + ((kind, symbol),))
+            raise ClosureError(f"recursive reached {kind}: {chain}")
+        path = resolve(kind, symbol, preferred, declared=declared)
+        key = (kind, symbol, path)
+        if key in visited:
+            return
+        visited.add(key)
+        sources.add(path)
+        if kind in ("Vtx", "Lights1"):
+            return
+        body = _actor_asset_initializer(root, path, kind, symbol)
+        prefix = "GEO_" if kind == "GeoLayout" else "gs"
+        commands = _actor_asset_commands(body, prefix, f"{kind} {symbol} in {path}")
+        next_stack = stack + ((kind, symbol),)
+        if kind == "GeoLayout":
+            terminators = [position for position, (macro, _args) in enumerate(commands)
+                           if macro in ("GEO_END", "GEO_RETURN")]
+            if terminators != [len(commands) - 1]:
+                raise ClosureError(
+                    f"reached GeoLayout {symbol} requires one final GEO_END/GEO_RETURN")
+            for macro, arguments in commands:
+                fields = _arguments(arguments)
+                if macro == "GEO_BRANCH_AND_LINK":
+                    if len(fields) != 1:
+                        raise ClosureError("unsupported reached GeoLayout branch expression")
+                    target = identifier(fields[0], "GeoLayout")
+                    visit("GeoLayout", target, path, next_stack)
+                elif macro == "GEO_BRANCH":
+                    if len(fields) != 2 or fields[0] not in ("0", "1"):
+                        raise ClosureError("unsupported reached GeoLayout branch expression")
+                    target = identifier(fields[1], "GeoLayout")
+                    visit("GeoLayout", target, path, next_stack)
+                elif (macro in ("GEO_ANIMATED_PART", "GEO_DISPLAY_LIST") or
+                      macro.endswith("_WITH_DL") or macro.endswith("_AND_DL")):
+                    if not fields:
+                        raise ClosureError("unsupported reached Gfx expression")
+                    target_expression = fields[-1]
+                    if target_expression == "NULL":
+                        continue
+                    target = identifier(target_expression, "Gfx")
+                    visit("Gfx", target, path, next_stack)
+        else:
+            for macro, arguments in commands:
+                fields = _arguments(arguments)
+                if macro in ("gsSPDisplayList", "gsSPBranchList"):
+                    if len(fields) != 1:
+                        raise ClosureError("unsupported reached Gfx expression")
+                    target = identifier(fields[0], "Gfx")
+                    visit("Gfx", target, path, next_stack)
+                elif macro == "gsSPVertex":
+                    if len(fields) != 3:
+                        raise ClosureError("unsupported reached Vtx expression")
+                    target = identifier(
+                        fields[0], "Vtx",
+                        r"([A-Za-z_]\w*)(?:\s*\+\s*(?:0[xX][0-9A-Fa-f]+|\d+))?",
+                    )
+                    visit("Vtx", target, path, next_stack)
+                elif macro == "gsSPLight":
+                    if len(fields) != 2:
+                        raise ClosureError("unsupported reached Lights1 expression")
+                    target = identifier(
+                        fields[0], "Lights1",
+                        r"&?([A-Za-z_]\w*)(?:\.(?:l|a))?",
+                    )
+                    visit("Lights1", target, path, next_stack)
+                elif macro == "gsSPSetLights1":
+                    if len(fields) != 1:
+                        raise ClosureError("unsupported reached Lights1 expression")
+                    target = identifier(fields[0], "Lights1")
+                    visit("Lights1", target, path, next_stack)
+
+    visit(root_kinds[0], entry, declared_source, declared=True)
+    return sources
+
+
 def _geo_source(root: Path, geo_root: str) -> str | None:
     return _asset_root_source(root, geo_root)
 
@@ -1005,7 +1228,8 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
             }
             used_sources[behavior].add(binding_source)
             if variant_geo_source:
-                geo_sources.add(variant_geo_source)
+                geo_sources.update(_reached_actor_sources(
+                    root, variant_geo, variant_geo_source))
                 material_features.update(_features(root, variant_geo_source))
         primary = next((variant for variant in variants if variant["model"] != "MODEL_NONE"), variants[0])
         model, geo_root = primary["model"], primary["geo_root"]

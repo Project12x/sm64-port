@@ -610,11 +610,35 @@
 
 ## 2026-08-11 generic actor bundle Task 3 source-provenance repair round 4
 
-- Status: `active; Task 4 paused before edits`. The reviewed parser now reaches
-  the selected wooden-signpost GeoLayout, but the exact BOB probe fails closed
-  because its closure record omits the reached Gfx/model definition source.
-- Boundary: extend authoritative, hash-bound closure provenance; never search
-  or consume an unsealed repository source in the variant compiler. Preserve
-  exact Mario artifacts and named missing/ambiguous-source failures.
-- Remaining: Task 3 RED/GREEN and scoped rereview, then Task 4. Task 16 Tasks
-  2-5 and all target/release/manual gates remain open.
+- Status: `source-complete; scoped rereview pending; Task 4 paused before
+  edits`. The reviewed parser now reaches the selected wooden-signpost
+  GeoLayout, but the exact BOB probe failed closed because its closure record
+  omitted the reached Gfx/model definition source.
+- Design correction: the existing `record.sources` set, not the singular
+  root-defining `root_provenance.models[*].geo_source`, carries every reached
+  source. The authoritative closure generator coverage-walks selected direct
+  Gfx roots or GeoLayout branches, bound/nested/tail display lists, Vtx, and
+  `Lights1` through a bounded deterministic game-source index; every unique
+  result is sorted and hash-bound before schema validation. Downstream Task 3
+  lookup remains closure-only and unchanged.
+- TDD: the real BOB RED raised `KeyError` for absent
+  `actors/wooden_signpost/model.inc.c`. Five focused RED failures showed the
+  missing exact source set, accepted missing/ambiguous/computed references,
+  and unobserved reached-source hash drift. A branch/tail-list mutation RED
+  additionally proved that indirect Geo/Gfx reachability cannot be skipped.
+  GREEN is 24/24 synthetic closure tests, 2/2 complete BOB closure tests,
+  28/28 variant/source tests, 25/25 rigid-group tests, 4/4 historical generic-
+  family report tests, compileall, and the combined native-root
+  variant/pose/meshlet Make wave.
+- Real-source evidence: `bhvMessagePanel` now attests sorted
+  `actors/wooden_signpost/geo.inc.c`, `actors/wooden_signpost/model.inc.c`,
+  behavior, model-ID, and binding sources. Strict `compile_actor_variant` no
+  longer reports missing Gfx and reaches the next honest named boundary,
+  unsupported `GEO_SHADOW`. No source is searched downstream or consumed
+  without a closure hash.
+- Legacy proof: Mario S64B remains 596,896 bytes at
+  `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
+  its JSON remains 562,096 bytes at
+  `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+- Remaining: Task 3 scoped rereview, then Task 4. Task 16 Tasks 2-5 and all
+  target/release/manual gates remain open and unclaimed.

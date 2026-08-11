@@ -59,10 +59,16 @@ class SceneClosureTest(unittest.TestCase):
             const BehaviorScript bhvProjectile[] = {};
             const BehaviorScript bhvEffect[] = {};
         """)
-        write(root / "actors/parent/geo.inc.c", "const GeoLayout parent_geo[] = { GEO_ANIMATED_PART(0, 0, 0, 0, parent_dl), GEO_SHADOW(1, 2, 3) };\n")
+        write(root / "actors/parent/geo.inc.c", "const GeoLayout parent_geo[] = { GEO_ANIMATED_PART(0, 0, 0, 0, parent_dl), GEO_BRANCH_AND_LINK(parent_shared_geo), GEO_SHADOW(1, 2, 3), GEO_END(), };\n")
+        write(root / "actors/parent/model.inc.c", "const Gfx parent_dl[] = { gsSPDisplayList(parent_child_dl), gsSPEndDisplayList(), };\n")
+        write(root / "actors/shared/geo.inc.c", "const GeoLayout parent_shared_geo[] = { GEO_NODE_START(), GEO_RETURN(), };\n")
+        write(root / "actors/shared/model.inc.c", "const Gfx parent_child_dl[] = { gsSPSetLights1(parent_light), gsSPVertex(parent_vtx, 3, 0), gsSP1Triangle(0, 1, 2, 0), gsSPBranchList(parent_tail_dl), };\n")
+        write(root / "actors/shared/tail.inc.c", "const Gfx parent_tail_dl[] = { gsSPEndDisplayList(), };\n")
+        write(root / "actors/shared/data.inc.c", "const Lights1 parent_light = gdSPDefLights1(0, 0, 0, 0, 0, 0, 0, 0, 0);\nconst Vtx parent_vtx[] = { {{{0, 0, 0}, 0, {0, 0}, {0, 0, 0, 0}}}, };\n")
         write(root / "actors/parent/anims/table.inc.c", "const struct Animation *const parent_anims[] = { 0 };\n")
-        write(root / "actors/child/geo.inc.c", "const GeoLayout child_geo[] = { GEO_BILLBOARD(), GEO_DISPLAY_LIST(LAYER_ALPHA, child_dl) };\n")
-        write(root / "actors/fixture_roots/geo.inc.c", "const GeoLayout yellow_coin_geo[] = { 0 };\nconst GeoLayout water_bomb_geo[] = { 0 };\nconst GeoLayout smoke_geo[] = { 0 };\n")
+        write(root / "actors/child/geo.inc.c", "const GeoLayout child_geo[] = { GEO_BILLBOARD(), GEO_DISPLAY_LIST(LAYER_ALPHA, child_dl), GEO_END(), };\n")
+        write(root / "actors/child/model.inc.c", "const Gfx child_dl[] = { gsSPEndDisplayList(), };\n")
+        write(root / "actors/fixture_roots/geo.inc.c", "const GeoLayout yellow_coin_geo[] = { GEO_END(), };\nconst GeoLayout water_bomb_geo[] = { GEO_END(), };\nconst GeoLayout smoke_geo[] = { GEO_END(), };\n")
         write(root / "include/model_ids.h", "#define MODEL_NONE 0\n#define MODEL_PARENT 1 // parent_geo\n#define MODEL_CHILD 2 // child_geo\n#define MODEL_YELLOW_COIN 3 // yellow_coin_geo\n#define MODEL_WATER_BOMB 4 // water_bomb_geo\n#define MODEL_SMOKE 5 // smoke_geo\n")
         write(root / "src/game/object_list_processor.h", "#define OBJECT_POOL_CAPACITY 240\n")
         return root
@@ -131,6 +137,64 @@ class SceneClosureTest(unittest.TestCase):
         self.assertEqual(records["bhvParent"]["root_provenance"]["animation"]["parent_anims"], "actors/parent/anims/table.inc.c")
         self.assertEqual(records["bhvParent"]["root_provenance"]["models"]["MODEL_PARENT"]["geo_source"], "actors/parent/geo.inc.c")
         self.assertEqual(records["bhvParent"]["children"], ["bhvChild"])
+
+    def test_collects_reached_actor_asset_sources_and_hashes(self) -> None:
+        root = self.fixture()
+        closure = self.collect(root)
+        record = next(record for record in closure["records"]
+                      if record["stable_id"] == "bhvParent")
+        sources = {source["path"]: source["sha256"]
+                   for source in record["sources"]}
+
+        self.assertEqual(
+            record["root_provenance"]["models"]["MODEL_PARENT"]["geo_source"],
+            "actors/parent/geo.inc.c",
+        )
+        reached = {
+            "actors/parent/geo.inc.c",
+            "actors/parent/model.inc.c",
+            "actors/shared/geo.inc.c",
+            "actors/shared/model.inc.c",
+            "actors/shared/tail.inc.c",
+            "actors/shared/data.inc.c",
+        }
+        self.assertTrue(reached <= set(sources))
+        for path in reached:
+            digest = hashlib.sha256((root / path).read_bytes()).hexdigest()
+            self.assertEqual(sources[path], digest)
+            self.assertEqual(closure["source_hashes"][path], digest)
+
+    def test_missing_reached_actor_source_fails_closed(self) -> None:
+        root = self.fixture()
+        write(root / "actors/parent/model.inc.c",
+              "const Gfx parent_dl[] = { gsSPDisplayList(missing_dl), gsSPEndDisplayList(), };\n")
+        with self.assertRaisesRegex(ClosureError, "missing reached Gfx missing_dl"):
+            self.collect(root)
+
+    def test_ambiguous_reached_actor_source_fails_closed(self) -> None:
+        root = self.fixture()
+        write(root / "actors/duplicate/model.inc.c",
+              "const Gfx parent_child_dl[] = { gsSPEndDisplayList(), };\n")
+        with self.assertRaisesRegex(ClosureError,
+                                    "ambiguous reached Gfx parent_child_dl"):
+            self.collect(root)
+
+    def test_computed_reached_actor_source_fails_closed(self) -> None:
+        root = self.fixture()
+        write(root / "actors/parent/model.inc.c",
+              "const Gfx parent_dl[] = { gsSPDisplayList(select_parent_dl(1)), gsSPEndDisplayList(), };\n")
+        with self.assertRaisesRegex(ClosureError,
+                                    "unsupported reached Gfx expression"):
+            self.collect(root)
+
+    def test_reached_actor_source_hash_drift_fails_closed(self) -> None:
+        root = self.fixture()
+        closure = self.collect(root)
+        path = root / "actors/shared/data.inc.c"
+        path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError,
+                                    "stale source hash: actors/shared/data.inc.c"):
+            validate_scene_closure(closure)
 
     def test_rejects_undeclared_child_and_missing_model_geo(self) -> None:
         root = self.fixture()
@@ -439,7 +503,7 @@ class SceneClosureTest(unittest.TestCase):
         write(behavior_path, text)
         with (root / "include/model_ids.h").open("a", encoding="utf-8") as stream:
             stream.write("#define MODEL_ONE_SHOT 6 // one_shot_geo\n#define MODEL_RECURRENT 7 // recurrent_geo\n")
-        write(root / "actors/site_bounds/geo.inc.c", "const GeoLayout one_shot_geo[] = { 0 };\nconst GeoLayout recurrent_geo[] = { 0 };\n")
+        write(root / "actors/site_bounds/geo.inc.c", "const GeoLayout one_shot_geo[] = { GEO_END(), };\nconst GeoLayout recurrent_geo[] = { GEO_END(), };\n")
         records = {record["stable_id"]: record for record in self.collect(root)["records"]}
         self.assertEqual(records["bhvOneShot"]["maximum_live_instances"], 3)
         self.assertEqual(records["bhvRecurrent"]["maximum_live_instances"], 240)

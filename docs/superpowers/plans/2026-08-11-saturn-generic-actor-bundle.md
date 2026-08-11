@@ -17,10 +17,11 @@ real-source repair round passed scoped rereview with C0/I0/M0: exact two-argumen
 GeoLayout and three-argument direct-DL bindings are coverage-parsed, selected
 direct-DL layers reach S64B semantics, and neighboring valid bindings cannot
 alter the selected variant. Task 4's resumed zero-edit probe then reached the
-next strict boundary: the BOB closure attests the wooden-signpost GeoLayout but
-not the Gfx/model source it reaches. Task 3 is reopened narrowly to bind that
-source provenance; Task 4 is paused without edits. Target, release, smoke,
-visual, desktop, manual, and total-game gates remain open.
+next strict boundary: the BOB closure attested the wooden-signpost GeoLayout but
+not the Gfx/model source it reaches. Task 3's narrow round-4 provenance repair
+is source-complete and awaits scoped rereview; Task 4 remains paused without
+edits. Target, release, smoke, visual, desktop, manual, and total-game gates
+remain open.
 
 ## Global Constraints
 
@@ -494,16 +495,39 @@ scoped diff checks. No new breakage was found. Task 4 is unblocked and resumed;
 target, release, smoke, visual, desktop, manual, and total-game gates remain
 open and unclaimed.
 
-**Task 3 real-source provenance repair round 4 (2026-08-11):** active. After
+**Task 3 real-source provenance repair round 4 (2026-08-11):** source-complete;
+scoped rereview pending. After
 the round-3 PASS, Task 4 replayed real BOB key `(family ordinal 3, model ID
 0x007c)` and selection reached the correct `wooden_signpost_geo`, then failed
 closed at `missing Gfx source: wooden_signpost_seg3_dl_0302DA48`. The closure
-record attests the GeoLayout and binding sources but not the reached model/DL
-definition. The repair must extend the authoritative closure/provenance chain
-so every consumed source byte is hash-bound; Task 3 may not search or consume
-an unsealed repository file. A real BOB RED, exact Mario preservation, scoped
-rereview, and named ambiguity/missing-source failures are required before Task
-4 resumes. Task 4 has made zero edits.
+record attested the GeoLayout and binding sources but not the reached model/DL
+definition. The authoritative closure generator now coverage-walks every
+selected direct Gfx root or GeoLayout branch, bound/nested/tail display list,
+and reached Vtx/`Lights1` definition through a bounded, deterministic game-
+source index. Unique reached paths enter the existing sorted `record.sources`
+and top-level `source_hashes` before schema validation; missing, ambiguous,
+recursive, malformed, and computed references raise `ClosureError`.
+`root_provenance.models[*].geo_source` remains the singular source that defines
+the selected root, because it cannot truthfully represent an arbitrary reached
+source set. The downstream compiler remains closure-only and was not changed.
+Real BOB RED was the missing wooden-signpost model source; focused RED was five
+failures showing omitted Geo/Gfx/Vtx/light paths and accepted missing,
+ambiguous, computed, and drift mutations. A branch/tail-list mutation RED
+proved indirect Geo/Gfx reachability cannot be skipped. GREEN is 24/24
+synthetic closure, 2/2 full BOB closure, 28/28 variant/source, 25/25
+rigid-group, 4/4 historical generic-family report, compileall, and the
+native-root combined variant/pose/meshlet Make wave. The repaired
+`bhvMessagePanel` record contains the root GeoLayout plus
+`actors/wooden_signpost/model.inc.c` alongside its behavior/model/binding
+sources; strict compilation now reaches the next named boundary,
+`UnsupportedActorSourceError: unsupported GeoLayout node: GEO_SHADOW`, rather
+than searching outside the closure or reporting missing Gfx. Historical Mario
+remains exactly 596,896 bytes at
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
+its 562,096-byte JSON remains
+`3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
+Task 4 has made zero edits and remains paused for scoped rereview; all target,
+release, smoke, visual, desktop, manual, and total-game gates remain open.
 
 ---
 

@@ -16,6 +16,28 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class BobSceneClosureTest(unittest.TestCase):
+    def test_real_bob_actor_sources_include_reached_model_data(self) -> None:
+        closure = collect_scene_closure(
+            ROOT, "bob", 1, ROOT / "tools/saturn/behavior_spawn_rules.json")
+        record = next(record for record in closure["records"]
+                      if record["stable_id"] == "bhvMessagePanel")
+        provenance = record["root_provenance"]["models"]["MODEL_WOODEN_SIGNPOST"]
+        sources = {source["path"]: source["sha256"]
+                   for source in record["sources"]}
+
+        self.assertEqual(provenance["geo_source"],
+                         "actors/wooden_signpost/geo.inc.c")
+        self.assertEqual(
+            sources["actors/wooden_signpost/model.inc.c"],
+            hashlib.sha256(
+                (ROOT / "actors/wooden_signpost/model.inc.c").read_bytes()
+            ).hexdigest(),
+        )
+        self.assertEqual(
+            closure["source_hashes"]["actors/wooden_signpost/model.inc.c"],
+            sources["actors/wooden_signpost/model.inc.c"],
+        )
+
     def test_bob_closure_is_byte_stable_and_complete(self) -> None:
         with tempfile.TemporaryDirectory(prefix="bob-scene-closure-") as temp:
             first_path = Path(temp) / "first.json"

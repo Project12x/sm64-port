@@ -38,8 +38,9 @@ strict source-selected generic S64B compiler is complete after its third,
 real-source binding repair passed scoped rereview with C0/I0/M0. It preserves
 the exact historical Mario bank while rejecting unrepresentable or unattested
 selected semantics. The resumed Task 4 zero-edit probe then exposed missing
-hash-bound provenance for the wooden-signpost display-list source. Task 3 is
-reopened narrowly to seal that reached source; Task 4 is paused without edits.
+hash-bound provenance for the wooden-signpost display-list source. Task 3's
+narrow upstream closure repair is source-complete and awaits scoped rereview;
+Task 4 remains paused without edits.
 Completing and reviewing the full prerequisite remains the gate before Task 16
 Task 2 resumes.
 The reusable
