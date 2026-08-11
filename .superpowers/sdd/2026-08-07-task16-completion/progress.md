@@ -183,6 +183,7 @@
   (`verify-actor-meshlets verify-actor-pose-bank verify-actor-instance-queue
   verify-actor-batches verify-actor-feature-off-wrapper`) passes, including
   pose bank, actual queue/batch storage, neutrality 2/2, and feature-off 6/6.
-- Status: `source-complete-review-passed`; the scoped test/docs commit and
-  exact SHA recording remain. Task 2 was not started. Tasks 2-5 and all target,
-  P2, Ymir, manual, reseal, and smoke evidence remain open.
+- Status: `source-complete-review-passed`; scoped test/docs closure commit
+  `90fdfa43` (`test(saturn): align actor overlap fixture`) records the M1 fix.
+  Task 2 was not started. Tasks 2-5 and all target, P2, Ymir, manual, reseal,
+  and smoke evidence remain open.

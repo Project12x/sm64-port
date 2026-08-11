@@ -105,9 +105,9 @@ started pending the controller's transition.
 ### Task 1: Generalize meshlet preparation to bank instances (registry-independent — start immediately)
 
 **Status:** `source-complete-review-passed` at `16cd2570` / `40cd970e`, with
-the final test-fixture closure in the scoped commit containing this status.
-Independent review is `PASS C0/I0/M1` with M1 closed. Task 2 remains not
-started and no target-complete claim is made.
+final test-fixture closure `90fdfa43`. Independent review is `PASS C0/I0/M1`
+with M1 closed. Task 2 remains not started and no target-complete claim is
+made.
 
 **Files:**
 - Modify: `src/port/saturn/gfx/saturn_actor_meshlets.h/.c`
