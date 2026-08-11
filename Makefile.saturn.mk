@@ -927,7 +927,7 @@ verify-dual-actor-worker:
 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/dual-actor-worker-owner-mutation$(HOST_EXEEXT)" \
 	  --label "dual actor worker cached-owner mutation"
 
-verify-actor-meshlets:
+verify-actor-meshlets: compile-mario-actor-bank
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
@@ -936,9 +936,11 @@ verify-actor-meshlets:
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_meshlet_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_meshlets.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bank.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_pose.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-test$(HOST_EXEEXT)" "$(MARIO_ACTOR_BANK)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
 	  -DSM64_SATURN_ACTOR_MESHLET_TEST_INVALID_SPAN=1 \
@@ -946,11 +948,13 @@ verify-actor-meshlets:
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_meshlet_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_meshlets.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bank.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_pose.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-span-mutation$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
-	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-span-mutation$(HOST_EXEEXT)" \
-	  --label "actor meshlet invalid-span mutation"
+	@if "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-span-mutation$(HOST_EXEEXT)"; then \
+	  echo "actor meshlet invalid-span mutation escaped fixture" >&2; exit 1; \
+	else echo "actor meshlet invalid-span mutation caught by fixture"; fi
 
 verify-actor-feature-off-wrapper:
 	@"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_actor_feature_off_wrapper.py"

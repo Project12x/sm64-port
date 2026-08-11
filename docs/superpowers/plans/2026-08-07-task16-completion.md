@@ -17,8 +17,29 @@ VBlank callbacks, but render generation 1 terminates
 `DONE,DONE,FAILED,QUARANTINED`: the sealed feature-on actor-admission wrapper
 still intentionally fails closed. Disabling dynamic actor closure is rejected
 because the same production actor path must scale to the total game. Task 1 is
-the active implementation slice; Tasks 2–5, target proof, Task 9 reseal, and
-Task 10 smoke/visual/manual acceptance remain open.
+source-complete on its isolated branch with independent review still open;
+Tasks 2–5, target proof, Task 9 reseal, and Task 10 smoke/visual/manual
+acceptance remain open.
+
+**Task 1 interface correction (2026-08-11):** the governing-plan prototype's
+`bank` parameter means the complete validated
+`const sm64_saturn_actor_bank_view_t *`, not its header-only
+`sm64_saturn_actor_bank_t` member. The latter cannot expose pose streams or
+geometry spans. The six-argument shape remains binding; the Task-1-owned
+meshlet output binding therefore carries draw capacity and an established
+quarantine reason for Task 2/3 to adapt from each queue descriptor. Bank
+identity/hash/family/model mismatches fail before output writes. Scene-package
+generation freshness remains a Task 2 handoff precondition because it is not
+represented by the S64B bank view. S64F v2's 56-byte records establish family
+registration/capability metadata upstream; they are not geometry records. The
+generic output binding is one descriptor-owned contiguous draw-record span,
+partitioned deterministically as opaque records followed by translucent
+records; it also owns an explicit uniqueness bitmap so evaluated pose lights
+and joint matrices remain immutable through preparation. The legacy Mario
+entry point and output struct retain their separate arrays and frozen ABI. The
+generalized entry point is type-safe: its output parameter is
+`sm64_saturn_actor_meshlet_bank_output_t *`, and the shared core receives that
+binding's unchanged legacy `output` member internally.
 
 **Current ground truth (2026-08-07 research pass):**
 - Arena reality (post-`c1e8e73e`, supersedes older ledger numbers): bank 24,088 + observer 13,024 (240-slot identity sidecars) + queue 5,644 + batches 1,024 + alignment + outputs = 65,536 B; output-record ceiling **2,718**; 64 live instances.
@@ -33,23 +54,28 @@ Task 10 smoke/visual/manual acceptance remain open.
 
 ### Task 1: Generalize meshlet preparation to bank instances (registry-independent — start immediately)
 
+**Status:** `source-complete` from isolated base `ec8ef844` in the behavior
+commit containing this status; implementation and host gates are green, while
+controller-owned independent two-stage review remains open. No target-complete
+claim is made.
+
 **Files:**
 - Modify: `src/port/saturn/gfx/saturn_actor_meshlets.h/.c`
 - Test: extend the existing meshlet host gate (locate via `Makefile.saturn.mk`'s `verify-actor-pose-bank` / meshlet targets — read the current test harness before writing)
 
-- [ ] **Step 1: Read the real Mario-scoped path first**
+- [x] **Step 1: Read the real Mario-scoped path first**
 
 Read `saturn_actor_meshlets.h:27-35` (current `sm64_saturn_actor_meshlets_prepare` contract) and its full `.c` implementation, plus `saturn_actor_instance_queue.h:57-72` (descriptor fields the generalized form must populate: `material_id`, `output_offset`, `output_capacity`, `output_class`) and the S64F family-bank record layout from Task 11's generated bank (the 56-byte v2 records). The generalization target signature is fixed by plan:848-856: `sm64_saturn_actor_meshlets_prepare_bank(bank, instance, view, pose_work, output, stats)`.
 
-- [ ] **Step 2: RED tests**
+- [x] **Step 2: RED tests**
 
 Extend the meshlet host gate with bank-driven cases before implementing: a registered rigid/opaque family instance produces exactly the meshlet set its bank record declares (counts and output-span bounds from the bank, not from Mario's hardcoded shape); an instance whose output span would exceed `output_capacity` fails closed with the established quarantine disposition (never a partial write); a stale bank generation is rejected before any output write. Run; confirm RED.
 
-- [ ] **Step 3: Implement `prepare_bank` as a wrapper-plus-generalization, not a fork**
+- [x] **Step 3: Implement `prepare_bank` as a wrapper-plus-generalization, not a fork**
 
 Factor the Mario path's per-meshlet loop so both entry points share one core (Mario's existing `prepare` becomes a thin call through the same core with his fixed inputs — the feature-off path must remain byte-identical, which the existing feature-off wrapper tests already gate). No new global state; all working storage comes from the caller-supplied `pose_work`/`output` spans per the plan contract.
 
-- [ ] **Step 4: Verify + commit**
+- [x] **Step 4: Verify + commit**
 
 Run the meshlet gate + `verify-actor-pose-bank` + the feature-off wrapper gate (all must stay green). Commit:
 

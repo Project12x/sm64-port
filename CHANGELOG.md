@@ -42,6 +42,14 @@
 
 ### Added
 
+- Added bank-driven actor meshlet preparation over validated S64B geometry and
+  pose records, with instance identity/generation checks, caller-owned
+  uniqueness scratch, and one deterministic opaque-then-translucent output
+  span. Capacity or stale-input failures now quarantine before any draw or
+  position write so the production queue can adapt descriptor capacity safely;
+  the legacy Mario API, split output layout, and feature-off call sites remain
+  unchanged while later tasks own queue wiring and scene-package freshness.
+
 - Made normal release-bound audit-v4 acceptance publish a canonical,
   no-overwrite JSON result after every audit gate passes. This closes the gap
   where `--json-output` was reserved for non-accepting observation mode even
