@@ -1542,8 +1542,10 @@ Do not create or pin the real v4 contract in this task. Reviewers must verify me
 **Current status (2026-08-11):** `source-complete` for independent-review
 repair round 2, pending both controller-owned same-reviewer rereviews. Candidate
 source is `df7894acd9cbce03eb099df68f8bc17ea71735b6`; the one-shot v4 pin is
-`537dd7210c2846e283c21a12a32770d601218c0c`. Two clean, owned `-j1`
-candidates independently verify and compare equal at release-manifest SHA-256
+`537dd7210c2846e283c21a12a32770d601218c0c`; authoritative release evidence
+and public status are `6685084aa258238a312dd6228f649e4b30328792`. Two clean,
+owned `-j1` candidates independently verify and compare equal at
+release-manifest SHA-256
 `9110b40da0e890b7b03dc5748e9ead4a47865ea4f9e3df21869b47de33679b99`
 and identity `id-a40f992c085da2f0`. Exact v4 passes at total 700 with both
 forbidden callers absent. Capacity, ten-class BOB package, guarded staging,

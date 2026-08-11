@@ -1,204 +1,193 @@
-# Task 9 implementation report — reproducible identity-v2 release
+# Task 9 execution report — authoritative repair-round-2 closeout
 
-## Verdict
+Date: 2026-08-11
 
-Task 9 is `source-complete` through Step 10. Two isolated, owned candidates
-reproduced the same release manifest and output bytes; audit v4, capacity,
-package, manifest verification, transactional staging, and overwrite refusal
-passed. Step 11's controller-owned independent evidence and code-quality
-reviews remain open. Task 10/Ymir/smoke/visual/manual execution did not run.
+## Status and scope
 
-## Exact candidate boundary
+Task 9 is source-complete pending the two controller-owned same-reviewer
+rereviews. Candidate source is
+df7894acd9cbce03eb099df68f8bc17ea71735b6 and the one-shot v4 pin is commit
+537dd7210c2846e283c21a12a32770d601218c0c. Authoritative release evidence and
+public status are commit 6685084aa258238a312dd6228f649e4b30328792. Task 10
+is the next acceptance lane and remains paused. This task did not run Ymir,
+the 20,100-frame smoke, visual capture, desktop launch, or owner manual play.
 
-- Common detached source: `44b786276f73c3dbd7dc91d9f39c332b2b51bf65`.
-- Candidate A: `D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/hermetic-release-repro-a`.
-- Candidate B: `D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/hermetic-release-repro-b`.
-- Each candidate had an independently copied 1,977-file `build/us_pc` tree and
-  `baserom.us.z64` SHA-256
-  `17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91`.
-- Both used pinned clean libyaul commit
-  `6012f79f...` and the attested Yaul toolchain under
-  `D:/Code/RetroDev/sm64-saturn-port/work/yaul-install`.
-- The implementation worktree's existing `build/us_pc` junction was never
-  removed, replaced, or admitted to a candidate closure.
+All release, audit, capacity, package, and stage evidence from earlier Task 9
+rounds is superseded. The only authoritative candidate identity is
+id-a40f992c085da2f0 and the only authoritative release-manifest SHA-256 is
+9110b40da0e890b7b03dc5748e9ead4a47865ea4f9e3df21869b47de33679b99.
 
-Both candidates ran `C:/msys64/usr/bin/make.exe -f Makefile.saturn.mk -j1
-verify-sourceboot` through the repository's Windows/MSYS wrapper with
-`SOURCEBOOT_TARGET_PROFILE=tools/saturn/profiles/sourceboot-bob-demo-v1.json`,
-`SOURCEBOOT_RELEASE_MODE=release`, and this exact accepted tuple:
+## Review finding and repair
 
-```text
-SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1
-SATURN_SOURCEBOOT_LIVE_INPUT=1 SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS=600
-SATURN_SOURCEBOOT_LEVEL_ID=9 SATURN_SOURCEBOOT_AREA_ID=1
-SATURN_SOURCEBOOT_ROUTE_ID=0 SATURN_SOURCEBOOT_CAMERA_ROUTE=0
-SATURN_CAMERA_VARIANT=3 SATURN_CAMERA_IDLE_START_TICK=0
-SATURN_CAMERA_IDLE_DISCOVERY=0 SATURN_CAMERA_RANGE_CAPTURE=0
-SATURN_CART_MBIT=32 SATURN_SOURCE_CART_STAGE_SECTORS=8
-SATURN_DEMO_HOT_PROMOTION=1 SATURN_DEMO_NEAR_CLIP=1
-SATURN_DEMO_BSP_ORDER=1 SATURN_DEMO_POLY_TIER=2
-SATURN_DEMO_BSP_FRAGMENTS=0 SATURN_DEMO_FRAGMENT_MODE=0
-SATURN_DEMO_BSP_FRAGMENT_FLAT=0 SATURN_RENDERER_PIPELINE=4
-SATURN_SLAVE_RENDER=1 SATURN_ATAN2_VARIANT=2
-SATURN_DEMO_VIEW_RADIUS=6000 SATURN_DIAGNOSTIC_MODE=0
-SATURN_FAST3D_Q16_TRACE=0 SATURN_EXPERIMENTAL_SKIP_GEO_WALK=0
-SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1
-SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1 SATURN_FEATURE_SEMANTIC_AUDIO=0
-SATURN_OBJECT_POOL_CAPACITY=208
-```
+The final rereview found a TOCTOU boundary in extracted-asset cleanup:
+_clean_asset_path validated a mutable ancestor chain, returned, and later
+Path.unlink/Path.rmdir resolved the path again. A deterministic junction swap
+after validation redirected the old deletion to an outside file.
 
-The command also bound forward-slashed `SOURCEBOOT_PYTHON`,
-`YAUL_INSTALL_ROOT`, SH-2/M68K prefixes, and scoped Git safe-directory entries.
-No flag or `-j1` requirement was relaxed.
+Reference-first inspection covered the active plan's Task 7 repair rounds 2
+and 3, the full in-tree DirectoryNamespaceGuard implementation in
+tools/saturn/release_manifest.py, and the exact-opened-object patterns in
+tools/saturn/path_identity.py. Reuse mode is same-repository close-port:
 
-## Reproducibility and audit evidence
+- cleanup holds Task 7's full ancestor namespace across validation and
+  mutation;
+- POSIX deletes relative to the held directory descriptor;
+- Windows opens the child without following reparse points, verifies exact
+  identity/type/non-reparse state, and applies delete disposition to that
+  exact handle;
+- unavailable directory-relative capability fails closed; and
+- batch cleanup removes files before pruning deepest-first, never removing the
+  output root or any ancestor.
 
-- Candidate A/B durations: 968.4/963.1 seconds; both exact commands exited 0.
-- Manifest SHA-256:
-  `b75ba5f073d8c7d03b64db47e6eed3e34d7fa8c70392ffe340a8ed208aca2ddf`.
-- Comparison: `identical:true`, zero differing fields; report SHA-256
-  `9c3b179f4ef699c69c4a0727d2046757a68824805a94f277bb63a2b604b9b231`.
-- Identity tag `id-9a051d30880c78f0`; identity/config/closure/profile/package/toolchain
-  hashes are recorded in `hermetic-sourceboot-release-2026-08-10.md`.
-- ELF SHA-256 `f3e01ff2...81c1b`; `SOURCE.DAT` `f0d3781c...fde6c`;
-  ISO `b0589b78...b989`; CUE `cdbf0bfa...dba7`.
-- Unsealed measurement command was the plan's Step 5
-  `verify_sh2_native_math.py` invocation with candidate B ELF/manifest,
-  baseline, both route oracles, exact SH tools, and exclusive
-  `--measure-audit-report`. It exited 0 in 273 seconds and published
-  `ad79a992...fa8075`, status `measured-unsealed`, total 700, with both
-  forbidden callers absent.
-- Seal command was the plan's Step 6
-  `seal_sh2_native_math_audit_v4.py --measurement ... --release-manifest ...
-  --output tools/saturn/sh2_native_math_goal_audit_contract_v4.txt`.
-  Contract bytes are exactly 606 bytes at
-  `2c23ce448c6495e552461bf2e5b75e596d57a5a292a9c8bef8f71d1edf7f7265`.
-- Exact-v4 command was the plan's Step 7 verifier invocation with the same
-  candidate B ELF/manifest, baseline/oracles, contract, exact SH tools, and
-  exclusive `--json-output`. It exited 0 in 274.0 seconds. Acceptance report
-  `1fe9d585...f4ddbf` is `passed`, total 700, and binds contract, manifest,
-  ELF, identity, config, and profile hashes.
-- Historical contract digests remain v2 `87dabb51...6127e2` and v3
-  `80f66286...9cba5`.
+Behavior and required CHANGELOG/status updates are commit
+df7894acd9cbce03eb099df68f8bc17ea71735b6
+(fix(saturn): pin asset cleanup namespaces).
 
-## Capacity, package, and staging evidence
+Focused TDD RED ran seven extractor tests with exactly two intended failures:
+the deterministic ancestor replacement deleted the outside file, and missing
+namespace capability still allowed deletion. Authoritative Windows GREEN is
+7/7 with one link-capability skip. The test proves traversal, absolute, NUL,
+symlink/reparse, and swapped-ancestor cases fail closed; the outside file,
+displaced generated file, output parent, and output root survive.
 
-- `___end=0x060fca38`; physical HWRAM margin 13,768 bytes; usable margin
-  after `0x1B00` is 6,856 bytes.
-- Cart span `0x22400000..0x22766880` is 3,565,696 bytes; 32-Mbit headroom is
-  628,608 bytes.
-- Object, CD, and ISO-extracted `/SOURCE.DAT` are byte-identical. ISO listing:
-  LBA 534, 1,742 blocks.
-- Package root `85a5a190...c266` contains exactly the required ten BOB classes:
-  actor, animation, audio, camera, cart, input, level, route, shared-data, and
-  texture. It is not a complete-game package inventory.
+## Host verification
+
+Fresh post-pin commands and results:
+
+- python tools/saturn/test_extract_assets_output_root.py — 7/7, one
+  link-capability skip.
+- python tools/saturn/test_audit_checkout_identity.py — 1/1.
+- python tools/saturn/test_gen_toolchain_attestation.py — 17/17.
+- python tools/saturn/test_sourceboot_hermetic_build_make.py — 19/19.
+- python tools/saturn/test_sourceboot_identity_spec_bootstrap.py — 15/15.
+- python tools/saturn/test_gen_source_closure.py — 27/27, one capability skip.
+- python tools/saturn/test_release_manifest.py — 28/28.
+- python tools/saturn/test_stage_saturn_release.py — 20/20.
+- python tools/saturn/test_seal_sh2_native_math_audit_v4.py — 12/12.
+- python tools/saturn/test_verify_sh2_native_math.py — 244 tests, exactly the
+  approved pre-existing
+  test_pinned_bob_null_camera_trigger_proof_removes_only_exact_two_sites
+  failure; 243/244 and no new failure.
+
+Release-manifest and staging tests used the established unsandboxed Windows
+environment required for ancestor handle access. Python compilation, canonical
+JSON parsing, direct manifest verification, git show --check, and scoped
+diff checks are closeout gates, not substitutes for the target runs below.
+
+## Reproducible candidates
+
+Candidates:
+
+- A: D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/hermetic-release-repro-a
+- B: D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/hermetic-release-repro-b
+
+Both were detached and tracked-clean at exact source
+df7894acd9cbce03eb099df68f8bc17ea71735b6. Their independently copied,
+non-reparse prerequisites matched:
+
+- baserom.us.z64 SHA-256
+  17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91;
+- build/us_pc: 1,977 files, 42,663,369 bytes, inventory SHA-256
+  ce37312358ecfd1fd537b36442b8905343e5f9e82f50e8839b7656e9d05ae7e7.
+
+Only each verified owned build/saturn tree was reset. Both builds used MSYS
+Make 4.4.1, -f Makefile.saturn.mk, -j1, verify-sourceboot, the
+sourceboot-bob-demo-v1 profile, release mode, object capacity 208, and the
+active plan's exact accepted feature/runtime flag tuple. A exited 0 in 924.0
+seconds and B exited 0 in 937.2 seconds.
+
+Direct release-manifest verification passed for A and B. Both published:
+
+- tag id-a40f992c085da2f0;
+- manifest 9110b40da0e890b7b03dc5748e9ead4a47865ea4f9e3df21869b47de33679b99;
+- identity 67c826f42010694fb317b1a3c47bb9e7826911f6be490207357f4081cd4fc8e2;
+- effective config a40f992c085da2f04ccf47d9a00754b1831baba95060418d0900cc5368e54cf4;
+- closure 4f6a2febfc7c446424b9be79569a6937490804d5857b148d6ebce075bb0c4da3;
+- profile fe090885efa5245d08a5d09a4e03ba923b5b61d083b0c4763dc4745c9e211dd2;
+- package set 85a5a1903c0ab04fab3f1fa2009e36e84a7537f2a975fea996cb9b20b0f4c266;
+- toolchain e74c5bad3adcf9f5207c99776ce13292ed3c4a97889aee0f315a4794bfda48db;
+- ELF dcf4123f66ffff5e5d4efd4ac2cd5efdc4298a2c8c62c2a73af69ce936013010;
+- provenance df7894acd9cbce03eb099df68f8bc17ea71735b6 with closure_clean:true.
+
+The comparison command passed identical:true with no differing fields.
+Comparison report SHA-256 is
+8edf96639c5c8244bab7bb171c9bf488b7b0df878417c0e24025cd7f0264eabc.
+Attestation binds direct sh-elf-ar.exe
+6ea97810d5e686c029d5c279b437b6f08d2d729fa3220a2dd4a798739771024a
+and sh-elf-nm.exe
+d6ed58af94b350368ce4e064ce5fd63ade56839300d9ad5d6188587e11dd7bb2.
+
+## Measurement, seal, and exact v4
+
+Unsealed measurement used candidate B's exact ELF and release manifest plus
+the pinned baseline, route oracle, audit-route oracle, and exact attested
+objdump/readelf/addr2line paths. It published only after passing:
+
+- schema/status measured-unsealed;
+- root _game_loop_one_iteration;
+- total 700;
+- _atan2_lookup and _atan2s absent;
+- manifest 9110b40d...b99 and ELF dcf4123f...3010.
+
+Measurement-report SHA-256 is
+148bec4b3616c190f5b384e85fbb8a7ade1cad0551d2f7d492cb0e5cdf15bcf1.
+
+The prior contract destination was removed before the one-shot sealer ran.
+The resulting canonical contract is 606 bytes and SHA-256
+14db6bfb5ab01239dd63aa4e11f767245c1f026f25836da73cf26fbc0d977b8b.
+TDD RED was the prior digest pin rejecting these new bytes. Focused integrity
+GREEN is 1/1 and sealer GREEN is 12/12. The pin and required CHANGELOG update
+are commit 537dd7210c2846e283c21a12a32770d601218c0c. Historical v2/v3 contract
+hashes remain 87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2
+and 80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5.
+
+The exact v4 run against the same B ELF/manifest exited 0 in 383.3 seconds.
+Its canonical result is status passed, total 700, and both forbidden callers
+verified absent. Result-report SHA-256 is
+2e37d74b806c44f65594a73018312ffde338ceb0b4887b0e65667a73a7efc286.
+
+## Capacity, package, and staging
+
+- ___end=0x060fca38; physical margin 13,768; usable margin after 0x1B00
+  reserve 6,856.
+- Cart span 0x22400000..0x22766880 is 3,565,696 bytes; headroom under
+  32 Mbit is 628,608 bytes.
+- ELF is 9,445,220 bytes at dcf4123f...3010; ISO is 4,968,448 bytes at
+  af194c75...e398; CUE is 88 bytes at cdbf0bfa...dba7.
+- Object, staged-CD, and xorriso-extracted ISO /SOURCE.DAT are byte-identical:
+  3,565,696 bytes at f0d3781c...fde6c. ISO listing is LBA 534, 1,742 blocks.
+- Package root 85a5a190...c266 contains exactly the ten BOB classes: actor,
+  animation, audio, camera, cart, input, level, route, shared-data, texture.
+  It is not a total-game inventory.
 - Capacity is sealed at 208. Prior artifact-bound idle-boot evidence peaked at
-  138 with zero failures, leaving 70 slots. That measurement is a floor and
-  does not cover pickup/hold/action-particle pressure.
-- Staging command:
-  `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\stage_saturn_release.py
-  --manifest <candidate-B-manifest> --destination
-  build\saturn\releases\sourceboot-bob-demo-v2-manual-candidate`.
-  It published exactly five files/17,982,718 bytes. Direct
-  `release_manifest.py verify --manifest <staged-manifest>` returned the same
-  manifest digest. A second staging command exited 1 with `release destination
-  is not empty`; inventory and hashes were unchanged and reverified.
+  138 with zero failures, leaving 70 slots. The 138 is a floor: pickup/hold
+  and action-particle pressure are not covered, and Task 9 ran no new occupancy
+  route.
 
-## Corrections and discarded executions
+The prior manifest-5e04 stage was verified as owned/non-reparse and moved
+recoverably to the .superseded-5e04e252 sibling. The canonical stage now holds
+exactly five files/17,982,718 bytes and directly verifies to
+9110b40d...b99. A repeated stage exited 1 on the nonempty destination; its
+before/after inventory SHA-256 stayed
+910ac359f8f54e41ecac25a9eb6c1ad30b2715706b9c571b2042557360992004 and
+the manifest reverified.
 
-Every failed run stopped before the affected gate and was not promoted:
+## Closeout gates
 
-- Qt GNU Make 4.2.1 was selected by the public spelling; the wrapper now binds
-  compatible MSYS Make 4.4.1.
-- MSYS shell escaping broke Python and Yaul Windows paths; explicit boundary
-  paths now use forward slashes.
-- dependency arguments exceeded the Windows command-line limit; strict sorted
-  LF path-list transport replaced repeated argv.
-- the implementation `build/us_pc` junction resolved outside the guarded
-  root; candidates moved to two owned worktrees with independent prerequisites.
-- required PNG assets were absent; a generic candidate-local baserom extraction
-  prerequisite now derives them and keeps generated bytes in the closure.
-- subsequent failures exposed generated-input classification, canonical profile
-  bytes, tool-helper attestation, copied-asset ownership, bounded Git status,
-  closure-owner schema, final provenance revalidation, and release-mode
-  historical-audit sequencing defects; each received focused RED/GREEN tests
-  and a separate behavior commit with CHANGELOG.
-- first A/B comparison exposed absolute generated `.incbin` paths; commit
-  `342c173d` made them repository-relative and both outputs were rebuilt empty.
-- second comparison differed only in unstripped ELF debug paths from soft-fp;
-  commit `44b78627` applied the canonical prefix maps, and both outputs were
-  rebuilt empty for the final passing pair.
-- first stage attempt found its required parent namespace absent and copied
-  nothing. After verifying real owned parent directories, only the missing
-  `build/saturn/releases` namespace was created and staging reran.
-- xorriso's first Windows extraction spelling was rejected without output;
-  the MSYS spelling succeeded and the temporary extracted file was removed
-  after equality hashing.
+The evidence files are:
 
-Reference reuse throughout was same-repository pattern-only/close-port from the
-named profile, identity, Make, manifest, audit, asset, and publication code in
-the active plan. No external source bytes were copied and no license/NOTICE
-obligation changed.
+- docs/saturn/evidence/reports/hermetic-sourceboot-reproducibility-2026-08-10.json
+- docs/saturn/evidence/reports/sh2-native-math-goal-measurement-v4-2026-08-10.json
+- docs/saturn/evidence/reports/sh2-native-math-goal-audit-v4-2026-08-10.json
+- docs/saturn/evidence/reports/hermetic-sourceboot-release-2026-08-10.md
 
-## Commits and open gates
+Still open:
 
-Final full-verifier RED ran 244 tests with two failures: the documented
-unrelated null-camera proof and a stale pre-pin v4 integrity test. Task 9
-updated only the stale test so its negative case now rejects synthetic
-noncanonical bytes against the real pin; no runtime, candidate, contract, or
-release bytes changed. Focused correction/integrity is GREEN 3/3; the final
-full suite is 243/244 with only the documented null-camera baseline failure.
+- same-reviewer specification/evidence rereview;
+- same-reviewer code-quality rereview;
+- Task 10 exact staged 20,100-frame smoke;
+- Task 10 visual, desktop-launch, and owner manual-play acceptance;
+- total-game content/system inventory and game-wide target evidence;
+- pickup/hold/action-particle occupancy coverage beyond the idle 138 floor.
 
-Final adjacent verification also passed release staging 20/20, release
-manifest 28/28, hermetic Make 18/18, and the focused v4/measurement slice 5/5.
-All three evidence JSON files parse, relevant Python modules compile, direct
-staged-manifest verification returns `b75ba5f0...a2ddf`, and scoped whitespace
-checks pass. The initial sandboxed staging-suite attempt produced 16 Windows
-ancestor-handle setup errors at `C:\Users`; the required unsandboxed rerun is
-the authoritative 20/20 result.
-
-Task 9 execution range begins at controller transition `8588d391`. The final
-candidate behavior identity is `44b78627`; later evidence/contract work is
-`c99563e5`, `283d701d`, `162945d6`, `438f926d`, `43c82145`, `29f5fd62`,
-`16a31d54`, and `e02f785e`. Source closeout and final test maintenance are
-`50228ae0`. The complete intervening source-fix list is
-preserved by `git log --reverse 038391a4..HEAD` and the active plan/ledger.
-
-The required legacy campaign/v3 plan files already contained user-owned
-uncommitted historical blocked-reproduction hunks before closeout. Task 9 adds
-self-contained supersession notes, but its commit must stage only those new
-notes and leave the older hunks uncommitted.
-
-Open gates are the two independent Task 9 reviews, then Task 10's exact staged
-20,100-frame smoke, visual inspection, desktop launch, and owner manual play.
-The `sm64-saturn-full` profile remains intentionally non-releasable until the
-complete-game content/system inventory and game-wide target gates are finished.
-
-## Independent review round 1
-
-Verdict: `Needs fixes`. Evidence review independently reproduced the current
-A/B artifact equality, closure/toolchain rehashes, v4 result, capacity/cart
-math, exact package classes, historical v2/v3 integrity, and staged-manifest
-verification. These facts describe the current installed toolchain but do not
-close Task 9 because `sh-elf-nm.exe`, which is invoked directly and as the
-backend of the recorded `sh-elf-gcc-nm.exe` wrapper, is absent from the sealed
-toolchain attestation. A backend mutation could therefore change a release gate
-without changing identity. Repair must bind the backend and rebuild/reseal all
-downstream evidence.
-
-Code review additionally requires: root-bounded isolated asset cleanup; LF
-checkout pinning for immutable audit text plus filtered-checkout coverage;
-final prepublication closure-digest and HEAD revalidation; one-shot Git index
-inventory instead of per-path `ls-files`; consistent Task 10 ownership in
-`STATE.md`; and a current sourceboot description in `docs/saturn/BUILDING.md`.
-Task 10/Ymir/manual execution remains paused pending repair and scoped rereview.
-
-### Repair round 1 — cleanup safety
-
-The extractor now validates the complete cleanup inventory before deleting any
-path, accepts only strict relative POSIX rows, rejects absolute/drive/NUL/dot/
-backslash forms and symlink/reparse ancestors, and stops empty-directory
-pruning below the resolved output root. TDD RED demonstrated both an outside
-traversal deletion and output-root pruning; focused GREEN is 5/5 with the link
-case skipped on a host that cannot create symlinks. This slice does not restore
-the invalidated candidate evidence.
+No demo smoke/manual or total-game completion claim is made by Task 9.
