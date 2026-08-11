@@ -266,7 +266,9 @@
   blocked before RED/production edits. The missing generic bank owner is now
   specified at
   `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`;
-  no format writer, runtime loader, bank, registry regeneration, target byte,
+  the complete design/status transition is commit `0e87f7ac`
+  (`docs(saturn): specify generic actor scene bundles`).
+  No format writer, runtime loader, bank, registry regeneration, target byte,
   or CHANGELOG-visible behavior changed in this transition.
 - Approved architecture: one scene-local S64F v3 bundle in the fixed unused
   region of the 32-Mbit DRAM cart; fixed big-endian offset tables capped at 64

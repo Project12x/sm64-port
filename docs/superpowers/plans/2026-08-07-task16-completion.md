@@ -52,7 +52,8 @@ workspace span, but production supplies it from one generated-capacity,
 bundle-wide LWRAM reservation while the immutable S64F/S64B bytes remain in
 the cart.
 Implementation remains prohibited until the follow-on implementation plan is
-written and reviewed.
+written and reviewed. The specification, plan reconciliation, ledger, State,
+and Roadmap transition are committed at `0e87f7ac`.
 
 **Task 1 interface correction (2026-08-11):** the governing-plan prototype's
 `bank` parameter means the complete validated
