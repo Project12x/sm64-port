@@ -2313,6 +2313,18 @@ floor without pickup/hold or action-particle coverage, and Task 9 did not run a
 new route or idle occupancy capture. Task 9 Step 8 is complete; staging and
 later gates remain open.
 
+The first staging invocation failed before copy because the clean
+implementation worktree lacked `build/saturn/releases`. Task 7's hardened
+publisher locks an existing parent namespace while atomically publishing a
+missing destination; it does not create that namespace. After verifying
+`build` and `build/saturn` were owned, real, non-reparse directories, execution
+created only the missing real `releases` parent and retained the final
+destination absent. Staging then published exactly five files totaling
+17,982,718 bytes; the staged manifest reverified at `b75ba5f0...a2ddf`.
+A second exact command exited 1 on nonempty destination, all five hashes were
+unchanged, and the manifest reverified again. Task 9 Step 9 is complete.
+Documentation closeout and both independent reviews remain open.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2542,7 +2554,7 @@ if ((Get-Item $sourceDat).Length -ne ($cartEnd - $cartStart)) {
 }
 ```
 
-- [ ] **Step 9: Stage the verified candidate without overwriting prior releases**
+- [x] **Step 9: Stage the verified candidate without overwriting prior releases**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\stage_saturn_release.py `

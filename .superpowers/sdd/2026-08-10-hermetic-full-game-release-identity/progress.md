@@ -1525,6 +1525,16 @@
   coverage gap remains explicit: idle 138 lacks pickup/hold/action particles,
   and Task 9 did not run a new route or idle occupancy capture. Step 8 is
   complete; staging, closeout, reviews, and Task 10 remain open.
+- The first staging invocation failed before any copy because the clean
+  implementation tree lacked `build/saturn/releases`. The Task 7 publisher
+  requires an existing parent namespace for its locked atomic publication.
+  After verifying `build`/`build/saturn` were owned real non-reparse
+  directories, execution created only the missing real `releases` parent while
+  keeping the final destination absent. Exact staging then published five
+  files/17,982,718 bytes and direct manifest verification returned
+  `b75ba5f0...a2ddf`. A second identical command exited 1 on nonempty
+  destination; all five hashes were unchanged and reverified. Step 9 is
+  complete. Closeout and both reviews remain open; Task 10 was not run.
 
 ## Task 5 review repair round 2
 

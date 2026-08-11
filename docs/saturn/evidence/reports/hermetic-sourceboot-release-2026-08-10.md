@@ -3,9 +3,9 @@
 ## Status
 
 Task 9 release construction, two-candidate reproducibility, exact audit v4,
-memory margin, cart payload, and package inventory pass. Transactional staging
-and independent evidence/code-quality reviews remain open. Task 10's 20,100-
-frame smoke, visual capture, desktop launch, and owner manual play have not run.
+memory margin, cart payload, package inventory, and transactional staging pass.
+Independent evidence/code-quality reviews remain open. Task 10's 20,100-frame
+smoke, visual capture, desktop launch, and owner manual play have not run.
 
 ## Immutable candidate identity
 
@@ -88,8 +88,25 @@ until its full content/system packages are populated and independently proved.
 
 ## Remaining gates
 
-- Transactionally stage this verified manifest and prove overwrite refusal.
 - Complete Task 9 documentation/status reconciliation and both independent
   reviews.
 - Run Task 10's exact staged-release smoke, visual, desktop, and owner manual
   gates. No Ymir or manual gate was run in Task 9.
+
+## Transactional staging
+
+The staged manual candidate is
+`build/saturn/releases/sourceboot-bob-demo-v2-manual-candidate`. A clean
+implementation worktree lacked the publisher's required existing parent
+namespace, so the first invocation failed before copying. After verifying
+`build` and `build/saturn` were owned real directories, execution created only
+the missing real `build/saturn/releases` parent and retained an absent final
+destination. This records the Task 7 publisher boundary: it atomically
+publishes a missing destination inside an existing locked parent namespace.
+
+Staging then copied exactly five files totaling 17,982,718 bytes and direct
+manifest verification returned the reviewed SHA
+`b75ba5f073d8c7d03b64db47e6eed3e34d7fa8c70392ffe340a8ed208aca2ddf`.
+A second identical staging command exited 1 with `release destination is not
+empty`; all five relative paths, sizes, and SHA-256 values remained unchanged,
+and the staged manifest verified again.
