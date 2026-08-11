@@ -78,10 +78,10 @@ rather than changing package identity in Task 1.
 
 ### Task 1: Generalize meshlet preparation to bank instances (registry-independent — start immediately)
 
-**Status:** `source-complete-review-repair` from base `ec8ef844` in the repair
-behavior commit containing this status; round-1 RED/GREEN and all focused host
-gates are complete. Task 2 remains blocked until independent rereview passes.
-No target-complete claim is made.
+**Status:** `source-complete-review-repair` at `c4cefaad` from base
+`ec8ef844`; round-1 RED/GREEN and all focused host gates are complete. Task 2
+remains blocked until independent rereview passes. No target-complete claim is
+made.
 
 **Files:**
 - Modify: `src/port/saturn/gfx/saturn_actor_meshlets.h/.c`

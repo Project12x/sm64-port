@@ -81,8 +81,9 @@
   REQUIRED C0/I4/M2`; Task 2 remains blocked. The status commit's actual subject
   is `docs(saturn): record actor meshlet source status` (the original report's
   different subject text was incorrect).
-- Status: `source-complete-review-repair` from base `ec8ef844` in the repair
-  behavior commit containing this status. RED compile evidence reports the missing
+- Status: `source-complete-review-repair` at behavior commit `c4cefaad`
+  (`fix(saturn): close actor meshlet review gaps`) from base `ec8ef844`. RED
+  compile evidence reports the missing
   workspace query/binder/types and an incompatible assignment from actual
   `sm64_saturn_actor_runtime_storage_t.outputs` to the distinct meshlet draw-ref
   pointer. Production edits followed that RED.
@@ -123,7 +124,7 @@
   queue/batch gates, neutrality 2/2, and feature-off 6/6. Python bytecode
   compilation for the actor compiler/wrapper/neutrality scripts passes;
   scoped `git diff --check` and unchanged Task 2 production paths pass. The
-  exact repair SHA will be recorded in a scoped status follow-up.
+  repair behavior SHA is `c4cefaad`; this scoped follow-up records it.
 - Remaining gates: controller-owned independent rereview; then Tasks 2-5 and
   all target/P2/Ymir/manual/reseal/smoke evidence. Task 2 is not authorized
   before rereview and no target-complete claim is made.
