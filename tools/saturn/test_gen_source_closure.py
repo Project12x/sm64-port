@@ -369,8 +369,11 @@ class SourceClosureTests(unittest.TestCase):
             "tools/saturn/gen_build_identity.py Makefile.saturn.mk "
             "third_party/sdk/include/sdk.h\n",
         )
+        # Do not inherit a developer's global ignore for `third_party`; this
+        # fixture deliberately records an embedded repository as a gitlink.
         subprocess.run(
-            ["git", "add", "obj/main.d", "third_party/sdk"], cwd=self.root, check=True
+            ["git", "add", "-f", "obj/main.d", "third_party/sdk"],
+            cwd=self.root, check=True,
         )
         subprocess.run(
             ["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test",

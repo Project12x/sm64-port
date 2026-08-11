@@ -2797,3 +2797,9 @@ integrated release-bound BOB sourceboot path from the retained hello diagnostic
 and keeps `sm64-saturn-full` explicitly non-releasable until total-game content
 and game-wide target gates exist. The clean A/B/reseal wave and both independent
 rereviews remain open.
+
+Full-suite verification exposed a host-only fixture leak: an accessible global
+Git ignore excluded `third_party`, preventing the deliberate embedded-repository
+gitlink fixture from being staged. The test now force-adds only its exact two
+owned fixture paths. RED was the ignored-path `git add` failure; GREEN restores
+closure 27/27 with one capability skip. Product behavior is unchanged.
