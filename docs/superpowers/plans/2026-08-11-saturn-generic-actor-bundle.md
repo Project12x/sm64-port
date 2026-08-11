@@ -446,9 +446,8 @@ the articulated fixture to payload/source
 `d5a472a4f4f90145e2882adf997b75912f205f82fc51d718ede704c329c3929d`;
 its 468-byte payload, 192-byte lane, 387-byte scratch, geometry, ownership,
 and pose samples are unchanged. Rigid remains at its round-1 exact hashes.
-The behavior commit is recorded by subject as
-`fix(saturn): verify actor model binding sources` until the evidence
-transition pins its exact SHA. Mario remains exactly 596,896 bytes at
+The behavior commit is `b21bb197`
+(`fix(saturn): verify actor model binding sources`). Mario remains exactly 596,896 bytes at
 `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`
 and its JSON remains
 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.

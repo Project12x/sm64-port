@@ -518,10 +518,9 @@
 ## 2026-08-11 generic actor bundle Task 3 review repair round 2
 
 - Status: `source-complete-review-repair-round-2; independent rereview
-  pending`. The behavior commit is recorded by subject as
-  `fix(saturn): verify actor model binding sources` until the evidence
-  transition pins its exact SHA. Task 4 has not started and Task 16 Tasks 2-5
-  remain blocked/open.
+  pending`. The behavior commit is `b21bb197`
+  (`fix(saturn): verify actor model binding sources`). Task 4 has not started
+  and Task 16 Tasks 2-5 remain blocked/open.
 - Binding-source correction: selected numeric model metadata is no longer
   authoritative by itself. The compiler parses the attested
   `LOAD_MODEL_FROM_GEO/DL` source (or exact model-ID comment fallback), requires
