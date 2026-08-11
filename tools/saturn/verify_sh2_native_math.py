@@ -3976,7 +3976,9 @@ SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21
 GOAL_AUDIT_CONTRACT_V3_SHA256 = (
     "80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5"
 )
-GOAL_AUDIT_CONTRACT_V4_SHA256: str | None = None
+GOAL_AUDIT_CONTRACT_V4_SHA256: str | None = (
+    "2c23ce448c6495e552461bf2e5b75e596d57a5a292a9c8bef8f71d1edf7f7265"
+)
 
 LIBM_NAMES = {
     "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf",

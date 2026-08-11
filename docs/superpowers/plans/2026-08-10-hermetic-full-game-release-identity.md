@@ -2266,6 +2266,16 @@ bound to manifest `b75ba5f0...a2ddf` and ELF `f3e01ff2...81c1b`.
 Task 9 Step 5 is complete as measurement only; it is not acceptance. No v4
 contract or digest pin existed before this result, and exact v4 remains open.
 
+The one-shot sealer generated a 606-byte audit-v4 contract whose exact
+lowercase SHA-256 is
+`2c23ce448c6495e552461bf2e5b75e596d57a5a292a9c8bef8f71d1edf7f7265`.
+Focused integrity TDD was RED 0/1 while the v4 pin remained `None`, then GREEN
+1/1 after pinning exactly that digest; combined v2/v3/v4 integrity coverage is
+GREEN 3/3. Historical v2/v3 digests remain `87dabb51...6127e2` and
+`80f66286...9cba5`. Task 9 Step 6 is source-complete in the scoped contract,
+pin, test, CHANGELOG, plan, and ledger behavior commit. Exact v4 execution
+against candidate B remains open and is the only acceptance audit.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2422,7 +2432,7 @@ $toolBin = Join-Path $env:YAUL_INSTALL_ROOT 'bin'
 
 Expected: report schema `sm64-saturn-native-math-measurement-v1`, status `measured-unsealed`, root `_game_loop_one_iteration`, a measured integer total, and neither `_atan2_lookup` nor `_atan2s` among audited callers.
 
-- [ ] **Step 6: Generate the immutable v4 contract and pin its printed digest**
+- [x] **Step 6: Generate the immutable v4 contract and pin its printed digest**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\seal_sh2_native_math_audit_v4.py `

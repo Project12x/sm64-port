@@ -66,6 +66,7 @@ from verify_sh2_native_math import (
     SIM_ROUTE_ORACLE_V1_SHA256,
     SIM_AUDIT_CONTRACT_V2_SHA256,
     GOAL_AUDIT_CONTRACT_V3_SHA256,
+    GOAL_AUDIT_CONTRACT_V4_SHA256,
     verify_audit_contract_integrity,
     verify_audit_contract_target,
     verify_baseline_integrity,
@@ -2964,6 +2965,23 @@ static bool demo_detached_start_decoy(uint32_t generation)
         self.assertEqual(
             contract.expected_elf_sha256,
             "562fd6e47dd489f55f3c9d131ea2bca1fa417b8b3ce2c2ed90369db7d145978a",
+        )
+        with self.assertRaisesRegex(ValueError, "immutable audit contract digest mismatch"):
+            verify_audit_contract_integrity(text.replace("700", "701"), contract)
+
+    def test_checked_in_goal_audit_contract_v4_is_pinned(self) -> None:
+        path = Path(__file__).parent / "sh2_native_math_goal_audit_contract_v4.txt"
+        text = path.read_text(encoding="utf-8")
+        contract = parse_audit_contract(text)
+        self.assertEqual(
+            GOAL_AUDIT_CONTRACT_V4_SHA256,
+            "2c23ce448c6495e552461bf2e5b75e596d57a5a292a9c8bef8f71d1edf7f7265",
+        )
+        verify_audit_contract_integrity(text, contract)
+        self.assertEqual(contract.expected_total, 700)
+        self.assertEqual(
+            contract.expected_release_manifest_sha256,
+            "b75ba5f073d8c7d03b64db47e6eed3e34d7fa8c70392ffe340a8ed208aca2ddf",
         )
         with self.assertRaisesRegex(ValueError, "immutable audit contract digest mismatch"):
             verify_audit_contract_integrity(text.replace("700", "701"), contract)

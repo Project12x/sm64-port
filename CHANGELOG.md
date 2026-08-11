@@ -4,6 +4,13 @@
 
 ### Added
 
+- Sealed the reproducible identity-v2 BOB release into native-math audit v4
+  after one-shot target measurement proved a total of 700 from
+  `_game_loop_one_iteration` and no `_atan2_lookup` or `_atan2s` caller. The
+  verifier now pins the exact 606-byte contract and release-manifest/ELF
+  identity, so later target changes fail closed instead of silently redefining
+  the acceptance baseline; immutable v2/v3 contracts remain unchanged.
+
 - Made fresh Saturn release candidates derive the complete US asset set from
   the allowed baserom inside their own generated build tree. The sourceboot
   asset boundary now orders extraction before every raw-asset consumer, keeps
@@ -20,10 +27,10 @@
   `measured-unsealed` canonical report. A separate one-shot sealer rejects
   mismatched manifests/ELFs, wrong roots, historical identity v1, and either
   forbidden atan2 caller before exclusively creating canonical v4 text. The
-  accepted v4 digest deliberately remains unpinned until the exact Task 9
-  target is measured, so measurement cannot masquerade as acceptance; audit
-  v2/v3 files and their historical manifest-free invocation behavior remain
-  byte-for-byte unchanged.
+  accepted v4 digest was deliberately left unpinned until the exact Task 9
+  target was measured, so measurement could not masquerade as acceptance;
+  audit v2/v3 files and their historical manifest-free invocation behavior
+  remain byte-for-byte unchanged.
 
 - Added deterministic post-link Saturn release sealing and profile-neutral
   deployment staging. The canonical manifest binds the exact ELF,

@@ -1486,6 +1486,14 @@
   `b75ba5f0...a2ddf` and ELF `f3e01ff2...81c1b`. This closes Step 5 only as
   measurement; it is not acceptance. No v4 contract or pin was created before
   validation, and sealing/exact-v4 plus all later gates remain open.
+- The sealer generated an exact 606-byte v4 contract at SHA-256
+  `2c23ce448c6495e552461bf2e5b75e596d57a5a292a9c8bef8f71d1edf7f7265`.
+  Focused integrity TDD was RED 0/1 with the v4 pin still `None` and GREEN 1/1
+  after pinning exactly that digest. Combined v2/v3/v4 integrity tests are
+  GREEN 3/3; historical v2/v3 digests remain `87dabb51...6127e2` and
+  `80f66286...9cba5`. Step 6 is source-complete in the scoped contract/pin/test
+  behavior commit with CHANGELOG, plan, and ledger. Exact candidate-B v4 is
+  still open; measurement is not substituted for acceptance.
 
 ## Task 5 review repair round 2
 
