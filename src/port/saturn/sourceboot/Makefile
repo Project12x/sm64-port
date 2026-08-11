@@ -693,6 +693,7 @@ SOFTFP_FUNCS := \
 SOFTFP_OBJS := $(patsubst %,$(SOFTFP_BUILD_DIR)/%.o,$(SOFTFP_FUNCS))
 SOFTFP_CFLAGS := $(SOURCEBOOT_GCC_TOOL_PREFIX) -O2 -g -std=gnu11 -m2 -mb -fno-lto -ffreestanding \
   -fomit-frame-pointer -ffunction-sections -fdata-sections \
+  -ffile-prefix-map=$(ROOT)=. -fdebug-prefix-map=$(ROOT)=. -fmacro-prefix-map=$(ROOT)=. \
   -I$(SOFTFP_DIR)/soft-fp -I$(SOFTFP_DIR)/config/sh -I$(SOFTFP_DIR)/include
 SOFTFP_HEADERS := $(wildcard $(SOFTFP_DIR)/soft-fp/*.h) \
   $(SOFTFP_DIR)/config/sh/sfp-machine.h $(SOFTFP_DIR)/include/longlong.h

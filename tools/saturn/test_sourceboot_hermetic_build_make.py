@@ -376,6 +376,13 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             "SOFTFP_CFLAGS := $(SOURCEBOOT_GCC_TOOL_PREFIX) -O2",
             makefile,
         )
+        softfp_flags = makefile.split("SOFTFP_CFLAGS :=", 1)[1].split(
+            "SOFTFP_HEADERS :=", 1
+        )[0]
+        for prefix_map in ("file", "debug", "macro"):
+            self.assertIn(
+                f"-f{prefix_map}-prefix-map=$(ROOT)=.", softfp_flags
+            )
         self.assertIn(
             "SOURCEBOOT_SH_AS := $(YAUL_INSTALL_ROOT)/bin/"
             "$(YAUL_PROG_SH_PREFIX)-as$(SOURCEBOOT_SH_EXEEXT)",

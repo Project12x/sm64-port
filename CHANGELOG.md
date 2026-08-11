@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Applied the repository prefix-map contract to the separately compiled
+  software-float runtime. Main sourceboot objects were already normalized, but
+  soft-fp's deliberately independent flags retained absolute checkout paths in
+  ELF debug sections; release artifacts from two clean worktrees therefore
+  differed despite identical executable/package bytes. File, macro, and debug
+  paths now share the same canonical repository spelling without changing
+  soft-fp optimization, math semantics, or cross-tool binding.
+
 - Made sourceboot's generated `.incbin` assembly relocatable between release
   worktrees. The first independent candidate pair differed only because five
   texture/sky/fragment directives serialized absolute checkout paths; they now

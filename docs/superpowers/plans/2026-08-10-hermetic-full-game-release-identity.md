@@ -2206,6 +2206,28 @@ operands. Candidate B remains empty at the exact same source commit; no
 reproducibility claim exists until its independently built manifest and all
 artifacts compare.
 
+Candidate B then completed the exact command in 956.2 seconds and its manifest
+verified individually, but canonical comparison again failed closed before
+measurement: only `outputs.elf.sha256` differed. A/B manifests were
+`e40bc000...43dd29` and `4389146d...e1048`; the diagnostic comparison report
+was `identical:false` with SHA-256 `bb5efebd...9adce`. Stripping debug from
+both ELFs produced byte-identical 4,497,924-byte files with SHA-256
+`5b33c0a4...619a37`, while `sh-elf-strings` found 50 candidate-specific paths
+under the separately compiled `third_party/gcc-soft-fp` tree. The main compile
+already used repository prefix maps; `SOFTFP_CFLAGS` deliberately did not
+inherit it.
+
+Soft-fp relocation correction: retain its independent optimization/math flags
+and exact cross-tool binding, but apply the same file/debug/macro prefix maps
+used by main sourceboot compilation. Focused TDD was RED 0/1 and GREEN 1/1;
+the full hermetic Make suite remains GREEN 18/18. Reference: direct pattern
+reuse of adjacent sourceboot `SH_CFLAGS` prefix normalization; no external
+source, copied bytes, license, or notice change. The failed comparison report
+is diagnostic rather than accepted evidence and must be exclusively recreated
+after both candidates rebuild from empty owned `build/saturn` trees at the
+resulting common source commit. Task 9 Steps 2–4 are reopened; measurement and
+all later gates remain closed.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2216,7 +2238,7 @@ git diff --check
 
 Confirm Tasks 1–8 and both reviews per task are recorded. Preserve unrelated dirt. Release mode may proceed only if every checked-in source-closure input is tracked and clean; if a relevant file is dirty, stop and reconcile ownership instead of hiding it.
 
-- [x] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
+- [ ] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
 
 ```powershell
 $implementationRoot = (Get-Location).Path
@@ -2278,7 +2300,7 @@ Invoke-HermeticBobBuild $candidateARoot
 
 Expected: ordinary sourceboot gates, post-link closure verification, and release-manifest verification pass. Audit v4 is not yet selected.
 
-- [x] **Step 3: Verify and retain candidate A's immutable manifest**
+- [ ] **Step 3: Verify and retain candidate A's immutable manifest**
 
 Resolve the current identity-tagged directory from the generated identity JSON,
 then verify its manifest:

@@ -1439,6 +1439,24 @@
   `../../../../build/...` operands. Task 9 Steps 2–3 are complete again;
   candidate B remains an empty independent build at the same source commit,
   and reproducibility plus all later gates remain open.
+- Corrected candidate B also completed its exact `-j1` command (956.2 seconds)
+  and passed direct manifest verification, but canonical comparison failed
+  closed solely on `outputs.elf.sha256`. A/B manifest hashes are
+  `e40bc000...43dd29` / `4389146d...e1048`; failed comparison evidence was
+  `identical:false`, SHA-256 `bb5efebd...9adce`. All canonical roots and
+  `SOURCE.DAT`/ISO/CUE outputs matched. Measurement did not start.
+- Root cause: stripping debug yielded identical 4,497,924-byte A/B ELFs at
+  SHA-256 `5b33c0a4...619a37`; unstripped strings contained 50 candidate-specific
+  paths from the separately compiled `third_party/gcc-soft-fp` sources.
+  `SOFTFP_CFLAGS` intentionally did not inherit main flags and omitted their
+  repository prefix maps. It now retains independent `-O2`/math/tool flags but
+  adds the same file/debug/macro mappings. TDD was RED 0/1 then GREEN 1/1;
+  full hermetic Make coverage remains GREEN 18/18. Reference: direct reuse of
+  adjacent sourceboot prefix normalization; no external source, copied notice,
+  or license change. The failed comparison report is diagnostic and must be
+  recreated exclusively after both empty owned Saturn trees rebuild at the
+  resulting common commit. Steps 2–4 are open; measurement and later gates
+  remain closed.
 
 ## Task 5 review repair round 2
 
