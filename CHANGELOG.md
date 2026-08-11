@@ -12,6 +12,16 @@
 
 ### Fixed
 
+- Hardened actor-source closure discovery after scoped review found three ways
+  strict provenance could be bypassed: repository-valid conditional display-
+  list branches now seal their reached Gfx sources, unmodeled Fast3D commands
+  carrying known Geo/Gfx/Vtx/light symbols fail named instead of dropping the
+  reference, and each collection uses one fresh definition index rather than
+  process-stale root-only cached results. Actor-asset traversal now also fails
+  with a bounded domain error at depth 256 instead of leaking Python
+  `RecursionError`; the closure schema, public ABI, and historical Mario bytes
+  remain unchanged.
+
 - Extended the authoritative scene-closure generator to seal every uniquely
   reached actor GeoLayout, display-list, vertex, and light source into each
   record's existing sorted source attestations. This fixes generic S64B

@@ -642,3 +642,29 @@
   `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
 - Remaining: Task 3 scoped rereview, then Task 4. Task 16 Tasks 2-5 and all
   target/release/manual gates remain open and unclaimed.
+
+## 2026-08-11 generic actor bundle Task 3 provenance repair round 5
+
+- Status: `source-complete-review-repair-round-5; scoped rereview pending;
+  Task 4 paused with zero edits`; behavior commit pending.
+- Review input: round 4 returned C0/I3/M0. Repository-valid
+  `gsSPBranchLessZraw` references were ignored, the definition index was
+  process-cached only by root, and a 1,200-list acyclic chain leaked raw
+  `RecursionError`.
+- TDD RED: four focused cases produced three assertion failures and one raw
+  recursion error: omitted branch-Z source, accepted unmodeled command carrying
+  an indexed Gfx symbol, same-process duplicate invisibility after priming, and
+  unbounded deep traversal. GREEN is 4/4 focused and 28/28 complete synthetic
+  closure tests.
+- Repair: model exact three-argument raw branch-Z Gfx targets; reject any otherwise
+  unmodeled Gfx command that carries an indexed GeoLayout/Gfx/Vtx/`Lights1`
+  symbol; build one fresh definition index per top-level collection and share
+  it across records; raise named `ClosureError` at traversal depth 256.
+- Regression evidence: 2/2 full BOB closure, 28/28 variant/source, 25/25 rigid-
+  group, 4/4 historical generic-family report, compileall, and the native-root
+  variant/pose/meshlet Make wave all pass. Real signpost model provenance stays
+  sealed. Mario JSON/S64B remain exactly 562,096/596,896 bytes at
+  `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0` /
+  `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`.
+- Remaining: scoped rereview, real BOB `GEO_SHADOW`, Task 4, Task 16 Tasks 2-5,
+  and all target/release/manual gates remain open and unclaimed.

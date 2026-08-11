@@ -187,6 +187,64 @@ class SceneClosureTest(unittest.TestCase):
                                     "unsupported reached Gfx expression"):
             self.collect(root)
 
+    def test_branch_less_zraw_reached_gfx_source_is_sealed(self) -> None:
+        root = self.fixture()
+        write(root / "actors/parent/model.inc.c", """
+            const Gfx parent_dl[] = {
+                gsSPBranchLessZraw(parent_branch_z_dl, 0, 0),
+                gsSPEndDisplayList(),
+            };
+        """)
+        write(root / "actors/branch_z/model.inc.c",
+              "const Gfx parent_branch_z_dl[] = { gsSPEndDisplayList(), };\n")
+
+        closure = self.collect(root)
+        record = next(record for record in closure["records"]
+                      if record["stable_id"] == "bhvParent")
+        sources = {source["path"] for source in record["sources"]}
+        self.assertIn("actors/branch_z/model.inc.c", sources)
+
+    def test_unmodeled_reference_bearing_gfx_macro_fails_closed(self) -> None:
+        root = self.fixture()
+        write(root / "actors/parent/model.inc.c", """
+            const Gfx parent_dl[] = {
+                gsSPUnhandledReference(parent_child_dl),
+                gsSPEndDisplayList(),
+            };
+        """)
+
+        with self.assertRaisesRegex(
+                ClosureError,
+                "unsupported reference-bearing Gfx command gsSPUnhandledReference"):
+            self.collect(root)
+
+    def test_actor_definition_index_refreshes_after_same_process_change(self) -> None:
+        root = self.fixture()
+        self.collect(root)
+        write(root / "actors/duplicate/model.inc.c",
+              "const Gfx parent_child_dl[] = { gsSPEndDisplayList(), };\n")
+
+        with self.assertRaisesRegex(ClosureError,
+                                    "ambiguous reached Gfx parent_child_dl"):
+            self.collect(root)
+
+    def test_deep_acyclic_display_list_chain_fails_bounded(self) -> None:
+        root = self.fixture()
+        write(root / "actors/parent/geo.inc.c",
+              "const GeoLayout parent_geo[] = { GEO_DISPLAY_LIST(LAYER_OPAQUE, parent_dl), GEO_END(), };\n")
+        lists = ["const Gfx parent_dl[] = { gsSPDisplayList(chain_0000), };\n"]
+        for index in range(1200):
+            command = (f"gsSPDisplayList(chain_{index + 1:04d})"
+                       if index + 1 < 1200 else "gsSPEndDisplayList()")
+            lists.append(
+                f"const Gfx chain_{index:04d}[] = {{ {command}, }};\n")
+        write(root / "actors/parent/model.inc.c", "".join(lists))
+
+        with self.assertRaisesRegex(
+                ClosureError,
+                "reached actor asset traversal depth limit exceeded"):
+            self.collect(root)
+
     def test_reached_actor_source_hash_drift_fails_closed(self) -> None:
         root = self.fixture()
         closure = self.collect(root)

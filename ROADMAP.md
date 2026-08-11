@@ -20,9 +20,10 @@ Tasks 1 and 2 are independently approved: shared target SHA-256 and canonical
 S64F-v3 validation. Task 3's strict generic source-selected S64B compiler is
 complete after its binding-parser repair passed scoped rereview with C0/I0/M0.
 Task 4's resumed zero-edit BOB probe exposed one further strict prerequisite:
-the reached wooden-signpost display-list source was not closure-attested. The
-narrow upstream closure repair is source-complete and awaits scoped rereview;
-after it passes, build/review the scene-local DRAM-cart bundle and fixed
+the reached wooden-signpost display-list source was not closure-attested. Its
+first repair received C0/I3/M0 for conditional Gfx references, stale index
+state, and unbounded traversal; round-5 hardening is source-complete and awaits
+scoped rereview. After it passes, build/review the scene-local DRAM-cart bundle and fixed
 dual-SH-2 LWRAM
 workspace and complete the Task 16 production generic actor cutover. After
 those target-byte changes, rerun Task 9's build/repro/v4/staging chain before

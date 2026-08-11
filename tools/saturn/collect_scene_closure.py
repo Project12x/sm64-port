@@ -236,7 +236,6 @@ def _asset_root_source(root: Path, asset_root: str) -> str | None:
     return None
 
 
-@lru_cache(maxsize=None)
 def _actor_asset_definition_index(root: Path) -> dict[tuple[str, str], tuple[str, ...]]:
     """Index source definitions used by the exact reached-actor source walk."""
     paths = (sorted(root.glob("actors/**/*.c")) +
@@ -330,15 +329,20 @@ def _actor_asset_commands(body: str, prefix: str, label: str) -> list[tuple[str,
     return tokens
 
 
-def _reached_actor_sources(root: Path, entry: str,
-                           declared_source: str) -> set[str]:
+def _reached_actor_sources(
+        root: Path,
+        entry: str,
+        declared_source: str,
+        index: dict[tuple[str, str], tuple[str, ...]] | None = None,
+) -> set[str]:
     """Return every uniquely reached Geo/Gfx/Vtx/light source for one model.
 
     This is the sealing-side counterpart to ``actor_variant_bank._SourceIndex``:
     repository discovery happens only here, and every returned path is hashed
     into the closure before the downstream compiler may select it.
     """
-    index = _actor_asset_definition_index(root)
+    if index is None:
+        index = _actor_asset_definition_index(root)
 
     def matches(kind: str, symbol: str, preferred: str | None) -> tuple[str, ...]:
         candidates = index.get((kind, symbol), ())
@@ -383,6 +387,9 @@ def _reached_actor_sources(root: Path, entry: str,
 
     def visit(kind: str, symbol: str, preferred: str,
               stack: tuple[tuple[str, str], ...] = (), *, declared: bool = False) -> None:
+        if len(stack) >= 256:
+            raise ClosureError(
+                "reached actor asset traversal depth limit exceeded: 256")
         if (kind, symbol) in stack:
             chain = " -> ".join(item[1] for item in stack + ((kind, symbol),))
             raise ClosureError(f"recursive reached {kind}: {chain}")
@@ -433,6 +440,11 @@ def _reached_actor_sources(root: Path, entry: str,
                         raise ClosureError("unsupported reached Gfx expression")
                     target = identifier(fields[0], "Gfx")
                     visit("Gfx", target, path, next_stack)
+                elif macro == "gsSPBranchLessZraw":
+                    if len(fields) != 3:
+                        raise ClosureError("unsupported reached Gfx expression")
+                    target = identifier(fields[0], "Gfx")
+                    visit("Gfx", target, path, next_stack)
                 elif macro == "gsSPVertex":
                     if len(fields) != 3:
                         raise ClosureError("unsupported reached Vtx expression")
@@ -454,6 +466,19 @@ def _reached_actor_sources(root: Path, entry: str,
                         raise ClosureError("unsupported reached Lights1 expression")
                     target = identifier(fields[0], "Lights1")
                     visit("Lights1", target, path, next_stack)
+                else:
+                    referenced = sorted({
+                        (reference_kind, token)
+                        for field in fields
+                        for token in re.findall(r"\b[A-Za-z_]\w*\b", field)
+                        for reference_kind in ("GeoLayout", "Gfx", "Vtx", "Lights1")
+                        if (reference_kind, token) in index
+                    })
+                    if referenced:
+                        raise ClosureError(
+                            f"unsupported reference-bearing Gfx command {macro}: " +
+                            ", ".join(f"{kind} {symbol}"
+                                      for kind, symbol in referenced))
 
     visit(root_kinds[0], entry, declared_source, declared=True)
     return sources
@@ -1205,6 +1230,7 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
                     continue
                 raise ClosureError(f"behavior spawn cycle: {behavior} -> {child}")
             queue.append((child_model, child, active_acts, count * maximum_live, f"spawn:{behavior}", ancestors | {behavior}))
+    actor_asset_index = _actor_asset_definition_index(root)
     records = []
     for behavior in sorted(occurrence):
         variants = []
@@ -1229,7 +1255,7 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
             used_sources[behavior].add(binding_source)
             if variant_geo_source:
                 geo_sources.update(_reached_actor_sources(
-                    root, variant_geo, variant_geo_source))
+                    root, variant_geo, variant_geo_source, actor_asset_index))
                 material_features.update(_features(root, variant_geo_source))
         primary = next((variant for variant in variants if variant["model"] != "MODEL_NONE"), variants[0])
         model, geo_root = primary["model"], primary["geo_root"]

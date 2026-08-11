@@ -19,9 +19,10 @@ direct-DL layers reach S64B semantics, and neighboring valid bindings cannot
 alter the selected variant. Task 4's resumed zero-edit probe then reached the
 next strict boundary: the BOB closure attested the wooden-signpost GeoLayout but
 not the Gfx/model source it reaches. Task 3's narrow round-4 provenance repair
-is source-complete and awaits scoped rereview; Task 4 remains paused without
-edits. Target, release, smoke, visual, desktop, manual, and total-game gates
-remain open.
+received C0/I3/M0 for conditional Gfx references, stale same-process source
+indices, and unbounded traversal. Round 5 is source-complete and awaits scoped
+rereview; Task 4 remains paused without edits. Target, release, smoke, visual,
+desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
 
@@ -495,8 +496,8 @@ scoped diff checks. No new breakage was found. Task 4 is unblocked and resumed;
 target, release, smoke, visual, desktop, manual, and total-game gates remain
 open and unclaimed.
 
-**Task 3 real-source provenance repair round 4 (2026-08-11):** source-complete;
-scoped rereview pending at behavior commit `1274c08b`. After
+**Task 3 real-source provenance repair round 4 (2026-08-11):** scoped rereview
+returned C0/I3/M0 at behavior commit `1274c08b`. After
 the round-3 PASS, Task 4 replayed real BOB key `(family ordinal 3, model ID
 0x007c)` and selection reached the correct `wooden_signpost_geo`, then failed
 closed at `missing Gfx source: wooden_signpost_seg3_dl_0302DA48`. The closure
@@ -528,6 +529,25 @@ its 562,096-byte JSON remains
 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
 Task 4 has made zero edits and remains paused for scoped rereview; all target,
 release, smoke, visual, desktop, manual, and total-game gates remain open.
+
+**Task 3 source-provenance repair round 5 (2026-08-11):** source-complete;
+scoped rereview pending, behavior commit pending. Four exact REDs reproduced
+all three review findings: `gsSPBranchLessZraw` omitted its reached Gfx source,
+an unmodeled command carrying a known Gfx symbol compiled without error, a
+same-process duplicate definition remained invisible after index priming, and
+a 1,200-list acyclic chain leaked raw `RecursionError`. The closure walker now
+models the exact repository `gsSPBranchLessZraw` arity and Gfx reachability;
+any otherwise unmodeled Gfx command carrying an indexed
+GeoLayout/Gfx/Vtx/`Lights1` symbol fails named. Each top-level collection
+builds one fresh deterministic definition index and shares that immutable
+snapshot across its records, avoiding stale process state without repeated
+per-record scans. Traversal fails with `ClosureError` at the fixed depth-256
+bound. GREEN is 28/28 complete synthetic closure, 2/2 real BOB closure, 28/28
+variant/source, 25/25 rigid-group, 4/4 historical generic-family report,
+compileall, and the exact-native-root combined variant/pose/meshlet Make wave.
+The signpost model source remains sealed and historical Mario sizes/hashes are
+unchanged. The schema/public ABI remain unchanged; Task 4 has zero edits and
+all target/release/manual gates remain open.
 
 ---
 

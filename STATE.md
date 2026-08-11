@@ -39,8 +39,10 @@ real-source binding repair passed scoped rereview with C0/I0/M0. It preserves
 the exact historical Mario bank while rejecting unrepresentable or unattested
 selected semantics. The resumed Task 4 zero-edit probe then exposed missing
 hash-bound provenance for the wooden-signpost display-list source. Task 3's
-narrow upstream closure repair is source-complete and awaits scoped rereview;
-Task 4 remains paused without edits.
+narrow upstream closure repair then received C0/I3/M0: conditional Gfx
+references, stale same-process definition indices, and unbounded recursive
+walking required correction. The round-5 hardening is source-complete and
+awaits scoped rereview; Task 4 remains paused without edits.
 Completing and reviewing the full prerequisite remains the gate before Task 16
 Task 2 resumes.
 The reusable
