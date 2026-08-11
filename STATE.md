@@ -28,9 +28,12 @@ The cutover's missing data prerequisite now has an approved written design:
 `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`.
 It is a Saturn-shaped S64F v3 scene bundle in the fixed DRAM-cart residency
 region, with bounded 64-family/128-variant offset tables, embedded S64B banks,
-two fixed LWRAM SH-2 workspace lanes, scalar generation-last publication, and
-lease-drained master-owned CD scene transitions. Implementation has not begun;
-the implementation plan is the next gate before Task 16 Task 2 can resume.
+  two fixed LWRAM SH-2 workspace lanes, scalar generation-last publication, and
+  lease-drained master-owned CD scene transitions. Its implementation plan is
+  written at
+  `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md`;
+  implementation has not begun, and completing/reviewing that plan remains the
+  gate before Task 16 Task 2 can resume.
 The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system

@@ -209,6 +209,18 @@ separate.
 - Render, queue, and residency generations remain separate scalar fields and
   must match their respective owners.
 
+`bank_source_sha256` has one canonical derivation. Hash the ASCII prefix
+`S64B-VARIANT-SOURCES`, one NUL byte, and version byte `0x01`; then the
+big-endian 16-bit family ordinal and model ID; then each contributing source
+record sorted by repository-relative UTF-8 path. A source record is the path,
+one NUL byte, and the raw 32-byte SHA-256 of that source file. Paths must be
+nonempty, slash-normalized, root-relative, unique, and contain neither NUL nor
+`.`/`..` segments. The source set includes the selected GeoLayout, every
+reached display-list/vertex source, every selected animation source, and the
+model/animation binding sources attested by the scene closure. An empty set,
+duplicate path, closure/hash mismatch, zero resulting bank ID, or distinct-key
+bank-ID collision fails the build.
+
 The actor identity registry is generated only after the final S64F v3 bundle
 and embedded S64B banks exist. It copies the family ordinal, model ID,
 per-variant bank ID/source hash, and package generation. It no longer derives

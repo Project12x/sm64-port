@@ -29,7 +29,7 @@ still intentionally fails closed. Disabling dynamic actor closure is rejected
 because the same production actor path must scale to the total game. Task 1 is
 source-complete and independently approved after review repair. Task 2 is
 blocked before RED while the approved S64F v3 generic-actor bundle prerequisite
-receives its implementation plan, implementation, and independent review;
+executes its written implementation plan and receives independent review;
 Tasks 2–5, target proof, Task 9 reseal, and Task 10 smoke/visual/manual
 acceptance remain open.
 
@@ -51,9 +51,12 @@ to each selected dependency: the reviewed binder still consumes the same raw
 workspace span, but production supplies it from one generated-capacity,
 bundle-wide LWRAM reservation while the immutable S64F/S64B bytes remain in
 the cart.
-Implementation remains prohibited until the follow-on implementation plan is
-written and reviewed. The specification, plan reconciliation, ledger, State,
-and Roadmap transition are committed at `0e87f7ac`.
+The follow-on implementation plan is now written at
+`docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md`; source
+implementation has not begun. The next authorized action is its Task 1 TDD
+slice after the owner selects the execution workflow. The specification, plan
+reconciliation, ledger, State, and Roadmap design transition are committed at
+`0e87f7ac`.
 
 **Task 1 interface correction (2026-08-11):** the governing-plan prototype's
 `bank` parameter means the complete validated

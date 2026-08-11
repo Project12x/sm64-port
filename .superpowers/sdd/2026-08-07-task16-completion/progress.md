@@ -262,7 +262,7 @@
 
 ## 2026-08-11 generic actor bundle design resolution
 
-- Status: `design-approved; implementation-plan-pending`. Task 16 Task 2 stays
+- Status: `implementation-plan-written; source-not-started`. Task 16 Task 2 stays
   blocked before RED/production edits. The missing generic bank owner is now
   specified at
   `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`;
@@ -294,10 +294,20 @@
   on a loading screen, validate completely, then publish. No blocking gameplay
   reads and no seamless double-buffer claim. Failure after reclaim leaves no
   active generation and never reuses stale pointers.
+- Implementation plan: `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md`
+  maps the approved design to 11 serialized, TDD-first tasks: shared target
+  SHA-256; host/target v3 validation; generic S64B compilation; real BOB
+  bundle; whole-game capacity inventory; per-variant registry identities;
+  non-provisional S64P/CD inputs; bundle-stride dual-SH-2 runtime; lease-drained
+  bounded streaming; sourceboot integration/map proof; and final handoff.
+  It preserves v2 historical bytes and Task 1's standalone ABI while requiring
+  the new heterogeneous-bank global-stride binder. No implementation or
+  CHANGELOG-visible behavior has begun.
 - Compatibility and gates: S64F v2 stays historical tooling only; feature-on
   production requires v3. Whole-game inventory, real BOB bank compilation,
   strict mutation tests, target cart/LWRAM/HWRAM map proof, heterogeneous
   dual-SH-2 lanes, feature-off byte identity, CD scene transition, Task 9
   rebuild/repro/v4/staging, and Task 10 smoke/visual/desktop/manual all remain
-  open. The next authorized action after user review of the written spec is a
-  separate implementation plan; source implementation has not started.
+  open. The next authorized action is Task 1 of the written implementation
+  plan after the owner chooses subagent-driven or inline execution; source
+  implementation has not started.
