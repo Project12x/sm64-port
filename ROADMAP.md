@@ -32,12 +32,15 @@ error. The full-key replay then exposed an unselected `MODEL_NONE` alternate
 poisoning selected drawable provenance. That selection-order repair is now
 source-complete with scoped rereview PASS C0/I0/M0; the real chain-part key advances
 to the preserved `GEO_SHADOW` unsupported boundary without fabricating
-model-less geometry. Resume Task 4 from zero edits and build/review the
-scene-local DRAM-cart bundle and fixed
-dual-SH-2 LWRAM
-workspace and complete the Task 16 production generic actor cutover. After
-those target-byte changes, rerun Task 9's build/repro/v4/staging chain before
-Task 10.
+model-less geometry. Task 4's completed zero-edit inventory is now blocked
+before RED: all 34 nonzero BOB drawable keys are named unsupported and the
+canonical v3 writer rejects the resulting zero-variant document. Revise the
+plan around an additive, exactly specified texture/material-capable Saturn/SH-2
+actor-bank format while preserving S64B-v1, then resume the real scene-local
+DRAM-cart bundle and fixed dual-SH-2 LWRAM workspace. Permitting an empty
+bundle is explicitly not a full-port path; stopping leaves Task 16 and Task 10
+blocked. After eventual target-byte changes, rerun Task 9's
+build/repro/v4/staging chain before Task 10.
 
 The staged result is the integrated BOB demo candidate only. The same profile,
 closure, identity-v2, audit, release-manifest, capture-binding, and staging

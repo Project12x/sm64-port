@@ -27,10 +27,16 @@ C0/I0/M0. Task 4 retained `GEO_SHADOW` as an explicit unsupported gap, then its
 next zero-edit BOB probe found a valid tail-branch display list rejected for
 lacking `gsSPEndDisplayList`. Task 3's exact terminal `gsSPBranchList` repair
 passed same-reviewer rereview at C0/I0/M0. Task 4's full-key zero-edit replay
-inventoried 25 explicit unsupported variants, then an unselected `MODEL_NONE`
-alternate poisoned selected `MODEL_METALLIC_BALL` provenance. Task 3 is narrowly
-reopened for selection-order correctness; Task 4 is paused. Target, release, smoke,
-visual, desktop, manual, and total-game gates remain open.
+first inventoried 25 explicit unsupported variants, then exposed an unselected
+`MODEL_NONE` alternate poisoning selected `MODEL_METALLIC_BALL` provenance.
+Task 3's selection-order repair passed scoped rereview C0/I0/M0 at status
+`44c90395`. The completed Task 4 read-only replay then proved a format
+contradiction: all 34 nonzero BOB drawable keys are named unsupported, two
+entries are exact non-drawable `MODEL_NONE` sentinels, and there are zero
+compiler-supported variants. Canonical S64F-v3 requires `variant_count` in
+`1..128`, so Task 4 is `blocked-before-RED` with no production, test, Make,
+CLI, or CHANGELOG edit. Target, release, smoke, visual, desktop, manual, and
+total-game gates remain open.
 
 ## Global Constraints
 
@@ -638,6 +644,23 @@ ABI, runtime, or Task 4 drift. Task 4 is unblocked to resume from zero edits.
 ---
 
 ### Task 4: Emit the real BOB S64F v3 bundle
+
+**Status (2026-08-11): blocked-before-RED.** Final read-only inventory at
+reviewed base `44c90395` found 47 canonical v2 families, 13 v2-unsupported
+families, 34 additional nonzero drawable keys that all raise named
+`UnsupportedActorSourceError`, two `MODEL_NONE` sentinel entries, and zero
+compiler-supported banks. First-hit reasons are 18 `GEO_SHADOW`, 14 textured
+rigid/material state, one `GEO_SCALE`, and one `GEO_ASM`. Removing shadow in
+an isolated copied-source diagnostic yielded no supported key (12 next hit
+scale and six next hit textured). The sole first-hit scale key is
+`bhvKoopaFlag` / family 14 / model `0x006a`, exact
+`GEO_SCALE(0x00, 16384)`; removing only scale next hits textured state.
+`pack_bundle` requires at least one variant, so no truthful real BOB S64F-v3
+artifact can be emitted at the reviewed S64B-v1 boundary. All Task 4 steps
+remain unchecked. Recommended resolution is an additive, exactly specified
+texture/material-capable Saturn/SH-2 bank-format revision while preserving v1;
+permitting an empty bundle would not unblock the full-port path. Full evidence
+is in `.superpowers/sdd/2026-08-11-saturn-generic-actor-bundle/task-4-report.md`.
 
 **Files:**
 - Create: `tools/saturn/compile_actor_family_bundle.py`

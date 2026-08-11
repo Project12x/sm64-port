@@ -105,7 +105,7 @@
   The selected signpost GeoLayout is no longer poisoned by the following valid
   three-argument direct-DL binding. Task 4 is unblocked.
 
-## Task 4: active
+## Task 4: blocked-before-RED
 
 - Base: `c4c0973ebe935a731c4bac98bdde2db8d7d3c530`.
 - Inputs: independently approved v3 canonical pack/validate boundary and
@@ -139,6 +139,31 @@
   list uses terminal `gsSPBranchList` without `gsSPEndDisplayList`. Task 3 is
   reopened narrowly for exact tail-transfer semantics; Task 4 remains paused
   with zero edits.
+- Final implementation base: `44c903950632df17de24ec0b4781ca8d13d14563`
+  after Task 3 round 7 passed same-reviewer C0/I0/M0. No Task 4 edit exists.
+- Final read-only inventory: 47 canonical v2 families; 13 v2-unsupported
+  families; 34 additional nonzero drawable keys, all named unsupported; two
+  exact `MODEL_NONE` entries; zero compiler-supported drawable banks. The 34
+  first-hit reasons are 18 `GEO_SHADOW`, 14 unrepresentable textured
+  rigid/material state, one `GEO_SCALE`, and one `GEO_ASM`.
+- Secondary diagnostics: none of the 18 shadow-first keys is shadow-only;
+  removing only shadow in isolated copied-source roots yields 12 scale and six
+  textured blockers. The sole scale-first key is family 14/model `0x006a`,
+  `bhvKoopaFlag`, `actors/koopa_flag/geo.inc.c`, exact
+  `GEO_SCALE(0x00, 16384)`; removing only scale next reaches textured state.
+- Blocking contradiction: canonical `pack_bundle` requires variant count
+  `1..128`. The truthful BOB document has zero variants, so Task 4 cannot
+  create or validate the required real v3 payload/report/dependency. Missing-
+  module RED, production/test/Make/CLI changes, GREEN, relocation, atomic
+  publication, host/target-C validation, and generated hashes/counts were not
+  run. `CHANGELOG.md` is unchanged because behavior did not change.
+- Decision: recommend revising the plan around an additive, exact texture/
+  material-capable Saturn/SH-2 actor-bank format while preserving S64B-v1.
+  Permitting an empty bundle is a format change and does not unblock the
+  full-port path; otherwise stop the prerequisite lane.
+- Open: Task 4, Tasks 5-11, Task 16 Tasks 2-5, all target/release/reseal,
+  sourceboot, map/capacity, P2/Ymir, transition, smoke/visual/desktop/manual,
+  and total-game gates remain unchecked.
 
 ## Task 3 real-source tail-branch repair round 6
 

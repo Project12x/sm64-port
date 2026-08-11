@@ -56,9 +56,16 @@ narrowly source-complete for selection-order correctness with scoped rereview
 PASS C0/I0/M0: model identities are resolved first, only the exact model-less
 sentinel may omit GeoLayout provenance, and no sentinel can produce geometry.
 The real chain-part key now reaches the existing `GEO_SHADOW` unsupported
-boundary. Task 4 is unblocked to resume from zero edits.
-Completing and reviewing the full prerequisite remains the gate before Task 16
-Task 2 resumes.
+boundary. Task 4's complete zero-edit replay is now
+`blocked-before-RED`: all 34 nonzero BOB drawable keys are named unsupported
+(18 shadow, 14 textured rigid/material state, one scale, one ASM), two entries
+are exact `MODEL_NONE` sentinels, and zero bank is compiler-supported across
+the 47-family inventory. Canonical S64F-v3 requires at least one variant, so a
+truthful real BOB bundle cannot be packed. The recommended next decision is an
+additive, exactly specified texture/material-capable Saturn/SH-2 actor-bank
+format that preserves S64B-v1; an empty bundle would not unblock the full-port
+path. Completing and reviewing that revised prerequisite remains the gate
+before Task 16 Task 2 resumes.
 The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system

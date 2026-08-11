@@ -752,3 +752,32 @@
   gate set. Evidence commit `c68d44fb`; the same reviewer independently
   repeated focused adversarial checks and every full gate with no drift.
 - Task 16 Tasks 2-5 and every target/release/manual gate remain open.
+
+## 2026-08-11 generic actor bundle Task 4 blocked before RED
+
+- Status: `blocked-before-RED`; implementation base `44c90395`. The complete
+  real BOB read-only replay made no Task 4 production, test, Make, CLI, or
+  CHANGELOG edit.
+- Inventory: canonical v2 order has 47 families; 13 are v2-unsupported. All
+  34 remaining nonzero drawable keys raise named `UnsupportedActorSourceError`
+  (18 first-hit `GEO_SHADOW`, 14 textured rigid/material state, one
+  `GEO_SCALE`, one `GEO_ASM`). Two entries are exact non-drawable `MODEL_NONE`
+  sentinels. Compiler-supported drawable count is zero.
+- Diagnostic detail: none of the 18 shadow-first keys is shadow-only; after
+  removing only shadow in copied/resealed temporary roots, 12 next reach scale
+  and six next reach textured state. The sole scale-first key is family 14,
+  model `0x006a`, behavior `bhvKoopaFlag`, source
+  `actors/koopa_flag/geo.inc.c`, exact `GEO_SCALE(0x00, 16384)`; removing only
+  scale next reaches textured state.
+- Blocker: canonical S64F-v3 requires `variant_count` in `1..128`; the only
+  truthful BOB document has zero. Therefore the required real payload,
+  relocation/determinism proof, host/target-C validation, atomic publication,
+  dependency record, hashes, counts, lane stride, and scratch evidence do not
+  exist. No RED/GREEN was started.
+- Decision needed: recommended additive, exactly specified Saturn/SH-2
+  texture/material-capable actor-bank format and plan revision, preserving
+  S64B-v1 historical bytes. An empty-bundle format change is not a full-port
+  path and does not unblock Task 16; the alternative is to stop.
+- Open: Task 4 and generic-bundle Tasks 5-11; Task 16 Tasks 2-5; sourceboot,
+  feature-off, target/P2/Ymir/map/capacity, transition, rebuild/reseal,
+  smoke/visual/desktop/owner-manual, release, and total-game gates.
