@@ -8,6 +8,12 @@
 
 **Tech Stack:** Python 3 deterministic asset compilers and `unittest`; freestanding C11 for SH-2 runtime/host fixtures; GNU Make 4.3+ through `tools/saturn/with-msys-toolchain.ps1`; existing S64P/S64B formats, scene residency, DRAM-cart/CDFS loader, P2/TAS.B ownership, and hermetic release tooling.
 
+**Planning status (2026-08-11):** written and self-reviewed at
+`a74a30808db9efb39bf953f8a910308196241489`; implementation has not started.
+Task 1 is the first authorized RED after the owner selects the execution
+workflow. All source, target, release, smoke, visual, desktop, and manual gates
+remain open.
+
 ## Global Constraints
 
 - Follow `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md` exactly; field sizes are S64F header 96, family record 64, variant record 88.

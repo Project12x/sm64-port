@@ -56,7 +56,8 @@ The follow-on implementation plan is now written at
 implementation has not begun. The next authorized action is its Task 1 TDD
 slice after the owner selects the execution workflow. The specification, plan
 reconciliation, ledger, State, and Roadmap design transition are committed at
-`0e87f7ac`.
+`0e87f7ac`; the implementation plan itself is commit
+`a74a30808db9efb39bf953f8a910308196241489`.
 
 **Task 1 interface correction (2026-08-11):** the governing-plan prototype's
 `bank` parameter means the complete validated

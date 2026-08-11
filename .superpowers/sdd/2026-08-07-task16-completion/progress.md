@@ -302,7 +302,13 @@
   bounded streaming; sourceboot integration/map proof; and final handoff.
   It preserves v2 historical bytes and Task 1's standalone ABI while requiring
   the new heterogeneous-bank global-stride binder. No implementation or
-  CHANGELOG-visible behavior has begun.
+  CHANGELOG-visible behavior has begun. Planning commit:
+  `a74a30808db9efb39bf953f8a910308196241489`
+  (`docs(saturn): plan generic actor scene bundles`). Planning verification:
+  11 tasks, 59 unchecked TDD/verification steps, balanced code fences, no
+  unresolved implementation placeholders, and scoped `git diff --check`
+  PASS. Independent source/code review is inapplicable until implementation;
+  the plan remains owner-workflow-selection ready.
 - Compatibility and gates: S64F v2 stays historical tooling only; feature-on
   production requires v3. Whole-game inventory, real BOB bank compilation,
   strict mutation tests, target cart/LWRAM/HWRAM map proof, heterogeneous
