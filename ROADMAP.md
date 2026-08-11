@@ -16,9 +16,9 @@ bundle design at
 `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md`.
 Its written plan at
 `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` is active:
-Tasks 1 and 2 are independently approved: shared target SHA-256 and canonical
-S64F-v3 host/target validation. Task 3 generic source-selected S64B compilation
-is next. Build/review the scene-local DRAM-cart
+Tasks 1-3 are independently approved: shared target SHA-256, canonical
+S64F-v3 validation, and strict generic source-selected S64B compilation. Task 4
+real BOB bundle orchestration is next. Build/review the scene-local DRAM-cart
 bundle and fixed dual-SH-2 LWRAM workspace, then complete the Task 16
 production generic actor cutover. After those target-byte changes, rerun Task 9's
 build/repro/v4/staging chain before Task 10.

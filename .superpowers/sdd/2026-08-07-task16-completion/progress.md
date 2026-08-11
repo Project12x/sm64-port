@@ -517,8 +517,8 @@
 
 ## 2026-08-11 generic actor bundle Task 3 review repair round 2
 
-- Status: `source-complete-review-repair-round-2; independent rereview
-  pending`. The behavior commit is `b21bb197`
+- Status: `complete; review-repair-round-2 scoped rereview PASS`. The behavior
+  commit is `b21bb197`
   (`fix(saturn): verify actor model binding sources`). Task 4 has not started
   and Task 16 Tasks 2-5 remain blocked/open.
 - Binding-source correction: selected numeric model metadata is no longer
@@ -546,7 +546,11 @@
   `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
   exact JSON remains
   `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
-- Remaining: independent Task 3 rereview and all real BOB/whole-game,
+- Scoped rereview: both remaining findings ADDRESSED. Source-byte model
+  binding now matches the selected numeric model/root exactly, and selected
+  animation tables/headers reject empty comma positions. No new breakage was
+  found.
+- Remaining: all real BOB/whole-game,
   S64F/registry/cart/workspace, Task 16 Tasks 2-5, feature-off, target/P2/Ymir,
   transition, release/reseal, smoke/visual/desktop/owner-manual, and total-game
   gates. None is claimed by this source-only repair.

@@ -12,10 +12,9 @@
 subagent-driven workflow. Tasks 1 and 2 are complete and independently
 approved. Task 2 repair `f1799118` passed scoped rereview with both Important
 findings addressed and no new breakage; its malformed-path error-type Minor is
-deferred to the final branch review. Task 3 review repair round 1 is
-source-complete at the scoped behavior commit described below and awaits
-independent rereview before Task 4. Review repair round 2 is source-complete at
-the scoped behavior commit described below. Target, release, smoke, visual,
+deferred to the final branch review. Task 3 is complete after two review-repair
+rounds; round 2 passed scoped rereview with both remaining findings addressed
+and no new breakage. Task 4 is the next RED. Target, release, smoke, visual,
 desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
@@ -425,8 +424,8 @@ and its JSON remains
 No Task 4, Task 16 production, target, release, smoke, visual, desktop,
 owner-manual, transition, or total-game gate is claimed.
 
-**Task 3 review repair round 2 (2026-08-11):** source-complete; independent
-rereview pending. The selected numeric model symbol is now checked against the
+**Task 3 review repair round 2 (2026-08-11):** complete; scoped rereview PASS.
+The selected numeric model symbol is now checked against the
 actual closure-attested binding-source bytes. One exact
 `LOAD_MODEL_FROM_GEO/DL(model, geo_root)` mapping is required, with balanced
 syntax, two exact identifier arguments, and a clean command boundary; the
