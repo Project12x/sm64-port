@@ -32,8 +32,8 @@
   tracked and untracked work outside Task 1 is preserved.
 - Status: `source-complete`; behavior commit subject
   `feat(saturn): generalize actor meshlet preparation to bank instances` is
-  the transition commit. Controller-owned independent two-stage review remains
-  open, so Task 2 has not started and no target-complete claim is made.
+  commit `3d5e6ff8`. Controller-owned independent two-stage review remains open,
+  so Task 2 has not started and no target-complete claim is made.
 - Design correction: `sm64_saturn_actor_meshlets_prepare_bank` accepts the
   complete validated `sm64_saturn_actor_bank_view_t`, while its Task-1-owned
   output binding supplies draw capacity and quarantine reason. The header-only
