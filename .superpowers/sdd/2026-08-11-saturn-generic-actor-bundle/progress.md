@@ -124,6 +124,12 @@
   conflicting, or trailing tokens. Repair commits `16e61b63` / `e72d7127`
   passed independent scoped rereview with C0/I0/M0. Task 4 made no preflight
   edits and is now resumed from the reviewed boundary.
+- Second zero-edit BOB probe after the PASS: selection reached
+  `wooden_signpost_geo` but failed closed at `missing Gfx source:
+  wooden_signpost_seg3_dl_0302DA48`. The closure record does not attest the
+  reached model/display-list definition source. Task 3 is reopened for a
+  narrow hash-bound provenance repair; ad hoc repository search/consumption is
+  forbidden. Task 4 remains paused with zero edits.
 
 ## Task 2: source-complete, independent review pending
 

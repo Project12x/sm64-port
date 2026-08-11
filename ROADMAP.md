@@ -18,9 +18,11 @@ Its written plan at
 `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` is active:
 Tasks 1 and 2 are independently approved: shared target SHA-256 and canonical
 S64F-v3 validation. Task 3's strict generic source-selected S64B compiler is
-complete after its real-source binding repair passed scoped rereview with
-C0/I0/M0; Task 4 real BOB bundle orchestration is resumed. Next build/review
-the scene-local DRAM-cart bundle and fixed dual-SH-2 LWRAM
+complete after its binding-parser repair passed scoped rereview with C0/I0/M0.
+Task 4's resumed zero-edit BOB probe exposed one further strict prerequisite:
+the reached wooden-signpost display-list source is not closure-attested. Repair
+that hash-bound provenance seam, then build/review the scene-local DRAM-cart
+bundle and fixed dual-SH-2 LWRAM
 workspace and complete the Task 16 production generic actor cutover. After
 those target-byte changes, rerun Task 9's build/repro/v4/staging chain before
 Task 10.

@@ -16,9 +16,11 @@ deferred to the final branch review. Task 3 is complete after its third,
 real-source repair round passed scoped rereview with C0/I0/M0: exact two-argument
 GeoLayout and three-argument direct-DL bindings are coverage-parsed, selected
 direct-DL layers reach S64B semantics, and neighboring valid bindings cannot
-alter the selected variant. Task 4 is resumed from its zero-edit preflight stop
-to build the real BOB bundle. Target, release, smoke, visual, desktop, manual,
-and total-game gates remain open.
+alter the selected variant. Task 4's resumed zero-edit probe then reached the
+next strict boundary: the BOB closure attests the wooden-signpost GeoLayout but
+not the Gfx/model source it reaches. Task 3 is reopened narrowly to bind that
+source provenance; Task 4 is paused without edits. Target, release, smoke,
+visual, desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
 
@@ -491,6 +493,17 @@ comparison, fresh BOB area-1 selection, exact historical Mario hashes, and
 scoped diff checks. No new breakage was found. Task 4 is unblocked and resumed;
 target, release, smoke, visual, desktop, manual, and total-game gates remain
 open and unclaimed.
+
+**Task 3 real-source provenance repair round 4 (2026-08-11):** active. After
+the round-3 PASS, Task 4 replayed real BOB key `(family ordinal 3, model ID
+0x007c)` and selection reached the correct `wooden_signpost_geo`, then failed
+closed at `missing Gfx source: wooden_signpost_seg3_dl_0302DA48`. The closure
+record attests the GeoLayout and binding sources but not the reached model/DL
+definition. The repair must extend the authoritative closure/provenance chain
+so every consumed source byte is hash-bound; Task 3 may not search or consume
+an unsealed repository file. A real BOB RED, exact Mario preservation, scoped
+rereview, and named ambiguity/missing-source failures are required before Task
+4 resumes. Task 4 has made zero edits.
 
 ---
 

@@ -37,9 +37,11 @@ SHA-256 and canonical 96/64/88-byte S64F-v3 host/target validation. Task 3's
 strict source-selected generic S64B compiler is complete after its third,
 real-source binding repair passed scoped rereview with C0/I0/M0. It preserves
 the exact historical Mario bank while rejecting unrepresentable or unattested
-selected semantics. Task 4 real BOB S64F-v3 orchestration is now resumed from
-its zero-edit preflight stop. Completing and reviewing the full prerequisite
-remains the gate before Task 16 Task 2 resumes.
+selected semantics. The resumed Task 4 zero-edit probe then exposed missing
+hash-bound provenance for the wooden-signpost display-list source. Task 3 is
+reopened narrowly to seal that reached source; Task 4 is paused without edits.
+Completing and reviewing the full prerequisite remains the gate before Task 16
+Task 2 resumes.
 The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system

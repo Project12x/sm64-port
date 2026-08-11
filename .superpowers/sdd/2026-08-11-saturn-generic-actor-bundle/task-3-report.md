@@ -923,3 +923,14 @@ opacity byte and the typed report material/layer metadata differed correctly.
 No closure schema field was added, no new breakage was found, and Task 4 is
 unblocked. Full real BOB compilation and every target/release/manual gate remain
 open.
+
+### Real-source provenance repair round 4 — active
+
+After the round-3 independent PASS, Task 4 replayed the exact BOB
+`bhvMessagePanel` / model `0x007c` probe. Binding selection reached the correct
+`wooden_signpost_geo`, then the strict source index rejected
+`wooden_signpost_seg3_dl_0302DA48` because its defining model/display-list file
+is absent from the closure record. Task 4 made zero edits. Task 3 is reopened
+only to extend the authoritative hash-bound provenance chain; consuming an
+unsealed repository source is explicitly forbidden. RED/GREEN, exact Mario
+preservation, and independent scoped rereview remain open.

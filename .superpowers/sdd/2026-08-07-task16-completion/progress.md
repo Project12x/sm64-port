@@ -607,3 +607,14 @@
 - Transition: Task 4 is unblocked and resumes from its zero-edit preflight
   stop. Task 16 Tasks 2-5 and all target, P2/Ymir, release/reseal, smoke,
   visual, desktop, owner-manual, and total-game gates remain open.
+
+## 2026-08-11 generic actor bundle Task 3 source-provenance repair round 4
+
+- Status: `active; Task 4 paused before edits`. The reviewed parser now reaches
+  the selected wooden-signpost GeoLayout, but the exact BOB probe fails closed
+  because its closure record omits the reached Gfx/model definition source.
+- Boundary: extend authoritative, hash-bound closure provenance; never search
+  or consume an unsealed repository source in the variant compiler. Preserve
+  exact Mario artifacts and named missing/ambiguous-source failures.
+- Remaining: Task 3 RED/GREEN and scoped rereview, then Task 4. Task 16 Tasks
+  2-5 and all target/release/manual gates remain open.
