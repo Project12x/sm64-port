@@ -2195,6 +2195,17 @@ external source, copied notice, or license change. Both owned candidates must
 remove only their verified `build/saturn` output tree and rebuild from the
 resulting common source commit; A's earlier manifest remains diagnostic only.
 
+Corrected candidate A from an empty owned `build/saturn` at `342c173d`
+completed the exact `-j1` release command in 956.8 seconds and passed direct
+manifest verification. Identity is `id-419ec1cdf746b8a1`, source closure is
+`e0dba9745e18666dbc1682f0c9be72e28a883491aee8388608f632057c027951`,
+and the manifest SHA-256 is
+`e40bc000196c49287bd2b78fedb0e8467180a53db4bf287716fa7d7e5d43dd29`.
+The generated assembly contains only canonical `../../../../build/...`
+operands. Candidate B remains empty at the exact same source commit; no
+reproducibility claim exists until its independently built manifest and all
+artifacts compare.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2205,7 +2216,7 @@ git diff --check
 
 Confirm Tasks 1–8 and both reviews per task are recorded. Preserve unrelated dirt. Release mode may proceed only if every checked-in source-closure input is tracked and clean; if a relevant file is dirty, stop and reconcile ownership instead of hiding it.
 
-- [ ] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
+- [x] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
 
 ```powershell
 $implementationRoot = (Get-Location).Path
@@ -2267,7 +2278,7 @@ Invoke-HermeticBobBuild $candidateARoot
 
 Expected: ordinary sourceboot gates, post-link closure verification, and release-manifest verification pass. Audit v4 is not yet selected.
 
-- [ ] **Step 3: Verify and retain candidate A's immutable manifest**
+- [x] **Step 3: Verify and retain candidate A's immutable manifest**
 
 Resolve the current identity-tagged directory from the generated identity JSON,
 then verify its manifest:

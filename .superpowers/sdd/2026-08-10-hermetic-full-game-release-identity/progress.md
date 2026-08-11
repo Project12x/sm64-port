@@ -1428,6 +1428,17 @@
   rebuild from empty owned `build/saturn` trees at the resulting common commit;
   the earlier A manifest is diagnostic, not reproducibility evidence. Task 9
   Steps 2–3 are reopened until corrected candidate A succeeds and verifies.
+- Corrected candidate A rebuilt from an empty owned `build/saturn` at common
+  source `342c173d910b86d166c5cd2191746cf1b1c9fde3`. The exact `-j1` command
+  exited 0 in 956.8 seconds and direct manifest verification exited 0.
+  Identity is `id-419ec1cdf746b8a1`; source closure is
+  `e0dba9745e18666dbc1682f0c9be72e28a883491aee8388608f632057c027951`;
+  the 3,266-byte manifest SHA-256 is
+  `e40bc000196c49287bd2b78fedb0e8467180a53db4bf287716fa7d7e5d43dd29`.
+  Generated sky/texture assembly now contains only canonical
+  `../../../../build/...` operands. Task 9 Steps 2–3 are complete again;
+  candidate B remains an empty independent build at the same source commit,
+  and reproducibility plus all later gates remain open.
 
 ## Task 5 review repair round 2
 
