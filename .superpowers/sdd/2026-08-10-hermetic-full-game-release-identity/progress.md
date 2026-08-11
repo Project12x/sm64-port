@@ -1506,6 +1506,15 @@
   close-port of the reviewed measurement document and exact-object publisher;
   no external source or license/notice change. Exact candidate-B v4 remains
   open pending the scoped behavior commit and real command.
+- Exact candidate-B v4 from acceptance-report behavior commit `43c82145`
+  exited 0 in 274.0 seconds. Canonical result status is `passed`, root is
+  `_game_loop_one_iteration`, and total is `700`; report SHA-256 is
+  `1fe9d585...f4ddbf`. It binds contract `2c23ce44...f7265`, manifest
+  `b75ba5f0...a2ddf`, ELF `f3e01ff2...81c1b`, identity
+  `f5fd613b...8da9`, effective config `9a051d30...71c5b`, and profile
+  `fe090885...1dd2`, with both forbidden callers explicitly absent. Task 9
+  Step 7 is complete. Capacity/package, staging, docs closeout, and both
+  independent reviews remain open; no Task 10 gate was run.
 
 ## Task 5 review repair round 2
 

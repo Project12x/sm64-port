@@ -2290,6 +2290,17 @@ document plus exact-object `publish_new_bytes` boundary; no external source,
 copied bytes, license, or notice change. Exact candidate-B v4 remains open
 until this correction is committed and the full planned command exits 0.
 
+The exact candidate-B v4 command from acceptance-report fix `43c82145` exited
+0 in 274.0 seconds and exclusively published canonical status `passed`, root
+`_game_loop_one_iteration`, and exact total `700`. Report SHA-256 is
+`1fe9d585bf5385b33a038081ffe37b9cfc054f2ebcab174858f0e0b27ff4ddbf`;
+it binds contract `2c23ce44...f7265`, manifest `b75ba5f0...a2ddf`, ELF
+`f3e01ff2...81c1b`, identity `f5fd613b...8da9`, effective config
+`9a051d30...71c5b`, and target profile `fe090885...1dd2`, and explicitly
+records both `_atan2_lookup` and `_atan2s` absent. Task 9 Step 7 is complete.
+Capacity, package, staging, documentation closeout, and both independent
+reviews remain open; Task 10 gates remain untouched.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2457,7 +2468,7 @@ Expected: report schema `sm64-saturn-native-math-measurement-v1`, status `measur
 
 Copy the script's printed lowercase digest into `GOAL_AUDIT_CONTRACT_V4_SHA256`, add a checked-in integrity test that reads the v4 file and calls `verify_audit_contract_integrity()`, and do not alter v2/v3 constants.
 
-- [ ] **Step 7: Run exact v4 audit against the same release manifest**
+- [x] **Step 7: Run exact v4 audit against the same release manifest**
 
 Run the verifier with candidate-B ELF, candidate-B release manifest, existing baseline/oracles, and the new v4 contract:
 
