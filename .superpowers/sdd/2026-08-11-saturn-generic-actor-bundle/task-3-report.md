@@ -1431,6 +1431,17 @@ key, `bhvExplosion` / model `0x00cd`, failed because
 terminal tail-transfer semantics with strict suffix, source, cycle, and depth
 checks; RED/GREEN and scoped rereview remain open.
 
+### Real-source tail-branch final rereview
+
+The same reviewer passed behavior `a78db8c9` and evidence `80fcac06` at
+C0/I0/M0. Independent checks covered six focused suffix/arity/expression/
+missing/ambiguity/cycle/depth mutations, all 32/27/33/2/4 full suites, native
+Make, compileall, real `bhvExplosion`, and exact Mario artifacts. A final bare-
+identifier `gsSPBranchList` is now an unconditional closure-only tail transfer;
+returning calls and ordinary final-End rules remain unchanged. No schema,
+public ABI, Makefile, `src`/`include`, or Task 4 drift was found. Task 4 is
+unblocked; explosion `textured` remains a named unsupported capability gap.
+
 ### Real-source tail-branch repair round 6 — source-complete
 
 Base is docs-only operational stop `0e2f03b9`. Reference reuse remains wholly

@@ -142,8 +142,8 @@
 
 ## Task 3 real-source tail-branch repair round 6
 
-- Status: `source-complete; scoped rereview pending; Task 4 paused with zero
-  edits` at behavior commit `a78db8c9`.
+- Status: `complete-review-passed`, C0/I0/M0, at behavior commit `a78db8c9`
+  and evidence `80fcac06`; Task 4 resumes from zero edits.
 - Repair: one final one-identifier `gsSPBranchList` is an unconditional
   closure-only tail transfer in collection, structural walking, and Fast3D
   extraction. Suffix, arity/expression, missing/duplicate source, recursion,
@@ -154,8 +154,9 @@
   BOB, 4/4 generic-family, native-root Make, compileall, and exact historical
   Mario JSON/S64B hashes. Real `bhvExplosion` advances to the preserved named
   `textured` unsupported boundary rather than fabricated S64B semantics.
-- Open: scoped rereview, Task 4, Task 16 Tasks 2-5, and all target/release/
-  manual gates.
+- Review: six focused mutations plus 32/27/33/2/4 full suites, native Make,
+  compileall, real explosion, exact Mario hashes, and scope/ABI checks passed.
+  Open: Task 4, Task 16 Tasks 2-5, and all target/release/manual gates.
 
 ## Task 2: source-complete, independent review pending
 

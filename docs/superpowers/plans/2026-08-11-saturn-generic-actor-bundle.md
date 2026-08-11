@@ -25,8 +25,9 @@ rereview continuations for index-independent reference semantics and exhaustive
 unknown-command rejection. The same reviewer now passes the complete repair at
 C0/I0/M0. Task 4 retained `GEO_SHADOW` as an explicit unsupported gap, then its
 next zero-edit BOB probe found a valid tail-branch display list rejected for
-lacking `gsSPEndDisplayList`. Task 3 is narrowly reopened to model terminal
-`gsSPBranchList` control flow; Task 4 is paused without edits. Target, release, smoke,
+lacking `gsSPEndDisplayList`. Task 3's exact terminal `gsSPBranchList` repair
+passed same-reviewer rereview at C0/I0/M0. Task 4 resumes; both `GEO_SHADOW`
+and explosion `textured` remain explicit unsupported gaps. Target, release, smoke,
 visual, desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
@@ -588,8 +589,8 @@ and no schema/ABI/Task 4 drift. Task 4 resumes from its zero-edit preflight;
 `GEO_SHADOW` is an explicit unsupported semantic for Task 4 inventory, and all
 broader gates remain open.
 
-**Task 3 real-source tail-branch repair round 6 (2026-08-11):** source-complete;
-scoped rereview pending at behavior commit `a78db8c9`
+**Task 3 real-source tail-branch repair round 6 (2026-08-11):** complete;
+same-reviewer rereview PASS C0/I0/M0 at behavior commit `a78db8c9`
 (`fix(saturn): follow actor display-list tail branches`). After
 the provenance PASS, Task 4 correctly recorded the signpost `GEO_SHADOW` gap,
 then real supported key `(family ordinal 4, model ID 0x00cd)` / `bhvExplosion`
@@ -605,8 +606,10 @@ returning call and ordinary lists still require one final
 `UnsupportedActorSourceError: unsupported rigid-group source: textured`, as
 required by S64B v1 rather than broadening its material format. GREEN is 32/32
 variant/source, 27/27 rigid-group, 33/33 closure, 2/2 real BOB, 4/4 historical
-generic-family, native-root Make, compileall, and exact Mario identity. Task 4
-remains zero-edit and paused for scoped rereview.
+generic-family, native-root Make, compileall, and exact Mario identity. The
+reviewer repeated the six tail-branch mutations, real explosion probe, and all
+full suites, finding no schema, ABI, Makefile, `src`/`include`, or Task 4 drift.
+Task 4 resumes from zero edits; all target/release/manual gates remain open.
 
 ---
 

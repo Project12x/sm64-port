@@ -25,11 +25,10 @@ first repair received C0/I3/M0 for conditional Gfx references, stale index
 state, and unbounded traversal. Round 5 closed those findings plus index-
 independent reference semantics and exhaustive unknown-command rejection; the
 same reviewer now passes C0/I0/M0. Task 4 recorded `GEO_SHADOW` explicitly,
-then exposed a valid terminal `gsSPBranchList` shape. Repair that exact tail-
-transfer boundary is source-complete and awaiting scoped rereview; the real
-explosion record now reaches the preserved textured-state unsupported boundary
-instead of a false terminator error. Keep Task 4 at zero edits until that
-rereview passes, then build/review the scene-local DRAM-cart bundle and fixed
+then exposed a valid terminal `gsSPBranchList` shape. Its exact tail-transfer
+repair also passed C0/I0/M0; the real explosion record now reaches the
+preserved textured-state unsupported boundary instead of a false terminator
+error. Resume Task 4 and build/review the scene-local DRAM-cart bundle and fixed
 dual-SH-2 LWRAM
 workspace and complete the Task 16 production generic actor cutover. After
 those target-byte changes, rerun Task 9's build/repro/v4/staging chain before

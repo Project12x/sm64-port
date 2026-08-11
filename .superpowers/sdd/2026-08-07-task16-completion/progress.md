@@ -718,8 +718,8 @@
 
 ## 2026-08-11 generic actor bundle Task 3 tail-branch repair round 6
 
-- Status: `source-complete; scoped rereview pending; Task 4 paused before
-  edits` at behavior commit `a78db8c9`. The next real BOB key,
+- Status: `complete-review-passed`, C0/I0/M0, at behavior commit `a78db8c9`
+  and evidence `80fcac06`. The next real BOB key,
   `bhvExplosion` / model `0x00cd`, uses a valid terminal `gsSPBranchList` and
   no `gsSPEndDisplayList`; the strict variant compiler misclassified it.
 - Repair: the compiler and rigid walker now treat one final one-identifier
@@ -730,4 +730,7 @@
   generic-family, native-root Make, compileall, and exact Mario artifacts. The
   real explosion key reaches the preserved named textured-state unsupported
   boundary rather than publishing unrepresentable S64B material semantics.
+- Same-reviewer rereview repeated all six mutations and full gates, finding no
+  schema, ABI, Makefile, `src`/`include`, or Task 4 drift. Task 4 resumes from
+  zero edits; `GEO_SHADOW` and `textured` remain explicit unsupported gaps.
 - Task 16 Tasks 2-5 and every target/release/manual gate remain open.

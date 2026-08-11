@@ -45,12 +45,12 @@ walking required correction. Round 5 closed those findings plus rereview
 continuations for index-independent command semantics and exhaustive unknown-
 command rejection; final same-reviewer verdict is C0/I0/M0. Task 4 retained
 `GEO_SHADOW` as explicit unsupported evidence, then its next zero-edit BOB
-probe exposed valid terminal `gsSPBranchList` control flow that Task 3 does not
-yet model. Task 3's narrow tail-transfer repair is now source-complete with
-scoped rereview pending: strict collection and rigid/Fast3D walks follow the
-final closure-selected target, while malformed/suffix/cycle/depth cases fail
-named. The real explosion key advances to the existing honest textured-state
-unsupported boundary. Task 4 remains paused without edits.
+probe exposed valid terminal `gsSPBranchList` control flow. Task 3's narrow
+tail-transfer repair passed same-reviewer rereview at C0/I0/M0: strict
+collection and rigid/Fast3D walks follow the final closure-selected target,
+while malformed/suffix/cycle/depth cases fail named. The real explosion key
+advances to the existing honest textured-state unsupported boundary. Task 4
+resumes from zero edits.
 Completing and reviewing the full prerequisite remains the gate before Task 16
 Task 2 resumes.
 The reusable
