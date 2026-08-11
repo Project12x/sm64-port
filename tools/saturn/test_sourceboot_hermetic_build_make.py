@@ -395,6 +395,25 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         )
         self.assertIn('--as "$(SOURCEBOOT_SH_AS)" --ld "$(SOURCEBOOT_SH_LD)"', makefile)
 
+    def test_archive_and_nm_gates_invoke_attested_backends_directly(self) -> None:
+        makefile = self.sourceboot_makefile()
+        for role in ("AR", "NM"):
+            expected = (
+                f"SOURCEBOOT_SH_{role} := $(YAUL_INSTALL_ROOT)/bin/"
+                f"$(YAUL_PROG_SH_PREFIX)-{role.lower()}$(SOURCEBOOT_SH_EXEEXT)"
+            )
+            self.assertIn(expected, makefile)
+            self.assertIn(f"SH_{role} := $(SOURCEBOOT_SH_{role})", makefile)
+            self.assertIn(
+                f'--{role.lower()} "$(SOURCEBOOT_SH_{role})"', makefile
+            )
+        self.assertNotIn('--nm "$(SH_NM)"', makefile)
+        self.assertIn('$(SH_AR) rcs "$@" $(SOFTFP_OBJS)', makefile)
+        self.assertEqual(
+            makefile.count('$(SOURCEBOOT_SH_NM) "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf"'),
+            2,
+        )
+
     def test_yaul_packaging_uses_candidate_local_temporary_directory(self) -> None:
         makefile = self.sourceboot_makefile()
         self.assertIn(

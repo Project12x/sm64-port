@@ -30,7 +30,8 @@ class ToolchainAttestationTests(unittest.TestCase):
     """A byte or ownership change must never silently reuse an attestation."""
 
     binary_names = (
-        "sh-elf-gcc.exe", "sh-elf-as.exe", "sh-elf-ld.exe", "sh-elf-nm.exe",
+        "sh-elf-gcc.exe", "sh-elf-as.exe", "sh-elf-ld.exe", "sh-elf-ar.exe",
+        "sh-elf-nm.exe",
         "sh-elf-objcopy.exe", "sh-elf-objdump.exe", "sh-elf-readelf.exe",
         "sh-elf-addr2line.exe",
     )
@@ -101,6 +102,19 @@ class ToolchainAttestationTests(unittest.TestCase):
                 original = path.read_bytes()
                 path.write_bytes(original + b"changed\n")
                 self.assertNotEqual(first.sha256, self.build().sha256)
+                path.write_bytes(original)
+
+    def test_direct_archive_and_nm_backends_are_sealed_and_required(self) -> None:
+        first = self.build()
+        for name in ("sh-elf-ar.exe", "sh-elf-nm.exe"):
+            with self.subTest(name=name):
+                path = self.install / "bin" / name
+                original = path.read_bytes()
+                path.write_bytes(original + b"mutated\n")
+                self.assertNotEqual(first.sha256, self.build().sha256)
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, "toolchain binary is not a file"):
+                    self.build()
                 path.write_bytes(original)
 
     def test_unclassified_or_ambiguous_external_dependency_fails(self) -> None:

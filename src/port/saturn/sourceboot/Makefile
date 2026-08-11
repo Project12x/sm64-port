@@ -68,6 +68,8 @@ SOURCEBOOT_SH_EXEEXT := .exe
 endif
 SOURCEBOOT_SH_AS := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-as$(SOURCEBOOT_SH_EXEEXT)
 SOURCEBOOT_SH_LD := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-ld$(SOURCEBOOT_SH_EXEEXT)
+SOURCEBOOT_SH_AR := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-ar$(SOURCEBOOT_SH_EXEEXT)
+SOURCEBOOT_SH_NM := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-nm$(SOURCEBOOT_SH_EXEEXT)
 SOURCEBOOT_SH_OBJDUMP := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-objdump$(SOURCEBOOT_SH_EXEEXT)
 SOURCEBOOT_SH_READELF := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf$(SOURCEBOOT_SH_EXEEXT)
 SOURCEBOOT_SH_ADDR2LINE := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-addr2line$(SOURCEBOOT_SH_EXEEXT)
@@ -573,6 +575,14 @@ SH_CFLAGS += $(SOURCEBOOT_GCC_TOOL_PREFIX)
 SH_CXXFLAGS += $(SOURCEBOOT_GCC_TOOL_PREFIX)
 SH_LDFLAGS += $(SOURCEBOOT_GCC_TOOL_PREFIX)
 
+# Yaul's generic environment selects the gcc-ar/gcc-nm helper wrappers. Those
+# wrappers discover their binutils backends through PATH, adding an unsealed
+# executable lookup to archive creation and the post-link symbol gate. The
+# sourceboot archive is explicitly non-LTO, so invoke the exact binutils
+# backends directly and attest those same paths.
+SH_AR := $(SOURCEBOOT_SH_AR)
+SH_NM := $(SOURCEBOOT_SH_NM)
+
 # Keep the default Yaul binary image contiguous in work RAM.  The source data
 # bank is exported separately from the final ELF and copied into the cart at
 # its already-linked VMA before thread5_game_loop() executes.
@@ -1069,7 +1079,8 @@ SOURCEBOOT_DERIVED_OUTPUTS := \
 SOURCEBOOT_TOOLCHAIN_ARGS = \
   --yaul-root "$(YAUL_INSTALL_ROOT)" --yaul-version 0.3.1 \
   --yaul-commit 6012f79f237773378c8014e70d8998ad95a38d98 \
-  --gcc "$(SH_CC)" --as "$(SOURCEBOOT_SH_AS)" --ld "$(SOURCEBOOT_SH_LD)" --nm "$(SH_NM)" \
+  --gcc "$(SH_CC)" --as "$(SOURCEBOOT_SH_AS)" --ld "$(SOURCEBOOT_SH_LD)" \
+  --ar "$(SOURCEBOOT_SH_AR)" --nm "$(SOURCEBOOT_SH_NM)" \
   --objcopy "$(SOURCEBOOT_RAW_OBJCOPY)" --objdump "$(SH_OBJDUMP)" \
   --readelf "$(SOURCEBOOT_SH_READELF)" --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)"
 
@@ -1297,7 +1308,7 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 # soft-float entry point resolved out of libsm64softfp.a. Checked as a set,
 # because a partial substitution (say, SF from soft-fp and DF from fp-bit) is
 # both possible and worth catching.
-	@if $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-nm "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" \
+	@if $(SOURCEBOOT_SH_NM) "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" \
 	    | grep -Eq '[[:space:]](___pack_f|___unpack_f|___pack_d|___unpack_d|__fpadd_parts|___fpcmp_parts_f|___fpcmp_parts_d)$$'; then \
 	  printf '%s\n' 'sourceboot: libgcc fp-bit soft-float is linked; expected soft-fp' >&2; \
 	  exit 1; \
@@ -1305,7 +1316,7 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 # ...and the converse, so an empty/missing archive cannot pass the check above
 # by accident: the soft-fp entry points must actually be present.
 	@for sym in ___addsf3 ___subsf3 ___mulsf3 ___divsf3 ___floatsisf ___fixsfsi; do \
-	  $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-nm "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" \
+	  $(SOURCEBOOT_SH_NM) "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" \
 	    | grep -Eq "[[:space:]]T[[:space:]]$$sym\$$" || { \
 	    printf '%s\n' "sourceboot: $$sym missing from the linked image" >&2; exit 1; }; \
 	done

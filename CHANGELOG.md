@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Bound sourceboot archive creation and every post-link symbol gate directly
+  to the attested `sh-elf-ar` and `sh-elf-nm` backends. This removes Yaul's
+  PATH-resolved `gcc-ar`/`gcc-nm` wrapper delegation, so an unsealed backend can
+  no longer change a release gate; missing or mutated backends fail closed and
+  reseal the build identity.
+
 - Pinned native-math audit contracts and route oracles to LF checkouts so
   Windows `core.autocrlf` cannot alter release-identity bytes. A filtered Git
   checkout test now exercises the effective Windows representation rather

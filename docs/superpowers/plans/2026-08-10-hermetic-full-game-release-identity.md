@@ -2755,3 +2755,18 @@ single baseline failure in
 (243/244). No old candidate identity or acceptance evidence is reinstated;
 tool-topology, final-provenance, index-scaling, clean A/B rebuild, measurement,
 v4 reseal, capacity/package, and rereview gates remain open.
+
+### Repair round 1 — direct archive/nm tool topology (2026-08-10)
+
+Task 9 remains **active**. Inspection of pinned Yaul 0.3.1 commit
+`6012f79f237773378c8014e70d8998ad95a38d98`'s `env.mk`, `build.pre.mk`, and
+`build.post.bin.mk` showed that `SH_AR` and `SH_NM` select `gcc-ar`/`gcc-nm`
+wrappers, while the installed wrappers delegate through PATH to `sh-elf-ar`
+and `sh-elf-nm`. Sourceboot now uses a same-repository close-port of the
+existing exact assembler/linker binding: it invokes the binutils archive and
+nm backends directly, passes those same paths to attestation, and keeps the
+non-LTO soft-fp archive compatible. TDD RED rejected the absent backend
+arguments/topology; focused GREEN is attestation 17/17 and Make 19/19,
+including backend mutation, absence, and direct-gate assertions. The old
+candidate identity and all downstream acceptance remain invalid pending the
+common-commit A/B rebuild and reseal.

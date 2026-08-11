@@ -28,7 +28,8 @@ YAUL_VERSION = "0.3.1"
 YAUL_COMMIT = "6012f79f237773378c8014e70d8998ad95a38d98"
 _TOOL_ARGUMENTS = (
     ("gcc", "compiler"), ("as", "assembler"), ("ld", "linker driver"),
-    ("nm", "nm"), ("objcopy", "objcopy"), ("objdump", "objdump"),
+    ("ar", "archive writer"), ("nm", "nm"),
+    ("objcopy", "objcopy"), ("objdump", "objdump"),
     ("readelf", "readelf"), ("addr2line", "addr2line"),
 )
 _POSIX_ABSOLUTE_PATH = re.compile(r"(?:^|[\s\"'=:(\[,;])/(?!/)")
