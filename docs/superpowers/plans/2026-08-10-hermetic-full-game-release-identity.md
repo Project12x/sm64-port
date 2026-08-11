@@ -2098,6 +2098,22 @@ canonical `gen_source_closure.py` schema; no external source, copied bytes,
 license, or notice change. Candidate A must restart from the resulting common
 source commit; manifest/reproducibility remain open.
 
+Candidate A from `4dcc2235` published identity tag
+`id-887f8a9ff04578ea`, completed compile/link/package, external equality, and
+root plus nested cleanliness, and cleared source-owner validation. Manifest
+construction then rejected the profile's declared unsuffixed
+`sm64-saturn-sourceboot.{elf,iso,cue}` names against the exact sourceboot
+program artifacts `sm64-saturn-sourceboot-e2.{elf,iso,cue}`. No manifest or
+reproducibility gate is claimed. The release-enabled BOB profile now declares
+the real `-e2` artifact basenames, with an integration test deriving expected
+names from sourceboot Make's `SH_PROGRAM`; the separately deferred full-game
+profile retains its intentional deployment names. Focused TDD was RED 0/1 and
+GREEN 1/1; full target-profile coverage is GREEN 14/14. Reference: close-port
+of the established names in sourceboot Make, Task 9's artifact paths, and
+historical target evidence; no external source, copied bytes, license, or
+notice change. Candidate A must restart from the resulting common source
+commit and new canonical profile digest; manifest/reproducibility remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

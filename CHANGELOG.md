@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Corrected the release-enabled BOB profile's declared ELF, ISO, and CUE
+  basenames to the sourceboot program's real `-e2` outputs. The profile had
+  named nonexistent unsuffixed files, so a fully compiled and cleanliness-
+  verified target correctly failed manifest sealing; a checked-in integration
+  contract now keeps the profile names synchronized with `SH_PROGRAM` while
+  leaving the future full-game profile's distinct deployment names unchanged.
+
 - Aligned release-manifest source-owner validation with the canonical closure
   schema. Recipe records deliberately use the schema-defined
   `linker/build-recipe` class as their owner, but the manifest validator had

@@ -1335,6 +1335,22 @@
   `gen_source_closure.py` schema; no external source, copied bytes, license,
   or notice change. Candidate A must restart from the resulting common commit;
   manifest/reproducibility gates remain open.
+- Candidate A from `4dcc2235` published identity v2 tag
+  `id-887f8a9ff04578ea`, completed compile/link/package, external equality, and
+  root plus nested cleanliness, and cleared source-owner validation. Manifest
+  construction then rejected the profile's unsuffixed ELF basename against
+  exact sourceboot program output `sm64-saturn-sourceboot-e2.elf`; ISO and CUE
+  carried the same latent suffix mismatch. No manifest or reproducibility gate
+  is claimed.
+- Profile/output correction: the release-enabled BOB profile now declares the
+  real `-e2` ELF/ISO/CUE basenames. A checked-in integration test derives those
+  names from sourceboot Make's `SH_PROGRAM`, while the deferred full-game
+  profile retains its distinct deployment names. Focused TDD was RED 0/1 and
+  GREEN 1/1; full target-profile coverage is GREEN 14/14. Reference: close-
+  port of established sourceboot Make, Task 9 plan, and historical target-
+  evidence paths; no external source, copied bytes, license, or notice change.
+  Candidate A must restart from the resulting common source commit and new
+  canonical profile digest; manifest/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

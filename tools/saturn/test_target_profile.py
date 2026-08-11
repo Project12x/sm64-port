@@ -138,6 +138,24 @@ class TargetProfileTests(unittest.TestCase):
                 raw = path.read_bytes()
                 self.assertEqual(raw, canonical_json_bytes(json.loads(raw)))
 
+    def test_release_profile_names_match_sourceboot_program_outputs(self) -> None:
+        profile = json.loads((
+            ROOT / "tools/saturn/profiles/sourceboot-bob-demo-v1.json"
+        ).read_text(encoding="ascii"))
+        makefile = (
+            ROOT / "src/port/saturn/sourceboot/Makefile"
+        ).read_text(encoding="utf-8")
+        program_line = next(
+            line for line in makefile.splitlines() if line.startswith("SH_PROGRAM := ")
+        )
+        program = program_line.partition(":=")[2].strip()
+        self.assertEqual(profile["output_names"], {
+            "cue": f"{program}.cue",
+            "elf": f"{program}.elf",
+            "iso": f"{program}.iso",
+            "source_dat": "SOURCE.DAT",
+        })
+
     def test_normalize_repo_path_rejects_escape_and_case_collision(self) -> None:
         with self.assertRaisesRegex(ValueError, "escapes repository"):
             normalize_repo_path(self.root, "../outside")
