@@ -219,3 +219,43 @@
   two-stage review; Tasks 3-5; feature-off identity; all target/P2/Ymir,
   visual/manual, Task 9 reseal, and Task 10 smoke gates. No target evidence
   is claimed.
+
+## 2026-08-11 Task 2 resumed downstream-binding audit
+
+- Status supersedes the earlier missing-registry blocker: Task 14 is landed
+  through `0d765ccb` and independently approved `PASS C0/I0/M0`, but Task 2 is
+  still `needs-context before RED/production edits` on the next, distinct
+  boundary. The reviewed registry owns source-object `(resolved model,
+  behavior)` to nonzero family/bank/hash/package-generation identity; Task 2
+  must not duplicate it.
+- Concrete missing input: the registry maps BOB actors such as
+  `bhvKingBobomb` to numeric bank `0x00E5754C`, hash
+  `00e5754c80762a15...`, and scene-package generation 1. The generated BOB
+  outputs are seven `.s64f` family/capability metadata files. A scoped artifact
+  inventory finds exactly one `.s64b`,
+  `build/saturn/actors/mario/mario.s64b` (596,896 bytes), whose model/family
+  identity is Mario-only. The brief forbids silently substituting that bank.
+- Residency evidence: the only BOB package is provisional; its
+  `ANIMATION_DEPENDENCIES` section is a four-byte placeholder with
+  `max_scratch=0`. Sourceboot only validates a local `scene_package_view` and
+  discards it; no production `sm64_saturn_scene_residency_t` owner/active
+  generation is initialized. Thus no matching immutable bank view, dependency
+  payload, or Task 1 scratch reservation exists for the captured numeric IDs.
+- Reviewed references/reuse mode: inspected the landed registry at
+  `8a9ff531` plus repair `d0a9868b`, final prerequisite docs `0d765ccb`, the
+  existing residency/package APIs, Task 1 bank workspace binding, and the
+  reviewed handoff state machine (`963e10d4` plus `e82759ce`). Intended reuse
+  remains direct use of those in-tree interfaces. No alternate registry,
+  lifecycle, or external code was created.
+- RED/GREEN/tests: no RED fixture, production edit, host test, target test, or
+  CHANGELOG entry was made. The mandatory RED requires a real
+  registry-resolved nonzero identity and matching immutable S64B/residency
+  span; fabricating that fixture would hide the missing production contract.
+- Required context: name or land the owner and interface/artifacts that expose
+  generic-actor S64B banks keyed by the registry's numeric bank IDs and exact
+  package generation, and initialize/retain the corresponding active scene
+  residency and scratch spans. Then run the required Task 2 production-shaped
+  RED, minimal GREEN, three host gates plus extended handoff gate, independent
+  two-stage review, and feature-off identity proof. Tasks 3-5 and every target,
+  P2, Ymir, visual/manual, Task 9 reseal, and Task 10 smoke gate remain open and
+  unclaimed.

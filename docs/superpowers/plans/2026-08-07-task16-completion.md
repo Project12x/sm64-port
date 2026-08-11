@@ -8,7 +8,15 @@
 
 **Tech Stack:** SH-2 C (dual-CPU, generation-keyed lock-free claim patterns already established in `saturn_actor_instance_queue.c` / `saturn_render_job_runtime.c`), host C test harnesses via `Makefile.saturn.mk` `verify-*` targets, MSYS2 toolchain wrapper.
 
-**Hard dependency:** `2026-08-07-task14-completion.md` Task 3 (identity registry). Until it lands, `valid_observation()` rejects every real object (`family_id==0`), so this plan's drain would run against a permanently empty queue. **Task 1 below is registry-independent and may start immediately; Tasks 2-5 require Task 14's registry merged.** Target (Ymir) evidence additionally requires Task 14's green link.
+**Hard dependency:** `2026-08-07-task14-completion.md` Task 3 (identity registry),
+landed through `0d765ccb` and independently approved `PASS C0/I0/M0`. The
+registry owns exact `(resolved model, behavior)` to nonzero
+family/bank/hash/package-generation identity. It does not materialize an S64B
+geometry dependency. Task 2 therefore still requires a production source for
+mapping each numeric bank ID plus exact active package generation to a
+registry-selected immutable S64B view and its residency scratch span. Target
+(Ymir) evidence additionally requires a completed production binding and green
+link.
 
 **Execution status (2026-08-11):** `active` as the load-bearing prerequisite
 for hermetic release Task 10. Exact manifest-bound smoke at commit `5a72a3aa`
@@ -17,8 +25,9 @@ VBlank callbacks, but render generation 1 terminates
 `DONE,DONE,FAILED,QUARANTINED`: the sealed feature-on actor-admission wrapper
 still intentionally fails closed. Disabling dynamic actor closure is rejected
 because the same production actor path must scale to the total game. Task 1 is
-source-complete after review repair on its isolated branch with independent
-rereview still open;
+source-complete and independently approved after review repair. Task 2 is
+`needs-context` before RED because the landed source registry has no matching
+generic-actor S64B/residency materialization;
 Tasks 2–5, target proof, Task 9 reseal, and Task 10 smoke/visual/manual
 acceptance remain open.
 
@@ -139,17 +148,21 @@ Independent two-stage review before Task 2.
 
 ### Task 2: Production handoff wiring — populate and claim (requires Task 14 registry)
 
-**2026-08-11 status: blocked before RED/production edits.** Approved base
-`a189820f` contains no actor-identity registry implementation or interface
-that can resolve a nonzero `actor_bank_id` plus the exact active
-`scene_package_generation` to an immutable `sm64_saturn_actor_bank_view_t` and
-its residency-owned dependency/scratch span. The only discoverable related
-object is unreachable `2d28214c`, explicitly labelled incomplete and
-unreviewed, and it changes only `src/game/rendering_graph_node.c`; it cannot
-be used as the reviewed Task 14 prerequisite. Do not substitute the compiled
-Mario bank or invent the missing contract. Resume only after the approved Task
-14 registry handoff (interface, source, build wiring, and reviewed commit) is
-provided.
+**2026-08-11 resumed status: `needs-context` before RED/production edits.**
+The Task 14 prerequisite is now landed through `0d765ccb` and approved
+`PASS C0/I0/M0`; it correctly owns source-object identity only. Its BOB entries
+select nonzero numeric bank IDs such as `0x00E5754C`, family IDs, hashes, and
+package generation 1, but the corresponding generated artifacts are S64F
+family/capability metadata, not immutable S64B geometry banks. This base has
+only `build/saturn/actors/mario/mario.s64b`; the BOB provisional package has a
+four-byte `ANIMATION_DEPENDENCIES` placeholder with zero scratch, production
+does not retain or initialize a `sm64_saturn_scene_residency_t`, and the local
+boot package view is discarded after validation. The compiled Mario bank is
+identity-incompatible and the Task 2 brief explicitly forbids using it as a
+fallback. A compliant registry-ID/generation-to-S64B/residency binding is
+therefore impossible without an additional owned artifact/interface. Keep all
+Task 2 steps unchecked until that input is named or supplied; do not duplicate
+Task 14's source registry or start Task 3 worker cutover.
 
 **Files:**
 - Modify: `src/port/saturn/sourceboot/main.c` (the per-frame bank lifecycle at :368-389/:492 and retirement at :1238-1284)
