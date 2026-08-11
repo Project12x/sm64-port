@@ -1408,6 +1408,26 @@
   dataflow traversal is the scale-sensitive phase and remains unchanged so A/B
   execute identical gates. Candidate B and every later Task 9 gate remain
   open.
+- Fresh candidate B at the same `081c8575` source and matching inventoried
+  prerequisites failed closed at identity publication: B emitted
+  `id-228b9dd66476aad9`, not A's `id-03b0d87ea1993a5a`. Only source closure
+  differed (`d1e6cb87...b06a4` versus `840b13b0...ae81a`): exactly
+  `bob_sky_bitmap.sx` and `bob_texture_bank.sx` among 4,234 rows embedded
+  candidate-specific absolute `.incbin` paths. Toolchain, profile, package,
+  binary prerequisites, and all other closure rows matched. The B compile was
+  stopped; reproducibility and measurement remain failed closed.
+- Generated-assembly relocation correction: all five texture, optional-
+  fragment, and sky `.incbin` operands are repository-relative to sourceboot's
+  real Make working directory. The generating Makefile is a normal prerequisite
+  so retained outputs cannot hide a recipe change. TDD was RED 0/1 then GREEN
+  1/1, with the full hermetic Make suite GREEN 18/18. Exact pinned
+  `sh-elf-as` resolved the canonical relative sky path and emitted a proof
+  object's `0x40000`-byte `.rodata`. Reference: same-repository close-port of
+  the generated assembly rules at `44b73975f`, `2ae3fcce`, and `51744d4e`; no
+  external source, copied notice, or license change. Both candidates must
+  rebuild from empty owned `build/saturn` trees at the resulting common commit;
+  the earlier A manifest is diagnostic, not reproducibility evidence. Task 9
+  Steps 2–3 are reopened until corrected candidate A succeeds and verifies.
 
 ## Task 5 review repair round 2
 

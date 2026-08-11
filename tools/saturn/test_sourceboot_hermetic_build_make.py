@@ -549,6 +549,35 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             explicit_audit,
         )
 
+    def test_generated_incbin_assembly_is_worktree_path_independent(self) -> None:
+        makefile = self.sourceboot_makefile()
+        incbin_lines = [
+            line.strip() for line in makefile.splitlines() if "'.incbin" in line
+        ]
+
+        self.assertIn("SOURCEBOOT_REPO_FROM_SOURCEBOOT := ../../../..", makefile)
+        self.assertIn(
+            "sourceboot-repo-input = $(SOURCEBOOT_REPO_FROM_SOURCEBOOT)/"
+            "$(patsubst $(ROOT)/%,%,$(1))",
+            makefile,
+        )
+        self.assertIn(
+            "SOURCEBOOT_ASSET_ASM_RECIPE := "
+            "$(realpath $(firstword $(MAKEFILE_LIST)))",
+            makefile,
+        )
+        self.assertEqual(makefile.count("$(SOURCEBOOT_ASSET_ASM_RECIPE)"), 3)
+        self.assertEqual(len(incbin_lines), 5)
+        self.assertTrue(
+            all("$(call sourceboot-repo-input," in line for line in incbin_lines),
+            incbin_lines,
+        )
+        self.assertTrue(
+            all("$(ROOT)" not in line and "$(SOURCEBOOT_GENERATED)" not in line
+                for line in incbin_lines),
+            incbin_lines,
+        )
+
     def test_second_discovery_rescans_cached_depfile_after_flag_drift(self) -> None:
         dep_root = Path(self.temporary.name) / "discovery-deps"
         dep_root_arg = f"SOURCEBOOT_DISCOVERY_DEPS={dep_root.as_posix()}"

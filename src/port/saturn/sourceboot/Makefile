@@ -5,6 +5,12 @@ endif
 ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-sourceboot-e2
 SOURCEBOOT_GENERATED := $(ROOT)/build/saturn/sourceboot/generated
+# GNU as resolves .incbin operands from this Makefile's working directory,
+# not from the generated assembly file.  Preserve that resolution while
+# keeping generated source bytes independent of the checkout's absolute path.
+SOURCEBOOT_REPO_FROM_SOURCEBOOT := ../../../..
+sourceboot-repo-input = $(SOURCEBOOT_REPO_FROM_SOURCEBOOT)/$(patsubst $(ROOT)/%,%,$(1))
+SOURCEBOOT_ASSET_ASM_RECIPE := $(realpath $(firstword $(MAKEFILE_LIST)))
 # sourceboot.specs' *link: spec reads this at link time via GCC's
 # %:getenv() spec function to build a -L flag it places directly ahead of
 # -T sourceboot-cart.x on the real collect2/ld command line -- the only way
@@ -924,48 +930,48 @@ source-sky-gradient: $(SOURCEBOOT_SKY_GRADIENT_HEADER)
 # the source cart remains compact and the linker can place it in .cart_rodata
 # alongside the other immutable source assets.  The generated assembly is in
 # the variant object tree, so demo/interpreted builds cannot cross-contaminate.
-$(SOURCEBOOT_BOB_TEXTURE_ASM): $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT)
+$(SOURCEBOOT_BOB_TEXTURE_ASM): $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) $(SOURCEBOOT_ASSET_ASM_RECIPE)
 	@mkdir -p "$(dir $@)"
 	@printf '%s\n' \
 	  '.section .rodata' \
 	  '.align 4' \
 	  '.global _sm64_saturn_bob_texture_bank' \
 	  '_sm64_saturn_bob_texture_bank:' \
-	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_TILES))"' \
+	  '.incbin "$(call sourceboot-repo-input,$(SOURCEBOOT_BOB_TILES))"' \
 	  '.global _sm64_saturn_bob_texture_bank_end' \
 	  '_sm64_saturn_bob_texture_bank_end:' \
 	  '.align 4' \
 	  '.global _sm64_saturn_bob_clut_bank' \
 	  '_sm64_saturn_bob_clut_bank:' \
-	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_CLUT))"' \
+	  '.incbin "$(call sourceboot-repo-input,$(SOURCEBOOT_BOB_CLUT))"' \
 	  '.global _sm64_saturn_bob_clut_bank_end' \
 	  '_sm64_saturn_bob_clut_bank_end:' > "$@"
 
-$(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM): $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT)
+$(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM): $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) $(SOURCEBOOT_ASSET_ASM_RECIPE)
 	@mkdir -p "$(dir $@)"
 	@printf '%s\n' \
 	  '.section .rodata' \
 	  '.align 4' \
 	  '.global _sm64_saturn_bob_fragment_texture_bank' \
 	  '_sm64_saturn_bob_fragment_texture_bank:' \
-	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK))"' \
+	  '.incbin "$(call sourceboot-repo-input,$(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK))"' \
 	  '.global _sm64_saturn_bob_fragment_texture_bank_end' \
 	  '_sm64_saturn_bob_fragment_texture_bank_end:' \
 	  '.align 4' \
 	  '.global _sm64_saturn_bob_fragment_clut_bank' \
 	  '_sm64_saturn_bob_fragment_clut_bank:' \
-	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT))"' \
+	  '.incbin "$(call sourceboot-repo-input,$(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT))"' \
 	  '.global _sm64_saturn_bob_fragment_clut_bank_end' \
 	  '_sm64_saturn_bob_fragment_clut_bank_end:' > "$@"
 
-$(SOURCEBOOT_BOB_SKY_ASM): $(SOURCEBOOT_BOB_SKY)
+$(SOURCEBOOT_BOB_SKY_ASM): $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_ASSET_ASM_RECIPE)
 	@mkdir -p "$(dir $@)"
 	@printf '%s\n' \
 	  '.section .rodata' \
 	  '.align 4' \
 	  '.global _sm64_saturn_bob_sky_bitmap' \
 	  '_sm64_saturn_bob_sky_bitmap:' \
-	  '.incbin "$(subst \,/,$(SOURCEBOOT_BOB_SKY))"' \
+	  '.incbin "$(call sourceboot-repo-input,$(SOURCEBOOT_BOB_SKY))"' \
 	  '.global _sm64_saturn_bob_sky_bitmap_end' \
 	  '_sm64_saturn_bob_sky_bitmap_end:' \
 	  '.align 4' > "$@"

@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Made sourceboot's generated `.incbin` assembly relocatable between release
+  worktrees. The first independent candidate pair differed only because five
+  texture/sky/fragment directives serialized absolute checkout paths; they now
+  use canonical repository-relative operands resolved from the sourceboot Make
+  working directory. The generating Makefile is an explicit prerequisite, so
+  a retained generated tree cannot silently reuse the old host-bound source.
+
 - Deferred the immutable native-math audit-v2 exact-total overlay during
   release-candidate construction. The first otherwise-verified Task 9
   candidate measured 700 while the historical v2 contract requires 582, but

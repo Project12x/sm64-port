@@ -2172,6 +2172,29 @@ The expensive phase is the existing code-only dataflow traversal, so candidate
 B retains the exact analyzer and gates rather than changing behavior between
 the reproducibility pair.
 
+Fresh candidate B at the same `081c8575` source and matching inventoried
+prerequisites failed closed at identity publication before measurement: it
+formed `id-228b9dd66476aad9` versus A's `id-03b0d87ea1993a5a`. All roots matched
+except source closure (`d1e6cb87...b06a4` versus `840b13b0...ae81a`), with
+exactly two differing rows among 4,234. `bob_sky_bitmap.sx` and
+`bob_texture_bank.sx` serialized candidate A/B's absolute paths in their
+`.incbin` operands; semantic binary prerequisites were equal. The invalid B
+compile was stopped, and no reproducibility or measurement claim was made.
+
+Relocation correction: all five current texture, optional-fragment, and sky
+`.incbin` directives now render repository-relative operands from the
+sourceboot Make working directory, and the generating Makefile is an explicit
+prerequisite so retained generated trees cannot reuse absolute-path bytes.
+Focused TDD observed RED 0/1 and then GREEN 1/1; full hermetic Make coverage is
+GREEN 18/18. The exact pinned `sh-elf-as` assembled a proof source from the
+real sourceboot working directory and resolved the relative sky input into a
+`0x40000`-byte `.rodata` section. Reference record: close-port of the existing
+sourceboot generated-assembly rules at `44b73975f`, `2ae3fcce`, and
+`51744d4e`; the reuse is same-repository Make-pattern adaptation with no
+external source, copied notice, or license change. Both owned candidates must
+remove only their verified `build/saturn` output tree and rebuild from the
+resulting common source commit; A's earlier manifest remains diagnostic only.
+
 - [x] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -2182,7 +2205,7 @@ git diff --check
 
 Confirm Tasks 1–8 and both reviews per task are recorded. Preserve unrelated dirt. Release mode may proceed only if every checked-in source-closure input is tracked and clean; if a relevant file is dirty, stop and reconcile ownership instead of hiding it.
 
-- [x] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
+- [ ] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
 
 ```powershell
 $implementationRoot = (Get-Location).Path
@@ -2244,7 +2267,7 @@ Invoke-HermeticBobBuild $candidateARoot
 
 Expected: ordinary sourceboot gates, post-link closure verification, and release-manifest verification pass. Audit v4 is not yet selected.
 
-- [x] **Step 3: Verify and retain candidate A's immutable manifest**
+- [ ] **Step 3: Verify and retain candidate A's immutable manifest**
 
 Resolve the current identity-tagged directory from the generated identity JSON,
 then verify its manifest:
