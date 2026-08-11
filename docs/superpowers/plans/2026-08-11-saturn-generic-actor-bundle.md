@@ -9,11 +9,11 @@
 **Tech Stack:** Python 3 deterministic asset compilers and `unittest`; freestanding C11 for SH-2 runtime/host fixtures; GNU Make 4.3+ through `tools/saturn/with-msys-toolchain.ps1`; existing S64P/S64B formats, scene residency, DRAM-cart/CDFS loader, P2/TAS.B ownership, and hermetic release tooling.
 
 **Execution status (2026-08-11):** active under the owner-selected
-subagent-driven workflow. Task 1 is complete and independently approved. Task
-2 is in independent-review repair round 1 at `f1799118` after a `C0/I2/M1`
-verdict; rereview remains the gate before Task 3. The deferred malformed-path
-type Minor was not addressed in this bounded round. Target, release, smoke, visual,
-desktop, manual, and total-game gates remain open.
+subagent-driven workflow. Tasks 1 and 2 are complete and independently
+approved. Task 2 repair `f1799118` passed scoped rereview with both Important
+findings addressed and no new breakage; its malformed-path error-type Minor is
+deferred to the final branch review. Task 3 is the next RED. Target, release,
+smoke, visual, desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
 
@@ -259,13 +259,13 @@ CHANGELOG states v3 is additive and feature-on selection is not wired yet. Commi
 
 #### Task 2 live status (2026-08-11)
 
-- Status: `source-complete-review-repair-round-1; rereview pending` at repair
+- Status: `complete; repair round 1 rereview PASS` at repair
   commit `f1799118` (`fix(saturn): align actor bundle host target validation`),
   following original behavior commit `b1133026`. The review's two Important
-  findings are repaired; the deferred malformed-path type Minor is
-  intentionally untouched in this round. Task 3 remains blocked on controller-owned
-  rereview. No sourceboot selection, target build, P2, Ymir, release, smoke,
-  visual, desktop, or manual claim is made.
+  findings are repaired and the scoped rereview found no new breakage. The
+  malformed-path error-type Minor remains deferred for final-review triage.
+  Task 3 is now ready for RED. No sourceboot selection, target build, P2,
+  Ymir, release, smoke, visual, desktop, or manual claim is made.
 - TDD: the Python RED failed with `ModuleNotFoundError: No module named
   'actor_family_bundle'`; the C RED failed on absent
   `saturn_actor_bundle.h/.c`. GREEN passes seven Python cases and the

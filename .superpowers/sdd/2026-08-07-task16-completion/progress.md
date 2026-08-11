@@ -398,9 +398,9 @@
 
 ## 2026-08-11 generic actor bundle Task 2 review repair round 1
 
-- Review verdict: `CHANGES REQUIRED C0/I2/M1`; the malformed-path type Minor
-  was explicitly deferred and out of scope for this round. Status is
-  `source-complete-review-repair-round-1; rereview pending` at `f1799118`
+- Review verdict: initial `CHANGES REQUIRED C0/I2/M1`; the malformed-path type
+  Minor was explicitly deferred and out of scope for this round. Final status
+  is `complete; repair round 1 rereview PASS` at `f1799118`
   (`fix(saturn): align actor bundle host target validation`). Task 16 Tasks 2-5
   and Task 3 of the prerequisite remain blocked.
 - I1 repair: host S64B validation now requires every tier-0 primitive reference
@@ -418,7 +418,12 @@
   The C fixture passes 53 mutations, for 100 host/target rejection assertions.
   The native-root combined wave passes v3, historical v2 (47/13/14), Mario
   pose-bank, and S64P runtime gates.
-- Remaining: independent rereview, deferred Minor disposition, prerequisite
-  Tasks 3-11, Task 16 Tasks 2-5, and every target/P2/Ymir/map/capacity,
+- Scoped rereview: both Important findings ADDRESSED with no new breakage. The
+  host now checks every contiguous tier-0 reference and the C helper publishes
+  only a fully validated local candidate. The deferred malformed-path
+  `TypeError` versus documented `ValueError` Minor remains recorded for final
+  whole-branch review; it does not block Task 3.
+- Remaining: deferred Minor disposition, prerequisite Tasks 3-11, Task 16
+  Tasks 2-5, and every target/P2/Ymir/map/capacity,
   feature-off, transition, release/reseal, smoke, visual, desktop, manual, and
   total-game gate remain open.
