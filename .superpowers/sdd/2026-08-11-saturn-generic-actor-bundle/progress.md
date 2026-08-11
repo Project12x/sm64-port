@@ -157,6 +157,10 @@
 - Review: six focused mutations plus 32/27/33/2/4 full suites, native Make,
   compileall, real explosion, exact Mario hashes, and scope/ABI checks passed.
   Open: Task 4, Task 16 Tasks 2-5, and all target/release/manual gates.
+- Task 4 full-key replay then inventoried 25 named unsupported variants and
+  stopped before edits at family 36/model `0x0065`: unselected non-drawable
+  `MODEL_NONE` was incorrectly required to carry GeoLayout provenance before
+  selecting `MODEL_METALLIC_BALL`. Task 3 round 7 is active; Task 4 is paused.
 
 ## Task 2: source-complete, independent review pending
 

@@ -26,8 +26,10 @@ unknown-command rejection. The same reviewer now passes the complete repair at
 C0/I0/M0. Task 4 retained `GEO_SHADOW` as an explicit unsupported gap, then its
 next zero-edit BOB probe found a valid tail-branch display list rejected for
 lacking `gsSPEndDisplayList`. Task 3's exact terminal `gsSPBranchList` repair
-passed same-reviewer rereview at C0/I0/M0. Task 4 resumes; both `GEO_SHADOW`
-and explosion `textured` remain explicit unsupported gaps. Target, release, smoke,
+passed same-reviewer rereview at C0/I0/M0. Task 4's full-key zero-edit replay
+inventoried 25 explicit unsupported variants, then an unselected `MODEL_NONE`
+alternate poisoned selected `MODEL_METALLIC_BALL` provenance. Task 3 is narrowly
+reopened for selection-order correctness; Task 4 is paused. Target, release, smoke,
 visual, desktop, manual, and total-game gates remain open.
 
 ## Global Constraints
@@ -610,6 +612,16 @@ generic-family, native-root Make, compileall, and exact Mario identity. The
 reviewer repeated the six tail-branch mutations, real explosion probe, and all
 full suites, finding no schema, ABI, Makefile, `src`/`include`, or Task 4 drift.
 Task 4 resumes from zero edits; all target/release/manual gates remain open.
+
+**Task 3 real-source model-less alternate repair round 7 (2026-08-11):** active.
+Task 4's full BOB replay reached family 36/model `0x0065`, where the valid
+drawable `MODEL_METALLIC_BALL` shares a family record with non-drawable
+`MODEL_NONE`. `_record_selection` required complete GeoLayout provenance for
+the unselected model-less alternate before numeric selection and rejected the
+drawable. The repair must select exact numeric identity before requiring
+drawable provenance, retain duplicate/conflicting selected-model rejection,
+and never fabricate geometry for `MODEL_NONE`. Task 4 remains zero-edit and
+paused for RED/GREEN plus scoped rereview.
 
 ---
 

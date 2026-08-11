@@ -49,8 +49,10 @@ probe exposed valid terminal `gsSPBranchList` control flow. Task 3's narrow
 tail-transfer repair passed same-reviewer rereview at C0/I0/M0: strict
 collection and rigid/Fast3D walks follow the final closure-selected target,
 while malformed/suffix/cycle/depth cases fail named. The real explosion key
-advances to the existing honest textured-state unsupported boundary. Task 4
-resumes from zero edits.
+advances to the existing honest textured-state unsupported boundary. Task 4's
+full-key zero-edit replay then exposed an unselected non-drawable `MODEL_NONE`
+alternate poisoning selected `MODEL_METALLIC_BALL` provenance. Task 3 is
+narrowly reopened for selection-order correctness; Task 4 is paused.
 Completing and reviewing the full prerequisite remains the gate before Task 16
 Task 2 resumes.
 The reusable

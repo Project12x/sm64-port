@@ -28,7 +28,9 @@ same reviewer now passes C0/I0/M0. Task 4 recorded `GEO_SHADOW` explicitly,
 then exposed a valid terminal `gsSPBranchList` shape. Its exact tail-transfer
 repair also passed C0/I0/M0; the real explosion record now reaches the
 preserved textured-state unsupported boundary instead of a false terminator
-error. Resume Task 4 and build/review the scene-local DRAM-cart bundle and fixed
+error. The full-key replay then exposed an unselected `MODEL_NONE` alternate
+poisoning selected drawable provenance. Repair that selection order, then
+resume Task 4 and build/review the scene-local DRAM-cart bundle and fixed
 dual-SH-2 LWRAM
 workspace and complete the Task 16 production generic actor cutover. After
 those target-byte changes, rerun Task 9's build/repro/v4/staging chain before

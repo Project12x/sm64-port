@@ -734,3 +734,13 @@
   schema, ABI, Makefile, `src`/`include`, or Task 4 drift. Task 4 resumes from
   zero edits; `GEO_SHADOW` and `textured` remain explicit unsupported gaps.
 - Task 16 Tasks 2-5 and every target/release/manual gate remain open.
+
+## 2026-08-11 generic actor bundle Task 3 model-less alternate round 7
+
+- Status: `active; Task 4 paused before edits`. Real family 36 legitimately
+  contains drawable `MODEL_METALLIC_BALL` and non-drawable `MODEL_NONE`, but
+  the variant selector validated the unselected model-less GeoLayout first.
+- Required correction: select exact numeric model identity before enforcing
+  drawable provenance; retain selected duplicate/conflict/malformed rejection
+  and never fabricate geometry for `MODEL_NONE`.
+- Task 16 Tasks 2-5 and every target/release/manual gate remain open.

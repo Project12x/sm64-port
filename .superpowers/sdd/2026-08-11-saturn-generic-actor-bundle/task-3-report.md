@@ -1442,6 +1442,17 @@ returning calls and ordinary final-End rules remain unchanged. No schema,
 public ABI, Makefile, `src`/`include`, or Task 4 drift was found. Task 4 is
 unblocked; explosion `textured` remains a named unsupported capability gap.
 
+### Real-source model-less alternate repair round 7 — active
+
+Task 4 replayed every current BOB key, inventorying 25 named unsupported
+variants, then stopped before edits at family 36/model `0x0065`.
+`bhvChainChompChainPart` legitimately contains drawable
+`MODEL_METALLIC_BALL` plus non-drawable `MODEL_NONE`; the selector rejected the
+selected drawable because it required GeoLayout provenance for the unselected
+model-less alternate first. Task 3 is reopened only to correct that selection
+order while retaining selected-model conflict/malformed checks and zero
+geometry for `MODEL_NONE`. RED/GREEN and scoped rereview remain open.
+
 ### Real-source tail-branch repair round 6 — source-complete
 
 Base is docs-only operational stop `0e2f03b9`. Reference reuse remains wholly
