@@ -686,5 +686,5 @@
   global source-selection cache remains. The depth-256 bound is unchanged.
 - Continuation GREEN: 32/32 complete synthetic closure, 2/2 real BOB closure,
   28/28 variant/source, 25/25 rigid-group, 4/4 generic-family, native-root Make,
-  compileall, and exact Mario hashes. Continuation behavior commit pending;
+  compileall, and exact Mario hashes. Continuation behavior commit `56155516`;
   same-reviewer rereview and every previously open gate remain open.
