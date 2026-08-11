@@ -1541,6 +1541,8 @@
 - Status: `source-complete` at candidate source `44b78627`; Steps 1–10 are
   complete. Step 11's controller-owned evidence and code-quality reviews remain
   open, so Task 9 is not `complete`.
+- Source-closeout commit: `50228ae0` (`test(saturn): close reproducible goal
+  target v4`).
 - Final full-suite RED ran 244 tests with two failures: the documented unrelated
   null-camera proof plus a stale Task 8 test that still expected the v4 pin to
   be absent. The scoped correction renames that test and requires synthetic

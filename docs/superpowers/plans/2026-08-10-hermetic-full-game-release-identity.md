@@ -1556,6 +1556,8 @@ against the real pin; the checked-in v2/v3/v4 integrity tests remain separate.
 Focused integrity is GREEN 3/3. The final full verifier is 243/244 with only
 the plan-approved unrelated null-camera proof failure. Release staging,
 manifest, and hermetic-Make suites are GREEN 20/20, 28/28, and 18/18.
+Source-closeout commit: `50228ae0` (`test(saturn): close reproducible goal
+target v4`).
 
 **Files:**
 - Create: `tools/saturn/sh2_native_math_goal_audit_contract_v4.txt`

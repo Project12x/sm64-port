@@ -160,7 +160,8 @@ the authoritative 20/20 result.
 Task 9 execution range begins at controller transition `8588d391`. The final
 candidate behavior identity is `44b78627`; later evidence/contract work is
 `c99563e5`, `283d701d`, `162945d6`, `438f926d`, `43c82145`, `29f5fd62`,
-`16a31d54`, and `e02f785e`. The complete intervening source-fix list is
+`16a31d54`, and `e02f785e`. Source closeout and final test maintenance are
+`50228ae0`. The complete intervening source-fix list is
 preserved by `git log --reverse 038391a4..HEAD` and the active plan/ledger.
 
 The required legacy campaign/v3 plan files already contained user-owned
