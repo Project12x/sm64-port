@@ -589,7 +589,8 @@ and no schema/ABI/Task 4 drift. Task 4 resumes from its zero-edit preflight;
 broader gates remain open.
 
 **Task 3 real-source tail-branch repair round 6 (2026-08-11):** source-complete;
-scoped rereview pending. After
+scoped rereview pending at behavior commit `a78db8c9`
+(`fix(saturn): follow actor display-list tail branches`). After
 the provenance PASS, Task 4 correctly recorded the signpost `GEO_SHADOW` gap,
 then real supported key `(family ordinal 4, model ID 0x00cd)` / `bhvExplosion`
 failed because `explosion_seg3_dl_03004298` ends with a valid unconditional

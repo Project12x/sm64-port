@@ -143,7 +143,7 @@
 ## Task 3 real-source tail-branch repair round 6
 
 - Status: `source-complete; scoped rereview pending; Task 4 paused with zero
-  edits`.
+  edits` at behavior commit `a78db8c9`.
 - Repair: one final one-identifier `gsSPBranchList` is an unconditional
   closure-only tail transfer in collection, structural walking, and Fast3D
   extraction. Suffix, arity/expression, missing/duplicate source, recursion,

@@ -719,7 +719,7 @@
 ## 2026-08-11 generic actor bundle Task 3 tail-branch repair round 6
 
 - Status: `source-complete; scoped rereview pending; Task 4 paused before
-  edits`. The next real BOB key,
+  edits` at behavior commit `a78db8c9`. The next real BOB key,
   `bhvExplosion` / model `0x00cd`, uses a valid terminal `gsSPBranchList` and
   no `gsSPEndDisplayList`; the strict variant compiler misclassified it.
 - Repair: the compiler and rigid walker now treat one final one-identifier

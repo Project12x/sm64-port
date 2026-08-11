@@ -1504,3 +1504,32 @@ Task 4 files remain unmodified. Behavior commit and final committed-HEAD
 evidence are recorded in the following transition; scoped same-reviewer
 rereview, Task 4, Task 16 Tasks 2-5, target/release/manual, and total-game gates
 remain open.
+
+#### Round-6 committed-HEAD evidence
+
+Behavior commit `a78db8c9` (`fix(saturn): follow actor display-list tail
+branches`) changes exactly the compiler, rigid walker, their two focused test
+files, CHANGELOG, STATE, ROADMAP, active plan, both tracked ledgers, and this
+report. It does not change either Task 4 file.
+
+Fresh verification from committed HEAD:
+
+```text
+actor variant/source: Ran 32 tests in 6.615s, OK
+rigid groups: Ran 27 tests in 0.003s, OK
+tools/saturn/test_scene_closure.py: Ran 33 tests in 4.439s, OK
+tools/saturn/test_bob_scene_closure.py: Ran 2 tests in 26.621s, OK
+historical generic-family report: Ran 4 tests in 20.677s, OK
+native-root variant/pose/meshlet Make wave: exit 0 (32 Python tests)
+compileall: exit 0
+git show --check a78db8c9: exit 0
+```
+
+The committed-HEAD real-source command again reaches exactly
+`UnsupportedActorSourceError: unsupported rigid-group source: textured`.
+Mario JSON/refactor copies remain 562,096 bytes at
+`3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`;
+Mario S64B/refactor copies remain 596,896 bytes at
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`.
+Scoped same-reviewer rereview remains open; Task 4 is still paused at zero
+edits, and no target/release/manual evidence is claimed.
