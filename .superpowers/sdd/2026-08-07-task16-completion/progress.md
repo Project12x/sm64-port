@@ -595,3 +595,15 @@
 - Remaining: scoped Task 3 rereview; Task 4 and all S64F/registry/cart/workspace,
   Task 16 Tasks 2-5, feature-off, target/P2/Ymir, transition, release/reseal,
   smoke/visual/desktop/owner-manual, and total-game gates. None is claimed.
+
+## 2026-08-11 generic actor bundle Task 3 real-source repair rereview
+
+- Status: `complete-review-passed`. Behavior `16e61b63` and evidence
+  `e72d7127` passed the independent scoped rereview with C0/I0/M0.
+- Verification: 28/28 focused variant/source tests, 25/25 rigid-group tests,
+  the combined variant/pose/meshlet Make wave, fresh BOB area-1 selection,
+  direct-DL alpha/opaque semantics, exact historical Mario hashes, and scoped
+  diff checks all passed. No closure schema field was invented.
+- Transition: Task 4 is unblocked and resumes from its zero-edit preflight
+  stop. Task 16 Tasks 2-5 and all target, P2/Ymir, release/reseal, smoke,
+  visual, desktop, owner-manual, and total-game gates remain open.

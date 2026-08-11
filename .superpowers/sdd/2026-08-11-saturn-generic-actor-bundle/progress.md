@@ -1,0 +1,188 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md
+
+## 2026-08-11 execution start
+
+- Controller HEAD: `0baac1a225d512f0f7eb95c36f2766fcef723c15` on linked worktree
+  `sm64-port/.worktrees/sh2-native-math-purge`, branch
+  `sh2/native-math-purge`.
+- Workflow: `superpowers:subagent-driven-development`, selected by the owner.
+  Each task receives a fresh implementer, task-scoped spec/quality review, and
+  any required bounded fix/re-review loop; a whole-branch review follows Task
+  11.
+- Preflight: the plan has 11 serialized tasks and 59 unchecked steps. No
+  contradiction was found between tasks or the Global Constraints. Immutable
+  actor bytes remain in fixed DRAM-cart residency; mutable state remains in
+  generated fixed LWRAM; all cross-SH-2 publication is scalar and
+  generation-last; CD work is master-owned and bounded to 16 sectors/step.
+- Open gates: all implementation, review, target, release, smoke, visual,
+  desktop, manual, and total-game gates remain open. Task 16 Task 2 remains
+  blocked until this prerequisite is source-complete and independently
+  approved.
+- Next: Task 1 shared freestanding SHA-256 RED/GREEN implementation.
+
+## Task 1: active
+
+- Base: `0baac1a225d512f0f7eb95c36f2766fcef723c15`.
+- Baseline: `verify-scene-package-runtime verify-actor-family-bank` initially
+  reached package runtime PASS but the family gate's native Python consumed
+  the MSYS `/d/...` report spelling and failed before assertions. Repeating
+  with command-line `SATURN_REPO_ROOT` set to the same absolute native
+  forward-slash worktree path exited 0: actor family report PASS (47 families,
+  13 unsupported representatives / 14 records) and C actor family bank PASS.
+  This is a harness path spelling, not a source/test baseline failure.
+- Dispatch: fresh Task 1 implementer; task-scoped review required before Task
+  2.
+- Material plan correction during RED: both refactored consumers are direct
+  sourceboot `SH_SRCS`, so the new `saturn_sha256.c` must also be added to
+  `src/port/saturn/sourceboot/Makefile`. The original Task 1 file list omitted
+  that necessary target link input. Controller authorized only the minimal
+  source-list addition plus a focused Make/dry-run assertion; the implementer
+  must record the correction in the tracked plan/Task 16 ledger/report. A
+  known target-link break may not be deferred.
+- Review: independent task reviewer verdict spec compliant / task quality
+  approved, C0/I0/M0. The target-link expansion item is confirmed as an open
+  later target gate rather than a missing Task 1 host/source requirement.
+- Task 1: complete (commits `0baac1a..43789630`, review clean).
+- Next: Task 2 canonical S64F-v3 host and target validation.
+
+## Task 2: active
+
+- Base: `e7b1c2bcb04705e5454684cea4487b3ff9c8692f`.
+- Inputs from Task 1: public `sm64_saturn_sha256_*` API is approved; existing
+  S64P and historical S64F-v2 hash semantics remain pinned. Task 2 may consume
+  that API but must not reopen or duplicate it.
+- Dispatch: fresh Task 2 implementer; task-scoped spec/quality review required
+  before Task 3.
+- Initial implementation commits: `b1133026` behavior and `bdc90eae` evidence.
+  Review verdict: spec issues / quality needs fixes, C0/I2/M1.
+- Task 2: minor (deferred): `source_identity` sorts `item.path` before complete
+  record/type validation, so mixed malformed path types may raise `TypeError`
+  instead of the documented `ValueError`. Final whole-branch review must
+  triage it; it does not enter the task fix loop.
+- Fix round 1/5 active from reviewer head `bdc90eae`: host validation must
+  check every tier-0 reference in target-contiguous order, and C variant lookup
+  must decode locally then publish only after complete success.
+- Task 2: fix round 1/5 (2 addressed, 0 open; commits
+  `bdc90eae..c8f8c24f`). Scoped rereview found no new Critical/Important
+  breakage; the deferred Minor remains recorded for final-review triage.
+- Task 2: complete (commits `e7b1c2bc..c8f8c24f`, review clean with 1 deferred
+  Minor).
+- Next: Task 3 deterministic generic S64B variant compilation.
+
+## Task 3: active
+
+- Base: `891a77a43d3587f62e21631acd23d6b584a78b58`.
+- Inputs: approved canonical S64F-v3/source-identity module and unchanged
+  historical S64B validator/pose/meshlet contracts. Task 3 must compile exact
+  source-selected generic variants without yet orchestrating a scene bundle.
+- Deferred prior Minor: malformed source-path type normalization belongs to
+  final-review triage unless Task 3 directly depends on the same public input
+  boundary; it is not an implicit scope expansion.
+- Dispatch: fresh Task 3 implementer; independent task review required before
+  Task 4.
+- Initial commits: `031e1620` behavior and `cdd9637d` evidence. Review verdict:
+  spec issues / quality needs fixes, C3/I2/M0.
+- Fix round 1/5 active from reviewer head `cdd9637d`: exact model-ID-to-variant
+  selection; rejection of unrepresentable texture/material state;
+  coverage-preserving fail-closed Geo/Fast3D/animation tokenization; strict
+  provenance-declared root source; and translation/range validation into named
+  `ActorVariantError` boundaries.
+- Task 3: fix round 1/5 (3 addressed, 2 open; commits
+  `cdd9637d..4e32ca2e`). Open: validate the actual attested
+  `LOAD_MODEL_FROM_GEO` binding rather than provenance metadata alone; reject
+  empty/double-comma tokens in selected animation table/header parsing.
+- Fix round 2/5 active from `4e32ca2e`.
+- Task 3: fix round 2/5 (2 addressed, 0 open; commits
+  `4e32ca2e..034f3c05`). Scoped rereview found no new Critical/Important
+  breakage.
+- Task 3: complete (commits `891a77a4..034f3c05`, review clean).
+- Next: Task 4 real BOB S64F-v3 bundle orchestration.
+- Task 3 real-source repair round 3: complete at behavior `16e61b63` and
+  evidence `e72d7127`; independent scoped rereview PASS, C0/I0/M0. Fresh
+  review repeated 28/28 focused tests, 25/25 rigid-group tests, the combined
+  variant/pose/meshlet Make wave, exact BOB area-1 selection, direct-DL
+  alpha/opaque semantic comparison, historical Mario hashes, and diff checks.
+  The selected signpost GeoLayout is no longer poisoned by the following valid
+  three-argument direct-DL binding. Task 4 is unblocked.
+
+## Task 4: active
+
+- Base: `c4c0973ebe935a731c4bac98bdde2db8d7d3c530`.
+- Inputs: independently approved v3 canonical pack/validate boundary and
+  strict generic S64B compiler. Task 4 must expose real BOB source limitations
+  rather than weaken or bypass Task 3's named fail-closed boundary.
+- Dispatch: fresh Task 4 implementer; independent task review required before
+  Task 5.
+- Pre-edit real-BOB stop: supported key `(family ordinal 3, model ID 0x007C)`
+  / `bhvMessagePanel` failed because Task 3's exact binding scanner treated a
+  neighboring valid three-argument `LOAD_MODEL_FROM_DL(..., LAYER_ALPHA)` in
+  `levels/scripts.c` as malformed, even though the selected signpost binding is
+  the preceding two-argument GEO command. Task 4 made no edits.
+- Decision: reopen Task 3 for a narrow TDD repair and scoped rereview. The
+  scanner must coverage-parse both valid GEO and DL source forms, retain/check
+  the direct-DL layer semantic, and continue rejecting malformed, duplicate,
+  conflicting, or trailing tokens. Repair commits `16e61b63` / `e72d7127`
+  passed independent scoped rereview with C0/I0/M0. Task 4 made no preflight
+  edits and is now resumed from the reviewed boundary.
+
+## Task 2: source-complete, independent review pending
+
+- Behavior commit: `b1133026` (`feat(saturn): define generic actor family
+  bundle v3`) from approved base
+  `e7b1c2bcb04705e5454684cea4487b3ff9c8692f`. It adds the canonical Python
+  writer/validator and freestanding target validator/resolver without wiring
+  sourceboot production selection.
+- Tracked plan/Task 16 evidence commit: `bdc90eae` (`docs(saturn): record
+  actor bundle v3 task evidence`). This task-local progress file and the full
+  report remain intentionally SDD-ignored artifacts.
+- RED: repo Python failed with `ModuleNotFoundError: No module named
+  'actor_family_bundle'`; the new Make target failed with
+  `fatal error: saturn_actor_bundle.h: No such file or directory` and the
+  absent `.c` source. Production edits followed both failures.
+- GREEN: seven Python tests pass. The pinned 1,580-byte fixture SHA-256 is
+  `fa47d3342b2111e946778a1f67bb479f235ecb7be7bcaeac5e2d0d0a8fcf42e4`.
+  The C fixture passes 53 resealed mutations and zero-output assertions;
+  Python carries 46 malformed-input assertions, for 99 rejection checks.
+- Historical wave: with command-line native forward-slash
+  `SATURN_REPO_ROOT`, `verify-actor-family-bundle verify-actor-family-bank
+  verify-actor-pose-bank verify-scene-package-runtime` exits 0. S64F v2 stays
+  at 47 families/13 unsupported representatives/14 closure records; Mario
+  pose-bank and S64P runtime fixtures pass.
+- Self-review: scoped staged `git diff --check`, Python bytecode compilation,
+  exact-size/endianness/hash/padding review, host-target fixture handoff, and
+  resolver no-rescan review pass. Header mutations are resealed so field
+  validation—not the outer hash alone—rejects them; pose and geometry mutations
+  enter the real embedded S64B records.
+- Reference/reuse: direct use plus close-port of same-repository
+  `saturn_actor_bank`, `saturn_scene_package`, and `compile_actor_bank` patterns
+  at base `e7b1c2bc`; no external source and no new license/notice obligation.
+  The repository has no root license file.
+- Review/open gates: independent spec/code-quality verdict remains pending and
+  blocks Task 3. Real BOB/all-scene banks, sourceboot selection, target
+  build/P2/Ymir, cart/LWRAM/HWRAM evidence, heterogeneous lanes, feature-off
+  identity, transition, release/reseal, smoke, visual, desktop, and manual
+  gates remain unchecked.
+
+## Task 2 review repair round 1
+
+- Review: `CHANGES REQUIRED C0/I2/M1`; the malformed-path type Minor was not in
+  the authorized repair scope. Repair commit `f1799118` (`fix(saturn): align actor
+  bundle host target validation`); tracked evidence commit `c8f8c24f`
+  (`docs(saturn): record actor bundle review repair`); independent rereview
+  pending.
+- Host-target parity RED: the exact focused Python test resealed matching
+  tier-0/tier-1 references from `[0,1,2]` to `[0,2,1]` after the first element.
+  Before production edits it failed with `ValueError not raised`. GREEN mirrors
+  the target's per-reference `source_ordinal + local` check.
+- Variant-output finding: current public lookup already decoded into local
+  `found` and assigned output only on success. The requested decoder-local
+  candidate hardening is landed anyway; the short-view public lookup test was
+  green before production edits and remains an explicit characterization
+  regression rather than a fabricated RED.
+- Final repair wave: Python 8/8; C fixture 53 mutations; historical S64F-v2
+  47/13/14, Mario pose-bank, and S64P runtime pass. Python has 47 malformed
+  input assertions; combined count is 100. Pinned synthetic fixture is 1,688
+  bytes with SHA-256
+  `4b3334a61f8ce7c8b2c4548a112b0c7354c444b42659ec7943941de5529e4dbc`.
+- Status: `source-complete-review-repair-round-1; rereview pending`. Task 3,
+  Task 16 production handoff, and all target/release/manual gates remain open.

@@ -12,12 +12,13 @@
 subagent-driven workflow. Tasks 1 and 2 are complete and independently
 approved. Task 2 repair `f1799118` passed scoped rereview with both Important
 findings addressed and no new breakage; its malformed-path error-type Minor is
-deferred to the final branch review. Task 3 is source-complete after a third,
-real-source repair round and awaits scoped rereview: the Task 4 pre-edit probe
-found that a valid neighboring three-argument direct-DL binding rejected the
-selected two-argument GeoLayout binding. Task 4 has not started and remains
-blocked on that rereview. Target, release, smoke, visual, desktop, manual, and
-total-game gates remain open.
+deferred to the final branch review. Task 3 is complete after its third,
+real-source repair round passed scoped rereview with C0/I0/M0: exact two-argument
+GeoLayout and three-argument direct-DL bindings are coverage-parsed, selected
+direct-DL layers reach S64B semantics, and neighboring valid bindings cannot
+alter the selected variant. Task 4 is resumed from its zero-edit preflight stop
+to build the real BOB bundle. Target, release, smoke, visual, desktop, manual,
+and total-game gates remain open.
 
 ## Global Constraints
 
@@ -454,8 +455,8 @@ and its JSON remains
 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
 No target/release/manual gate is claimed.
 
-**Task 3 real-source repair round 3 (2026-08-11):** source-complete; scoped
-rereview pending at behavior commit `16e61b63`
+**Task 3 real-source repair round 3 (2026-08-11):** complete; scoped
+rereview PASS (C0/I0/M0) at behavior commit `16e61b63`
 (`fix(saturn): preserve direct actor binding layers`). The attested binding
 source is authoritative and the closure schema remains unchanged. The coverage parser now distinguishes exact
 two-argument `LOAD_MODEL_FROM_GEO` from exact three-argument
@@ -484,8 +485,12 @@ Mario remains exactly 596,896 bytes at
 `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`;
 its JSON remains
 `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`.
-Task 4, target, release, smoke, visual, desktop, manual, and total-game gates
-remain open and unclaimed.
+The independent rereview repeated 28/28 focused and 25/25 rigid-group tests,
+the combined variant/pose/meshlet Make wave, direct-DL alpha/opaque semantic
+comparison, fresh BOB area-1 selection, exact historical Mario hashes, and
+scoped diff checks. No new breakage was found. Task 4 is unblocked and resumed;
+target, release, smoke, visual, desktop, manual, and total-game gates remain
+open and unclaimed.
 
 ---
 
