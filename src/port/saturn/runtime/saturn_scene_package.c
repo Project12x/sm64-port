@@ -1,14 +1,8 @@
 #include "saturn_scene_package.h"
+#include "saturn_sha256.h"
 
 #include <stddef.h>
 #include <string.h>
-
-typedef struct sha256_state {
-    uint32_t word[8];
-    uint64_t bit_count;
-    uint8_t block[64];
-    uint32_t used;
-} sha256_state_t;
 
 static uint32_t read_u32(const uint8_t *p)
 {
@@ -29,94 +23,10 @@ static void write_u32(uint8_t *p, uint32_t value)
     p[3] = (uint8_t)value;
 }
 
-static uint32_t rotate_right(uint32_t value, uint32_t shift)
-{
-    return (value >> shift) | (value << (32U - shift));
-}
-
-static void sha256_block(sha256_state_t *state, const uint8_t block[64])
-{
-    static const uint32_t constants[64] = {
-        0x428A2F98U,0x71374491U,0xB5C0FBCFU,0xE9B5DBA5U,0x3956C25BU,0x59F111F1U,0x923F82A4U,0xAB1C5ED5U,
-        0xD807AA98U,0x12835B01U,0x243185BEU,0x550C7DC3U,0x72BE5D74U,0x80DEB1FEU,0x9BDC06A7U,0xC19BF174U,
-        0xE49B69C1U,0xEFBE4786U,0x0FC19DC6U,0x240CA1CCU,0x2DE92C6FU,0x4A7484AAU,0x5CB0A9DCU,0x76F988DAU,
-        0x983E5152U,0xA831C66DU,0xB00327C8U,0xBF597FC7U,0xC6E00BF3U,0xD5A79147U,0x06CA6351U,0x14292967U,
-        0x27B70A85U,0x2E1B2138U,0x4D2C6DFCU,0x53380D13U,0x650A7354U,0x766A0ABBU,0x81C2C92EU,0x92722C85U,
-        0xA2BFE8A1U,0xA81A664BU,0xC24B8B70U,0xC76C51A3U,0xD192E819U,0xD6990624U,0xF40E3585U,0x106AA070U,
-        0x19A4C116U,0x1E376C08U,0x2748774CU,0x34B0BCB5U,0x391C0CB3U,0x4ED8AA4AU,0x5B9CCA4FU,0x682E6FF3U,
-        0x748F82EEU,0x78A5636FU,0x84C87814U,0x8CC70208U,0x90BEFFFAU,0xA4506CEBU,0xBEF9A3F7U,0xC67178F2U,
-    };
-    uint32_t schedule[64];
-    uint32_t a, b, c, d, e, f, g, h, index;
-
-    for (index = 0U; index < 16U; index++) schedule[index] = read_u32(block + index * 4U);
-    for (; index < 64U; index++) {
-        uint32_t x = schedule[index - 15U];
-        uint32_t y = schedule[index - 2U];
-        uint32_t s0 = rotate_right(x, 7U) ^ rotate_right(x, 18U) ^ (x >> 3U);
-        uint32_t s1 = rotate_right(y, 17U) ^ rotate_right(y, 19U) ^ (y >> 10U);
-        schedule[index] = schedule[index - 16U] + s0 + schedule[index - 7U] + s1;
-    }
-    a=state->word[0]; b=state->word[1]; c=state->word[2]; d=state->word[3];
-    e=state->word[4]; f=state->word[5]; g=state->word[6]; h=state->word[7];
-    for (index = 0U; index < 64U; index++) {
-        uint32_t s1 = rotate_right(e,6U)^rotate_right(e,11U)^rotate_right(e,25U);
-        uint32_t choice = (e & f) ^ ((~e) & g);
-        uint32_t temp1 = h + s1 + choice + constants[index] + schedule[index];
-        uint32_t s0 = rotate_right(a,2U)^rotate_right(a,13U)^rotate_right(a,22U);
-        uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
-        uint32_t temp2 = s0 + majority;
-        h=g; g=f; f=e; e=d+temp1; d=c; c=b; b=a; a=temp1+temp2;
-    }
-    state->word[0]+=a; state->word[1]+=b; state->word[2]+=c; state->word[3]+=d;
-    state->word[4]+=e; state->word[5]+=f; state->word[6]+=g; state->word[7]+=h;
-}
-
-static void sha256_init(sha256_state_t *state)
-{
-    static const uint32_t initial[8] = {0x6A09E667U,0xBB67AE85U,0x3C6EF372U,0xA54FF53AU,
-        0x510E527FU,0x9B05688CU,0x1F83D9ABU,0x5BE0CD19U};
-    memcpy(state->word, initial, sizeof(initial));
-    state->bit_count = 0U;
-    state->used = 0U;
-}
-
-static void sha256_update(sha256_state_t *state, const uint8_t *bytes, uint32_t count)
-{
-    state->bit_count += (uint64_t)count * 8U;
-    while (count != 0U) {
-        uint32_t take = 64U - state->used;
-        if (take > count) take = count;
-        memcpy(state->block + state->used, bytes, take);
-        state->used += take; bytes += take; count -= take;
-        if (state->used == 64U) { sha256_block(state, state->block); state->used = 0U; }
-    }
-}
-
-static void sha256_finish(sha256_state_t *state, uint8_t digest[32])
-{
-    uint64_t bits = state->bit_count;
-    uint32_t index;
-    state->block[state->used++] = 0x80U;
-    if (state->used > 56U) {
-        memset(state->block + state->used, 0, 64U - state->used);
-        sha256_block(state, state->block); state->used = 0U;
-    }
-    memset(state->block + state->used, 0, 56U - state->used);
-    for (index = 0U; index < 8U; index++) state->block[63U-index] = (uint8_t)(bits >> (index*8U));
-    sha256_block(state, state->block);
-    for (index = 0U; index < 8U; index++) write_u32(digest + index*4U, state->word[index]);
-}
-
 bool sm64_saturn_scene_package_sha256(const void *bytes, uint32_t byte_count,
                                       uint8_t digest[32])
 {
-    sha256_state_t state;
-    if (digest == NULL || (bytes == NULL && byte_count != 0U)) return false;
-    sha256_init(&state);
-    if (byte_count != 0U && bytes != NULL) sha256_update(&state, bytes, byte_count);
-    sha256_finish(&state, digest);
-    return true;
+    return sm64_saturn_sha256_digest(bytes, byte_count, digest);
 }
 
 static bool digest_equal(const uint8_t a[32], const uint8_t b[32])
@@ -258,18 +168,20 @@ static bool section_graph_valid(const sm64_saturn_scene_package_view_t *view)
 static bool dependency_digest_valid(const sm64_saturn_scene_package_view_t *view)
 {
     static const uint8_t prefix[11] = {'S','6','4','P','-','D','E','P','S',0,1};
-    sha256_state_t sha;
+    sm64_saturn_sha256_t sha;
     uint8_t record[70], digest[32];
     uint32_t index;
-    sha256_init(&sha); sha256_update(&sha, prefix, sizeof(prefix));
+    sm64_saturn_sha256_init(&sha);
+    if (!sm64_saturn_sha256_update(&sha, prefix, sizeof(prefix))) return false;
     for (index = 0U; index < view->dependency_count; index++) {
         const sm64_saturn_scene_dependency_view_t *item = &view->dependencies[index];
         record[0] = (uint8_t)(item->payload_kind >> 8); record[1] = (uint8_t)item->payload_kind;
         memcpy(record + 2U, item->stable_id, 32U); write_u32(record + 34U, item->generation);
-        memcpy(record + 38U, item->content_sha256, 32U); sha256_update(&sha, record, sizeof(record));
+        memcpy(record + 38U, item->content_sha256, 32U);
+        if (!sm64_saturn_sha256_update(&sha, record, sizeof(record))) return false;
     }
-    sha256_finish(&sha, digest);
-    return digest_equal(digest, view->dependency_set_sha256);
+    return sm64_saturn_sha256_finish(&sha, digest) &&
+           digest_equal(digest, view->dependency_set_sha256);
 }
 
 bool sm64_saturn_scene_package_validate(const void *source, uint32_t byte_count,
@@ -282,7 +194,7 @@ bool sm64_saturn_scene_package_validate(const void *source, uint32_t byte_count,
     uint8_t saved_hash[32];
     uint8_t root_copy_hash_input[32];
     uint32_t section_count, table_end, previous_end, index;
-    sha256_state_t root_sha;
+    sm64_saturn_sha256_t root_sha;
     if (caller_view != NULL) memset(caller_view, 0, sizeof(*caller_view));
     if (bytes == NULL || caller_view == NULL || byte_count < SM64_SATURN_SCENE_PACKAGE_HEADER_SIZE) return false;
     memset(&local_view, 0, sizeof(local_view));
@@ -296,8 +208,11 @@ bool sm64_saturn_scene_package_validate(const void *source, uint32_t byte_count,
     table_end = SM64_SATURN_SCENE_PACKAGE_HEADER_SIZE + section_count * SM64_SATURN_SCENE_SECTION_DESCRIPTOR_SIZE;
     if (table_end > byte_count) return false;
     memcpy(saved_hash, bytes+20U, 32U); memset(root_copy_hash_input, 0, sizeof(root_copy_hash_input));
-    sha256_init(&root_sha); sha256_update(&root_sha, bytes, 20U); sha256_update(&root_sha, root_copy_hash_input, 32U);
-    sha256_update(&root_sha, bytes+52U, byte_count-52U); sha256_finish(&root_sha, digest);
+    sm64_saturn_sha256_init(&root_sha);
+    if (!sm64_saturn_sha256_update(&root_sha, bytes, 20U) ||
+        !sm64_saturn_sha256_update(&root_sha, root_copy_hash_input, 32U) ||
+        !sm64_saturn_sha256_update(&root_sha, bytes+52U, byte_count-52U) ||
+        !sm64_saturn_sha256_finish(&root_sha, digest)) return false;
     if (!digest_equal(digest, saved_hash)) return false;
     view->root_bytes = bytes; view->package_size = byte_count; view->level_id = read_u16(bytes+12U);
     view->area_id = read_u16(bytes+14U); view->section_count = (uint16_t)section_count; view->flags = read_u16(bytes+18U);
@@ -350,20 +265,19 @@ bool sm64_saturn_scene_package_identity_for_kind(
     const sm64_saturn_scene_package_view_t *view, uint16_t payload_kind,
     uint8_t digest[32])
 {
-    sha256_state_t sha;
+    sm64_saturn_sha256_t sha;
     uint8_t generation[4];
     uint32_t index;
     if (view == NULL || digest == NULL || payload_kind < SM64_SATURN_SCENE_ACTOR_DEPENDENCIES ||
         payload_kind > SM64_SATURN_SCENE_AUDIO_DEPENDENCIES) return false;
-    sha256_init(&sha);
+    sm64_saturn_sha256_init(&sha);
     for (index = 0U; index < view->dependency_count; index++) {
         const sm64_saturn_scene_dependency_view_t *item = &view->dependencies[index];
         if (item->payload_kind != payload_kind) continue;
-        sha256_update(&sha, item->stable_id, 32U);
-        sha256_update(&sha, item->content_sha256, 32U);
+        if (!sm64_saturn_sha256_update(&sha, item->stable_id, 32U) ||
+            !sm64_saturn_sha256_update(&sha, item->content_sha256, 32U)) return false;
         write_u32(generation, item->generation);
-        sha256_update(&sha, generation, 4U);
+        if (!sm64_saturn_sha256_update(&sha, generation, 4U)) return false;
     }
-    sha256_finish(&sha, digest);
-    return true;
+    return sm64_saturn_sha256_finish(&sha, digest);
 }

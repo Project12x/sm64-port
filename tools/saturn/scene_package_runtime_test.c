@@ -5,8 +5,16 @@
 
 static void test_validates_big_endian_root_and_dependencies(void)
 {
+    static const uint8_t fixture_root_sha256[32] = {
+        0x6eU,0x33U,0xc1U,0x75U,0x46U,0xc0U,0x46U,0x72U,
+        0xb1U,0x8fU,0x55U,0xe9U,0xedU,0xb6U,0xbdU,0xcfU,
+        0xe2U,0x87U,0xafU,0x8bU,0xe5U,0xb3U,0x1cU,0xa3U,
+        0xcbU,0x2fU,0x63U,0x28U,0xb6U,0xd8U,0x82U,0x97U,
+    };
     test_scene_fixture_t fixture; sm64_saturn_scene_package_view_t view;
     test_make_fixture(&fixture,0);
+    assert(memcmp(fixture.root + 20U, fixture_root_sha256,
+                  sizeof(fixture_root_sha256)) == 0);
     assert(sm64_saturn_scene_package_validate(fixture.root,fixture.root_size,&view));
     assert(view.level_id==9U && view.area_id==1U && view.section_count==8U && view.dependency_count==3U);
     assert(view.dependencies[2].dependency_mask==1U);

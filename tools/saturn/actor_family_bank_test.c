@@ -1,4 +1,5 @@
 #include "saturn_actor_bank.h"
+#include "saturn_sha256.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +30,14 @@ static unsigned int read_be32(const unsigned char *bytes)
 
 int main(int argc, char **argv)
 {
+    static const uint8_t historical_v2_payload_sha256[32] = {
+        0x00U,0xe5U,0x75U,0x4cU,0x80U,0x76U,0x2aU,0x15U,
+        0xb5U,0x48U,0x2fU,0xb1U,0xf2U,0xe8U,0x8fU,0x4bU,
+        0xc1U,0xfcU,0x7aU,0xb8U,0x47U,0xf3U,0x46U,0x39U,
+        0x44U,0xe2U,0xe6U,0x68U,0x9dU,0x41U,0x2eU,0xe8U,
+    };
     unsigned char *bytes, *copy;
+    uint8_t payload_digest[32];
     size_t size;
     uint32_t expected[8];
     sm64_saturn_actor_family_bank_view_t view;
@@ -38,7 +46,9 @@ int main(int argc, char **argv)
     uint32_t selected_capability_bits;
     int selected;
     unsigned int index;
-    if (argc != 2 || !read_file(argv[1], &bytes, &size) ||
+    if (argc != 2 || !read_file(argv[1], &bytes, &size) || size > UINT32_MAX ||
+        !sm64_saturn_sha256_digest(bytes, (uint32_t)size, payload_digest) ||
+        memcmp(payload_digest, historical_v2_payload_sha256, sizeof(payload_digest)) != 0 ||
         !sm64_saturn_actor_family_bank_validate(bytes, size, &view))
         return 1;
     for (index = 0U; index < 8U; index++)

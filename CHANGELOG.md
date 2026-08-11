@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Consolidated the duplicate freestanding SHA-256 implementations used by the
+  S64P scene-package and S64F v2 actor-family-bank validators into one
+  incremental target primitive. Existing serialized bytes and hashes remain
+  unchanged; the shared implementation now rejects null nonempty inputs and
+  byte-accounting overflow explicitly.
+
 ### Fixed
 
 - Reserved worst-case leading alignment headroom in actor-bank dependency

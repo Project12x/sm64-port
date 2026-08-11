@@ -25,6 +25,32 @@
   byte identity, target/P2 evidence, hermetic reseal, smoke, visual, desktop,
   owner manual play, and total-game evidence remain open.
 
+## 2026-08-11 generic actor bundle Task 1 — shared SHA-256
+
+- Status: `source-complete; independent review pending`. The behavior commit is
+  recorded with the Task 1 report; Task 2 must not start until its independent
+  review passes. No target, P2, Ymir, manual, release, or byte-on-hardware
+  evidence is claimed.
+- Implementation: close-ported the private S64P SHA block/update/final path
+  and the S64F v2 segmented-zeroing path into one freestanding incremental
+  `sm64_saturn_sha256_*` API. Null nonempty input and total-byte overflow fail
+  explicitly. S64P and historical S64F v2 fixture/payload hashes are pinned.
+- Design correction: the plan's original file list omitted
+  `src/port/saturn/sourceboot/Makefile`; the shared source is now in `SH_SRCS`
+  beside both consumers. The focused source-list assertion passes. The Yaul
+  dry-run cannot reach link expansion because its existing generated
+  source-closure prerequisite is absent, so that remains an open target gate.
+- Reference record: same-repository close-port from base
+  `0baac1a225d512f0f7eb95c36f2766fcef723c15`, inspected
+  `runtime/saturn_scene_package.c:6-118` and
+  `gfx/saturn_actor_bank.c:534-657`; no external source or license boundary.
+- Tests: RED was the missing `saturn_sha256.h`/`.c` compile failure. GREEN via
+  the MSYS/DLL wrapper with native forward-slash `SATURN_REPO_ROOT` passes
+  `verify-saturn-sha256 verify-scene-package-runtime verify-actor-family-bank`:
+  actor report 47 families, 13 unsupported representatives across 14 records.
+  Scoped `git diff --check` passes for Task 1 files; independent review and
+  every later target/release gate remain open.
+
 ## 2026-08-11 Task 1 execution
 
 - Isolated worktree/branch: `sm64-port/.worktrees/sh2-native-math-purge`,

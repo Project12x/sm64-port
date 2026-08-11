@@ -55,6 +55,8 @@ remain open.
 - Modify: `src/port/saturn/runtime/saturn_scene_package.c`
 - Modify: `src/port/saturn/gfx/saturn_actor_bank.c`
 - Modify: `Makefile.saturn.mk`
+- Modify: `src/port/saturn/sourceboot/Makefile` (source-list correction: the
+  shared object must link with both validators)
 - Modify: `CHANGELOG.md`
 - Modify: `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md`
 - Modify: `.superpowers/sdd/2026-08-07-task16-completion/progress.md`
@@ -80,7 +82,7 @@ bool sm64_saturn_sha256_digest(const void *bytes, uint32_t byte_count,
                                uint8_t digest[32]);
 ```
 
-- [ ] **Step 1: Write the RED vector and regression tests**
+- [x] **Step 1: Write the RED vector and regression tests**
 
 Add `saturn_sha256_test.c` with empty, `"abc"`, a 64-byte boundary, segmented updates, a null/nonzero rejection, and a `UINT32_MAX` accounting mutation. Extend package/family-bank tests to assert their current hashes and historical v2 bytes remain exact after the refactor.
 
@@ -94,7 +96,7 @@ assert(sm64_saturn_sha256_finish(&state, segmented));
 assert(memcmp(digest, segmented, 32U) == 0);
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -104,7 +106,7 @@ powershell -ExecutionPolicy Bypass -File tools/saturn/with-msys-toolchain.ps1 mi
 
 Expected: compile failure because `saturn_sha256.h` and its functions do not exist.
 
-- [ ] **Step 3: Close-port the existing implementation**
+- [x] **Step 3: Close-port the existing implementation**
 
 Move the reviewed block/update/final logic into `saturn_sha256.c`, make null/overflow failures explicit, replace both private copies with the public interface, and preserve package hash zeroing as segmented updates rather than allocating a payload copy.
 
@@ -118,15 +120,42 @@ if (!sm64_saturn_sha256_update(&sha, bytes, hash_offset) ||
     return false;
 ```
 
-- [ ] **Step 4: Run GREEN and regressions**
+- [x] **Step 4: Run GREEN and regressions**
 
 Run `verify-saturn-sha256 verify-scene-package-runtime verify-actor-family-bank`. Expected: all pass and v2 payload/hash fixtures remain unchanged.
 
-- [ ] **Step 5: Update docs, commit, and request review**
+- [x] **Step 5: Update docs, commit, and request review**
 
 Add a Keep-a-Changelog `Changed` entry explaining removal of duplicate target SHA code without changing bytes. Stage only the files above and commit `refactor(saturn): share target SHA-256 validation`. Independent review must pass before Task 2.
 
 ---
+
+#### Task 1 live status (2026-08-11)
+
+- Status: `source-complete; independent review pending`. The close-port creates
+  one freestanding incremental API consumed by the existing S64P and S64F v2
+  validators; no S64F v3 behavior, target completion, or release claim is
+  introduced.
+- TDD: the new public-header/vector fixture first failed exactly because
+  `saturn_sha256.h` and `saturn_sha256.c` did not exist. GREEN passes empty,
+  `"abc"`, 64-byte, segmented, null/nonzero, and `UINT32_MAX` accounting
+  overflow coverage, plus byte-pinned S64P fixture and historical S64F v2
+  payload hashes.
+- Design correction: the initial file list omitted
+  `src/port/saturn/sourceboot/Makefile`; it now adds the shared source to
+  `SH_SRCS` ahead of both consumer objects. A focused source-list assertion
+  passes. A Yaul dry-run reaches the pre-link identity bootstrap but cannot
+  expand the link command because the unrelated generated source-closure input
+  is absent; this is not target evidence.
+- Reference reuse: same repository, base
+  `0baac1a225d512f0f7eb95c36f2766fcef723c15`, close-port/shared-core reuse of
+  `src/port/saturn/runtime/saturn_scene_package.c:6-118` and
+  `src/port/saturn/gfx/saturn_actor_bank.c:534-657`; no external code used.
+- Evidence: the required MSYS wrapper invocation with native forward-slash
+  `SATURN_REPO_ROOT` passes `verify-saturn-sha256`,
+  `verify-scene-package-runtime`, and `verify-actor-family-bank` (47 families,
+  13 unsupported representatives across 14 records). Independent review,
+  all target/P2/Ymir/manual/reseal/smoke gates, and Tasks 2-11 remain open.
 
 ### Task 2: Implement canonical S64F v3 host and target validation
 

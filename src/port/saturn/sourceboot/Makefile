@@ -364,6 +364,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
+  $(ROOT)/src/port/saturn/runtime/saturn_sha256.c \
   $(ROOT)/src/port/saturn/runtime/saturn_scene_package.c \
   $(ROOT)/src/port/saturn/runtime/saturn_scene_residency.c \
   $(ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c \
