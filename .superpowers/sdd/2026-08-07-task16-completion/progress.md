@@ -688,3 +688,16 @@
   28/28 variant/source, 25/25 rigid-group, 4/4 generic-family, native-root Make,
   compileall, and exact Mario hashes. Continuation behavior commit `56155516`;
   same-reviewer rereview and every previously open gate remain open.
+
+- Same round-5 final continuation: one Important remained because a command
+  absent from both reference tables still fell through. RED was three no-error
+  failures for indexed, missing, and computed `gsSPUnhandledReference`
+  arguments; the exact compiler-modeled scalar/state guard remained green.
+- Repair: an exhaustive non-reference/state allowlist is close-ported from
+  `_Fast3DCompiler` and includes the explicit scalar render states reached by
+  real BOB. Commands absent from the supported-reference, unsupported-
+  reference, and state tables now fail named without token inspection.
+- GREEN: 33/33 complete synthetic closure, 2/2 real BOB, 28/28 variant/source,
+  25/25 rigid-group, 4/4 generic-family, native-root Make, compileall, and exact
+  Mario hashes. Final continuation behavior commit pending; same-reviewer
+  rereview and all prior open gates remain open.

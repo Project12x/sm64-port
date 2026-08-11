@@ -567,6 +567,18 @@ source-selection cache remains. GREEN is 32/32 complete synthetic closure,
 2/2 real BOB, 28/28 variant/source, 25/25 rigid-group, 4/4 generic-family,
 Make, compileall, and exact Mario hashes. The depth-256 bound is retained.
 
+The same round-5 rereview then found one final Important: a macro absent from
+both semantic reference tables still fell through. Three RED subcases proved
+`gsSPUnhandledReference` was accepted with indexed, missing, and computed
+targets alike, while the compiler-modeled scalar/state fixture stayed green.
+The closure now has an exhaustive non-reference/state allowlist close-ported
+from `_Fast3DCompiler`, extended only by the exact scalar render-state forms
+reached by real BOB; any macro absent from that allowlist and the two reference
+tables raises `ClosureError` without inspecting tokens. GREEN is 33/33
+synthetic closure, 2/2 BOB, 28/28 variant/source, 25/25 rigid-group, 4/4
+generic-family, Make, compileall, and exact Mario identity. Continuation
+behavior commit pending; Task 4 remains zero-edit and all broader gates open.
+
 ---
 
 ### Task 4: Emit the real BOB S64F v3 bundle

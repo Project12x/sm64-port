@@ -397,6 +397,25 @@ _ACTOR_GFX_UNMODELED_REFERENCE_COMMANDS = {
     "gsSPLookAt": (0,),
 }
 
+# Exact non-reference/state vocabulary close-ported from Task 3's
+# actor_variant_bank._Fast3DCompiler.  These commands consume no additional
+# Geo/Gfx/Vtx/Lights1 definition; several are deliberately rejected later as
+# unrepresentable S64B-v1 state, but the closure may safely retain that typed
+# unsupported result.  Anything absent from all three tables is unknown.
+_ACTOR_GFX_NON_REFERENCE_COMMANDS = {
+    "gsSP1Triangle", "gsSP2Triangles", "gsSPPopMatrix",
+    "gsDPPipeSync", "gsSPEndDisplayList",
+    "gsDPSetTextureImage", "gsDPLoadTextureBlock", "gsSPTexture",
+    "gsDPSetCombineMode", "gsSPSetGeometryMode", "gsSPClearGeometryMode",
+    "gsDPSetEnvColor", "gsDPSetAlphaCompare", "gsDPLoadSync",
+    "gsDPLoadBlock", "gsDPSetTile", "gsDPTileSync", "gsDPSetTileSize",
+    # Additional scalar render state reached by the real BOB closure.  Each
+    # form is source-address-free and is rejected or preserved as unsupported
+    # by the existing source/compiler capability path.
+    "gsDPSetCycleType", "gsDPSetDepthSource", "gsDPSetFogColor",
+    "gsDPSetRenderMode", "gsSPFogPosition", "gsSPNumLights",
+}
+
 
 def _reached_actor_sources(
         root: Path,
@@ -515,6 +534,8 @@ def _reached_actor_sources(
                 elif macro in _ACTOR_GFX_UNMODELED_REFERENCE_COMMANDS:
                     raise ClosureError(
                         f"unsupported reference-bearing Gfx command {macro}")
+                elif macro not in _ACTOR_GFX_NON_REFERENCE_COMMANDS:
+                    raise ClosureError(f"unknown reached Gfx command {macro}")
 
     visit(root_kinds[0], entry, declared_source, declared=True)
     return sources

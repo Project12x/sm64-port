@@ -17,7 +17,9 @@
   list branches now seal their reached Gfx sources, with missing/computed/
   malformed targets rejected from exact macro semantics rather than a
   successful symbol-index lookup. Known unmodeled Fast3D source-address forms
-  fail named while scalar/state identifiers remain passive. Each collection
+  fail named while an explicit compiler-derived allowlist retains known
+  scalar/render state; every command absent from the reference, unsupported-
+  reference, and state tables now fails regardless of its arguments. Each collection
   now uses fresh actor-definition and root/animation-definition inventories
   rather than process-stale root-only caches. Actor-asset traversal also fails
   with a bounded domain error at depth 256 instead of leaking Python

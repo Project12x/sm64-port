@@ -250,7 +250,7 @@ class SceneClosureTest(unittest.TestCase):
         root = self.fixture()
         write(root / "actors/parent/model.inc.c", """
             const Gfx parent_dl[] = {
-                gsSPGeometryMode(G_CULL_BACK, G_LIGHTING),
+                gsSPSetGeometryMode(G_CULL_BACK | G_LIGHTING),
                 gsDPSetCombineMode(G_CC_SHADE, G_CC_SHADE),
                 gsSPEndDisplayList(),
             };
@@ -275,6 +275,22 @@ class SceneClosureTest(unittest.TestCase):
                 ClosureError,
                 "unsupported reference-bearing Gfx command gsSPMatrix"):
             self.collect(root)
+
+    def test_entirely_unmodeled_gfx_commands_fail_closed(self) -> None:
+        cases = (
+            ("indexed", "gsSPUnhandledReference(parent_child_dl)"),
+            ("missing", "gsSPUnhandledReference(missing_dl)"),
+            ("computed", "gsSPUnhandledReference(select_parent_dl(1))"),
+        )
+        for label, command in cases:
+            with self.subTest(label=label):
+                root = self.fixture()
+                write(root / "actors/parent/model.inc.c",
+                      f"const Gfx parent_dl[] = {{ {command}, gsSPEndDisplayList(), }};\n")
+                with self.assertRaisesRegex(
+                        ClosureError,
+                        "unknown reached Gfx command gsSPUnhandledReference"):
+                    self.collect(root)
 
     def test_actor_definition_index_refreshes_after_same_process_change(self) -> None:
         root = self.fixture()
