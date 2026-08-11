@@ -455,8 +455,9 @@ and its JSON remains
 No target/release/manual gate is claimed.
 
 **Task 3 real-source repair round 3 (2026-08-11):** source-complete; scoped
-rereview pending. The attested binding source is authoritative and the closure
-schema remains unchanged. The coverage parser now distinguishes exact
+rereview pending at behavior commit `16e61b63`
+(`fix(saturn): preserve direct actor binding layers`). The attested binding
+source is authoritative and the closure schema remains unchanged. The coverage parser now distinguishes exact
 two-argument `LOAD_MODEL_FROM_GEO` from exact three-argument
 `LOAD_MODEL_FROM_DL`, retains every direct-DL layer token, and enforces S64B-v1
 layer representability only when that binding is selected. A selected direct

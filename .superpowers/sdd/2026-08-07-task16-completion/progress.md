@@ -558,6 +558,8 @@
 ## 2026-08-11 generic actor bundle Task 3 real-source repair round 3
 
 - Status: `source-complete-review-repair-round-3; scoped rereview pending`.
+  The behavior commit is `16e61b63`
+  (`fix(saturn): preserve direct actor binding layers`).
   A Task 4 pre-edit BOB probe found the selected valid two-argument
   `LOAD_MODEL_FROM_GEO(MODEL_WOODEN_SIGNPOST, wooden_signpost_geo)` was rejected
   because the next valid three-argument direct-DL command was globally parsed
