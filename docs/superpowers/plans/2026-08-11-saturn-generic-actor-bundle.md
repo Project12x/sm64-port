@@ -496,7 +496,7 @@ target, release, smoke, visual, desktop, manual, and total-game gates remain
 open and unclaimed.
 
 **Task 3 real-source provenance repair round 4 (2026-08-11):** source-complete;
-scoped rereview pending. After
+scoped rereview pending at behavior commit `1274c08b`. After
 the round-3 PASS, Task 4 replayed real BOB key `(family ordinal 3, model ID
 0x007c)` and selection reached the correct `wooden_signpost_geo`, then failed
 closed at `missing Gfx source: wooden_signpost_seg3_dl_0302DA48`. The closure

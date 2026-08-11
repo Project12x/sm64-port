@@ -611,9 +611,9 @@
 ## 2026-08-11 generic actor bundle Task 3 source-provenance repair round 4
 
 - Status: `source-complete; scoped rereview pending; Task 4 paused before
-  edits`. The reviewed parser now reaches the selected wooden-signpost
-  GeoLayout, but the exact BOB probe failed closed because its closure record
-  omitted the reached Gfx/model definition source.
+  edits` at behavior commit `1274c08b`. The reviewed parser now reaches the
+  selected wooden-signpost GeoLayout, but the exact BOB probe failed closed
+  because its closure record omitted the reached Gfx/model definition source.
 - Design correction: the existing `record.sources` set, not the singular
   root-defining `root_provenance.models[*].geo_source`, carries every reached
   source. The authoritative closure generator coverage-walks selected direct
