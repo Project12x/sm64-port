@@ -38,9 +38,20 @@ compiler-supported variants. Canonical S64F-v3 requires `variant_count` in
 CLI, or CHANGELOG edit. Target, release, smoke, visual, desktop, manual, and
 total-game gates remain open.
 
+The owner has now approved the replacement architecture documented in
+`docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`:
+an additive self-contained S64B v2 with offline-baked VDP1 tiles, separate hot
+CPU and cold cart spans, scene-aggregate texture/CLUT/cart/command budgeting,
+version-owned bank parsing, master-only residency publication, worker-only
+scalar preparation, and a required real BOB actor Ymir demo. The design keeps
+v1 byte-exact and describes v2 as full-game-shaped rather than semantically
+full-game-complete. Task 4 remains blocked pending committed written-spec
+approval and a separate implementation plan; no production RED or code edit
+has begun.
+
 ## Global Constraints
 
-- Follow `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md` exactly; field sizes are S64F header 96, family record 64, variant record 88.
+- Follow `docs/superpowers/specs/2026-08-11-saturn-generic-actor-bundle-design.md` together with its narrow normative amendment, `docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`. The amendment supersedes only the v1-only embedded-bank clause: S64F-v3 field sizes remain header 96, family record 64, variant record 88, while its opaque bank spans may contain version-owned validated S64B v1 or v2 bytes.
 - S64F v3 tables accept at most 64 families and 128 drawable variants per scene; overflow is a build failure, never truncation or dynamic growth.
 - Serialized integers are big-endian; offsets are root-relative uint32 values; all regions are four-byte aligned; padding and reserved fields are zero.
 - S64F v2 historical parsing/tests remain byte-stable. Feature-on production accepts only S64F v3.
@@ -661,6 +672,19 @@ remain unchecked. Recommended resolution is an additive, exactly specified
 texture/material-capable Saturn/SH-2 bank-format revision while preserving v1;
 permitting an empty bundle would not unblock the full-port path. Full evidence
 is in `.superpowers/sdd/2026-08-11-saturn-generic-actor-bundle/task-4-report.md`.
+
+**Approved replacement boundary:** BOB-first, full-game-shaped S64B v2. The
+normative design is
+`docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`.
+V2 carries target-level recipe records, unpaired per-triangle offline-baked
+VDP1 tiles, and cold CLUT16/RGB1555 spans; it adds no heap, pointers, serialized
+VRAM addresses, or runtime Fast3D interpreter. Scene activation must prove the
+aggregate cart, texture, CLUT, command, Gouraud, output, and scratch budgets
+before master-only upload and generation publication. Worker output records
+stay unchanged. Acceptance requires at least one normally spawned recognizable
+BOB non-Mario actor through the production mixed v1/v2 path in Ymir. Written-
+spec approval and the replacement implementation plan remain open, so Task 4
+is still `blocked-before-RED`.
 
 **Files:**
 - Create: `tools/saturn/compile_actor_family_bundle.py`

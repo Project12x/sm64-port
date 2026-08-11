@@ -134,6 +134,34 @@ material state.
 3. **Stop the prerequisite lane.** Preserve all existing fail-closed behavior
    and leave Task 10/Task 16 blocked.
 
+## Owner-approved design resolution
+
+The owner selected option 1 with an explicit Saturn/SH-2 constraint: implement
+BOB-first semantics in a full-game-shaped additive S64B v2 and keep every
+unapproved later-game state fail-closed. The normative written design is
+`docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`.
+
+The approved correction does not embed an N64 material interpreter. It adds
+target-level recipe records, per-primitive offline-baked VDP1 tiles, and cold
+CLUT16/RGB1555 payload spans while retaining the v1 pose/geometry prefix. It
+requires separate texture/CLUT accounting, scene-aggregate proof against the
+shared 446,432-byte VDP1 ceiling and fixed cart/command/Gouraud/runtime budgets,
+S64B-owned v1/v2 parsing, master-only all-resident uploads and generation
+publication, and unchanged worker scalar output records. Textured triangles are
+not paired in v2.
+
+The acceptance bar includes a normally spawned recognizable BOB non-Mario
+actor textured through the production mixed-bank path in Ymir. A synthetic
+fixture, Mario substitution, stale bank, first record, or empty S64F remains
+invalid. Target bytes will require the Task 9 reproducibility/release/native-
+math chain and Task 10 smoke/visual/manual gates to reopen.
+
+This resolution does not unblock code yet. Task 4 remains
+`blocked-before-RED` until the written specification is self-reviewed,
+committed, approved by the owner as written, and followed by a committed
+implementation plan. No production, test, Make, CLI, CHANGELOG, target, or
+release behavior has changed in this design transition.
+
 ## Reference/reuse record
 
 Read-only inspection and direct diagnostic use were based on repository HEAD

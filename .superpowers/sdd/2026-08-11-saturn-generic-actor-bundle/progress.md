@@ -161,6 +161,23 @@
   material-capable Saturn/SH-2 actor-bank format while preserving S64B-v1.
   Permitting an empty bundle is a format change and does not unblock the
   full-port path; otherwise stop the prerequisite lane.
+- Owner-approved architecture: BOB-first but full-game-shaped S64B v2, recorded
+  normatively in
+  `docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`.
+  V1 remains byte-exact. V2 carries target-level recipes, per-primitive baked
+  VDP1 tile records, and cold CLUT16/RGB1555 payloads; it uses no runtime
+  Fast3D interpreter, heap, pointers, or serialized VRAM addresses. Scene
+  activation proves aggregate texture, CLUT, cart, command, Gouraud, output,
+  and scratch budgets before master-only upload/generation publication;
+  workers keep the existing scalar draw-record ABI. Textured triangles remain
+  unpaired in v2 and unapproved later-game states fail offline by name.
+- Required terminal evidence: at least one normally spawned recognizable BOB
+  non-Mario actor textured through the mixed v1/v2 S64F path in Ymir, followed
+  by reopened reproducibility/release/native-math/capacity/stage/smoke/visual/
+  manual gates. A synthetic actor or empty bundle is not accepted.
+- Current status remains `blocked-before-RED`: written-spec self-review and
+  owner approval plus a replacement implementation plan are still required.
+  No v2 production/test/Make/CHANGELOG edit or target gate has started.
 - Open: Task 4, Tasks 5-11, Task 16 Tasks 2-5, all target/release/reseal,
   sourceboot, map/capacity, P2/Ymir, transition, smoke/visual/desktop/manual,
   and total-game gates remain unchecked.
