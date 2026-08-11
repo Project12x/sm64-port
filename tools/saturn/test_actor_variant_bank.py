@@ -213,7 +213,128 @@ def _replace_root_display_list(fixture: _Fixture, replacement: str) -> Path:
     return model
 
 
+def _add_model_none_variant(fixture: _Fixture, model_id: int = 0,
+                            *, newline: str = "\n") -> None:
+    model_ids = fixture.root / "include/model_ids.h"
+    model_ids.write_text(
+        model_ids.read_text(encoding="utf-8") +
+        f"#define MODEL_NONE {model_id}\n",
+        encoding="utf-8", newline=newline,
+    )
+    fixture.record["model_variants"].append({
+        "model": "MODEL_NONE", "geo_root": "none",
+    })
+    fixture.record["root_provenance"]["models"]["MODEL_NONE"] = {
+        "source": "include/model_ids.h",
+        "binding_source": "include/model_ids.h",
+        "geo_symbol": "none",
+        "geo_source": None,
+    }
+    fixture.rehash()
+
+
 class ActorVariantBankTest(unittest.TestCase):
+    def test_crlf_model_none_identity_does_not_poison_selected_drawable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            _add_model_none_variant(fixture, newline="\r\n")
+            compiled = fixture.compile(model=1)
+
+        self.assertEqual((compiled.report["selection"]["model"],
+                          compiled.report["selection"]["geo_root"]),
+                         ("MODEL_TEST", "test_geo"))
+
+    def test_selected_drawable_ignores_exact_unselected_model_none_geometry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            _add_model_none_variant(fixture)
+            compiled = fixture.compile(model=1)
+
+        self.assertEqual((len(compiled.payload), compiled.lane_bytes,
+                          compiled.maximum_scratch), (358, 104, 211))
+        self.assertEqual(compiled.payload_sha256,
+                         "d2dd087722cda6e1e9e76c56e87bca50d0624facf3a83830a5e07bc682c1dc15")
+        self.assertEqual(compiled.source_sha256,
+                         "cab8055779d39b1738fe117a605f47d70b950234242b12548dcccc89fcdd5149")
+        self.assertEqual(compiled.report["selection"]["model"], "MODEL_TEST")
+        self.assertEqual(compiled.report["selection"]["geo_root"], "test_geo")
+        self.assertEqual(compiled.report["selection"]["model_variants"], [
+            {"model": "MODEL_NONE", "geo_root": "none"},
+            {"model": "MODEL_TEST", "geo_root": "test_geo"},
+        ])
+        self.assertEqual(compiled.report["geometry"]["vertices"], [
+            {"local": [0, 0, 0], "joint_ordinal": 0, "branch_ordinal": 0},
+            {"local": [10, 0, 0], "joint_ordinal": 0, "branch_ordinal": 0},
+            {"local": [10, 10, 0], "joint_ordinal": 0, "branch_ordinal": 0},
+            {"local": [0, 10, 0], "joint_ordinal": 0, "branch_ordinal": 0},
+        ])
+        self.assertEqual(compiled.report["geometry"]["primitives"], [
+            {"material": 0, "indices": [0, 1, 2, 3]},
+        ])
+
+    def test_selected_model_none_fails_as_non_drawable_without_geometry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            _add_model_none_variant(fixture, model_id=2)
+            with self.assertRaisesRegex(ActorSourceSelectionError, "non-drawable"):
+                fixture.compile(model=2)
+
+    def test_unselected_model_none_requires_exact_nondrawable_provenance(self) -> None:
+        mutations = {
+            "drawable_root": ("variant", "geo_root", "test_geo"),
+            "drawable_symbol": ("binding", "geo_symbol", "test_geo"),
+            "fabricated_geo_source": (
+                "binding", "geo_source", "actors/test/geo.inc.c"),
+            "missing_binding_source": ("binding", "binding_source", None),
+            "mismatched_binding_source": (
+                "binding", "binding_source", "levels/test/script.c"),
+        }
+        for label, (owner, field, value) in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _RIGID_GEO)
+                _add_model_none_variant(fixture)
+                if owner == "variant":
+                    fixture.record["model_variants"][1][field] = value
+                else:
+                    fixture.record["root_provenance"]["models"]["MODEL_NONE"][field] = value
+                with self.assertRaises(ActorSourceSelectionError):
+                    fixture.compile(model=1)
+
+    def test_drawable_provenance_stays_strict_before_and_after_selection(self) -> None:
+        selected_mutations = {
+            "missing_geo_source": ("geo_source", None),
+            "missing_binding_source": ("binding_source", None),
+            "mismatched_geo_symbol": ("geo_symbol", "other_geo"),
+        }
+        for label, (field, value) in selected_mutations.items():
+            with self.subTest(selected=label), tempfile.TemporaryDirectory() as directory:
+                fixture = _Fixture(Path(directory), _RIGID_GEO)
+                fixture.record["root_provenance"]["models"]["MODEL_TEST"][field] = value
+                with self.assertRaises(ActorSourceSelectionError):
+                    fixture.compile(model=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = _Fixture(Path(directory), _RIGID_GEO)
+            model_ids = fixture.root / "include/model_ids.h"
+            model_ids.write_text(
+                model_ids.read_text(encoding="utf-8") +
+                "#define MODEL_ALT 2 // alternate_geo\n",
+                encoding="utf-8", newline="\n",
+            )
+            fixture.record["model_variants"].append({
+                "model": "MODEL_ALT", "geo_root": "alternate_geo",
+            })
+            fixture.record["root_provenance"]["models"]["MODEL_ALT"] = {
+                "source": "include/model_ids.h",
+                "binding_source": "levels/test/script.c",
+                "geo_symbol": "alternate_geo",
+                "geo_source": None,
+            }
+            fixture.rehash()
+            with self.assertRaisesRegex(ActorSourceSelectionError,
+                                        "geo_source is incomplete: MODEL_ALT"):
+                fixture.compile(model=1)
+
     def test_real_shaped_terminal_branch_list_executes_exact_tail_geometry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = _Fixture(Path(directory), _RIGID_GEO)

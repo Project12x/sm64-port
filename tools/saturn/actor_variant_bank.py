@@ -1079,7 +1079,8 @@ def _source_model_id(index: _SourceIndex, path: str, symbol: str) -> int:
     index.require_attested(path, "model ID source")
     clean = _strip_comments(index.text(path), path)
     pattern = re.compile(
-        r"^[ \t]*#define[ \t]+" + re.escape(symbol) + r"[ \t]+([^\r\n]+)$",
+        r"^[ \t]*#define[ \t]+" + re.escape(symbol) +
+        r"[ \t]+([^\r\n]+)\r?$",
         re.MULTILINE,
     )
     values = pattern.findall(clean)
@@ -1207,7 +1208,7 @@ def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
         variant_models = [item["model"] for item in model_variants]
         if len(set(variant_models)) != len(variant_models) or primary not in variant_models:
             raise ActorSourceSelectionError("closure model variants do not contain one primary")
-        record_matches: list[tuple[str, str, str, str, str | None]] = []
+        resolved_variants: list[tuple[str, str, dict[str, object], int]] = []
         for item in model_variants:
             model = item["model"]
             geo_root = item["geo_root"]
@@ -1215,6 +1216,24 @@ def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
             if not isinstance(binding, dict):
                 raise ActorSourceSelectionError(
                     f"closure has no model-variant provenance: {model}")
+            if not isinstance(binding.get("source"), str):
+                raise ActorSourceSelectionError(
+                    f"closure model source is incomplete: {model}")
+            value = _source_model_id(index, binding["source"], model)
+            resolved_variants.append((model, geo_root, binding, value))
+
+        numeric_matches = [item for item in resolved_variants
+                           if item[3] == requested_model_id]
+        for model, geo_root, binding, _value in resolved_variants:
+            if model == "MODEL_NONE":
+                if (geo_root != "none" or binding.get("geo_symbol") != "none" or
+                        binding.get("geo_source") is not None):
+                    raise ActorSourceSelectionError(
+                        "closure non-drawable provenance mismatch: MODEL_NONE")
+                if binding.get("binding_source") != binding["source"]:
+                    raise ActorSourceSelectionError(
+                        "closure non-drawable binding provenance mismatch: MODEL_NONE")
+                continue
             if binding.get("geo_symbol") != geo_root:
                 raise ActorSourceSelectionError(
                     f"closure model-variant provenance mismatch: {model}")
@@ -1222,21 +1241,22 @@ def _record_selection(index: _SourceIndex, records: Sequence[dict[str, object]],
                 if not isinstance(binding.get(label), str):
                     raise ActorSourceSelectionError(
                         f"closure model {label} is incomplete: {model}")
-            value = _source_model_id(index, binding["source"], model)
-            if value == requested_model_id:
-                selected_binding = _source_model_binding(
-                    index, binding["source"], binding["binding_source"],
-                    model, geo_root)
-                record_matches.append(
-                    (model, geo_root, _normal_path(binding["geo_source"]),
-                     selected_binding.kind, selected_binding.layer))
-        if not record_matches:
+        if not numeric_matches:
             raise ActorSourceSelectionError(
                 f"model ID {requested_model_id} has no closure variant")
-        if len(record_matches) != 1:
+        if len(numeric_matches) != 1:
             raise ActorSourceSelectionError(
                 f"ambiguous model ID {requested_model_id} in closure variants")
-        selected.add(record_matches[0])
+        model, geo_root, binding, _value = numeric_matches[0]
+        if model == "MODEL_NONE":
+            raise ActorSourceSelectionError(
+                "selected model is non-drawable: MODEL_NONE")
+        selected_binding = _source_model_binding(
+            index, binding["source"], binding["binding_source"],
+            model, geo_root)
+        selected.add(
+            (model, geo_root, _normal_path(binding["geo_source"]),
+             selected_binding.kind, selected_binding.layer))
         variants.extend(model_variants)
     if len(selected) != 1:
         raise ActorSourceSelectionError(

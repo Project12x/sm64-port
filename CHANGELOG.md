@@ -12,6 +12,16 @@
 
 ### Fixed
 
+- Corrected generic actor variant selection for families that mix drawable
+  models with the explicit non-drawable `MODEL_NONE` sentinel. Numeric model
+  identities are now resolved from attested source before drawable GeoLayout
+  provenance is required, so a valid unselected `{none, null}` alternate no
+  longer poisons `MODEL_METALLIC_BALL`. Drawable variants remain strictly
+  validated even when unselected; selected/invalid model-less variants fail
+  named without fabricated geometry. Model-ID parsing also accepts repository
+  CRLF lines without relying on a trailing comment. S64B schema/runtime and
+  historical Mario bytes are unchanged.
+
 - Modeled repository-valid terminal `gsSPBranchList` actor display lists as
   unconditional tail transfers. This fixes strict generic S64B selection
   misclassifying the real explosion actor's final branch as a missing
