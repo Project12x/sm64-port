@@ -295,3 +295,7 @@
   16,640-byte texture and 2,816-byte CLUT additions; Task 7 must repartition the
   region, with 33,216 bytes left. Task 5 proves the future partition equation
   but does not claim current binder ownership of `remaining`.
+- The source-ceiling design correction is `acef808d`; the authoritative
+  frame-policy/partition correction is `833c9bfb`. The prescribed Task 5 RED
+  remains exactly the two missing compiler/inventory modules; implementation may
+  resume from these committed contracts without changing its host-only scope.
