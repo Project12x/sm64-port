@@ -45,6 +45,15 @@ class ActorBankFormatTest(unittest.TestCase):
                     self.assertRaisesRegex(ValueError, "unsupported S64B version"):
                 validate_actor_bank(payload)
 
+    def test_v1_header_padding_bytes_must_be_zero(self) -> None:
+        """Fails if either reserved v1 header byte is structurally unowned."""
+        for offset in (102, 103):
+            corrupt = bytearray(self.mario)
+            corrupt[offset] = 1
+            with self.subTest(offset=offset), \
+                    self.assertRaisesRegex(ValueError, "S64B header padding"):
+                validate_actor_bank(bytes(corrupt))
+
     def test_version_two_stops_at_its_named_unimplemented_boundary(self) -> None:
         """Fails if v2 is accidentally accepted before its contract exists."""
         v2 = self.mario[:4] + b"\x00\x02" + self.mario[6:]

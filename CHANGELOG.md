@@ -17,6 +17,11 @@
 
 ### Fixed
 
+- Made the final two bytes of the S64B-v1 104-byte header an explicit
+  zero-reserved field in the version-owned parser. Nonzero padding now fails
+  closed instead of being structurally unowned; historical Mario and S64F-v3
+  bytes remain exact.
+
 - Corrected generic actor variant selection for families that mix drawable
   models with the explicit non-drawable `MODEL_NONE` sentinel. Numeric model
   identities are now resolved from attested source before drawable GeoLayout

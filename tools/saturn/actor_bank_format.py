@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 UINT32_MAX = (1 << 32) - 1
 
-_S64B_HEADER = struct.Struct(">4s9HI32sHH10I")
+_S64B_HEADER = struct.Struct(">4s9HI32sHH10IH")
 _S64B_ANIMATION = struct.Struct(">IIHHHh")
 _GEO_HEADER = struct.Struct(">4s7H7I")
 _MESHLET = struct.Struct(">HHBB6h12I")
@@ -82,9 +82,11 @@ def _validate_v1(payload: bytes) -> ActorBankView:
      meshlet_count, primitive_count, vertex_count, max_instances, feature_mask,
      source_hash, header_size, record_size, records_offset, indices_offset,
      indices_size, values_offset, values_size, vertices_offset, vertices_size,
-     geometry_offset, geometry_size, maximum_scratch) = fields
+     geometry_offset, geometry_size, maximum_scratch, header_padding) = fields
     if (magic != b"S64B" or version != 1 or header_size != 104 or record_size != 16):
         raise ValueError("malformed S64B header")
+    if header_padding:
+        raise ValueError("S64B header padding")
     if not family_id or not model_id or not joint_count or not animation_count or not vertex_count or not max_instances:
         raise ValueError("malformed S64B identity/count")
     if not any(source_hash):

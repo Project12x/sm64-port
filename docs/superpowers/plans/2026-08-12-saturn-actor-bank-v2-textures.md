@@ -88,6 +88,10 @@ unimplemented boundary. Fresh host tests and the historical Mario/S64F-v3
 byte proofs passed; independent spec-compliance and code-quality reviews are
 still required before Task 2.
 
+**Fix round 1:** the complete 104-byte v1 header now owns its final two-byte
+zero-reserved field. Mutating either byte fails closed; the historical Mario
+and S64F-v3 proofs were rerun without a byte change.
+
 **Files:**
 - Create: `tools/saturn/actor_bank_format.py`
 - Create: `tools/saturn/test_actor_bank_format.py`
