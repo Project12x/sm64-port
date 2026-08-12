@@ -852,3 +852,18 @@
   Saturn memory ownership are unchanged. Status remains
   `source-complete-pending-rereview`; the next executable work after PASS is the
   generic BOB live cutover, not another architecture or format task.
+
+## Task 8 repair round 5/5 (2026-08-12)
+
+- Same-reviewer rereview of `aa68afe5..3bcf5ab1` independently confirmed the
+  production range unchanged, both concurrency tests GREEN, both no-lock
+  mutations RED, full schema 26/26 with one permitted capability skip, source
+  bundle/determinism GREEN, and compile/diff checks GREEN. It returned
+  Spec FAIL / Quality NEEDS FIXES C0/I1/M0 only because the authoritative plan
+  still named Cannon as the initial witness and its serial rule contradicted
+  Task 9's required immediate link/Ymir observation.
+- Documentation-only correction now makes `MODEL_BLACK_BOBOMB` / `bhvBobomb`
+  the first live witness, leaves Cannon as one regression, and explicitly
+  defines the early Task 10 link/smoke commands as an observation inside Task
+  9 rather than prematurely opening Task 10. Production/package/target bytes
+  remain unchanged. Final plan-only rereview is required before Task 9 opens.

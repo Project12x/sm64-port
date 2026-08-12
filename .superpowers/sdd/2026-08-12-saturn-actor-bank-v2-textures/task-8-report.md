@@ -2,11 +2,13 @@
 
 ## Status
 
-`source-complete-pending-rereview` from approved Task 7 base `dfa8b286` after
+`source-complete-pending-plan-rereview` from approved Task 7 base `dfa8b286` after
 initial behavior `b84103cd`, evidence `0a180e39`, repair `dc81808b`,
 generation-transaction repair `3b81456b`, serialization follow-up `b2f66f5a`,
-and canonical-lock repair `58165193`. Reviews returned C0/I3/M0, C0/I1/M2,
-then C0/I1/M0; the same-reviewer final verdict is open. This report claims
+canonical-lock repair `58165193`, and test repair `3bcf5ab1`. Reviews returned
+C0/I3/M0, C0/I1/M2, C0/I1/M0, then C0/I1/M0; the last finding was solely the
+authoritative plan's stale Cannon-first/serial-order contradiction. The plan is
+now corrected and its narrow same-reviewer verdict is open. This report claims
 package/source ownership plus host and freestanding SH-2 module evidence only;
 Task 9 production cutover, linked target, Ymir, release, and manual gates remain
 unchecked.
@@ -189,3 +191,15 @@ unchecked.
   The complete schema suite passes 26/26 with one permitted Windows
   symlink-capability skip. No production, package, target, memory, or wire bytes
   changed. Final rereview remains required; Task 9 and Ymir remain unopened.
+
+## Repair round 5 — reconcile the live execution contract
+
+- Same-reviewer rereview independently confirmed every round-4 behavioral and
+  mutation result, but found the plan's top-level Goal/constraint still named
+  Cannon while Task 9 correctly required Bob-omb first, and the global serial
+  rule did not exempt Task 9's immediate target observation.
+- The documentation-only correction makes `MODEL_BLACK_BOBOMB` / `bhvBobomb`
+  the required first live witness, retains Cannon as a regression, and states
+  that minimum link/Ymir commands run inside Task 9 without opening or
+  completing formal Task 10. No implementation, package, target, memory, or
+  wire bytes changed. A narrow plan-only rereview remains open.

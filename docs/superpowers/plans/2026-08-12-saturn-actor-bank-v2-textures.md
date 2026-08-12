@@ -5,8 +5,9 @@
 **Goal:** Build an additive texture/material-capable S64B v2, package the exact
 reviewed generic BOB subset in an S64F-v3 dependency whose parser supports both
 v1 and v2, run historical v1 Mario and v2 generic actors together through the
-production dual-SH-2 scene path, and prove a normally spawned textured Cannon
-in BOB under Ymir before rebuilding and resealing the release.
+production dual-SH-2 scene path, prove a normally spawned Bob-omb first under
+Ymir, broaden that same path to the normal BOB actor set, and enable existing
+game music/SFX before rebuilding and resealing the release.
 
 **Architecture:** The host captures complete closure-attested Fast3D material signatures and lowers only a reviewed BOB whitelist into deterministic, target-ready VDP1 tiles, palettes, and stable S64B-owned material recipes. S64B owns v1/v2 parsing; S64F remains an opaque mixed-bank container. At runtime the master SH-2 validates all-resident data budgets and an atomic per-frame output/command/Gouraud credit policy, uploads all scene actor textures while VDP1 is idle, publishes one generation last, and emits final commands; worker SH-2s continue to write the existing eight-byte scalar output records without VDP1 pointers or mutable residency state.
 
@@ -103,7 +104,7 @@ does not delay the first short Ymir smoke.
 - Cross-SH-2 publication contains scalar IDs, hashes, offsets, counts, lane indexes, and generations only. No pointer, VDP1 address, allocator state, command pointer, or residency-table pointer enters a worker descriptor or queue record.
 - The master validates, uploads, publishes residency generation last, resolves material/tile ordinals, translates stable S64B enums to Yaul values, and emits final VDP1 commands. Workers evaluate pose/admission and write only the unchanged `{meshlet_id, primitive_id, sort_key}` records.
 - No heap, recursive target parser, runtime Fast3D interpreter, runtime quantization/conversion, gameplay-time CD read, paging, eviction, rollback, decompression, or shared cross-bank texture pool is permitted.
-- At least one normally spawned recognizable BOB non-Mario actor must compile and render through the production path. The required initial demo key is family 29, `MODEL_CANNON_BASE` (`0x0080`), behavior `bhvCannon`; a synthetic actor, Mario substitution, stale bank, or forced first record is not accepted.
+- At least one normally spawned recognizable BOB non-Mario actor must compile and render through the production path. The required first live witness is family 7, `MODEL_BLACK_BOBOMB`, behavior `bhvBobomb`; Cannon remains a regression, not the initial witness. A synthetic actor, Mario substitution, stale bank, or forced first record is not accepted.
 - Every behavior commit updates `CHANGELOG.md` in the same commit, updates this plan and the active SDD ledger/report, stages explicit paths only, and receives independent spec-compliance plus code-quality review before the next task.
 - Target-byte changes invalidate the prior Task 9 release. After the demo, clean A/B reproducibility, release-manifest equality, native-math measurement/seal/pin/v4, capacity/package/staging, Task 10 smoke/visual/desktop/manual, and total-game gates must be rerun; prior evidence is historical only.
 
@@ -1339,7 +1340,7 @@ emission to the active texture generation.
 - [x] Host and target public type/function names match across tasks.
 - [x] Texture, CLUT, cart, LWRAM, and HWRAM residency budgets are separate and scene-aggregate; output, command, and Gouraud live demand use atomic complete-frame credit admission rather than summing mutually incompatible source-pool ceilings.
 - [x] Master/worker responsibilities are consistent in compiler, residency, queue, and emitter tasks.
-- [x] Cannon demo evidence cannot be satisfied by a synthetic object or injected model.
+- [x] The Bob-omb first-live and later normal-BOB evidence cannot be satisfied by a synthetic object or injected model; Cannon remains only one regression.
 - [x] Unknown material/Geo states remain named offline failures.
 - [x] Release rebuild/reseal and Task 10 gates follow target-byte changes.
 - [x] Every behavior task includes RED, GREEN, exact commit scope, CHANGELOG, ledger, and two-stage review.
@@ -1347,7 +1348,7 @@ emission to the active texture generation.
 
 ## Execution Order and Stop Rules
 
-Execute Tasks 1-13 serially. A task may not begin until the prior task's behavior commit and both independent reviews pass. Stop immediately on a format/interface contradiction, inability to compile the exact Cannon key, nonpositive all-resident or individual-bank margin, nonpositive guaranteed service floor, host/target parser disagreement, dirty/unbound source input, target crash/stall/quarantine on the accepted route, nonidentical A/B release, failed v4, or failed smoke/visual/manual gate. The unconstrained source-ceiling diagnostic is not a simultaneous-scene acceptance margin. Record every failure without weakening flags, budgets, source identity, or acceptance.
+Execute Tasks 1-13 serially. A task may not begin until the prior task's behavior commit and both independent reviews pass, except that Task 9 Step 4 deliberately runs the minimum Task 10 Steps 1-4 link/smoke commands as an observation inside Task 9 immediately after the Bob-omb consumer compiles. That early smoke does not mark Task 10 active or complete; formal Task 10 status still waits for Task 9 behavior and reviews. Stop immediately on a format/interface contradiction, inability to compile the exact Bob-omb witness, nonpositive all-resident or individual-bank margin, nonpositive guaranteed service floor, host/target parser disagreement, dirty/unbound source input, target crash/stall/quarantine on the accepted route, nonidentical A/B release, failed v4, or failed smoke/visual/manual gate. The unconstrained source-ceiling diagnostic is not a simultaneous-scene acceptance margin. Record every failure without weakening flags, budgets, source identity, or acceptance.
 
 Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` resumes only through Tasks 1-5 here. Its downstream Tasks 5-11 and Task 16 Tasks 2-5 are satisfied/reconciled through Tasks 7-13 here; do not run the stale v1-only Task 4 instructions in parallel.
 
