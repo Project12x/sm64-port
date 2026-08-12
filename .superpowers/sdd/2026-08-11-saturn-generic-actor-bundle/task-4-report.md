@@ -161,11 +161,18 @@ arithmetic, production-v1-prefix comparison, in-tree reference checks, and
 reconciliation of the prior v1-only design clause. It was committed as
 `62f16de8` (`docs(saturn): design textured actor banks`).
 
+The owner approved the committed written specification on 2026-08-12. The
+self-reviewed dependency-ordered implementation plan is
+`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`. Its
+self-review clarified that the real generic BOB S64F may contain only v2 banks
+while historical v1 Mario and v2 generic actors prove the mixed-version scene
+path; it also retains S64P alignment 4 and explicitly separates bounded CLUT
+upload, global lane stride, and active texture generation.
+
 This resolution does not unblock code yet. Task 4 remains
-`blocked-before-RED` until the owner approves that committed specification as
-written and a separate implementation plan is committed. No production, test,
-Make, CLI, CHANGELOG, target, or release behavior changed in this design
-transition.
+`blocked-before-RED` until the implementation plan is committed and dispatched.
+No production, test, Make, CLI, CHANGELOG, target, or release behavior changed
+in this design/plan transition.
 
 ## Reference/reuse record
 

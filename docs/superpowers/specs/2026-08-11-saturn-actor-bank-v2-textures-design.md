@@ -1,8 +1,9 @@
 # Saturn Actor Bank v2 Texture Design
 
-**Status:** Owner-approved architecture; written specification self-reviewed
-and committed at `62f16de8`; owner written-spec approval and implementation
-plan remain open.
+**Status:** Owner-approved architecture and written specification. The spec was
+self-reviewed and committed at `62f16de8`; owner written-spec approval was
+received 2026-08-12. The implementation plan is
+`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`.
 
 **Date:** 2026-08-11
 
@@ -536,10 +537,12 @@ external source and introduces no new license obligation.
 
 The verbal architecture was approved by the owner on 2026-08-11. The written
 specification passed scoped self-review and binary-layout arithmetic/reference
-checks, then was committed as `62f16de8`. It must now be presented to the owner
-for written-spec approval. Only then may the implementation plan be written and
-committed. Task 4 remains `blocked-before-RED`; no v2 production or test change
-is authorized by this design document alone.
+checks, was committed as `62f16de8`, and received owner approval on 2026-08-12.
+The dependency-ordered implementation plan is
+`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`. Task 4
+remains `blocked-before-RED` until that plan is committed and execution is
+dispatched; no v2 production or test change is authorized by this design
+document alone.
 
 Task 4, Tasks 5-11, Task 16 Tasks 2-5, target/release/reseal, sourceboot,
 capacity/map, P2/Ymir, transition, smoke, visual, desktop, owner-manual,

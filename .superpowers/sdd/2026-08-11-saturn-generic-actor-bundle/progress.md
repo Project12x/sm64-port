@@ -180,10 +180,20 @@
   comparison with the production v1 parser, in-tree reference existence, and
   reconciliation of the older v1-only bundle clause. It was committed as
   `62f16de8` (`docs(saturn): design textured actor banks`).
-- Current status remains `blocked-before-RED`: owner approval of the committed
-  written specification plus a replacement implementation plan are still
-  required. No v2 production/test/Make/CHANGELOG edit or target gate has
-  started.
+- Owner approved the committed written specification on 2026-08-12. The
+  dependency-ordered replacement plan was written and self-reviewed at
+  `docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`; it
+  includes format/compiler, aggregate budgets, dual-SH-2 residency and queue
+  cutover, a normal-spawn Cannon Ymir demo, and mandatory release/smoke
+  reopenings.
+- Plan self-review corrections: the real generic BOB S64F may be v2-only while
+  the scene runs historical v1 Mario plus v2 generic actors; S64P alignment
+  remains 4; texture and CLUT use independent bounded VDP1 upload regions;
+  bundle-wide heterogeneous workspace stride and active texture generation are
+  explicit APIs.
+- Current status remains `blocked-before-RED` until the implementation plan is
+  committed and dispatched. No v2 production/test/Make/CHANGELOG edit or
+  target gate has started.
 - Open: Task 4, Tasks 5-11, Task 16 Tasks 2-5, all target/release/reseal,
   sourceboot, map/capacity, P2/Ymir, transition, smoke/visual/desktop/manual,
   and total-game gates remain unchecked.

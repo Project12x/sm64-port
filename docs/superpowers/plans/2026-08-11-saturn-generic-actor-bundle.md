@@ -46,9 +46,11 @@ version-owned bank parsing, master-only residency publication, worker-only
 scalar preparation, and a required real BOB actor Ymir demo. The design keeps
 v1 byte-exact and describes v2 as full-game-shaped rather than semantically
 full-game-complete. The written design passed scoped self-review and exact
-layout/reference checks and was committed as `62f16de8`. Task 4 remains blocked
-pending owner approval of that written specification and a separate committed
-implementation plan; no production RED or code edit has begun.
+layout/reference checks, was committed as `62f16de8`, and received owner
+approval on 2026-08-12. Its dependency-ordered replacement plan is
+`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`. Task 4
+remains blocked until that plan is committed and dispatched; no production RED
+or code edit has begun.
 
 ## Global Constraints
 
@@ -684,8 +686,11 @@ aggregate cart, texture, CLUT, command, Gouraud, output, and scratch budgets
 before master-only upload and generation publication. Worker output records
 stay unchanged. Acceptance requires at least one normally spawned recognizable
 BOB non-Mario actor through the production mixed v1/v2 path in Ymir. Written-
-spec owner approval and the replacement implementation plan remain open, so
-Task 4 is still `blocked-before-RED`. Design commit: `62f16de8`.
+spec owner approval was received 2026-08-12. The self-reviewed replacement
+implementation plan is
+`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`; its commit
+and execution dispatch remain open, so Task 4 is still `blocked-before-RED`.
+Design commit: `62f16de8`.
 
 **Files:**
 - Create: `tools/saturn/compile_actor_family_bundle.py`
