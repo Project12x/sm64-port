@@ -1,7 +1,8 @@
 # Task 5 evidence report: bounded textured BOB actor bundle
 
 **Status (2026-08-12):** source-complete after fix round 1/5, pending scoped
-independent rereview. The initial `65a3fdb9` review found C0/I3/M0. This is
+independent rereview at repair `2cc767c0`. The initial `65a3fdb9` review found
+C0/I3/M0. This is
 host-only evidence. Target residency, renderer cutover, Ymir, manual visual,
 release, and whole-game gates remain open.
 

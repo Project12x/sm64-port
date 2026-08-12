@@ -383,5 +383,6 @@
   54 mixed-S64F mutations, real 47-family/14-bank S64F, 86 S64B-v2 mutations,
   and both capability gates. Broader historical/parser/closure/profile coverage
   passed 112/112; compileall, scoped diff, and four-sidecar hash checks pass.
-  Task 5 remains source-complete-pending-rereview and all
+  Repair behavior is `2cc767c0`. Task 5 remains
+  source-complete-pending-rereview and all
   Task 6+/runtime/residency/renderer/Ymir gates remain open.

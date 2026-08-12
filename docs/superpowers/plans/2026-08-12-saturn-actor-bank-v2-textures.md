@@ -468,8 +468,8 @@ Commit `feat(saturn): bake BOB actor materials for VDP1`. Review source closure,
 
 ### Task 5: Build the real mixed BOB S64F and prove aggregate budgets
 
-**Execution status:** source-complete after fix round 1/5, pending scoped
-rereview. Initial behavior commit `65a3fdb9` received C0/I3/M0 for an
+**Execution status:** source-complete after fix round 1/5 at repair `2cc767c0`,
+pending scoped rereview. Initial behavior commit `65a3fdb9` received C0/I3/M0 for an
 unreconciled family report, stale-generation Make graph, and manual package-
 profile intake. The repair recomputes exact family semantics through the owning
 compiler (excluding only generated payload pathname), consumes only those

@@ -703,7 +703,7 @@ committed as `3338de20`. Replacement Tasks 1 and 2 completed through evidence
 preservation. Replacement Task 3 completed through `ca3318cd` with independent
 C0/I0/M0 parser/ABI approval. Replacement Task 4 completed through `f5a03808`
 with independent C0/I0/M0 approval. Replacement Task 5 fix round 1/5 is
-source-complete pending scoped rereview after initial behavior `65a3fdb9`
+source-complete at repair `2cc767c0`, pending scoped rereview after initial behavior `65a3fdb9`
 received C0/I3/M0. The repair binds family input to deterministic closure
 recomputation, package intake to canonical target-profile ownership, and Make
 publication to real prerequisites plus current-input four-sidecar verification.
