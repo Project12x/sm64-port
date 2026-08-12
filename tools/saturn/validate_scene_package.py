@@ -245,21 +245,41 @@ def validate_scene_package(package: bytes,
     }
 
 
-def load_payloads(path: Path | None) -> dict[str, tuple[bytes, int]]:
+def load_payloads(path: Path | None,
+                  payload_root: Path | None = None) -> dict[str, tuple[bytes, int]]:
     if path is None:
         return {}
-    document = json.loads(path.read_text(encoding="utf-8"))
+    if payload_root is None:
+        _fail("payload manifest requires an explicit payload root")
+    try:
+        root = payload_root.resolve(strict=True)
+        manifest_path = path.resolve(strict=True)
+        manifest_path.relative_to(root)
+    except (FileNotFoundError, RuntimeError, ValueError):
+        _fail("payload manifest escapes payload root")
+    document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict) or set(document) != {"payloads"}:
+        _fail("payload manifest fields are noncanonical")
     entries = document.get("payloads")
     if not isinstance(entries, list):
         _fail("payload manifest requires a payloads list")
     result: dict[str, tuple[bytes, int]] = {}
     for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {
+                "stable_id", "path", "generation"}:
+            _fail("payload manifest entry fields are noncanonical")
         stable_id = entry["stable_id"]
         if stable_id in result:
             _fail(f"duplicate payload manifest ID: {stable_id}")
         payload_path = Path(entry["path"])
-        if not payload_path.is_absolute():
-            payload_path = path.parent / payload_path
+        if payload_path.is_absolute():
+            _fail("payload manifest path must be relative")
+        try:
+            payload_path = (manifest_path.parent / payload_path).resolve(
+                strict=True)
+            payload_path.relative_to(root)
+        except (FileNotFoundError, RuntimeError, ValueError):
+            _fail("payload manifest path escapes payload root")
         result[stable_id] = (payload_path.read_bytes(), int(entry["generation"]))
     return result
 
@@ -268,11 +288,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--payload-manifest", type=Path)
+    parser.add_argument("--payload-root", type=Path)
     parser.add_argument("--allow-provisional", action="store_true")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     report = validate_scene_package(args.input.read_bytes(),
-                                    load_payloads(args.payload_manifest),
+                                    load_payloads(args.payload_manifest,
+                                                  args.payload_root),
                                     allow_provisional=args.allow_provisional)
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)

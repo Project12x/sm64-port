@@ -342,6 +342,24 @@ static bool plan_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
     return true;
 }
 
+bool sm64_saturn_actor_texture_residency_requirements(
+    const sm64_saturn_actor_bundle_view_t *bundle,
+    uint32_t *texture_bytes, uint32_t *clut_bytes,
+    uint16_t *mapping_count)
+{
+    sm64_saturn_actor_bundle_view_t validated;
+    if (texture_bytes != NULL) *texture_bytes = 0U;
+    if (clut_bytes != NULL) *clut_bytes = 0U;
+    if (mapping_count != NULL) *mapping_count = 0U;
+    return bundle != NULL && bundle->bytes != NULL &&
+        texture_bytes != NULL && clut_bytes != NULL &&
+        mapping_count != NULL &&
+        sm64_saturn_actor_bundle_validate(bundle->bytes, bundle->byte_count,
+                                           &validated) &&
+        bundle_views_equal(bundle, &validated) &&
+        plan_bundle(&validated, texture_bytes, clut_bytes, mapping_count);
+}
+
 static bool regions_fit(const sm64_saturn_texture_residency_t *texture_region,
                         const sm64_saturn_texture_residency_t *clut_region,
                         uint32_t texture_bytes, uint32_t clut_bytes)

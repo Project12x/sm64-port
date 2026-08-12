@@ -42,6 +42,11 @@ typedef struct sm64_saturn_scene_resident_identity {
     uint32_t destination_bytes[SM64_SATURN_SCENE_DESTINATION_COUNT];
     uint32_t section_storage_offset[SM64_SATURN_SCENE_MAX_SECTIONS];
     uint32_t dependency_storage_offset[SM64_SATURN_SCENE_MAX_DEPENDENCIES];
+    /* Commit-time copies avoid rebuilding the 3.3 KiB package view on the
+     * SH-2 stack for every dependency lookup. Cost: 160 bytes per resident
+     * generation, 320 bytes for the fixed two-slot owner. */
+    uint32_t dependency_byte_count[SM64_SATURN_SCENE_MAX_DEPENDENCIES];
+    uint8_t dependency_destination_class[SM64_SATURN_SCENE_MAX_DEPENDENCIES];
     uint8_t package_sha256[32];
     uint8_t dependency_set_sha256[32];
     uint8_t actor_bank_identity[32];

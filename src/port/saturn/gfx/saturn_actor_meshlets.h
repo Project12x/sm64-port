@@ -101,6 +101,14 @@ bool sm64_saturn_actor_meshlets_bind_workspace(
     uint32_t scratch_capacity, uint8_t lane,
     sm64_saturn_actor_output_record_t *records, uint16_t draw_capacity,
     sm64_saturn_actor_meshlet_workspace_t *workspace);
+/* Bind one bank inside the bundle-wide fixed claimant lanes. lane_stride is
+ * the validated S64F maximum across every embedded bank; the caller owns one
+ * raw two-lane span including worst-case leading alignment headroom. */
+bool sm64_saturn_actor_meshlets_bind_bundle_workspace(
+    const sm64_saturn_actor_bank_view_t *bank, void *scratch,
+    uint32_t scratch_capacity, uint32_t lane_stride, uint8_t lane,
+    sm64_saturn_actor_output_record_t *records, uint16_t draw_capacity,
+    sm64_saturn_actor_meshlet_workspace_t *workspace);
 
 /* Compatibility entry point. It shares the bank-neutral admission core while
  * retaining the exact Mario snapshot/pose/capacity contract. */

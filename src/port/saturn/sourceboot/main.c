@@ -38,6 +38,7 @@
 #include "source_camera_idle_probe.h"
 #include "source_q16_kernel_probe.h"
 #include "source_route_probe.h"
+#include "source_scene_bundle.h"
 #include "mario_eye_uv_tiles.h"
 #include "saturn_sky_gradient_generated.h"
 #include "../gpl/slavedriver_dma_queue.h" /* gpl/ is a sibling of sourceboot/
@@ -741,6 +742,14 @@ extern const uint8_t sm64_saturn_bob_clut_bank[];
  * `.lwram_cmdts` attribute (the linker rejects that legacy section). */
 static vdp1_cmdt_t sourceboot_vdp1_cmdts[2][SOURCEBOOT_VDP1_COMMAND_CAPACITY]
     __aligned(32);
+
+void *sm64_saturn_source_scene_bundle_upload_stage(void)
+{
+    _Static_assert(sizeof(sourceboot_vdp1_cmdts[0]) >=
+                       SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES,
+                   "idle command bank must cover generic actor upload stage");
+    return sourceboot_vdp1_cmdts[0];
+}
 static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend
     SOURCEBOOT_LWRAM_STATE;
 static sm64_saturn_vdp1_frame_bank_set_t sourceboot_vdp1_frame_banks
@@ -1647,16 +1656,6 @@ int main(void) {
         sm64_saturn_source_cart_report_failure(cart_status);
         for (;;) {}
     }
-    {
-        sm64_saturn_scene_package_view_t scene_package_view;
-        const sm64_saturn_source_cart_status_t scene_status =
-            sm64_saturn_source_cart_boot_scene_package_validate(
-                &scene_package_view);
-        if (scene_status != SM64_SATURN_SOURCE_CART_OK) {
-            sm64_saturn_source_cart_report_failure(scene_status);
-            for (;;) {}
-        }
-    }
     /* The bitmap is linked in .cart_rodata and is not readable from its
      * final DRAM-cart address until source_cart_load() has completed. Keep
      * the VDP2 format setup in user_init(), but defer the actual copy so NBG1
@@ -1881,6 +1880,13 @@ int main(void) {
         /* Exclusive frame-transport handoff: every boot-time SCU/CPU DMA
          * above is complete before the serial queue owns both channel 0s. */
         saturn_dma_queue_init();
+        if (!sm64_saturn_source_scene_bundle_init(
+                SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_LEVEL_ID,
+                SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_AREA_ID)) {
+            dbgio_puts("sourceboot: generic BOB scene bundle failed\n");
+            dbgio_flush();
+            for (;;) {}
+        }
     }
 
     main_pool_init(sourceboot_main_pool,

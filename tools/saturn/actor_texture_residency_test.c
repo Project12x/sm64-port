@@ -823,6 +823,14 @@ int main(int argc, char **argv)
     real = load_fixture(argv[2]);
     assert(mixed.view.variant_count == 2U);
     assert(real.view.family_count == 47U && real.view.variant_count == 14U);
+    {
+        uint32_t texture_bytes = 0U, clut_bytes = 0U;
+        uint16_t mapping_count = 0U;
+        assert(sm64_saturn_actor_texture_residency_requirements(
+            &real.view, &texture_bytes, &clut_bytes, &mapping_count));
+        assert(texture_bytes == 16640U && clut_bytes == 2816U &&
+               mapping_count == 14U);
+    }
     test_mixed_and_real_success(&mixed, &real);
     test_generation_serial_order();
     test_stage_memory_policy();

@@ -122,11 +122,13 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--abi-output", type=Path)
     parser.add_argument("--payload-manifest", type=Path)
+    parser.add_argument("--payload-root", type=Path)
     parser.add_argument("--symbol-prefix", default="sm64_saturn_scene_package")
     parser.add_argument("--allow-provisional", action="store_true")
     args = parser.parse_args()
     package = args.input.read_bytes()
-    validate_scene_package(package, load_payloads(args.payload_manifest),
+    validate_scene_package(package, load_payloads(
+                               args.payload_manifest, args.payload_root),
                            allow_provisional=args.allow_provisional)
     text = emit_header(package, args.symbol_prefix)
     args.output.parent.mkdir(parents=True, exist_ok=True)

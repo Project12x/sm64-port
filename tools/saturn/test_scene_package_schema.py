@@ -19,7 +19,11 @@ from compile_scene_package import (
     compile_package,
     parse_package,
 )
-from validate_scene_package import PackageValidationError, validate_scene_package
+from validate_scene_package import (
+    PackageValidationError,
+    load_payloads,
+    validate_scene_package,
+)
 from emit_scene_package_header import emit_abi_header, emit_header
 
 
@@ -244,13 +248,169 @@ class ScenePackageSchemaTest(unittest.TestCase):
                 sys.executable, str(Path(__file__).with_name("emit_scene_package_header.py")),
                 "--input", str(package_path), "--output", str(root / "scene.h"),
                 "--abi-output", str(root / "saturn_scene_package_abi.h"),
-                "--payload-manifest", str(manifest), "--symbol-prefix", "fixture",
+                "--payload-manifest", str(manifest),
+                "--payload-root", str(root), "--symbol-prefix", "fixture",
             ], text=True, capture_output=True, check=False)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("FIXTURE_S64P_PACKAGE_SHA256",
                           (root / "scene.h").read_text(encoding="utf-8"))
             self.assertIn("sm64_saturn_scene_dependency_descriptor",
                           (root / "saturn_scene_package_abi.h").read_text(encoding="utf-8"))
+
+    def test_compiler_cli_consumes_canonical_dependency_sidecar(self) -> None:
+        payload = b"S64F-v3-actor-bundle"
+        with tempfile.TemporaryDirectory(prefix="s64p-dependency-cli-") as temporary:
+            root = Path(temporary)
+            payload_path = root / "actors.s64f"
+            manifest_path = root / "actors-dependency.json"
+            output_path = root / "scene.s64p"
+            report_path = root / "scene.json"
+            payload_manifest_path = root / "payloads.json"
+            payload_path.write_bytes(payload)
+            manifest = {
+                "alignment": 4,
+                "byte_count": len(payload),
+                "destination_class": "CART",
+                "generation": 11,
+                "kind": "ACTOR_DEPENDENCIES",
+                "lifetime": "SCENE",
+                "max_scratch": 0,
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "stable_id": "bob-area1-actors-v3",
+            }
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True), encoding="utf-8")
+            result = subprocess.run([
+                sys.executable,
+                str(Path(__file__).with_name("compile_scene_package.py")),
+                "--level-id", "9", "--area-id", "1",
+                "--dependency-manifest", str(manifest_path),
+                "--dependency-payload", str(payload_path),
+                "--payload-root", str(root),
+                "--output", str(output_path),
+                "--metadata-output", str(report_path),
+                "--payload-manifest-output", str(payload_manifest_path),
+            ], text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(payload_manifest_path.read_text(
+                encoding="utf-8")), {"payloads": [{
+                    "generation": 11,
+                    "path": "actors.s64f",
+                    "stable_id": "bob-area1-actors-v3",
+                }]})
+            parsed = validate_scene_package(
+                output_path.read_bytes(), {"bob-area1-actors-v3": (payload, 11)})
+            self.assertFalse(parsed["provisional"])
+            self.assertEqual(parsed["dependencies"], [{
+                "kind": "ACTOR_DEPENDENCIES",
+                "stable_id": "bob-area1-actors-v3",
+                "byte_count": len(payload),
+                "alignment": 4,
+                "destination_class": "CART",
+                "lifetime": "SCENE",
+                "dependency_mask": 0,
+                "max_scratch": 0,
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "generation": 11,
+            }])
+
+    def test_compiler_cli_rejects_dependency_sidecar_byte_drift(self) -> None:
+        payload = b"S64F-v3-actor-bundle"
+        with tempfile.TemporaryDirectory(prefix="s64p-dependency-drift-") as temporary:
+            root = Path(temporary)
+            payload_path = root / "actors.s64f"
+            manifest_path = root / "actors-dependency.json"
+            payload_path.write_bytes(payload)
+            manifest_path.write_text(json.dumps({
+                "alignment": 4,
+                "byte_count": len(payload),
+                "destination_class": "CART",
+                "generation": 11,
+                "kind": "ACTOR_DEPENDENCIES",
+                "lifetime": "SCENE",
+                "max_scratch": 0,
+                "sha256": "00" * 32,
+                "stable_id": "bob-area1-actors-v3",
+            }, sort_keys=True), encoding="utf-8")
+            result = subprocess.run([
+                sys.executable,
+                str(Path(__file__).with_name("compile_scene_package.py")),
+                "--level-id", "9", "--area-id", "1",
+                "--dependency-manifest", str(manifest_path),
+                "--dependency-payload", str(payload_path),
+                "--payload-root", str(root),
+                "--output", str(root / "scene.s64p"),
+            ], text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("dependency SHA-256 mismatch", result.stderr)
+
+    def test_external_payload_paths_cannot_escape_declared_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="s64p-payload-root-") as temporary:
+            root = Path(temporary)
+            package_root = root / "package"
+            package_root.mkdir()
+            outside = root / "outside.s64f"
+            outside.write_bytes(b"outside")
+            manifest = package_root / "dependency.json"
+            manifest.write_text(json.dumps({
+                "alignment": 4,
+                "byte_count": len(outside.read_bytes()),
+                "destination_class": "CART",
+                "generation": 11,
+                "kind": "ACTOR_DEPENDENCIES",
+                "lifetime": "SCENE",
+                "max_scratch": 0,
+                "sha256": hashlib.sha256(outside.read_bytes()).hexdigest(),
+                "stable_id": "bob-area1-actors-v3",
+            }, sort_keys=True), encoding="utf-8")
+            result = subprocess.run([
+                sys.executable,
+                str(Path(__file__).with_name("compile_scene_package.py")),
+                "--level-id", "9", "--area-id", "1",
+                "--dependency-manifest", str(manifest),
+                "--dependency-payload", str(outside),
+                "--payload-root", str(package_root),
+                "--output", str(package_root / "scene.s64p"),
+            ], text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("dependency payload escapes payload root", result.stderr)
+            payload_manifest = package_root / "payloads.json"
+            payload_manifest.write_text(json.dumps({"payloads": [{
+                "generation": 11,
+                "path": "../outside.s64f",
+                "stable_id": "bob-area1-actors-v3",
+            }]}), encoding="utf-8")
+            with self.assertRaisesRegex(
+                    PackageValidationError,
+                    "payload manifest path escapes payload root"):
+                load_payloads(payload_manifest, package_root)
+
+    def test_make_compiles_minimal_final_actor_scene_package(self) -> None:
+        makefile = Path(__file__).resolve().parents[2].joinpath(
+            "Makefile.saturn.mk").read_text(encoding="utf-8")
+        self.assertIn("compile-actor-scene-package:", makefile)
+        start = makefile.index("compile-actor-scene-package:")
+        end = makefile.index("\n\n", start)
+        recipe = makefile[start:end]
+        self.assertIn(
+            "compile-actor-scene-package: verify-scene-package-schema", recipe)
+        self.assertIn("--verify-publication", recipe)
+        self.assertIn("compile-actor-banks", recipe)
+        self.assertIn("compile-actor-family-bundle", recipe)
+        self.assertIn("$(ACTOR_FAMILY_BUNDLE_DEPENDENCY)", recipe)
+        self.assertIn("$(ACTOR_FAMILY_BUNDLE_PAYLOAD)", recipe)
+        self.assertIn("--dependency-manifest", recipe)
+        self.assertIn("--dependency-payload", recipe)
+        self.assertIn("--metadata-output", recipe)
+        self.assertIn("--payload-manifest-output", recipe)
+        self.assertIn("$(SCENE_PACKAGE_FINAL_ASM)", recipe)
+        self.assertIn("_sm64_saturn_sourceboot_scene_package_root", recipe)
+        self.assertIn("_sm64_saturn_sourceboot_actor_bundle", recipe)
+        self.assertIn("$(SCENE_PACKAGE_FINAL_ROOT)", recipe)
+        self.assertIn("$(ACTOR_FAMILY_BUNDLE_PAYLOAD)", recipe)
+        self.assertIn("../../../../$(patsubst", recipe)
+        self.assertNotIn("--provisional", recipe)
+        self.assertNotIn("--section", recipe)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,31 @@
 
 ### Changed
 
+- Added the canonical sourceboot owner for the generic BOB actor dependency.
+  The root package build now emits one relocation-neutral S64P root plus its
+  exact S64F-v3 CART dependency and a deterministic assembly wrapper; the
+  sourceboot target only consumes and seals those bytes instead of rebuilding
+  them inside the hermetic identity boundary. A fixed 64-byte, generation-last
+  bundle publication resolves any validated family/model snapshot through the
+  common S64F/S64B path, leases one of two aligned workspace lanes, and feeds
+  the existing generic pose/meshlet preparation without model-, behavior-, or
+  Cannon-specific branches. Boot validation scratch and the 1,280-byte runtime
+  workspace now share one typed 3,348-byte LWRAM lifetime, while the complete
+  source owner including the 2,064-byte texture publication is 5,556 bytes.
+  Scene validation reuses state-owned views/identity slots, reducing exact SH-2
+  stack frames from 3,920/3,420 bytes to 92/88 bytes (112 for section load);
+  source initialization is 220 bytes. Cold CART spans use 2,560 bytes borrowed
+  from the idle VDP1 command bank only during boot, so this task adds no
+  persistent HWRAM upload buffer and waits for every checked DMA before that
+  storage becomes frame-visible. The all-resident actor texture/CLUT regions
+  remain 16,640/2,816 bytes with 33,216 bytes of Yaul `remaining` capacity
+  left. Package tools now require an explicit payload root and reject absolute
+  or escaping dependency paths before hashing or header emission. This is
+  source/package ownership plus host and freestanding SH-2 evidence for the 14
+  currently compiler-supported textured BOB families; the other 20 drawable
+  families, production job/emitter cutover, linked target, Ymir, release, and
+  manual gates remain open in Task 9 and later.
+
 - Added master-owned, fixed-capacity actor texture residency for the validated
   BOB S64F-v3 dependency. Scene activation now prevalidates every selected
   S64B-v2 bank, hash, source/destination span, independent texture/CLUT bound,

@@ -312,42 +312,64 @@ bool sm64_saturn_scene_residency_begin(sm64_saturn_scene_residency_t *state,
                                        const sm64_saturn_scene_package_view_t *view,
                                        uint32_t generation)
 {
-    uint32_t slot;
-    sm64_saturn_scene_resident_identity_t identity;
-    sm64_saturn_scene_package_view_t owned_view;
+    uint32_t slot, dependency_index;
+    sm64_saturn_scene_resident_identity_t *identity;
     if (state == NULL || view == NULL || generation == 0U || state->staging_generation != 0U ||
         generation == state->active_generation || view->root_bytes == NULL || !payloads_valid(state, view)) return false;
     for (slot = 0U; slot < 2U; slot++) if (state->slot[slot].generation == generation) return false;
     for (slot = 0U; slot < 2U; slot++) if (!state->slot[slot].committed && state->slot[slot].generation == 0U) break;
     if (slot == 2U) return false;
+    identity = &state->slot[slot];
+    memset(identity, 0, sizeof(*identity));
     state->staging_view = *view;
-    memset(&identity, 0, sizeof(identity));
-    if (!placement_layout(state, &identity, slot)) {
+    memcpy(identity->package_sha256, view->package_sha256, 32U);
+    if (!placement_layout(state, identity, slot)) {
+        memset(identity, 0, sizeof(*identity));
         memset(&state->staging_view, 0, sizeof(state->staging_view)); return false;
     }
-    clear_identity_storage(state, &identity);
-    memcpy(state->root_storage + identity.root_storage_offset, view->root_bytes, view->package_size);
+    clear_identity_storage(state, identity);
+    memcpy(state->root_storage + identity->root_storage_offset,
+           state->staging_view.root_bytes, state->staging_view.package_size);
     if (!sm64_saturn_scene_package_validate(
-            state->root_storage + identity.root_storage_offset, view->package_size, &owned_view) ||
-        !bytes_equal(owned_view.package_sha256, view->package_sha256)) {
-        clear_identity_storage(state, &identity);
+            state->root_storage + identity->root_storage_offset,
+            state->staging_view.package_size, &state->staging_view) ||
+        !bytes_equal(state->staging_view.package_sha256,
+                     identity->package_sha256)) {
+        clear_identity_storage(state, identity);
+        memset(identity, 0, sizeof(*identity));
         memset(&state->staging_view, 0, sizeof(state->staging_view)); return false;
     }
-    state->staging_view = owned_view;
     if (!payloads_valid(state, &state->staging_view)) {
-        clear_identity_storage(state, &identity);
+        clear_identity_storage(state, identity);
+        memset(identity, 0, sizeof(*identity));
         memset(&state->staging_view, 0, sizeof(state->staging_view)); return false;
     }
-    identity.generation = generation;
-    identity.scene_package_id = ((uint32_t)view->package_sha256[0] << 24) |
-        ((uint32_t)view->package_sha256[1] << 16) | ((uint32_t)view->package_sha256[2] << 8) | view->package_sha256[3];
-    identity.active_feature_mask = state->active_feature_mask;
-    memcpy(identity.package_sha256, view->package_sha256, 32U);
-    memcpy(identity.dependency_set_sha256, view->dependency_set_sha256, 32U);
-    aggregate_identity(view, SM64_SATURN_SCENE_ACTOR_DEPENDENCIES, identity.actor_bank_identity);
-    aggregate_identity(view, SM64_SATURN_SCENE_ANIMATION_DEPENDENCIES, identity.animation_bank_identity);
-    aggregate_identity(view, SM64_SATURN_SCENE_AUDIO_DEPENDENCIES, identity.audio_bank_identity);
-    state->slot[slot] = identity;
+    for (dependency_index = 0U;
+         dependency_index < state->staging_view.dependency_count;
+         dependency_index++) {
+        identity->dependency_byte_count[dependency_index] =
+            state->staging_view.dependencies[dependency_index].byte_count;
+        identity->dependency_destination_class[dependency_index] =
+            state->staging_view.dependencies[dependency_index].destination_class;
+    }
+    identity->generation = generation;
+    identity->scene_package_id =
+        ((uint32_t)identity->package_sha256[0] << 24) |
+        ((uint32_t)identity->package_sha256[1] << 16) |
+        ((uint32_t)identity->package_sha256[2] << 8) |
+        identity->package_sha256[3];
+    identity->active_feature_mask = state->active_feature_mask;
+    memcpy(identity->dependency_set_sha256,
+           state->staging_view.dependency_set_sha256, 32U);
+    aggregate_identity(&state->staging_view,
+                       SM64_SATURN_SCENE_ACTOR_DEPENDENCIES,
+                       identity->actor_bank_identity);
+    aggregate_identity(&state->staging_view,
+                       SM64_SATURN_SCENE_ANIMATION_DEPENDENCIES,
+                       identity->animation_bank_identity);
+    aggregate_identity(&state->staging_view,
+                       SM64_SATURN_SCENE_AUDIO_DEPENDENCIES,
+                       identity->audio_bank_identity);
     state->staging_slot = (int8_t)slot;
     state->staging_generation = generation;
     state->loaded_section_mask = 0U;
@@ -424,18 +446,20 @@ static void rollback_staging(sm64_saturn_scene_residency_t *state)
     state->quarantine_count++;
 }
 
-static bool owned_bytes_valid(const sm64_saturn_scene_residency_t *state,
+static bool owned_bytes_valid(sm64_saturn_scene_residency_t *state,
                               const sm64_saturn_scene_resident_identity_t *identity)
 {
-    sm64_saturn_scene_package_view_t view;
     uint8_t digest[32];
-    uint32_t required = required_dependencies(state), index;
+    uint32_t required, index;
     if (!sm64_saturn_scene_package_validate(
             state->root_storage + identity->root_storage_offset,
-            identity->root_byte_count, &view) ||
-        !bytes_equal(view.package_sha256, identity->package_sha256)) return false;
-    for (index = 0U; index < view.section_count; index++) {
-        const sm64_saturn_scene_section_view_t *section = &view.sections[index];
+            identity->root_byte_count, &state->staging_view) ||
+        !bytes_equal(state->staging_view.package_sha256,
+                     identity->package_sha256)) return false;
+    required = required_dependencies(state);
+    for (index = 0U; index < state->staging_view.section_count; index++) {
+        const sm64_saturn_scene_section_view_t *section =
+            &state->staging_view.sections[index];
         if (section->destination_class == SM64_SATURN_SCENE_DESTINATION_NONE) continue;
         if (identity->section_storage_offset[index] == UINT32_MAX ||
             !sm64_saturn_scene_package_sha256(
@@ -443,8 +467,9 @@ static bool owned_bytes_valid(const sm64_saturn_scene_residency_t *state,
                     identity->section_storage_offset[index],
                 section->byte_size, digest) || !bytes_equal(digest, section->content_sha256)) return false;
     }
-    for (index = 0U; index < view.dependency_count; index++) {
-        const sm64_saturn_scene_dependency_view_t *dependency = &view.dependencies[index];
+    for (index = 0U; index < state->staging_view.dependency_count; index++) {
+        const sm64_saturn_scene_dependency_view_t *dependency =
+            &state->staging_view.dependencies[index];
         if ((required & (1U << index)) == 0U) continue;
         if (identity->dependency_storage_offset[index] == UINT32_MAX ||
             !sm64_saturn_scene_package_sha256(
@@ -721,15 +746,28 @@ const uint8_t *sm64_saturn_scene_residency_dependency_bytes(
         return NULL;
     for (slot = 0U; slot < 2U; slot++) if (state->slot[slot].committed &&
         state->slot[slot].generation == generation) {
-        const sm64_saturn_scene_dependency_view_t *dependency;
-        sm64_saturn_scene_package_view_t view;
-        uint32_t offset = state->slot[slot].dependency_storage_offset[dependency_index];
-        if (offset == UINT32_MAX || !sm64_saturn_scene_package_validate(
-                state->root_storage + state->slot[slot].root_storage_offset,
-                state->slot[slot].root_byte_count, &view) || dependency_index >= view.dependency_count) return NULL;
-        dependency = &view.dependencies[dependency_index];
-        *byte_count = dependency->byte_count;
-        return state->destination_storage[dependency->destination_class] + offset;
+        const sm64_saturn_scene_resident_identity_t *identity =
+            &state->slot[slot];
+        const uint32_t offset =
+            identity->dependency_storage_offset[dependency_index];
+        const uint32_t bytes =
+            identity->dependency_byte_count[dependency_index];
+        const uint8_t destination =
+            identity->dependency_destination_class[dependency_index];
+        if (offset == UINT32_MAX ||
+            destination == SM64_SATURN_SCENE_DESTINATION_NONE ||
+            destination >= SM64_SATURN_SCENE_DESTINATION_COUNT ||
+            state->destination_storage[destination] == NULL ||
+            offset < identity->destination_base[destination] ||
+            offset > state->capacity[destination] ||
+            bytes > state->capacity[destination] - offset ||
+            offset - identity->destination_base[destination] >
+                identity->destination_bytes[destination] ||
+            bytes > identity->destination_bytes[destination] -
+                (offset - identity->destination_base[destination]))
+            return NULL;
+        *byte_count = bytes;
+        return state->destination_storage[destination] + offset;
     }
     return NULL;
 }

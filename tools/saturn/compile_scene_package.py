@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -302,18 +303,83 @@ def _parse_section_argument(value: str) -> tuple[str, Path]:
     return kind, Path(path)
 
 
+def _dependency_from_manifest(manifest_path: Path,
+                              payload_path: Path) -> DependencyInput:
+    expected_keys = {
+        "alignment", "byte_count", "destination_class", "generation",
+        "kind", "lifetime", "max_scratch", "sha256", "stable_id",
+    }
+    document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict) or set(document) != expected_keys:
+        raise ValueError("dependency manifest fields are noncanonical")
+    data = payload_path.read_bytes()
+    byte_count = _u32(document["byte_count"], "dependency byte count")
+    if byte_count != len(data):
+        raise ValueError("dependency byte count mismatch")
+    digest = hashlib.sha256(data).hexdigest()
+    if document["sha256"] != digest:
+        raise ValueError("dependency SHA-256 mismatch")
+    kind = document["kind"]
+    if kind not in DEPENDENCY_KINDS:
+        raise ValueError(f"unknown dependency kind: {kind}")
+    generation = _u32(document["generation"], "dependency generation")
+    if generation == 0:
+        raise ValueError("dependency generation must be nonzero")
+    return DependencyInput(
+        kind=kind,
+        stable_id=document["stable_id"],
+        data=data,
+        destination_class=document["destination_class"],
+        lifetime=document["lifetime"],
+        max_scratch=_u32(document["max_scratch"], "maximum scratch"),
+        generation=generation,
+        alignment=_alignment(document["alignment"]),
+    )
+
+
+def _input_within_root(path: Path, root: Path, label: str) -> Path:
+    try:
+        resolved_root = root.resolve(strict=True)
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(resolved_root)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise ValueError(f"{label} escapes payload root: {path}") from exc
+    if not resolved.is_file():
+        raise ValueError(f"{label} is not a file: {path}")
+    return resolved
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--level-id", type=int, required=True)
     parser.add_argument("--area-id", type=int, required=True)
     parser.add_argument("--section", action="append", default=[], type=_parse_section_argument)
+    parser.add_argument("--dependency-manifest", action="append", default=[],
+                        type=Path)
+    parser.add_argument("--dependency-payload", action="append", default=[],
+                        type=Path)
+    parser.add_argument("--payload-root", type=Path)
     parser.add_argument("--provisional", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--metadata-output", type=Path)
+    parser.add_argument("--payload-manifest-output", type=Path)
     args = parser.parse_args()
+    if len(args.dependency_manifest) != len(args.dependency_payload):
+        parser.error("each dependency manifest requires one dependency payload")
+    if args.dependency_manifest and args.payload_root is None:
+        parser.error("external dependencies require --payload-root")
     inputs = [SectionInput(kind, path.read_bytes(), alignment=16)
               for kind, path in args.section]
-    package = compile_package(args.level_id, args.area_id, inputs,
+    dependency_manifests = [_input_within_root(
+        manifest, args.payload_root, "dependency manifest")
+        for manifest in args.dependency_manifest]
+    dependency_payloads = [_input_within_root(
+        payload, args.payload_root, "dependency payload")
+        for payload in args.dependency_payload]
+    dependencies = [_dependency_from_manifest(manifest, payload)
+                    for manifest, payload in zip(
+                        dependency_manifests, dependency_payloads)]
+    package = compile_package(args.level_id, args.area_id, inputs, dependencies,
                               provisional=args.provisional)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(package)
@@ -323,6 +389,19 @@ def main() -> None:
         args.metadata_output.parent.mkdir(parents=True, exist_ok=True)
         args.metadata_output.write_text(
             json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if args.payload_manifest_output is not None:
+        output = args.payload_manifest_output
+        payloads = [{
+            "stable_id": dependency.stable_id,
+            "path": Path(os.path.relpath(payload_path, output.parent)).as_posix(),
+            "generation": dependency.generation,
+        } for dependency, payload_path in zip(
+            dependencies, dependency_payloads)]
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps({"payloads": payloads}, separators=(",", ":"),
+                       sort_keys=True) + "\n",
+            encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

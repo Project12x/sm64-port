@@ -65,6 +65,14 @@ _Static_assert(sizeof(sm64_saturn_actor_texture_publication_t) == 2064U &&
 bool sm64_saturn_actor_texture_publication_validate(
     const sm64_saturn_actor_texture_publication_t *publication);
 
+/* Exact resident byte requirements for a fully validated bundle. Callers use
+ * this to carve a dedicated actor partition from Yaul's remaining VDP1 VRAM;
+ * terrain/Mario partitions are never aliased or overwritten. */
+bool sm64_saturn_actor_texture_residency_requirements(
+    const sm64_saturn_actor_bundle_view_t *bundle,
+    uint32_t *texture_bytes, uint32_t *clut_bytes,
+    uint16_t *mapping_count);
+
 /* Master-only, all-resident activation. The checked DMA queue must already be
  * initialized and exclusively owned by the scene transition. Staging is a
  * caller-owned, 4-byte-aligned HWRAM span; it must not overlap the bundle,

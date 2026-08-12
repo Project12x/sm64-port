@@ -128,6 +128,12 @@ static void actor_output_reset(sm64_saturn_actor_meshlet_output_t *output)
     output->position_count = 0U;
 }
 
+static bool actor_bank_version_supported(uint16_t version)
+{
+    return version == SM64_SATURN_ACTOR_BANK_VERSION_V1 ||
+           version == SM64_SATURN_ACTOR_BANK_VERSION_V2;
+}
+
 bool sm64_saturn_actor_meshlets_workspace_query(
     const sm64_saturn_actor_bank_view_t *bank, uint32_t *lane_bytes,
     uint32_t *usable_bytes, uint32_t *reserved_bytes)
@@ -136,7 +142,7 @@ bool sm64_saturn_actor_meshlets_workspace_query(
     if (bank == NULL || lane_bytes == NULL || usable_bytes == NULL ||
         reserved_bytes == NULL ||
         bank->bytes == NULL || bank->bank.magic != SM64_SATURN_ACTOR_BANK_MAGIC ||
-        bank->bank.version != SM64_SATURN_ACTOR_BANK_VERSION ||
+        !actor_bank_version_supported(bank->bank.version) ||
         !sm64_saturn_actor_bank_workspace_requirements(
             bank->bank.vertex_count, bank->bank.joint_count, &lane, &usable,
             &minimum_reserved) || bank->max_scratch < minimum_reserved)
@@ -167,24 +173,33 @@ static bool actor_pointer_spans_overlap(const void *left, uint32_t left_size,
     return left_start < right_end && right_start < left_end;
 }
 
-bool sm64_saturn_actor_meshlets_bind_workspace(
+static bool actor_bind_workspace_with_stride(
     const sm64_saturn_actor_bank_view_t *bank, void *scratch,
-    uint32_t scratch_capacity, uint8_t lane,
+    uint32_t scratch_capacity, uint32_t lane_stride, uint8_t lane,
     sm64_saturn_actor_output_record_t *records, uint16_t draw_capacity,
     sm64_saturn_actor_meshlet_workspace_t *workspace)
 {
     uint8_t *bytes = (uint8_t *)scratch;
     uintptr_t raw_address, aligned_address;
-    uint32_t lane_bytes, usable_bytes, reserved_bytes, leading_bytes, cursor;
+    uint32_t lane_bytes, usable_bytes, reserved_bytes, minimum_capacity;
+    uint32_t leading_bytes, cursor;
     uint32_t record_bytes = (uint32_t)draw_capacity * sizeof(*records);
     if (workspace == NULL || scratch == NULL || records == NULL ||
         draw_capacity == 0U ||
         lane >= SM64_SATURN_ACTOR_MESHLET_WORK_LANE_COUNT ||
         !sm64_saturn_actor_meshlets_workspace_query(
             bank, &lane_bytes, &usable_bytes, &reserved_bytes) ||
-        scratch_capacity < reserved_bytes ||
+        lane_stride < lane_bytes ||
+        (lane_stride & (SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT - 1U)) != 0U ||
+        lane_stride > (UINT32_MAX -
+            (SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT - 1U)) /
+                SM64_SATURN_ACTOR_MESHLET_WORK_LANE_COUNT)
+        return false;
+    minimum_capacity = lane_stride * SM64_SATURN_ACTOR_MESHLET_WORK_LANE_COUNT +
+        (SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT - 1U);
+    if (scratch_capacity < minimum_capacity ||
         actor_pointer_spans_overlap(
-            scratch, reserved_bytes, records, record_bytes))
+            scratch, minimum_capacity, records, record_bytes))
         return false;
 
     raw_address = (uintptr_t)scratch;
@@ -195,15 +210,16 @@ bool sm64_saturn_actor_meshlets_bind_workspace(
         (SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT - 1U)) &
         ~(uintptr_t)(SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT - 1U);
     leading_bytes = (uint32_t)(aligned_address - raw_address);
-    if (leading_bytes > reserved_bytes ||
-        usable_bytes > reserved_bytes - leading_bytes)
+    if (leading_bytes > minimum_capacity ||
+        lane_stride * SM64_SATURN_ACTOR_MESHLET_WORK_LANE_COUNT >
+            minimum_capacity - leading_bytes)
         return false;
 
     memset(workspace, 0, sizeof(*workspace));
     bytes += leading_bytes;
-    cursor = (uint32_t)lane * lane_bytes;
+    cursor = (uint32_t)lane * lane_stride;
     workspace->scratch_offset = leading_bytes + cursor;
-    workspace->scratch_size = lane_bytes;
+    workspace->scratch_size = lane_stride;
     workspace->lane = lane;
     cursor = actor_align_u32(cursor, _Alignof(int16_t));
     workspace->pose_work.vertices = (int16_t (*)[3])(void *)(bytes + cursor);
@@ -219,8 +235,8 @@ bool sm64_saturn_actor_meshlets_bind_workspace(
     cursor += (uint32_t)bank->bank.vertex_count * sizeof(uint16_t);
     workspace->output.position_seen = bytes + cursor;
     cursor += (uint32_t)bank->bank.vertex_count * sizeof(uint8_t);
-    if (actor_align_u32(cursor, SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT) !=
-            ((uint32_t)lane + 1U) * workspace->scratch_size)
+    if (actor_align_u32(cursor, SM64_SATURN_ACTOR_MESHLET_WORK_ALIGNMENT) >
+            ((uint32_t)lane + 1U) * lane_stride)
         return false;
     workspace->pose_work.vertex_capacity = bank->bank.vertex_count;
     workspace->pose_work.joint_capacity = bank->bank.joint_count;
@@ -233,6 +249,33 @@ bool sm64_saturn_actor_meshlets_bind_workspace(
     workspace->output.quarantine_reason =
         SM64_SATURN_ACTOR_MESHLET_QUARANTINE_NONE;
     return true;
+}
+
+bool sm64_saturn_actor_meshlets_bind_workspace(
+    const sm64_saturn_actor_bank_view_t *bank, void *scratch,
+    uint32_t scratch_capacity, uint8_t lane,
+    sm64_saturn_actor_output_record_t *records, uint16_t draw_capacity,
+    sm64_saturn_actor_meshlet_workspace_t *workspace)
+{
+    uint32_t lane_bytes, usable_bytes, reserved_bytes;
+    if (!sm64_saturn_actor_meshlets_workspace_query(
+            bank, &lane_bytes, &usable_bytes, &reserved_bytes) ||
+        scratch_capacity < reserved_bytes)
+        return false;
+    return actor_bind_workspace_with_stride(
+        bank, scratch, scratch_capacity, lane_bytes, lane, records,
+        draw_capacity, workspace);
+}
+
+bool sm64_saturn_actor_meshlets_bind_bundle_workspace(
+    const sm64_saturn_actor_bank_view_t *bank, void *scratch,
+    uint32_t scratch_capacity, uint32_t lane_stride, uint8_t lane,
+    sm64_saturn_actor_output_record_t *records, uint16_t draw_capacity,
+    sm64_saturn_actor_meshlet_workspace_t *workspace)
+{
+    return actor_bind_workspace_with_stride(
+        bank, scratch, scratch_capacity, lane_stride, lane, records,
+        draw_capacity, workspace);
 }
 
 static actor_meshlet_source_t actor_mario_source(void)
@@ -547,7 +590,10 @@ static bool actor_meshlet_core(
                     output->positions[position_cursor++] = position;
                 }
             for (uint32_t local = 0U; local < span.primitive_count; local++) {
-                uint16_t primitive;
+                /* The first pass has already validated every reference, but
+                 * keep this emission pass defined even under the target
+                 * compiler's interprocedural warning model. */
+                uint16_t primitive = 0U;
                 sm64_saturn_actor_draw_ref_t ref;
                 const uint8_t bin = actor_depth_bin(depth_bounds.furthest_q16);
                 (void)actor_primitive_ref(source, span.primitive_offset + local,
@@ -638,7 +684,7 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
         output->records == NULL || output->position_seen == NULL ||
         output->position_seen_capacity == 0U || bank->bytes == NULL ||
         bank->bank.magic != SM64_SATURN_ACTOR_BANK_MAGIC ||
-        bank->bank.version != SM64_SATURN_ACTOR_BANK_VERSION ||
+        !actor_bank_version_supported(bank->bank.version) ||
         instance->generation == 0U ||
         instance->generation != view->generation) {
         if (output != NULL && output->abi ==

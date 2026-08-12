@@ -311,7 +311,11 @@ SOURCEBOOT_SKY_GRADIENT_HEADER := $(SOURCEBOOT_GENERATED)/saturn_sky_gradient_ge
 SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER := $(SOURCEBOOT_GENERATED)/actor_identity_registry.h
 SOURCEBOOT_ACTOR_FAMILY_REPORT := $(ROOT)/build/saturn/packages/bob/1/actors/actor-families.json
 SOURCEBOOT_ACTOR_CLOSURE := $(ROOT)/build/saturn/packages/bob/1/closure.json
-SOURCEBOOT_SCENE_PACKAGE_GENERATION ?= 1
+SOURCEBOOT_SCENE_PACKAGE_GENERATION ?= 14
+SOURCEBOOT_ACTOR_BUNDLE_DIR := $(ROOT)/build/saturn/packages/bob/1/actors-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
+SOURCEBOOT_ACTOR_BUNDLE := $(SOURCEBOOT_ACTOR_BUNDLE_DIR)/bob-area1-actors-v3.s64f
+SOURCEBOOT_SCENE_PACKAGE_DIR := $(ROOT)/build/saturn/packages/bob/1/scene-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
+SOURCEBOOT_SCENE_PACKAGE_ROOT := $(SOURCEBOOT_SCENE_PACKAGE_DIR)/scene.s64p
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
@@ -321,6 +325,28 @@ SOURCEBOOT_BOB_TOOLS := \
 SOURCEBOOT_BOB_TILE_TOOLS := $(ROOT)/tools/saturn/bake_bob_tiles.py \
   $(ROOT)/tools/saturn/bake_castle_uv.py $(ROOT)/tools/saturn/vdp1_texture.py
 SOURCEBOOT_BOB_SCENE_TOOL := $(ROOT)/tools/saturn/emit_bob_scene.py
+SOURCEBOOT_ACTOR_PACKAGE_TOOLS := \
+  $(ROOT)/tools/saturn/compile_actor_family_bundle.py \
+  $(ROOT)/tools/saturn/inventory_actor_family_bundles.py \
+  $(ROOT)/tools/saturn/actor_family_bundle.py \
+  $(ROOT)/tools/saturn/actor_variant_bank.py \
+  $(ROOT)/tools/saturn/actor_bank_format.py \
+  $(ROOT)/tools/saturn/actor_bank_v2.py \
+  $(ROOT)/tools/saturn/actor_source.py \
+  $(ROOT)/tools/saturn/actor_material_v2.py \
+  $(ROOT)/tools/saturn/bake_castle_uv.py \
+  $(ROOT)/tools/saturn/compile_castle_bsp.py \
+  $(ROOT)/tools/saturn/dl_rigid_groups.py \
+  $(ROOT)/tools/saturn/extract_mario_actor.py \
+  $(ROOT)/tools/saturn/extract_mario_textures.py \
+  $(ROOT)/tools/saturn/quad_pairing.py \
+  $(ROOT)/tools/saturn/saturn_mesh_ir.py \
+  $(ROOT)/tools/saturn/static_bsp.py \
+  $(ROOT)/tools/saturn/vdp1_texture.py \
+  $(ROOT)/tools/saturn/compile_scene_package.py \
+  $(ROOT)/tools/saturn/scene_package_schema.py \
+  $(ROOT)/tools/saturn/validate_scene_package.py \
+  $(ROOT)/tools/saturn/emit_scene_package_header.py
 SOURCEBOOT_BOB_SOURCES := \
   $(ROOT)/levels/bob/areas/1/geo.inc.c \
   $(wildcard $(ROOT)/levels/bob/areas/1/*/model.inc.c)
@@ -375,6 +401,9 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/gfx/saturn_actor_instance.c \
   $(ROOT)/src/port/saturn/gfx/saturn_geo_state_observer.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bank.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_bundle.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_bundle_runtime.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_texture_residency.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_pose.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c \
@@ -408,6 +437,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/gpl/slavedriver_dma_queue.c \
   $(ROOT)/src/port/saturn/gpl/slavedriver_dual_worker.c \
   $(ROOT)/src/port/saturn/gpl/slavedriver_projection.sx \
+  source_scene_bundle.c \
   $(ROOT)/src/port/saturn/compat/sqrtf.c \
   $(ROOT)/src/buffers/buffers.c $(ROOT)/src/buffers/gfx_output_buffer.c \
   $(SOURCEBOOT_GAME_SRCS) $(SOURCEBOOT_ENGINE_SRCS) $(SOURCEBOOT_MENU_SRCS) \
@@ -562,11 +592,13 @@ export TMPDIR := $(SOURCEBOOT_TOOL_TMPDIR)
 SOURCEBOOT_BOB_SKY_ASM := $(SOURCEBOOT_GENERATED)/bob_sky_bitmap.sx
 SOURCEBOOT_BOB_TEXTURE_ASM := $(SOURCEBOOT_GENERATED)/bob_texture_bank.sx
 SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM := $(SOURCEBOOT_GENERATED)/bob_bsp_fragment_texture_bank.sx
+SOURCEBOOT_ACTOR_SCENE_ASM := $(SOURCEBOOT_GENERATED)/actor_scene_bundle.sx
 SH_SRCS += $(SOURCEBOOT_BOB_TEXTURE_ASM)
 ifeq ($(SATURN_DEMO_BSP_FRAGMENTS),1)
 SH_SRCS += $(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM)
 endif
 SH_SRCS += $(SOURCEBOOT_BOB_SKY_ASM)
+SH_SRCS += $(SOURCEBOOT_ACTOR_SCENE_ASM)
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 
@@ -827,7 +859,7 @@ endif
 .PHONY: identity-assets
 identity-assets: source-assets source-geo-depth $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
   $(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_ACTOR_BANK) \
-  $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER) \
+  $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER) $(SOURCEBOOT_ACTOR_SCENE_ASM) \
   $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C))
 
 # Emits only the seal-stage identity directory tag, so an orchestrating make
@@ -963,6 +995,17 @@ $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER): source-actor-families \
 .PHONY: source-actor-identity-registry
 source-actor-identity-registry: $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER)
 
+.PHONY: source-actor-scene-package
+source-actor-scene-package:
+	$(MAKE) -C "$(ROOT)" -f Makefile.saturn.mk -j1 \
+	  SCENE_PACKAGE_GENERATION="$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)" \
+	  compile-actor-scene-package
+
+# The root package owner emits this deterministic assembly alongside the
+# validated S64P/S64F pair. This identity boundary only consumes and seals it.
+$(SOURCEBOOT_ACTOR_SCENE_ASM): source-actor-scene-package $(SOURCEBOOT_ASSET_ASM_RECIPE)
+	@test -f "$@"
+
 # Keep the large baked bank binary, rather than a generated C initializer, so
 # the source cart remains compact and the linker can place it in .cart_rodata
 # alongside the other immutable source assets.  The generated assembly is in
@@ -1045,7 +1088,8 @@ SOURCEBOOT_GENERATED_COMPILED_INPUTS := \
   $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C)) \
   $(SOURCEBOOT_BOB_TEXTURE_ASM) \
   $(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENTS)),$(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM)) \
-  $(SOURCEBOOT_BOB_SKY_ASM)
+  $(SOURCEBOOT_BOB_SKY_ASM) \
+  $(SOURCEBOOT_ACTOR_SCENE_ASM)
 SOURCEBOOT_ALL_COMPILED_INPUTS := $(foreach source,$(SH_SRCS_UNIQ),$(abspath $(source)))
 SOURCEBOOT_COMPILED_INPUTS := $(filter-out $(SOURCEBOOT_GENERATED_COMPILED_INPUTS),$(SOURCEBOOT_ALL_COMPILED_INPUTS))
 SOURCEBOOT_RECIPE_INPUTS := \
@@ -1080,6 +1124,7 @@ SOURCEBOOT_GENERATOR_INPUTS := $(sort \
   $(ROOT)/tools/saturn/gen_actor_identity_registry.py \
   $(ROOT)/tools/saturn/compile_actor_bank.py \
   $(ROOT)/tools/saturn/collect_scene_closure.py \
+  $(SOURCEBOOT_ACTOR_PACKAGE_TOOLS) \
   $(SOURCEBOOT_GEO_DEPTH_TOOL) $(SOURCEBOOT_QUAD_MAP_TOOLS) \
   $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_TILE_TOOLS) $(SOURCEBOOT_BOB_SCENE_TOOL))
 SOURCEBOOT_PC_ASSET_REQUIRED_INPUTS := $(SOURCEBOOT_WATER_SKYBOX) $(ROOT)/$(SOURCEBOOT_TEXT_STRINGS)
@@ -1095,6 +1140,7 @@ SOURCEBOOT_GENERATED_INPUTS := $(filter-out $(SOURCEBOOT_PC_ASSET_REQUIRED_INPUT
   $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) \
   $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) \
   $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_ACTOR_BANK) \
+  $(SOURCEBOOT_SCENE_PACKAGE_ROOT) $(SOURCEBOOT_ACTOR_BUNDLE) \
   $(ROOT)/$(SOURCEBOOT_TEXT_STRINGS)))
 SOURCEBOOT_RELEASE_MANIFEST := $(SH_OUTPUT_PATH)/saturn-release-manifest-v1.json
 SOURCEBOOT_DERIVED_OUTPUTS := \

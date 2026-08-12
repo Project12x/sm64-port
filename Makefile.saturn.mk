@@ -34,7 +34,12 @@ ACTOR_FAMILY_BANK_DIR ?= $(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL
 ACTOR_FAMILY_BANK_REPORT ?= $(ACTOR_FAMILY_BANK_DIR)/actor-families.json
 ACTOR_FAMILY_BUNDLE_DIR ?= $(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)/actors-v3-g$(SCENE_PACKAGE_GENERATION)
 ACTOR_FAMILY_BUNDLE_REPORT ?= $(ACTOR_FAMILY_BUNDLE_DIR)/actor-family-bundle.json
-SCENE_PACKAGE_GENERATION ?= 1
+ACTOR_FAMILY_BUNDLE_PAYLOAD ?= $(ACTOR_FAMILY_BUNDLE_DIR)/bob-area1-actors-v3.s64f
+ACTOR_FAMILY_BUNDLE_DEPENDENCY ?= $(ACTOR_FAMILY_BUNDLE_DIR)/bob-area1-actors-v3-dependency.json
+# Published package generations are immutable/no-clobber. Generation 14 is
+# the first final S64P + textured S64F pair accepted by the generic BOB path;
+# any byte-changing follow-up must deliberately select a newer generation.
+SCENE_PACKAGE_GENERATION ?= 14
 PYTHON ?= python3
 HOST_CC ?= gcc
 ifeq ($(OS),Windows_NT)
@@ -125,6 +130,13 @@ SCENE_PACKAGE_PROVISIONAL_ROOT ?= $(SCENE_PACKAGE_PROVISIONAL_DIR)/scene.s64p
 SCENE_PACKAGE_PROVISIONAL_REPORT ?= $(SCENE_PACKAGE_PROVISIONAL_DIR)/scene-package-report.json
 SCENE_PACKAGE_PROVISIONAL_VALIDATION ?= $(SCENE_PACKAGE_PROVISIONAL_DIR)/scene-package-validation.json
 SCENE_PACKAGE_PROVISIONAL_HEADER ?= $(SCENE_PACKAGE_PROVISIONAL_DIR)/scene_package.h
+SCENE_PACKAGE_FINAL_DIR ?= $(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)/scene-v3-g$(SCENE_PACKAGE_GENERATION)
+SCENE_PACKAGE_FINAL_ROOT ?= $(SCENE_PACKAGE_FINAL_DIR)/scene.s64p
+SCENE_PACKAGE_FINAL_REPORT ?= $(SCENE_PACKAGE_FINAL_DIR)/scene-package-report.json
+SCENE_PACKAGE_FINAL_VALIDATION ?= $(SCENE_PACKAGE_FINAL_DIR)/scene-package-validation.json
+SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST ?= $(SCENE_PACKAGE_FINAL_DIR)/scene-package-payloads.json
+SCENE_PACKAGE_FINAL_HEADER ?= $(SCENE_PACKAGE_FINAL_DIR)/scene_package.h
+SCENE_PACKAGE_FINAL_ASM ?= $(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated/actor_scene_bundle.sx
 SCENE_PACKAGE_ABI_HEADER ?= $(SATURN_REPO_ROOT)/build/saturn/packages/saturn_scene_package_abi.h
 SCENE_PACKAGE_WORLD_STATIC ?= $(BOB_MESH_GENERATED)/bob_area1_compiled.json
 SCENE_PACKAGE_COLLISION ?= $(SATURN_REPO_ROOT)/levels/$(SCENE_LEVEL)/areas/$(SCENE_AREA)/collision.inc.c
@@ -149,7 +161,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-saturn-object-pool-probe-contract verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-audio-sequences compile-saturn-audio verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-bank-v2 verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-family-bundle verify-actor-family-bundle-build verify-actor-identity-registry verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema verify-saturn-sha256 classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-actor-family-bundle inventory-actor-family-bundles compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-saturn-object-pool-probe-contract verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-audio-sequences compile-saturn-audio verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-bank-v2 verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-family-bundle verify-actor-family-bundle-build verify-actor-identity-registry verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema verify-saturn-sha256 classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-actor-family-bundle inventory-actor-family-bundles compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-actor-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 .PHONY: verify-actor-variant-bank
 
@@ -247,30 +259,36 @@ verify-castleviewer: castleviewer
 # into the wrong identity's directory and the shipped .iso silently lacked it.
 sourceboot: check-libyaul check-sdk
 	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets \
+	  SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
 	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)"
 	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=discover identity-discovery \
+	  SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
 	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)"
 	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" \
+	  SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
 	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" print-identity-tag)" && \
 	  test -n "$$tag" && \
 	  printf 'sourceboot: sealed identity %s\n' "$$tag" && \
 	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag" \
+	    SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	    SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
 	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" && \
 	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag" \
+	    SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	    SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
 	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" verify-sealed-inputs seal-release
 
 # Read the sealed tag back from the frozen spec (no reseal) so verify runs
 # against the exact identity the build above produced.
 verify-sourceboot: sourceboot
-	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" print-identity-tag SOURCEBOOT_IDENTITY_FROZEN=1)" && \
+	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" print-identity-tag SOURCEBOOT_IDENTITY_FROZEN=1 SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)")" && \
 	  test -n "$$tag" && \
 	  printf 'verify-sourceboot: verifying sealed identity %s\n' "$$tag" && \
-	  $(MAKE) -C "$(SOURCEBOOT_DIR)" verify verify-release SOURCEBOOT_SEALED_IDENTITY="$$tag"
+	  $(MAKE) -C "$(SOURCEBOOT_DIR)" verify verify-release SOURCEBOOT_SEALED_IDENTITY="$$tag" \
+	    SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)"
 
 verify-sourceboot-feature-identity:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_gen_build_identity.py"
@@ -1134,9 +1152,10 @@ verify-actor-bank-v2: check-host-tools
 	  "build/saturn/host-tests/actor-bank-v2-rgb1555.bin" \
 	  "build/saturn/host-tests/actor-bank-v2-padded.bin"
 
-.PHONY: verify-ir-texture verify-actor-material verify-actor-texture-residency
+.PHONY: verify-ir-texture verify-actor-material verify-actor-texture-residency \
+	verify-actor-bundle-runtime verify-source-scene-bundle
 
-verify-actor-texture-residency: verify-actor-family-bundle-build
+verify-actor-texture-residency: compile-actor-scene-package
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; path=Path('build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)/actors-v3-g$(SCENE_PACKAGE_GENERATION)/bob-area1-actors-v3.s64f'); assert path.is_file(), f'missing real Task 5 bundle: {path}'"
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; from tools.saturn.test_actor_bank_v2 import write_target_fixtures; write_target_fixtures(Path('build/saturn/host-tests'))"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \
@@ -1152,6 +1171,50 @@ verify-actor-texture-residency: verify-actor-family-bundle-build
 	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/actor-texture-residency-test$(HOST_EXEEXT)" \
 	  "build/saturn/host-tests/actor-family-bundle-mixed-v3.bin" \
 	  "$(ACTOR_FAMILY_BUNDLE_DIR)/bob-area1-actors-v3.s64f"
+
+verify-actor-bundle-runtime: compile-actor-scene-package
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
+	  -I"$(SATURN_REPO_ROOT)/include" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_bundle_runtime_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bundle_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bundle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_meshlets.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bank.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_pose.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_sha256.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-bundle-runtime-test$(HOST_EXEEXT)"
+	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/actor-bundle-runtime-test$(HOST_EXEEXT)" \
+	  "$(ACTOR_FAMILY_BUNDLE_PAYLOAD)"
+
+verify-source-scene-bundle: compile-actor-scene-package
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \
+	  -DSM64_SATURN_SOURCE_SCENE_BUNDLE_HOST_TEST=1 \
+	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
+	  -I"$(SATURN_REPO_ROOT)/include" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/sourceboot" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/source_scene_bundle_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/sourceboot/source_scene_bundle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bundle_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bundle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_meshlets.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bank.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_pose.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_scene_package.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_sha256.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/source-scene-bundle-test$(HOST_EXEEXT)"
+	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/source-scene-bundle-test$(HOST_EXEEXT)" \
+	  "$(SCENE_PACKAGE_FINAL_ROOT)" "$(ACTOR_FAMILY_BUNDLE_PAYLOAD)" \
+	  "$(SCENE_PACKAGE_GENERATION)"
 
 verify-ir-texture: check-host-tools
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
@@ -1563,6 +1626,65 @@ compile-provisional-scene-package: compile-bob-area compile-bob-bsp compile-bob-
 	  --abi-output "$(SCENE_PACKAGE_ABI_HEADER)" \
 	  --symbol-prefix "$(SCENE_LEVEL)_area$(SCENE_AREA)" \
 	  --output "$(SCENE_PACKAGE_PROVISIONAL_HEADER)"
+
+# The minimum final root owns no second copy of terrain/collision/sky bytes.
+# source_cart already loads SOURCE.DAT into its linked CART VMA; this small
+# S64P root only binds the content-addressed S64F actor dependency that shares
+# that immutable CART image.
+compile-actor-scene-package: verify-scene-package-schema
+	@if ! cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" \
+	  "tools/saturn/compile_actor_family_bundle.py" \
+	  --root "$(SATURN_REPO_ROOT)" --closure "$(SCENE_CLOSURE_OUTPUT)" \
+	  --family-report "$(ACTOR_FAMILY_BANK_REPORT)" \
+	  --model-ids "$(SATURN_REPO_ROOT)/include/model_ids.h" \
+	  --package-generation "$(SCENE_PACKAGE_GENERATION)" \
+	  --output-dir "$(ACTOR_FAMILY_BUNDLE_DIR)" --verify-publication \
+	  >/dev/null 2>&1; then \
+	  $(MAKE) -f "$(SATURN_REPO_ROOT)/Makefile.saturn.mk" compile-actor-banks && \
+	  $(MAKE) -f "$(SATURN_REPO_ROOT)/Makefile.saturn.mk" compile-actor-family-bundle; \
+	fi
+	@mkdir -p "$(SCENE_PACKAGE_FINAL_DIR)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/compile_scene_package.py" \
+	  --level-id "$(SCENE_LEVEL_ID)" --area-id "$(SCENE_AREA)" \
+	  --dependency-manifest "$(ACTOR_FAMILY_BUNDLE_DEPENDENCY)" \
+	  --dependency-payload "$(ACTOR_FAMILY_BUNDLE_PAYLOAD)" \
+	  --payload-root "$(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)" \
+	  --output "$(SCENE_PACKAGE_FINAL_ROOT)" \
+	  --metadata-output "$(SCENE_PACKAGE_FINAL_REPORT)" \
+	  --payload-manifest-output "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/validate_scene_package.py" \
+	  --input "$(SCENE_PACKAGE_FINAL_ROOT)" \
+	  --payload-manifest "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)" \
+	  --payload-root "$(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)" \
+	  --report "$(SCENE_PACKAGE_FINAL_VALIDATION)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/emit_scene_package_header.py" \
+	  --input "$(SCENE_PACKAGE_FINAL_ROOT)" \
+	  --payload-manifest "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)" \
+	  --payload-root "$(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)" \
+	  --abi-output "$(SCENE_PACKAGE_ABI_HEADER)" \
+	  --symbol-prefix "$(SCENE_LEVEL)_area$(SCENE_AREA)_actors_v3" \
+	  --output "$(SCENE_PACKAGE_FINAL_HEADER)"
+	@mkdir -p "$(dir $(SCENE_PACKAGE_FINAL_ASM))"
+	@printf '%s\n' \
+	  '.section .rodata' \
+	  '.align 4' \
+	  '.global _sm64_saturn_sourceboot_scene_package_root' \
+	  '_sm64_saturn_sourceboot_scene_package_root:' \
+	  '.incbin "../../../../$(patsubst $(SATURN_REPO_ROOT)/%,%,$(SCENE_PACKAGE_FINAL_ROOT))"' \
+	  '_sm64_saturn_sourceboot_scene_package_root_end:' \
+	  '.align 4' \
+	  '.global _sm64_saturn_sourceboot_scene_package_root_size' \
+	  '_sm64_saturn_sourceboot_scene_package_root_size:' \
+	  '.long _sm64_saturn_sourceboot_scene_package_root_end - _sm64_saturn_sourceboot_scene_package_root' \
+	  '.align 4' \
+	  '.global _sm64_saturn_sourceboot_actor_bundle' \
+	  '_sm64_saturn_sourceboot_actor_bundle:' \
+	  '.incbin "../../../../$(patsubst $(SATURN_REPO_ROOT)/%,%,$(ACTOR_FAMILY_BUNDLE_PAYLOAD))"' \
+	  '_sm64_saturn_sourceboot_actor_bundle_end:' \
+	  '.align 4' \
+	  '.global _sm64_saturn_sourceboot_actor_bundle_size' \
+	  '_sm64_saturn_sourceboot_actor_bundle_size:' \
+	  '.long _sm64_saturn_sourceboot_actor_bundle_end - _sm64_saturn_sourceboot_actor_bundle' > "$(SCENE_PACKAGE_FINAL_ASM)"
 
 # Z-Treme-style LWRAM -> HWRAM promotion contract: alignment, bounded
 # capacity, copied bytes, and source immutability are all host-verifiable.
