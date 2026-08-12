@@ -3,9 +3,10 @@
 ## Status
 
 `source-complete-pending-rereview` from approved Task 7 base `dfa8b286` after
-initial behavior `b84103cd`, evidence `0a180e39`, repair `dc81808b`, and
-generation-transaction repair `3b81456b`. Reviews returned C0/I3/M0 then
-C0/I1/M2; the same-reviewer round-2 verdict is open. This report claims
+initial behavior `b84103cd`, evidence `0a180e39`, repair `dc81808b`,
+generation-transaction repair `3b81456b`, and serialization follow-up
+`b2f66f5a`. Reviews returned C0/I3/M0 then C0/I1/M2; the same-reviewer
+round-2 verdict is open. This report claims
 package/source ownership plus host and freestanding SH-2 module evidence only;
 Task 9 production cutover, linked target, Ymir, release, and manual gates remain
 unchecked.
@@ -133,17 +134,20 @@ unchecked.
   divergent payload manifest or ABI left an earlier root/header behind. It
   also corrected init-from stack evidence to 96 B and narrowed the MSYS claim
   to the tested repository-wrapper route.
-- Repair `3b81456b` computes all seven bytes first, preflights the complete
-  target set, stages private files, and links report/ready last. On any late
+- Repairs `3b81456b` and `b2f66f5a` compute all seven bytes first, acquire one
+  OS-held generation lock in the host temp namespace, preflight the complete
+  target set, stage private files, and link report/ready last. On any late
   error it removes only outputs whose exact device/inode still belongs to that
   transaction. Identical concurrent publishers converge; divergent contenders
   fail without mixing. Standalone header+ABI uses the same pair transaction.
 - RED/GREEN covers static conflicts at all seven positions, injected late-link
-  conflicts and ownership rollback at every position, header-before-ABI, eight
-  identical concurrent publishers, and mixed divergent contenders. Schema is
-  22/22, determinism 3/3, the full focused Make wave passes, output hash+mtime
+  conflicts and ownership rollback at every position, an existing ready marker
+  with missing siblings, header-before-ABI, eight identical concurrent
+  publishers, and mixed divergent contenders. Schema is 23/23, determinism
+  3/3, the full focused Make wave passes, output hash+mtime
   inventory remains unchanged 7/7, Python compileall passes, and exact SH-2
-  object/stack evidence remains 220/96/44 B.
+  object/stack evidence remains 220/96/44 B. The locked exact-wrapper rerun
+  keeps all seven hashes and timestamps unchanged.
 - The exact repository wrapper validated required DLL presence and ran MSYS
   GNU Make, host compiler/Python, and installed SH-2 tools without a loader
   failure. Direct/manual MSYS routes and the full hermetic link are not claimed.

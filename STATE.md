@@ -11,7 +11,8 @@ models, object-specific renderer branches, and whole-scene stalls are not.
 
 Task 7 residency is complete after repairs `4c4c24a9`, `c270f363`, and
 `d1408e00`; same-reviewer final rereview passed Spec/Quality C0/I0/M0. Task 8
-is source-complete-pending-rereview at repairs `dc81808b` and `3b81456b` after
+is source-complete-pending-rereview at repairs `dc81808b`, `3b81456b`, and
+`b2f66f5a` after
 initial C0/I3/M0 and round-1 C0/I1/M2 reviews. Command-bank restoration, exact
 dependency identity, and whole-generation atomic publication are now repaired.
 Generation 14 binds one relocation-neutral S64P to the exact

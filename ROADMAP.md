@@ -3,7 +3,8 @@
 ## Now — converge on a working generic BOB by 2026-08-14
 
 Freeze new Saturn architecture sprints. Task 7 residency has final
-Spec/Quality C0/I0/M0 approval. Task 8 repairs `dc81808b` and `3b81456b` are
+Spec/Quality C0/I0/M0 approval. Task 8 repairs `dc81808b`, `3b81456b`, and
+`b2f66f5a` are
 source-complete-pending-rereview after initial C0/I3/M0 and round-1 C0/I1/M2:
 the canonical package is retained in CART, common bundle lookup/pose/meshlet
 preparation is target-compiled, and the 2,560-byte cold stage is phase-borrowed

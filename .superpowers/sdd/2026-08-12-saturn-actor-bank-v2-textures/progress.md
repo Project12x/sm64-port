@@ -811,3 +811,11 @@
   ELF32 big-endian SuperH with exact source stack init/init-from/resolve
   220/96/44 B. Evidence/status commit and same-reviewer round-2 verdict remain
   open. Task 9 and all linked/Ymir/release/visual/manual gates remain closed.
+
+- Pre-rereview self-audit found and closed one identical-publisher race: a
+  publisher could observe another transaction's identical early link, then the
+  owner could roll it back. Follow-up `b2f66f5a` serializes the entire set with
+  an OS-held generation lock outside build outputs and rejects an existing
+  ready marker whose siblings are incomplete. Schema is now 23/23; the locked
+  exact-wrapper gate passes and preserves hash+mtime 7/7. The same reviewer was
+  interrupted before this edit and must rereview the new exact range.
