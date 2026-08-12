@@ -1049,9 +1049,9 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   an ELF32 big-endian SuperH object. Repair commit `3b81456b` owns the set
   transaction; self-review follow-up `b2f66f5a` adds the OS-held lock and
   incomplete ready-set rejection. Rereview then found textual alias and
-  overlapping-set lock keys; the current uncommitted follow-up canonicalizes
-  physical targets and acquires stable per-target locks. Its commit, evidence
-  status, and rereview remain open;
+  overlapping-set lock keys; follow-up `58165193` canonicalizes physical
+  targets and acquires stable per-target locks. Evidence status and rereview
+  remain open;
   Step 5 and Task 9 stay unchecked.
 
 ---

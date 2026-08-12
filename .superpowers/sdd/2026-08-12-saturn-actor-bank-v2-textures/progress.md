@@ -819,3 +819,19 @@
   ready marker whose siblings are incomplete. Schema is now 23/23; the locked
   exact-wrapper gate passes and preserves hash+mtime 7/7. The same reviewer was
   interrupted before this edit and must rereview the new exact range.
+
+## Task 8 repair round 3/5 (2026-08-12)
+
+- Rereview of `249f158e..2a6de93b` returned Spec FAIL / Quality needs fixes
+  C0/I1/M0. Ordered textual lock keys allowed canonical and `alias/../target`
+  spellings, reordered sets, or symlinked parents to lock separately while
+  touching overlapping physical outputs. The reproduced winner retained a
+  ready marker after the loser's rollback removed a shared prefix.
+- GREEN `58165193` canonicalizes each physical parent, rejects output symlinks
+  and canonical duplicates, and acquires per-target locks in stable order. The
+  forced canonical-vs-alias/reversed overlapping race leaves one complete
+  generation; the loser fails before mutation. Schema 25/25 (one Windows
+  symlink-capability skip), determinism 3/3, full focused exact-wrapper wave,
+  output hash+mtime 7/7, and compileall all pass. Evidence commit and
+  same-reviewer final verdict remain open; Task 9/link/Ymir/release/manual stay
+  closed.

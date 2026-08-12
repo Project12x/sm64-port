@@ -4,9 +4,9 @@
 
 `source-complete-pending-rereview` from approved Task 7 base `dfa8b286` after
 initial behavior `b84103cd`, evidence `0a180e39`, repair `dc81808b`,
-generation-transaction repair `3b81456b`, and serialization follow-up
-`b2f66f5a`. Reviews returned C0/I3/M0 then C0/I1/M2; the same-reviewer
-round-2 verdict is open. This report claims
+generation-transaction repair `3b81456b`, serialization follow-up `b2f66f5a`,
+and canonical-lock repair `58165193`. Reviews returned C0/I3/M0, C0/I1/M2,
+then C0/I1/M0; the same-reviewer final verdict is open. This report claims
 package/source ownership plus host and freestanding SH-2 module evidence only;
 Task 9 production cutover, linked target, Ymir, release, and manual gates remain
 unchecked.
@@ -151,3 +151,22 @@ unchecked.
 - The exact repository wrapper validated required DLL presence and ran MSYS
   GNU Make, host compiler/Python, and installed SH-2 tools without a loader
   failure. Direct/manual MSYS routes and the full hermetic link are not claimed.
+
+## Repair round 3 — canonical overlapping locks
+
+- Rereview of `249f158e..2a6de93b` returned C0/I1/M0. Textual
+  `alias/../target` paths and reordered/partially overlapping sets could hash to
+  different generation locks even though they touched the same physical files;
+  a losing rollback could remove a shared prefix beneath the winner's ready
+  marker.
+- Repair `58165193` resolves each physical parent before lock-key derivation,
+  rejects target symlinks and canonical duplicates, and acquires one lock per
+  physical target in stable order. Any overlapping sets now share at least one
+  lock and serialize without deadlock; textual aliases and reordered lists do
+  not change lock ownership.
+- An adversarial held-first-publisher test uses a canonical set and a reversed
+  `alias/../target` set with conflicting bytes. Exactly one complete generation
+  remains and the loser fails before mutation. Schema passes 25/25 with one
+  Windows symlink-capability skip; the full focused wrapper wave passes and
+  preserves all seven hashes and timestamps. Python compileall and scoped
+  whitespace pass; target bytes/stack are unchanged.
