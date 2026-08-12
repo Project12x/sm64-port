@@ -482,6 +482,16 @@ atomically at runtime. No subset selection or count rewrite is allowed. Task 5
 remains host-only; Task 9 owns that runtime preflight and Task 11 must prove the
 actual complete BOB route has positive margins.
 
+The share derivation follows the existing renderer's essential-actor-before-
+optional-terrain policy: setup/END plus maximum Mario leave 1,351 command and
+892 Gouraud credits for generic actors, while their output arena is the dedicated
+2,718 records. With measured maxima 46 / 24 / 46, any supported mixture has a
+conservative 19-actor floor; actual cheaper mixtures may admit up to 64. Actor
+residency requires 16,640 texture plus 2,816 CLUT bytes and Task 7 must
+repartition the existing 52,672-byte Yaul `remaining` region, leaving 33,216
+bytes. Task 5 records that future layout requirement; it does not claim the
+current binders can address `remaining` directly.
+
 **Files:**
 - Create: `tools/saturn/compile_actor_family_bundle.py`
 - Create: `tools/saturn/test_compile_actor_family_bundle.py`
@@ -514,7 +524,8 @@ ownership, separate texture/CLUT totals, preserved family source ceilings, the
 named unconstrained source-ceiling diagnostic, exact per-bank credit costs, and
 a positive post-reservation guaranteed service floor. Require the fixed
 64-observer/65,536-byte/2,718-record limits, the 446,432-byte shared ceiling
-after reservations, 32-Mbit cart fit, no host paths, report-last publication, no overwrite,
+and exact future texture/CLUT repartition equation after existing terrain/Mario
+reservations, 32-Mbit cart fit, no host paths, report-last publication, no overwrite,
 and named failure for every one-byte overflow. The real generic BOB S64F may
 contain only v2 banks; historical v1 Mario remains a separately owned scene
 bank and proves the mixed-version scene path.
@@ -529,8 +540,11 @@ Compile each unique supported key once, keep unsupported rows, pack/validate
 S64F, compute unique-bank residency, preserve per-family source ceilings, and
 compute exact per-variant admission credits. Report the impossible unconstrained
 source-ceiling envelope as diagnostic only. Compute the guaranteed service floor
-from the maximum supported per-instance cost and each fixed post-reservation
-actor share; require it and every individual-bank margin to be positive. Write a
+from the maximum supported per-instance cost and the dedicated output / maximum-
+Mario-after-setup command/Gouraud shares; require it to equal 19 for the current
+measured set and require every individual-bank margin to be positive. Compute
+the exact future Yaul texture/CLUT partition sizes and remaining total; do not
+treat the current `remaining` base as an actor binder region. Write a
 private staging directory and publish payload/dependency/header first and report
 last with no-clobber semantics.
 
@@ -813,7 +827,7 @@ Run the actor runtime handoff, instance queue, batches, render overlap, demo ren
 
 - [ ] **Step 3: Replace only the auditable feature-on seam**
 
-Dry-sum all selected variants' validated S64B credit fields in canonical snapshot order, then populate the real queue only if the complete set fits every actor share. Replace the feature-on compat bodies with queue drain calls; leave the four-job graph/dependencies unchanged; master merge uses current bundle/residency generations and material binder; all retirement flows through the handoff. No partial subset is published on overflow. Feature-off retains the exact Mario path.
+After computing the actual Mario obligations, dry-sum all selected variants' validated S64B credit fields in canonical snapshot order, then populate the real queue only if the complete essential actor set fits the command/Gouraud frame-bank remainder and dedicated actor output arena. Terrain remains optional and receives only the credits left after Mario plus generic actors. Replace the feature-on compat bodies with queue drain calls; leave the four-job graph/dependencies unchanged; master merge uses current bundle/residency generations and material binder; all retirement flows through the handoff. No partial actor subset is published on overflow. Feature-off retains the exact Mario path.
 
 - [ ] **Step 4: Run GREEN, capacity, and rollback proof**
 

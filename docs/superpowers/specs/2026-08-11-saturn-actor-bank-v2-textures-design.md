@@ -369,8 +369,13 @@ shared scene resources. Before packaging or target activation, the planner:
    bound that it is. Those bounds are not added: recurrent families can each
    inherit the same 240-object source-pool ceiling, so treating them as
    simultaneously resident would count the same global pool many times.
-4. Adds terrain, Mario, command-table, Gouraud, CLUT, HUD, and other profile
-   reservations before deriving the fixed actor shares.
+4. Applies the existing essential-actor-before-optional-world policy. After the
+   two setup commands and final END, the maximum Mario obligation is 694
+   commands and 644 Gouraud tables. Generic actors join that essential
+   obligation; terrain/world receives only the remaining credits. This yields
+   static generic-actor shares of 2,718 dedicated output records, 1,351 VDP1
+   commands, and 892 Gouraud tables without inventing a permanent world/actor
+   partition.
 5. Computes the exact per-variant draw, texture-command, and Gouraud credits
    used by atomic per-frame admission. The complete observed actor set must
    satisfy all of `count <= 64`, `sum(draw) <= actor_output_share`,
@@ -381,8 +386,11 @@ shared scene resources. Before packaging or target activation, the planner:
 6. Reports two distinct diagnostics. The unconstrained source-ceiling envelope
    applies each family upper bound and is allowed to exceed hardware because it
    is not a simultaneous-scene claim. The guaranteed service floor uses the
-   largest per-instance cost in the supported set and the fixed post-reservation
-   actor shares; it must remain positive. Each supported bank must fit by
+   largest per-instance cost in the supported set and those conservative
+   post-Mario actor shares; it must remain positive. For the measured BOB set,
+   the 46-record / 24-texture-command / 46-Gouraud maxima guarantee 19 actors
+   of any supported mixture; cheaper actual mixtures may reach the 64-observer
+   cap. Each supported bank must fit by
    itself, and the later BOB target route must measure positive margins for its
    actual complete observed set.
 7. Proves the complete S64F dependency and scene package fit the fixed cart
@@ -421,6 +429,15 @@ descriptor or command is published and the generation is quarantined. This is
 the Saturn/SH-2 fail-closed boundary for scenes whose instantaneous actor demand
 exceeds fixed VDP1 resources; later work may add reviewed culling or degradation,
 but v2 does not silently invent one.
+
+VDP1 texture and CLUT requirements remain separate values, but partition fit is
+one exact ordered-VRAM equation. The existing sourceboot layout reserves
+333,696 B terrain texels, 25,600 B Mario texels, 34,464 B terrain CLUTs, and
+leaves 52,672 B in Yaul's final `remaining` region. The measured generic actor
+set requires 16,640 B texels and 2,816 B CLUTs. Task 7 must repartition that
+remaining region into enlarged texture and CLUT regions before upload; the
+static total margin is 33,216 B. The current `remaining` address is not falsely
+reported as already usable by either binder.
 
 Workers read immutable animation/pose/geometry/material/tile-directory data,
 perform pose/project/admission work, and write the existing eight-byte

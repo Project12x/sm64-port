@@ -281,3 +281,17 @@
   and prove a positive computed service floor. Task 11 remains responsible for
   measured positive margins on the normally spawned BOB Cannon route; all
   target/runtime/Ymir/release/manual gates remain open.
+- Reservation audit found no fixed generic-actor subpartition, and correctly
+  stopped after the missing-module RED rather than assigning world capacity by
+  guess. The authoritative policy is dynamic: maximum Mario is already an
+  essential 694-command / 644-Gouraud obligation, terrain is explicitly
+  optional, and generic actors join the essential set. This provides 1,351
+  command and 892 Gouraud conservative planning credits plus the dedicated
+  2,718-record actor arena; current measured maxima guarantee 19 actors of any
+  supported mixture. Task 9 must use actual Mario and generic costs each frame,
+  leaving only the remainder to terrain.
+- The current Yaul VDP1 layout has physically distinct texture/CLUT partitions
+  followed by a 52,672-byte `remaining` region. Generic actors require separate
+  16,640-byte texture and 2,816-byte CLUT additions; Task 7 must repartition the
+  region, with 33,216 bytes left. Task 5 proves the future partition equation
+  but does not claim current binder ownership of `remaining`.
