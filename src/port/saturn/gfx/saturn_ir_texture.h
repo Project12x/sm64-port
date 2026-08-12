@@ -15,7 +15,7 @@ bool sm64_saturn_ir_texture_bind_clut16(
     vdp1_cmdt_t *cmdt,
     const vdp1_vram_partitions_t *partitions,
     size_t texture_offset,
-    uint8_t width,
+    uint16_t width,
     uint8_t height,
     uint16_t clut_index,
     vdp1_cmdt_cc_t cc_mode,
@@ -25,7 +25,7 @@ bool sm64_saturn_ir_texture_bind_rgb1555(
     vdp1_cmdt_t *cmdt,
     const vdp1_vram_partitions_t *partitions,
     size_t texture_offset,
-    uint8_t width,
+    uint16_t width,
     uint8_t height,
     vdp1_cmdt_cc_t cc_mode,
     const int16_vec2_t vertices[4]);

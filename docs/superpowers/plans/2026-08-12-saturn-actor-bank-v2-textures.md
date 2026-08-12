@@ -601,6 +601,33 @@ capacity equations are host-approved; target rendering remains a later gate.
 
 ### Task 6: Bind stable v2 materials to exact VDP1 commands
 
+**Execution status (2026-08-12):** source-complete-pending-review from
+reconciled base `a553b500`. Both IR binders use a checked `uint16_t` width and
+the new master-only final-emission boundary translates all seven stable
+S64B-owned recipes to exact Yaul command fields only after validating the bank,
+mapping generation/identity, tile/material ordinals, complete texture/CLUT
+partition spans, address arithmetic, and four vertices. The prescribed RED
+and focused GREEN passed; S64B-v2 86-mutation, mixed-S64F 54-mutation, pose,
+meshlet, feature-off, and 40-test host gates passed, and both changed modules
+passed exact SH-2 `-m2 -mb -ffreestanding -Werror` syntax/object compilation.
+The adjacent historical family-bank target remains unchecked because its
+test-only trust anchor expects pre-Task-4 SHA `00e5754c...` while the current
+Task-5-attested payload is `db611af6...`; that stale unrelated oracle does not
+replace the passing mixed-S64F/bank gates and is outside this task's file list.
+No residency publication, runtime activation, renderer/Ymir, or Task 7 work is
+claimed. Independent Task 6 review remains open, so Task 7 remains closed.
+
+**Task 6 reference-code provenance:** dependency/API adaptation against the
+pinned libyaul gitlink `6012f79f237773378c8014e70d8998ad95a38d98`
+(MIT), specifically `libyaul/scu/bus/b/vdp/vdp1/cmdt.h` command structure,
+stable Yaul enum values, source/size/CLUT encoders, and
+`libyaul/scu/bus/b/vdp/vdp1/vram.h` partitions. Same-project direct extension
+uses `src/port/saturn/gfx/saturn_ir_texture.*` and the validated Task 3
+`saturn_actor_bank.*` accessors at base `a553b500`; Task 4 host records in
+`tools/saturn/actor_material_v2.py` and `actor_bank_v2.py` are inspected for
+wire-enum parity only. Reuse mode is dependency/API use plus same-project
+shared-core extension; no external source is copied.
+
 **Files:**
 - Create: `src/port/saturn/gfx/saturn_actor_material.h`
 - Create: `src/port/saturn/gfx/saturn_actor_material.c`
@@ -630,15 +657,15 @@ bool sm64_saturn_actor_material_bind(
     const int16_vec2_t vertices[4]);
 ```
 
-- [ ] **Step 1: Write RED width/recipe tests**
+- [x] **Step 1: Write RED width/recipe tests**
 
 Require CLUT16/RGB1555 flat/Gouraud/half-transparent recipes, stable-enum translation, end-code disabled, exact source-address/size/CLUT calculations, and width boundaries 8, 248, 256, 504. Reject 0, 505, stale mapping, wrong bank, invalid tile/material, and no command mutation on failure.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `verify-ir-texture verify-actor-material`. Expected: uint8 truncation at 256/504 and missing actor material API.
 
-- [ ] **Step 3: Widen width and implement master-only translation**
+- [x] **Step 3: Widen width and implement master-only translation**
 
 Change both IR binders to `uint16_t width`, retain the exact current encoding for 8/248, validate 8..504/multiple-of-eight before converting to the VDP1 size field, and map only the approved stable recipes to Yaul enums.
 
@@ -648,7 +675,7 @@ if (width < 8U || width > 504U || (width & 7U) != 0U)
 cmd_size = (uint16_t)(((width / 8U) << 8) | height);
 ```
 
-- [ ] **Step 4: Run GREEN and SH-2 compile**
+- [x] **Step 4: Run GREEN and SH-2 compile**
 
 Run IR/material/bank/family host gates and compile the two changed modules with the exact SH-2 flags. Expected: all boundaries pass and feature-off calls are byte/behavior compatible.
 

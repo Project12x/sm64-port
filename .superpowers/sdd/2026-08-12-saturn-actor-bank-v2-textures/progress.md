@@ -417,3 +417,69 @@
 - Task 5 is complete for host scope at `cf8bef5c` plus evidence `13854e17` and
   this verdict record. Task 6 and every target/runtime/residency/renderer/Ymir
   gate remain closed.
+
+## Task 6 active transition (2026-08-12)
+
+- Reconciled plan, ledger, and HEAD `a553b500`; the pre-existing dirty/untracked
+  set belongs to other work and remains untouched. Task 6 is active for the
+  target material binder and IR width contract only; Task 7 residency,
+  publication, runtime activation, renderer integration, Ymir, release, and
+  whole-game gates remain closed.
+- Reference-code-first inspection pinned libyaul gitlink
+  `6012f79f237773378c8014e70d8998ad95a38d98` (MIT):
+  `libyaul/scu/bus/b/vdp/vdp1/cmdt.h` and `vdp1/vram.h`. Same-project shared
+  sources inspected at `a553b500` are `saturn_ir_texture.*`,
+  `saturn_actor_bank.*`, `actor_bank_format.py`, `actor_bank_v2.py`, and
+  `actor_material_v2.py`. Reuse mode is dependency/API use and in-repository
+  shared-core extension; no external source is copied.
+- TDD gate is open: write the Task 6 IR/material fixtures first and capture the
+  prescribed uint8 truncation/missing-API RED before production edits. No test,
+  host GREEN, freestanding SH-2 compile, behavior commit, or independent review
+  is claimed yet.
+
+## Task 6 source-complete evidence (2026-08-12)
+
+- Status: source-complete-pending-review from base `a553b500`; behavior commit
+  is recorded in the Task 6 report after explicit staging. Task 7 and every
+  residency/publication/runtime/renderer/Ymir/release gate remain closed.
+- TDD RED: `make -k -f Makefile.saturn.mk verify-ir-texture
+  verify-actor-material` exited 1. The IR test compiled then aborted at the
+  first 256-width boundary because the old public `uint8_t` parameter
+  truncated it to zero; the material test failed to compile because
+  `saturn_actor_material.c` did not exist. Production files were untouched at
+  that point.
+- GREEN: `make -f Makefile.saturn.mk verify-ir-texture
+  verify-actor-material` passes. It proves exact 8/248/256/504 size encoding,
+  the `504x255 -> 0x3FFF` maximum, all non-multiple/0/505 failures, complete
+  CLUT16/RGB1555 span checks, blend-mode validation, aligned/nonoverflowing
+  texture/CLUT addresses, all four vertices, and byte-exact no-command-mutation
+  failure. The material fixture covers stable recipes 1..7 independently of
+  Yaul enum values, exact source/CLUT/size/mode/end-code fields, stale/zero
+  generation, wrong/zero bank, tile-count mismatch, invalid primitive/
+  material/tile/format, null inputs, partition shortage, and address overflow.
+- Broader fresh host wave passed: S64B-v2 `86` mutations, mixed S64F-v3 `54`
+  mutations, historical pose, meshlet plus invalid-span mutation, feature-off
+  wrapper `6/6`, and variant/source `40/40`. Historical Mario remains exactly
+  596,896 bytes with SHA-256
+  `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`.
+- Both production modules passed the installed libyaul SH-2 compiler with
+  sourceboot-equivalent `-std=c11 -m2 -mb -Os -g -ffreestanding -fno-lto
+  -Wall -Wextra -Werror -pedantic` flags, first `-fsyntax-only` and then real
+  object emission. Objects were 20,904 bytes for `saturn_ir_texture.o` and
+  24,544 bytes for `saturn_actor_material.o`; this is compiler evidence, not a
+  target link or execution claim.
+- Open unrelated adjacent gate: `verify-actor-family-bank` reaches its C
+  validator only with an explicit Windows-root override, then returns 1 because
+  `actor_family_bank_test.c` hardcodes historical payload SHA-256
+  `00e5754c80762a15b5482fb1f2e88f4bc1fc7ab847f3463944e2e6689d412ee8`.
+  The current Task-5-attested payload and report agree on
+  `db611af699337f38a2284abf58cb287c70f9ab6e5df5b07555cda48aba7bf313`.
+  That test-only trust-anchor file is outside Task 6's strict file list, so it
+  remains explicitly unchecked; it neither invalidates nor substitutes for the
+  passing Task 6 IR/material, S64B-v2, or mixed-S64F gates.
+- Self-review found no production edit outside the approved module/Make/docs
+  list. The stable S64B enums stay in `saturn_actor_bank.h`; Yaul values appear
+  only in the new master-owned translation C file. Workers receive no pointer,
+  command, partition, or mapping state. All fallible parsing, arithmetic, and
+  range work precedes command mutation; textured final writes delegate to the
+  atomic IR binders. Task 7 code and sourceboot runtime integration are absent.

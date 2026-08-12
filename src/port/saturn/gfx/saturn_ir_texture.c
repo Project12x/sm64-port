@@ -35,15 +35,26 @@ static bool texture_binding_valid(
     vdp1_cmdt_t *cmdt,
     const vdp1_vram_partitions_t *partitions,
     size_t texture_offset,
-    uint8_t width,
+    uint16_t width,
     uint8_t height,
+    size_t texture_bytes,
+    vdp1_cmdt_cc_t cc_mode,
     const int16_vec2_t vertices[4])
 {
+    uintptr_t texture_base;
     if (cmdt == NULL || partitions == NULL || vertices == NULL ||
-        width == 0 || height == 0 ||
-        texture_offset >= partitions->texture_size) {
+        partitions->texture_base == NULL || width < 8U || width > 504U ||
+        (width & 7U) != 0U || height == 0U || (texture_offset & 7U) != 0U ||
+        texture_offset > partitions->texture_size ||
+        texture_bytes > (size_t)partitions->texture_size - texture_offset ||
+        (cc_mode != VDP1_CMDT_CC_REPLACE &&
+         cc_mode != VDP1_CMDT_CC_GOURAUD &&
+         cc_mode != VDP1_CMDT_CC_HALF_TRANSPARENT)) {
         return false;
     }
+    texture_base = (uintptr_t)partitions->texture_base;
+    if ((texture_base & 7U) != 0U || texture_base > UINTPTR_MAX - texture_offset)
+        return false;
     return true;
 }
 
@@ -51,18 +62,31 @@ bool sm64_saturn_ir_texture_bind_clut16(
     vdp1_cmdt_t *cmdt,
     const vdp1_vram_partitions_t *partitions,
     size_t texture_offset,
-    uint8_t width,
+    uint16_t width,
     uint8_t height,
     uint16_t clut_index,
     vdp1_cmdt_cc_t cc_mode,
     const int16_vec2_t vertices[4])
 {
-    if (!texture_binding_valid(cmdt, partitions, texture_offset, width,
-                               height, vertices) ||
-        ((size_t)clut_index + 1U) * sizeof(vdp1_clut_t) >
-            partitions->clut_size) {
+    size_t texture_bytes;
+    uintptr_t clut_base;
+    uint16_t cmd_size;
+    if (width < 8U || width > 504U || (width & 7U) != 0U || height == 0U)
+        return false;
+    texture_bytes = ((size_t)width * (size_t)height) / 2U;
+    cmd_size = (uint16_t)(((width / 8U) << 8) | height);
+    if (cmd_size > 0x3FFFU ||
+        !texture_binding_valid(cmdt, partitions, texture_offset, width,
+                               height, texture_bytes, cc_mode, vertices) ||
+        partitions->clut_base == NULL ||
+        (size_t)clut_index >=
+            (size_t)partitions->clut_size / sizeof(vdp1_clut_t)) {
         return false;
     }
+    clut_base = (uintptr_t)partitions->clut_base;
+    if ((clut_base & 7U) != 0U ||
+        clut_base > UINTPTR_MAX - (size_t)clut_index * sizeof(vdp1_clut_t))
+        return false;
     vdp1_cmdt_distorted_sprite_set(cmdt);
     vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
         .color_mode = VDP1_CMDT_CM_CLUT_16,
@@ -82,13 +106,22 @@ bool sm64_saturn_ir_texture_bind_rgb1555(
     vdp1_cmdt_t *cmdt,
     const vdp1_vram_partitions_t *partitions,
     size_t texture_offset,
-    uint8_t width,
+    uint16_t width,
     uint8_t height,
     vdp1_cmdt_cc_t cc_mode,
     const int16_vec2_t vertices[4])
 {
-    if (!texture_binding_valid(cmdt, partitions, texture_offset, width,
-                               height, vertices)) {
+    size_t pixels, texture_bytes;
+    uint16_t cmd_size;
+    if (width < 8U || width > 504U || (width & 7U) != 0U || height == 0U)
+        return false;
+    pixels = (size_t)width * (size_t)height;
+    if (pixels > SIZE_MAX / 2U) return false;
+    texture_bytes = pixels * 2U;
+    cmd_size = (uint16_t)(((width / 8U) << 8) | height);
+    if (cmd_size > 0x3FFFU ||
+        !texture_binding_valid(cmdt, partitions, texture_offset, width,
+                               height, texture_bytes, cc_mode, vertices)) {
         return false;
     }
     vdp1_cmdt_distorted_sprite_set(cmdt);

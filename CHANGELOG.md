@@ -4,6 +4,19 @@
 
 ### Changed
 
+- Added the master-owned final-emission boundary for validated S64B-v2 actor
+  materials. Stable bank recipes now translate explicitly to Yaul flat,
+  CLUT16, RGB1555, Gouraud, replace, and half-transparent command fields while
+  preserving scalar-only cross-SH-2 ownership and leaving every command byte
+  unchanged on a stale generation, wrong bank, invalid ordinal/recipe/tile,
+  or VRAM span/address failure. The shared IR texture binders now accept the
+  Saturn VDP1 width range `8..504` as `uint16_t`, retain exact 8/248 command
+  encoding, support 256/504 without truncation, disable texture end codes, and
+  validate complete format-derived texture/CLUT spans before mutation. This is
+  a target module and host/freestanding proof only: texture residency,
+  generation publication, runtime activation, renderer integration, and Ymir
+  evidence remain deliberately deferred to Tasks 7 and later.
+
 - Added host-only orchestration for the exact bounded BOB actor dependency:
   fourteen closure-attested S64B-v2 banks now pack into one deterministic
   S64F-v3 with canonical S64P dependency metadata, exact unsupported inventory,

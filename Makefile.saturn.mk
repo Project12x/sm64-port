@@ -1134,6 +1134,32 @@ verify-actor-bank-v2: check-host-tools
 	  "build/saturn/host-tests/actor-bank-v2-rgb1555.bin" \
 	  "build/saturn/host-tests/actor-bank-v2-padded.bin"
 
+.PHONY: verify-ir-texture verify-actor-material
+
+verify-ir-texture: check-host-tools
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/ir_texture_test.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/ir-texture-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/ir-texture-test$(HOST_EXEEXT)"
+
+verify-actor-material: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; from tools.saturn.test_actor_bank_v2 import write_target_fixtures; write_target_fixtures(Path('build/saturn/host-tests'))"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_material_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bank.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_sha256.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-material-test$(HOST_EXEEXT)"
+	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/actor-material-test$(HOST_EXEEXT)" \
+	  "build/saturn/host-tests/actor-bank-v2-untextured.bin" \
+	  "build/saturn/host-tests/actor-bank-v2-textured.bin" \
+	  "build/saturn/host-tests/actor-bank-v2-rgb1555.bin"
+
 verify-actor-variant-bank: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -m unittest \
 	  tools.saturn.test_actor_variant_bank tools.saturn.test_actor_source -v
