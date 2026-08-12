@@ -702,12 +702,18 @@ committed as `3338de20`. Replacement Tasks 1 and 2 completed through evidence
 `d5914059`, each with independent C0/I0/M0 approval and exact historical-byte
 preservation. Replacement Task 3 completed through `ca3318cd` with independent
 C0/I0/M0 parser/ABI approval. Replacement Task 4 completed through `f5a03808`
-with independent C0/I0/M0 approval. Replacement Task 5 is ready; this Task 4 and all later
-target/release gates remain open. Design commit: `62f16de8`.
+with independent C0/I0/M0 approval. Replacement Task 5 is source-complete
+pending independent review: its real BOB bundle is 160,928 bytes with 47
+families, 14 v2 banks, and exact unsupported inventory, and its corrected
+Saturn resource proof guarantees any mixture of 19 supported actors. This
+reconciles the BOB-only portion of this stale Task 4; whole-game discovery and
+all target/release gates remain open. Design commit: `62f16de8`.
 
 **Files:**
 - Create: `tools/saturn/compile_actor_family_bundle.py`
 - Create: `tools/saturn/test_compile_actor_family_bundle.py`
+- Modify: `tools/saturn/actor_family_bundle_test.c` to validate the real artifact
+- Modify: `tools/saturn/actor_capability_opaque_test.c` trust anchor only
 - Modify: `tools/saturn/compile_actor_bank.py` CLI only to keep v2 historical mode explicit
 - Modify: `Makefile.saturn.mk`
 - Modify: `CHANGELOG.md`, plan, and ledger
@@ -722,15 +728,15 @@ package_generation: int, output_dir: Path) -> dict[str, object]`. It writes to
 an output-parent staging directory, verifies the staged payload/report, and
 publishes the report last by no-clobber replacement.
 
-- [ ] **Step 1: RED orchestration tests**
+- [x] **Step 1: RED orchestration tests**
 
 Require two relocatable builds of BOB to produce byte-identical bundle/report identities; all currently supported drawable `(family ordinal, model ID)` keys have exactly one bank; unsupported families have zero variants; every source object maps to either one supported variant or one explicit unsupported reason.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `python -m unittest tools.saturn.test_compile_actor_family_bundle -v`. Expected: missing compiler module.
 
-- [ ] **Step 3: Implement bundle orchestration**
+- [x] **Step 3: Implement bundle orchestration**
 
 Derive family ordinals from canonical S64F ordering, expand each record's model variants, group duplicate source objects by variant key, compile each supported key once, compute global stride, pack v3, validate it again, and publish files atomically with the report last.
 
@@ -743,13 +749,19 @@ dependency = {
 }
 ```
 
-- [ ] **Step 4: Wire `compile-actor-family-bundle` and verify target**
+- [x] **Step 4: Wire `compile-actor-family-bundle` and verify host artifact**
 
 Add a new Make target without changing `compile-actor-banks` v2. Add `verify-actor-family-bundle-build` to run Python validation and the C validator against the real BOB artifact.
 
-- [ ] **Step 5: Run GREEN**
+- [x] **Step 5: Run GREEN**
 
 Run `compile-actor-banks compile-actor-family-bundle verify-actor-family-bundle-build verify-actor-capability-bank verify-actor-capability-articulated`. Expected: real BOB v3 validates; every compiler-supported row is bound; unsupported rows remain explicit.
+
+Replacement Task 5's BOB build, inventory, C bundle/bank validators, and both
+capability gates pass. The opaque capability expected-output digest was
+narrowly resealed to the twice-regenerated Task-4 closure identity without
+changing production semantics; no target or release evidence is promoted from
+this green host wave.
 
 - [ ] **Step 6: Commit and review**
 

@@ -39,6 +39,36 @@ static void reject(uint8_t *copy, uint32_t size)
     assert_zero(&view, sizeof(view));
 }
 
+static int validate_real_bob_bundle(const char *path)
+{
+    FILE *file = fopen(path, "rb");
+    long length;
+    uint8_t *bytes;
+    sm64_saturn_actor_bundle_view_t view;
+    if (file == NULL || fseek(file, 0, SEEK_END) != 0 ||
+        (length = ftell(file)) <= 0 || (uint64_t)length > UINT32_MAX ||
+        fseek(file, 0, SEEK_SET) != 0) {
+        if (file != NULL) fclose(file);
+        return 1;
+    }
+    bytes = malloc((size_t)length);
+    if (bytes == NULL || fread(bytes, 1, (size_t)length, file) != (size_t)length) {
+        free(bytes);
+        fclose(file);
+        return 1;
+    }
+    fclose(file);
+    memset(&view, 0, sizeof(view));
+    if (!sm64_saturn_actor_bundle_validate(bytes, (uint32_t)length, &view) ||
+        view.family_count != 47U || view.variant_count != 14U) {
+        free(bytes);
+        return 1;
+    }
+    free(bytes);
+    puts("real BOB actor family bundle: PASS (47 families, 14 variants)");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     FILE *file;
@@ -47,6 +77,8 @@ int main(int argc, char **argv)
     sm64_saturn_actor_bundle_view_t view;
     sm64_saturn_actor_bundle_variant_t variant;
     sm64_saturn_actor_bank_view_t bank;
+    if (argc == 3 && strcmp(argv[1], "--validate-only") == 0)
+        return validate_real_bob_bundle(argv[2]);
     assert(argc == 2 || argc == 3);
     file = fopen(argv[1], "rb"); assert(file != NULL);
     assert(fseek(file, 0, SEEK_END) == 0); length = ftell(file); assert(length > 0);

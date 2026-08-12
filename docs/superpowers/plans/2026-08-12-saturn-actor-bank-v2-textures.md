@@ -25,12 +25,12 @@ opaque mixed-S64F delegation; 86 direct S64B mutations, 54 S64F mutations, 63
 broader Python tests, the historical actor gates, and the freestanding SH-2
 syntax check pass. Task 4 behavior `52c9c1af` plus repair `86de51cc` compiles
 the exact 14 measured direct-textured BOB keys, including Cannon, and its scoped
-rereview passed C0/I0/M0 through `f5a03808`. Task 5 is active after its initial
-zero-edit preflight exposed and corrected a design error: source-pool family
-ceilings are not simultaneous resource allocations. Tasks 5-13 and every target-material, real-BOB bundle,
-runtime, demo, release, reseal, smoke, visual, desktop, manual, retail, and
-total-game gate remain open. No target runtime, residency, renderer, or Ymir
-state changed.
+rereview passed C0/I0/M0 through `f5a03808`. Task 5 is source-complete pending
+independent review after its initial zero-edit preflight exposed and corrected
+a design error: source-pool family ceilings are not simultaneous resource
+allocations. Task 5 review, Tasks 6-13, and every target-material, runtime,
+demo, release, reseal, smoke, visual, desktop, manual, retail, and total-game
+gate remain open. No target runtime, residency, renderer, or Ymir state changed.
 
 ## Global Constraints
 
@@ -468,7 +468,8 @@ Commit `feat(saturn): bake BOB actor materials for VDP1`. Review source closure,
 
 ### Task 5: Build the real mixed BOB S64F and prove aggregate budgets
 
-**Execution status:** active after zero-edit design stops; source-ceiling
+**Execution status:** source-complete pending independent review after the
+prescribed missing-module RED. Source-ceiling
 correction `acef808d`, frame-policy/partition correction `833c9bfb`. Applying the original
 family-sum equation to the real 14-bank set counted 5,288 mutually incompatible
 live contributions against the global 64-observer cap and produced impossible
@@ -498,6 +499,8 @@ current binders can address `remaining` directly.
 - Create: `tools/saturn/inventory_actor_family_bundles.py`
 - Create: `tools/saturn/test_inventory_actor_family_bundles.py`
 - Modify: `tools/saturn/actor_family_bundle.py`
+- Modify: `tools/saturn/actor_family_bundle_test.c` (real-artifact validation mode)
+- Modify: `tools/saturn/actor_capability_opaque_test.c` (generated trust anchor only)
 - Modify: `Makefile.saturn.mk`
 - Modify: `CHANGELOG.md`, this plan, generic-bundle plan, and SDD ledger/report
 
@@ -516,7 +519,7 @@ inventory_bundles(root: Path,
 
 The report includes each family/key, bank version/hash/source identity, texture/CLUT bytes, draw/texture-command/Gouraud counts, live-count contribution, unsupported reason, bundle totals, all shared-profile reservations, remaining margins, and one canonical S64P `ACTOR_DEPENDENCIES` record.
 
-- [ ] **Step 1: Write RED orchestration/resource tests**
+- [x] **Step 1: Write RED orchestration/resource tests**
 
 Require at least Cannon, nonzero variant count, a separate mixed-v1/v2 S64F
 fixture, byte-identical relocated real-BOB builds, exact ten-class BOB package
@@ -530,11 +533,11 @@ and named failure for every one-byte overflow. The real generic BOB S64F may
 contain only v2 banks; historical v1 Mario remains a separately owned scene
 bank and proves the mixed-version scene path.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run both new suites. Expected: missing compiler/inventory modules.
 
-- [ ] **Step 3: Implement canonical orchestration and planner**
+- [x] **Step 3: Implement canonical orchestration and planner**
 
 Compile each unique supported key once, keep unsupported rows, pack/validate
 S64F, compute unique-bank residency, preserve per-family source ceilings, and
@@ -562,9 +565,16 @@ dependency = {
 }
 ```
 
-- [ ] **Step 4: Run real BOB build and GREEN wave**
+- [x] **Step 4: Run real BOB build and GREEN wave**
 
 Run `compile-actor-family-bundle inventory-actor-family-bundles verify-actor-family-bundle-build verify-actor-bank-v2 verify-actor-capability-bank verify-actor-capability-articulated`. Record exact supported/unsupported counts, bytes, hashes, static-residency/individual-bank margins, guaranteed floors, and the explicitly non-acceptance unconstrained diagnostic; no target or actual-frame-fit claim yet.
+
+Task-owned build/inventory tests, mixed-S64F C validation, S64B-v2 C
+validation, and both capability validations pass. The opaque capability
+fixture's expected-output trust anchor was narrowly resealed from its
+pre-Task-4 `56e9a35c...` digest to twice-regenerated PNG-attested closure digest
+`60c329ab...`; production parser/runtime semantics and the separate effect
+oracle remain unchanged.
 
 - [ ] **Step 5: Commit and independent review**
 

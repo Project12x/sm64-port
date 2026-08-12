@@ -145,10 +145,11 @@ static void reseal_payload(unsigned char *bytes, size_t size)
     memcpy(bytes + 24U, digest, sizeof(digest));
 }
 
-/* Header content digest for the pinned generated BOB Area 1 S64F v2 bank. */
+/* Header content digest for the BOB Area 1 S64F-v2 family bank regenerated
+ * from the reviewed PNG-attested closure at f5a03808. */
 static const uint32_t TRUSTED_BOB_V2_HASH[8] = {
-    0x56e9a35cU, 0x2ee24c92U, 0xe0cf3f7fU, 0x80f5a107U,
-    0x20e87183U, 0xc9cd0f5aU, 0x18e135b4U, 0x63a71badU,
+    0x60c329abU, 0x3e8bcd8bU, 0xc7d13869U, 0xc123706aU,
+    0xf5517f5bU, 0xd7efd3b3U, 0xa539b702U, 0x12e28b73U,
 };
 
 /* Header content digest from the pre-change 52-byte-record S64F v1 bank. */

@@ -102,6 +102,18 @@ class BundleView:
     variants: tuple[VariantView, ...]
 
 
+def embedded_bank_payloads(view: BundleView) -> tuple[bytes, ...]:
+    """Return canonical embedded S64B spans without reproducing format offsets."""
+    if not isinstance(view, BundleView):
+        raise ValueError("invalid bundle view")
+    return tuple(
+        view.payload[
+            view.bank_payloads_offset + item.bank_offset:
+            view.bank_payloads_offset + item.bank_offset + item.bank_size
+        ] for item in view.variants
+    )
+
+
 def _u16(value: int, name: str, *, nonzero: bool = False) -> int:
     if not isinstance(value, int) or value < (1 if nonzero else 0) or value > 0xFFFF:
         raise ValueError(f"invalid {name}")

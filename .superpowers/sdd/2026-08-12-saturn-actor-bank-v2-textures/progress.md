@@ -299,3 +299,54 @@
   frame-policy/partition correction is `833c9bfb`. The prescribed Task 5 RED
   remains exactly the two missing compiler/inventory modules; implementation may
   resume from these committed contracts without changing its host-only scope.
+
+## Task 5 source-complete implementation evidence (2026-08-12)
+
+- Status: source-complete pending independent review and behavior commit. The
+  prescribed RED failed only on the two missing compiler/inventory modules;
+  the focused GREEN is 8/8 including real-artifact C Make wiring, relocation
+  neutrality, no-clobber,
+  report-last rollback, exact unsupported inventory, checked arithmetic,
+  explicit zero-cost floors, and all seven one-byte/one-credit failures.
+- Real BOB result: 47 families, 14 supported S64B-v2 banks, 20 drawable
+  unsupported rows (18 shadow, one scale, one asm), two `MODEL_NONE`
+  sentinels, 160,928-byte S64F, SHA-256
+  `5703b8485fc68c2ddfd8cd91cecdf54813f71e2532742430a7f4dd09c82bc97d`,
+  40,920 embedded-bank bytes, 16,640 texture bytes, 2,816 CLUT bytes,
+  544-byte lane stride, and 1,091-byte workspace. The authoritative 256-byte
+  rounding yields a 1,280-byte fixed capacity and positive 189-byte margin.
+- The exact 5,288 / 85,512 / 65,788 / 29,352 source-ceiling envelope is
+  retained as a named non-acceptance diagnostic. Individual-bank proof uses
+  2,718 output, 1,351 command, and 892 Gouraud actor shares with witness maxima
+  46/24/46 and floors 59/56/19; the observer floor is 64 and the conservative
+  guaranteed-any-mix count is exactly 19. Every individual margin is positive.
+- The ordered VDP1 equation reports the 446,432-byte post-command/Gouraud
+  region and existing 333,696 terrain-texture, 25,600 Mario-texture, and 34,464
+  terrain-CLUT reservations. Future actor texture/CLUT repartition consumes
+  19,456 of the resulting 52,672-byte remaining region and leaves 33,216 bytes;
+  current binders are explicitly not claimed. The 2,340,436-byte provisional
+  S64P plus the actor S64F uses
+  2,501,364 of the 4,194,304-byte cart, leaving 1,692,940 bytes. Package
+  ownership remains exactly ten canonical classes.
+- Publication is private-stage, atomic exclusive-link, payload/dependency/
+  header first and report last; existing outputs reject before compilation and
+  injected mid-publish failure rolls back all published paths. Relocated builds
+  make all four outputs byte-identical and path-neutral.
+- Provenance: same-project GPL-2.0-only close-port/direct extension of
+  `actor_family_bundle.py` (`68ceec9c`), `actor_variant_bank.py` (`86de51cc`),
+  `compile_actor_bank.py` (`83cfc1ad`), `compile_scene_package.py`
+  (`a3e22842`), and `target_profile.py` (`b345dd15`); no external source copied.
+- Combined Make closure regenerated the provisional package and passed the
+  existing scene-package suites (12 + 3), Task 5 focused suite (8), mixed-S64F
+  C validator (54 mutations), real 47-family/14-variant C validation, S64B-v2
+  C validator (86 mutations), and the
+  articulated capability target. Historical/parser/closure is 87/87;
+  compileall and scoped diff/hash checks pass. The opaque capability fixture's
+  stale `56e9a35c...` expected-output digest first RED-exited at its trust
+  comparison; two regenerations were identical at header `60c329ab...` and
+  payload `db611af6...`, and the authorized test-only reseal makes the complete
+  capability target GREEN without production changes. The full prescribed
+  wave passes at fresh package generation 5; S64F SHA is `d83789cb...` and the
+  1,280-byte-capacity header SHA is `c0faab4a...`. Independent review remains
+  open. All target residency, runtime admission, renderer, Ymir, manual,
+  release, and whole-game gates remain unchecked.

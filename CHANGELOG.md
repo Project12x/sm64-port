@@ -4,6 +4,26 @@
 
 ### Changed
 
+- Added host-only orchestration for the exact bounded BOB actor dependency:
+  fourteen closure-attested S64B-v2 banks now pack into one deterministic
+  S64F-v3 with canonical S64P dependency metadata, exact unsupported inventory,
+  relocation-neutral bytes, and atomic no-clobber/report-last publication.
+  The planner keeps all 5,288 source ceilings unchanged while labeling their
+  85,512-output / 65,788-command / 29,352-Gouraud sum as a non-acceptance
+  diagnostic, and instead proves the Saturn frame policy's dedicated 2,718
+  output, post-Mario 1,351 command, and 892 Gouraud shares. The measured
+  46/24/46 maxima guarantee any 19 supported actors; texture and CLUT demand
+  remain separately reported at 16,640/2,816 bytes. The complete 446,432-byte
+  post-command/Gouraud reservation equation is retained, and Task 7 must
+  repartition Yaul's resulting 52,672-byte remainder, leaving 33,216 bytes.
+  Later runtime admission, residency, rendering, and Ymir evidence remain
+  deliberately unchanged and fail-closed. The generated two-lane workspace
+  capacity applies the design-owned 256-byte rounding to the 1,091-byte BOB
+  maximum, reserving 1,280 bytes with 189 bytes of static margin. The host
+  capability fixture's generated-family trust anchor is also resealed to the
+  twice-reproduced PNG-attested closure digest; this is expected-output
+  maintenance only and does not change target validation semantics.
+
 - Added host-only, closure-attested Fast3D material capture and S64B-v2
   lowering for the exact 14 measured direct-textured BOB keys. The existing
   strict display-list compiler now owns texture/load/tile/combiner/geometry/
