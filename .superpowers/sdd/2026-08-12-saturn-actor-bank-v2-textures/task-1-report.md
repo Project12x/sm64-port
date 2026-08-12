@@ -119,3 +119,53 @@ Open gates: independent spec-compliance review and code-quality review are
 required before Task 2; every Task 2-13 host/compiler/target/runtime/build,
 texture/CLUT, scene, emulator, release, visual, desktop, manual, retail, and
 total-game gate remains open. No host-only result is claimed as target evidence.
+
+## Fix round 1 — complete v1 header padding ownership
+
+Reviewer finding: the original version-owned `_S64B_HEADER` format was 102
+bytes even though v1 declares a 104-byte header, leaving bytes 102 and 103
+structurally unowned. The fix commit is
+`9d5fc03ce1f4112ba750aaad7f648e5b158113dd`
+(`fix(saturn): validate actor bank header padding`). It changes the authority
+format to `>4s9HI32sHH10IH`, makes the final `H` an explicit zero-reserved
+field, and rejects nonzero padding with `S64B header padding`. No v2 behavior
+or target/runtime code changed.
+
+RED command:
+
+```text
+.venv-saturn-tools\Scripts\python.exe -m unittest \
+  tools.saturn.test_actor_bank_format.ActorBankFormatTest.test_v1_header_padding_bytes_must_be_zero -v
+```
+
+RED result: one test ran and failed at both independent subtests, offsets 102
+and 103, with `AssertionError: ValueError not raised`. That proves both bytes
+were formerly accepted rather than merely testing source text.
+
+GREEN commands/results:
+
+```text
+.venv-saturn-tools\Scripts\python.exe -m unittest \
+  tools.saturn.test_actor_bank_format.ActorBankFormatTest.test_v1_header_padding_bytes_must_be_zero -v
+# Ran 1 test ... OK
+
+.venv-saturn-tools\Scripts\python.exe -m unittest \
+  tools.saturn.test_actor_bank_format \
+  tools.saturn.test_actor_family_bundle \
+  tools.saturn.test_actor_variant_bank -v
+# Ran 38 tests ... OK
+
+make -f Makefile.saturn.mk verify-actor-family-bundle \
+  verify-actor-variant-bank verify-actor-pose-bank verify-actor-meshlets
+```
+
+The re-run host gates passed: family bundle `PASS (53 mutations)`, variant plus
+actor-source `Ran 37 tests ... OK`, actor pose `PASS`, and actor meshlets
+`PASS`. The historical Mario rehash is unchanged: S64B payload
+`242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`,
+JSON `3f0f2dd965e7fbe9e73d9b791053478d9b3fe73199087bb827b76912e4206bf0`,
+payload size `596896`, and source SHA-256
+`60f942e6f30d4a153393a47ac53626ee53d90ebeb750ee5d244d5ef2a16925c1`.
+Both matched the pre-existing `task3-refactor` references exactly. The existing
+S64F-v3 deterministic fixture remains 1,688 bytes with SHA-256
+`4b3334a61f8ce7c8b2c4548a112b0c7354c444b42659ec7943941de5529e4dbc`.
