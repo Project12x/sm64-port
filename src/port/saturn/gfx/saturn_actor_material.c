@@ -23,6 +23,18 @@ static bool actor_multiply_u32(uint32_t left, uint32_t right, uint32_t *out)
     return true;
 }
 
+/* Empty spans touch no address. Nonempty spans validate through their final
+ * required byte so a hardware/fabricated base can never wrap silently. */
+static bool actor_address_span_valid(uintptr_t base, uint32_t offset,
+                                     uint32_t bytes)
+{
+    uintptr_t start;
+    if (bytes == 0U) return true;
+    if ((uintptr_t)offset > UINTPTR_MAX - base) return false;
+    start = base + (uintptr_t)offset;
+    return (uintptr_t)(bytes - 1U) <= UINTPTR_MAX - start;
+}
+
 static bool actor_material_translate(
     const sm64_saturn_actor_target_material_t *material,
     sm64_saturn_actor_binding_kind_t *kind, vdp1_cmdt_cc_t *cc_mode)
@@ -120,9 +132,13 @@ static bool actor_mapping_valid(
     clut_base = (uintptr_t)partitions->clut_base;
     if ((bank->texture_resident_bytes != 0U &&
          ((texture_base & 7U) != 0U ||
-          texture_base > UINTPTR_MAX - mapping->texture_base_offset)) ||
+          !actor_address_span_valid(texture_base,
+                                    mapping->texture_base_offset,
+                                    bank->texture_resident_bytes))) ||
         (bank->clut_resident_bytes != 0U &&
-         ((clut_base & 7U) != 0U || clut_base > UINTPTR_MAX - clut_start)))
+         ((clut_base & 7U) != 0U ||
+          !actor_address_span_valid(clut_base, clut_start,
+                                    bank->clut_resident_bytes))))
         return false;
     return true;
 }
@@ -141,7 +157,9 @@ static bool actor_tile_valid(
         return false;
     if (kind == SM64_SATURN_ACTOR_BINDING_CLUT16) {
         if (tile->format != SM64_SATURN_ACTOR_TILE_FORMAT_CLUT16 ||
-            tile->clut_id == UINT16_MAX)
+            tile->clut_id == UINT16_MAX ||
+            (uint32_t)tile->clut_id >=
+                bank->clut_payload_size / sizeof(vdp1_clut_t))
             return false;
         expected_size = pixels / 2U;
     } else if (kind == SM64_SATURN_ACTOR_BINDING_RGB1555) {

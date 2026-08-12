@@ -601,8 +601,17 @@ capacity equations are host-approved; target rendering remains a later gate.
 
 ### Task 6: Bind stable v2 materials to exact VDP1 commands
 
-**Execution status (2026-08-12):** source-complete-pending-review from
-reconciled base `a553b500` at behavior commit `863b4646`. Both IR binders use a checked `uint16_t` width and
+**Execution status (2026-08-12):** source-complete-pending-rereview from
+reconciled base `a553b500` at behavior commit `863b4646`, with fix round 1
+prepared from frozen review head `5ceb251c`. Independent review returned Spec
+FAIL / Quality needs fixes, C0/I3/M0: IR and actor aggregate address checks
+validated only their start rather than the final byte, post-parse CLUT tile
+ordinals were not locally bounded before global mapping, and the historical
+family-bank trust anchor was stale. The repair uses checked integer address
+spans through the final required byte, defines zero aggregate bytes as touching
+no address, rechecks the local dense CLUT count, and reseals only the test
+anchor after two identical `db611af6...` / header `60c329ab...` regenerations.
+Both IR binders use a checked `uint16_t` width and
 the new master-only final-emission boundary translates all seven stable
 S64B-owned recipes to exact Yaul command fields only after validating the bank,
 mapping generation/identity, tile/material ordinals, complete texture/CLUT
@@ -610,12 +619,11 @@ partition spans, address arithmetic, and four vertices. The prescribed RED
 and focused GREEN passed; S64B-v2 86-mutation, mixed-S64F 54-mutation, pose,
 meshlet, feature-off, and 40-test host gates passed, and both changed modules
 passed exact SH-2 `-m2 -mb -ffreestanding -Werror` syntax/object compilation.
-The adjacent historical family-bank target remains unchecked because its
-test-only trust anchor expects pre-Task-4 SHA `00e5754c...` while the current
-Task-5-attested payload is `db611af6...`; that stale unrelated oracle does not
-replace the passing mixed-S64F/bank gates and is outside this task's file list.
+The formerly adjacent family-bank target is now authorized test-only scope and
+passes against the twice-reproduced Task-5 payload; production family parsing
+and the separate effect oracle are unchanged.
 No residency publication, runtime activation, renderer/Ymir, or Task 7 work is
-claimed. Independent Task 6 review remains open, so Task 7 remains closed.
+claimed. Same-reviewer Task 6 rereview remains open, so Task 7 remains closed.
 
 **Task 6 reference-code provenance:** dependency/API adaptation against the
 pinned libyaul gitlink `6012f79f237773378c8014e70d8998ad95a38d98`
@@ -637,6 +645,8 @@ shared-core extension; no external source is copied.
 - Modify: `src/port/saturn/gfx/saturn_ir_texture.c`
 - Modify: `Makefile.saturn.mk` to add `verify-ir-texture` and `verify-actor-material`
 - Modify: `Makefile.saturn.mk`, `CHANGELOG.md`, this plan, and ledger/report
+- Fix-round-1 authorized test-only modify:
+  `tools/saturn/actor_family_bank_test.c`
 
 **Interfaces:**
 

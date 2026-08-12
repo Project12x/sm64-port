@@ -11,6 +11,9 @@ Create `saturn_actor_material.h/.c`, `actor_material_test.c`, and
 `CHANGELOG.md`, the active plan, ledger, and this task report. Stop before
 texture residency, generation publication, runtime activation, renderer/Ymir,
 or Task 7 work. Do not expand the file list without controller authorization.
+Fix round 1 authorizes the test-only adjacent
+`tools/saturn/actor_family_bank_test.c`; it does not authorize changes to the
+family parser, compiler, effect oracle, or any Task 7 path.
 
 ## Exact interface
 
@@ -53,6 +56,23 @@ bool sm64_saturn_actor_material_bind(
   size, CLUT address, color mode, blend mode, and four input vertices.
 - Keep package enums separate from Yaul enums. Add no pointer or residency
   state to serialized/cross-SH-2 data.
+
+## Independent-review fix round 1
+
+- Verdict at frozen HEAD `5ceb251c`: Spec FAIL / Quality needs fixes,
+  C0/I3/M0. Reproduce each finding before production edits.
+- Check integer address spans through their final required byte for IR CLUT16,
+  IR RGB1555, actor aggregate texture residency, actor aggregate CLUT
+  residency, and the selected 32-byte CLUT. Form no typed pointer until the
+  checked integer address is final. Empty aggregate spans touch no address;
+  scalar partition offsets remain bounded.
+- Recheck every selected CLUT tile against
+  `bank->clut_payload_size / sizeof(vdp1_clut_t)` before adding the global
+  mapping ordinal. Prove one-palette ordinal `0` succeeds and ordinals `1` and
+  `0xFFFF` reject without command mutation.
+- Regenerate the deterministic family payload twice, record payload/header
+  identities, capture the stale `00e5754c...` trust-anchor RED, and update only
+  that expected payload anchor. Do not change the independent effect oracle.
 
 ## Verification and completion contract
 

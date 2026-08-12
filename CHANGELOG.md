@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Hardened the new S64B-v2 material-to-VDP1 boundary after independent review
+  found three fail-open edges: texture/CLUT address checks now cover the final
+  required byte of every nonempty IR tile and actor-bank aggregate before any
+  command write, CLUT tiles are rechecked against their bank-local dense
+  palette count before the global residency offset is added, and the stale
+  family-bank test anchor is resealed only after two deterministic Task 5
+  rebuilds produced the same payload/header identities. Empty aggregate spans
+  deliberately touch no hardware address, preserving flat-only banks without
+  inventing residency requirements. This remains a host/freestanding target-
+  module repair only; residency, runtime activation, rendering, and Ymir proof
+  are still deferred.
+
 - Added the master-owned final-emission boundary for validated S64B-v2 actor
   materials. Stable bank recipes now translate explicitly to Yaul flat,
   CLUT16, RGB1555, Gouraud, replace, and half-transparent command fields while

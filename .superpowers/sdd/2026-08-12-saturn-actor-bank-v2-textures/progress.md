@@ -468,18 +468,48 @@
   object emission. Objects were 20,904 bytes for `saturn_ir_texture.o` and
   24,544 bytes for `saturn_actor_material.o`; this is compiler evidence, not a
   target link or execution claim.
-- Open unrelated adjacent gate: `verify-actor-family-bank` reaches its C
+- At initial source completion, the unrelated adjacent gate
+  `verify-actor-family-bank` reached its C
   validator only with an explicit Windows-root override, then returns 1 because
   `actor_family_bank_test.c` hardcodes historical payload SHA-256
   `00e5754c80762a15b5482fb1f2e88f4bc1fc7ab847f3463944e2e6689d412ee8`.
   The current Task-5-attested payload and report agree on
   `db611af699337f38a2284abf58cb287c70f9ab6e5df5b07555cda48aba7bf313`.
-  That test-only trust-anchor file is outside Task 6's strict file list, so it
-  remains explicitly unchecked; it neither invalidates nor substitutes for the
-  passing Task 6 IR/material, S64B-v2, or mixed-S64F gates.
+  That test-only trust-anchor file was then outside Task 6's strict file list,
+  so it remained explicitly unchecked at that transition; fix round 1 below
+  records its later authorized reseal and GREEN.
 - Self-review found no production edit outside the approved module/Make/docs
   list. The stable S64B enums stay in `saturn_actor_bank.h`; Yaul values appear
   only in the new master-owned translation C file. Workers receive no pointer,
   command, partition, or mapping state. All fallible parsing, arithmetic, and
   range work precedes command mutation; textured final writes delegate to the
   atomic IR binders. Task 7 code and sourceboot runtime integration are absent.
+
+## Task 6 review and fix round 1/5 (2026-08-12)
+
+- Independent review of `a553b500..5ceb251c` returned Spec FAIL / Quality needs
+  fixes, C0/I3/M0. Verified findings were start-only IR/aggregate hardware
+  address validation, missing bank-local CLUT ordinal validation, and the
+  already-recorded stale family-bank test anchor. Task 7 remained closed.
+- Serial TDD RED first caught IR CLUT16 full-span wrap and actor aggregate
+  texture wrap with byte-exact command preservation; after span repair, the
+  one-palette `clut_id 0 -> 1` mutation was accepted and supplied the second
+  production RED. `verify-actor-family-bank` separately exited 1 at the old
+  `00e5754c...` payload trust comparison after its report gate passed.
+- Repair validates every nonempty integer address span through its last byte,
+  casts only final checked IR addresses, and treats zero aggregate bytes as
+  touching no address. Actor binding retains scalar partition and per-tile IR
+  checks while adding complete aggregate texture/CLUT checks and the local
+  dense palette bound before global mapping addition.
+- Family payload generation run twice produced identical payload SHA-256
+  `db611af699337f38a2284abf58cb287c70f9ab6e5df5b07555cda48aba7bf313`,
+  header content SHA-256
+  `60c329ab3e8bcd8bc7d13869c123706af5517f5bd7efd3b3a539b70212e28b73`,
+  and 128,917 bytes. Only `actor_family_bank_test.c` is resealed; the parser,
+  compiler, and effect oracle are unchanged.
+- Full host wave passes IR/material, S64B-v2 86 mutations, family-bank 47/13/14,
+  mixed-S64F 54 mutations, pose, meshlet and invalid-span mutation, feature-off
+  6/6, and variant/source 40/40. Both production modules pass exact SH-2
+  freestanding syntax and object compilation; fix-round objects are 22,504 and
+  25,216 bytes. The repair commit is pending this transition; same-reviewer
+  rereview remains mandatory and every Task 7/runtime/Ymir gate stays closed.

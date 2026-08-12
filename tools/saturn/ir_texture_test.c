@@ -284,12 +284,71 @@ static void test_failures_are_atomic(void)
         VDP1_CMDT_CC_REPLACE, k_vertices));
 }
 
+static void test_address_span_boundaries(void)
+{
+    vdp1_vram_partitions_t value = partitions();
+    vdp1_cmdt_t command;
+
+    /* Exact last-byte fits are valid. Each immediately following case keeps
+     * the scalar partition large enough but makes the hardware address span
+     * cross UINTPTR_MAX. */
+    value.texture_base = (void *)(UINTPTR_MAX - 7U);
+    value.texture_size = 8U;
+    memset(&command, 0, sizeof(command));
+    assert(sm64_saturn_ir_texture_bind_clut16(
+        &command, &value, 0U, 8U, 2U, 0U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+    value.texture_size = 7U;
+    ASSERT_NO_MUTATION(sm64_saturn_ir_texture_bind_clut16(
+        &command, &value, 0U, 8U, 2U, 0U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+    value.texture_size = 16U;
+    ASSERT_NO_MUTATION(sm64_saturn_ir_texture_bind_clut16(
+        &command, &value, 0U, 8U, 4U, 0U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+
+    value = partitions();
+    value.texture_base = (void *)(UINTPTR_MAX - 15U);
+    value.texture_size = 16U;
+    memset(&command, 0, sizeof(command));
+    assert(sm64_saturn_ir_texture_bind_rgb1555(
+        &command, &value, 0U, 8U, 1U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+    value.texture_size = 15U;
+    ASSERT_NO_MUTATION(sm64_saturn_ir_texture_bind_rgb1555(
+        &command, &value, 0U, 8U, 1U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+    value.texture_base = (void *)(UINTPTR_MAX - 7U);
+    value.texture_size = 16U;
+    ASSERT_NO_MUTATION(sm64_saturn_ir_texture_bind_rgb1555(
+        &command, &value, 0U, 8U, 1U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+
+    value = partitions();
+    value.clut_base = (vdp1_clut_t *)(UINTPTR_MAX - 63U);
+    value.clut_size = 64U;
+    memset(&command, 0, sizeof(command));
+    assert(sm64_saturn_ir_texture_bind_clut16(
+        &command, &value, 0U, 8U, 2U, 1U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+    value.clut_size = 63U;
+    ASSERT_NO_MUTATION(sm64_saturn_ir_texture_bind_clut16(
+        &command, &value, 0U, 8U, 2U, 1U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+    value.clut_base = (vdp1_clut_t *)(UINTPTR_MAX - 55U);
+    value.clut_size = 64U;
+    ASSERT_NO_MUTATION(sm64_saturn_ir_texture_bind_clut16(
+        &command, &value, 0U, 8U, 2U, 1U,
+        VDP1_CMDT_CC_REPLACE, k_vertices));
+}
+
 int main(void)
 {
     assert(sizeof(vdp1_cmdt_t) == 32U);
     assert(sizeof(vdp1_clut_t) == 32U);
     test_width_boundaries();
     test_failures_are_atomic();
+    test_address_span_boundaries();
     puts("IR texture binding: PASS");
     return 0;
 }

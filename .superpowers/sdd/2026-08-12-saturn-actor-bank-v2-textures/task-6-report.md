@@ -2,8 +2,9 @@
 
 ## Status
 
-Source-complete-pending-review from reconciled base `a553b500`. Behavior commit
-is `863b4646`. No target runtime, residency,
+Source-complete-pending-rereview from reconciled base `a553b500`. Initial
+behavior commit is `863b4646`; fix round 1 is prepared from frozen review HEAD
+`5ceb251c`. No target runtime, residency,
 renderer, Ymir, release, or Task 7 claim exists.
 
 ## Reconciliation and provenance
@@ -83,20 +84,56 @@ renderer, Ymir, release, or Task 7 claim exists.
   source compatible, and the historical feature-off wrapper and Mario bank are
   unchanged. No Task 7 residency/publication or renderer integration was added.
 
-## Open adjacent and downstream gates
+## Open downstream gates
 
-- `verify-actor-family-bank` is explicitly not green: after overcoming its
-  plain-Make `/d/...` path form with `SATURN_REPO_ROOT=D:/...`, its C oracle
-  returns 1 because `actor_family_bank_test.c` expects historical SHA-256
-  `00e5754c80762a15b5482fb1f2e88f4bc1fc7ab847f3463944e2e6689d412ee8`,
-  while the current Task-5-attested report and file both carry
-  `db611af699337f38a2284abf58cb287c70f9ab6e5df5b07555cda48aba7bf313`.
-  The test-only anchor is outside Task 6's strict file list and does not cover
-  Task 6 code. It remains open rather than being silently resealed.
-- Fresh independent Task 6 spec/quality review remains mandatory. Task 7
+- Same-reviewer Task 6 spec/quality rereview remains mandatory. Task 7
   residency/publication, target link/run, runtime activation, renderer/Ymir,
   release, smoke, visual, desktop, manual, retail, and total-game gates remain
   unchecked.
+
+## Independent review and fix round 1/5
+
+- Review range `a553b500..5ceb251c` returned Spec FAIL / Quality needs fixes,
+  C0/I3/M0. The three verified findings were: IR/actor address checks covered
+  only the start address, actor binding did not independently bound a selected
+  CLUT ordinal to the bank-local palette count, and the family-bank C oracle
+  still expected historical payload `00e5754c...`.
+- Serial RED: the focused Make command exited 1 at an aligned CLUT16 full-span
+  wrap (`UINTPTR_MAX-7`, 16-byte payload) and then at actor aggregate texture
+  wrap where the selected first tile still fit. After that repair, mutating a
+  one-palette tile from ordinal 0 to 1 was accepted and supplied the local-CLUT
+  RED. All rejection probes compare the full 32-byte command byte-for-byte.
+- The shared IR helper now checks `base + offset` and, for nonzero spans, the
+  final `size - 1` byte in `uintptr_t`; only the final checked texture/CLUT
+  integer is cast to `vdp1_vram_t`. Actor aggregate texture and CLUT spans use
+  the same last-byte rule, while zero resident bytes explicitly touch no
+  address and may use null bases. Exact-size fits succeed; scalar one-byte-
+  short partitions and address one-byte-over wraps reject atomically.
+- `actor_tile_valid` now requires a CLUT tile ordinal below the bank's dense
+  `clut_payload_size / sizeof(vdp1_clut_t)` count before adding the global
+  mapping base. The one-palette fixture proves 0 succeeds while 1 and
+  `UINT16_MAX` reject.
+- Two deterministic `compile-actor-banks` runs produced identical 128,917-byte
+  payload SHA-256
+  `db611af699337f38a2284abf58cb287c70f9ab6e5df5b07555cda48aba7bf313`
+  and header content SHA-256
+  `60c329ab3e8bcd8bc7d13869c123706af5517f5bd7efd3b3a539b70212e28b73`.
+  `verify-actor-family-bank` first RED-exited at the old anchor, then passed
+  after only its test payload expectation changed. Production family parsing,
+  compilation, and the separate effect oracle are untouched.
+- Full GREEN command: `make -f Makefile.saturn.mk SATURN_REPO_ROOT=<worktree>
+  verify-ir-texture verify-actor-material verify-actor-bank-v2
+  verify-actor-family-bank verify-actor-family-bundle verify-actor-pose-bank
+  verify-actor-meshlets verify-actor-feature-off-wrapper
+  verify-actor-variant-bank` — exit 0. Results: IR/material PASS, S64B-v2 86
+  mutations, family-bank 47 families/13 unsupported representatives/14
+  records, mixed-S64F 54 mutations, pose PASS, meshlet plus invalid-span
+  mutation PASS, feature-off 6/6, variant/source 40/40.
+- Exact installed `sh-elf-gcc` sourceboot-equivalent flags passed both
+  `-fsyntax-only` and `-c` for the two production modules. Fix-round object
+  sizes are 22,504 bytes (`saturn_ir_texture`) and 25,216 bytes
+  (`saturn_actor_material`). Same-reviewer rereview is still required; Task 7,
+  residency, runtime, renderer, Ymir, release, and manual gates remain closed.
 
 ## Commits
 

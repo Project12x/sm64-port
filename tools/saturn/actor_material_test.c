@@ -216,6 +216,14 @@ static void check_textured(const test_bank_t *bank, uint16_t primitive,
     assert_vertices(&command);
 }
 
+#define EXPECT_REJECT(call) do { \
+    vdp1_cmdt_t command, before; \
+    memset(&command, 0xA5, sizeof(command)); \
+    before = command; \
+    assert(!(call)); \
+    assert(memcmp(&command, &before, sizeof(command)) == 0); \
+} while (0)
+
 static void check_flat(const test_bank_t *bank)
 {
     sm64_saturn_actor_texture_mapping_t mapping = mapping_for(&bank->view);
@@ -229,15 +237,29 @@ static void check_flat(const test_bank_t *bank)
     assert(command.cmd_ctrl == 0x0004U && command.cmd_pmod == 0x00ECU);
     assert(command.cmd_colr == 0x9234U && command.cmd_grda == 0x5678U);
     assert_vertices(&command);
-}
 
-#define EXPECT_REJECT(call) do { \
-    vdp1_cmdt_t command, before; \
-    memset(&command, 0xA5, sizeof(command)); \
-    before = command; \
-    assert(!(call)); \
-    assert(memcmp(&command, &before, sizeof(command)) == 0); \
-} while (0)
+    /* Empty resident spans touch no address and therefore need no backing
+     * partition pointer. Scalar offsets must still fit their partitions. */
+    value.texture_base = NULL;
+    value.texture_size = mapping.texture_base_offset;
+    value.clut_base = NULL;
+    value.clut_size = (uint32_t)mapping.clut_base_index * sizeof(vdp1_clut_t);
+    memset(&command, 0, sizeof(command));
+    command.cmd_colr = 0x9234U;
+    command.cmd_grda = 0x5678U;
+    assert(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+    assert(command.cmd_ctrl == 0x0004U && command.cmd_pmod == 0x00ECU);
+    assert(command.cmd_colr == 0x9234U && command.cmd_grda == 0x5678U);
+    assert_vertices(&command);
+    value.texture_size--;
+    EXPECT_REJECT(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+    value.texture_size++;
+    value.clut_size--;
+    EXPECT_REJECT(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+}
 
 static void check_rejections(test_bank_t *bank)
 {
@@ -302,6 +324,16 @@ static void check_rejections(test_bank_t *bank)
     memcpy(bank->bytes + material_offset, saved, 8U);
 
     memcpy(saved, bank->bytes + tile_offset, 16U);
+    assert(bank->view.clut_payload_size / sizeof(vdp1_clut_t) == 1U);
+    assert(bank->bytes[tile_offset + 12U] == 0U &&
+           bank->bytes[tile_offset + 13U] == 0U);
+    put16(bank->bytes + tile_offset + 12U, 1U);
+    EXPECT_REJECT(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+    put16(bank->bytes + tile_offset + 12U, UINT16_MAX);
+    EXPECT_REJECT(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+    memcpy(bank->bytes + tile_offset, saved, 16U);
     put16(bank->bytes + tile_offset + 8U, 0U);
     EXPECT_REJECT(sm64_saturn_actor_material_bind(
         &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
@@ -331,6 +363,60 @@ static void check_rejections(test_bank_t *bank)
     value.clut_base = (vdp1_clut_t *)(UINTPTR_MAX - 7U);
     EXPECT_REJECT(sm64_saturn_actor_material_bind(
         &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+}
+
+static void check_aggregate_address_boundaries(const test_bank_t *bank)
+{
+    sm64_saturn_actor_texture_mapping_t mapping = mapping_for(&bank->view);
+    sm64_saturn_actor_bank_view_t expanded = bank->view;
+    vdp1_vram_partitions_t value = partitions();
+    vdp1_cmdt_t command;
+    const uintptr_t texture_exact = UINTPTR_MAX -
+        ((uintptr_t)mapping.texture_base_offset +
+         (uintptr_t)bank->view.texture_resident_bytes - 1U);
+    const uintptr_t clut_start =
+        (uintptr_t)mapping.clut_base_index * sizeof(vdp1_clut_t);
+    const uintptr_t clut_exact = UINTPTR_MAX -
+        (clut_start + (uintptr_t)bank->view.clut_resident_bytes - 1U);
+
+    assert(bank->view.texture_resident_bytes == 16U);
+    assert(bank->view.clut_resident_bytes == sizeof(vdp1_clut_t));
+    assert((texture_exact & 7U) == 0U && (clut_exact & 7U) == 0U);
+
+    value.texture_base = (void *)texture_exact;
+    value.texture_size = mapping.texture_base_offset +
+                         bank->view.texture_resident_bytes;
+    value.clut_base = (vdp1_clut_t *)clut_exact;
+    value.clut_size = (uint32_t)clut_start + bank->view.clut_resident_bytes;
+    memset(&command, 0, sizeof(command));
+    assert(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+
+    value.texture_size--;
+    EXPECT_REJECT(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+    value.texture_size++;
+    value.clut_size--;
+    EXPECT_REJECT(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+
+    /* The selected first tile still fits through UINTPTR_MAX, but the second
+     * resident tile makes the bank's aggregate texture span wrap. */
+    value = partitions();
+    value.texture_base = (void *)(texture_exact + 8U);
+    EXPECT_REJECT(sm64_saturn_actor_material_bind(
+        &command, &value, &bank->view, 0U, &mapping, 7U, k_vertices));
+
+    /* Likewise, the selected palette fits exactly while a synthetically
+     * extended validated-view aggregate crosses UINTPTR_MAX. The binder must
+     * retain its aggregate check independently of the per-tile IR check. */
+    expanded.clut_payload_size = 2U * sizeof(vdp1_clut_t);
+    expanded.clut_resident_bytes = expanded.clut_payload_size;
+    value = partitions();
+    value.clut_base = (vdp1_clut_t *)clut_exact;
+    value.clut_size = (uint32_t)clut_start + expanded.clut_resident_bytes;
+    EXPECT_REJECT(sm64_saturn_actor_material_bind(
+        &command, &value, &expanded, 0U, &mapping, 7U, k_vertices));
 }
 
 int main(int argc, char **argv)
@@ -363,6 +449,7 @@ int main(int argc, char **argv)
     check_textured(&rgb_gouraud, 0U, 0x00ACU);
     check_textured(&clut_half, 0U, 0x008BU);
     check_textured(&rgb_half, 0U, 0x00ABU);
+    check_aggregate_address_boundaries(&clut);
     check_rejections(&clut);
 
     free_bank(&rgb_half); free_bank(&clut_half);

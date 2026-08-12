@@ -30,11 +30,15 @@ static unsigned int read_be32(const unsigned char *bytes)
 
 int main(int argc, char **argv)
 {
-    static const uint8_t historical_v2_payload_sha256[32] = {
-        0x00U,0xe5U,0x75U,0x4cU,0x80U,0x76U,0x2aU,0x15U,
-        0xb5U,0x48U,0x2fU,0xb1U,0xf2U,0xe8U,0x8fU,0x4bU,
-        0xc1U,0xfcU,0x7aU,0xb8U,0x47U,0xf3U,0x46U,0x39U,
-        0x44U,0xe2U,0xe6U,0x68U,0x9dU,0x41U,0x2eU,0xe8U,
+    /* Task 5's reviewed family compiler was rebuilt twice before this
+     * test-only reseal. Both runs produced payload db611af6... and header
+     * content 60c329ab...; production parsing and the effect oracle remain
+     * unchanged. */
+    static const uint8_t task5_v2_payload_sha256[32] = {
+        0xdbU,0x61U,0x1aU,0xf6U,0x99U,0x33U,0x7fU,0x38U,
+        0xa2U,0x28U,0x4aU,0xbfU,0x58U,0xcbU,0x28U,0x7cU,
+        0x70U,0xf9U,0xabU,0x6eU,0x5dU,0xf5U,0xb0U,0x75U,
+        0x55U,0xcdU,0xa4U,0x8aU,0xbaU,0x7bU,0xf3U,0x13U,
     };
     unsigned char *bytes, *copy;
     uint8_t payload_digest[32];
@@ -48,7 +52,7 @@ int main(int argc, char **argv)
     unsigned int index;
     if (argc != 2 || !read_file(argv[1], &bytes, &size) || size > UINT32_MAX ||
         !sm64_saturn_sha256_digest(bytes, (uint32_t)size, payload_digest) ||
-        memcmp(payload_digest, historical_v2_payload_sha256, sizeof(payload_digest)) != 0 ||
+        memcmp(payload_digest, task5_v2_payload_sha256, sizeof(payload_digest)) != 0 ||
         !sm64_saturn_actor_family_bank_validate(bytes, size, &view))
         return 1;
     for (index = 0U; index < 8U; index++)
