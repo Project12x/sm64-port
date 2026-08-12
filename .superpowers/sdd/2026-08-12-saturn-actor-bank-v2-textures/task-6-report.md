@@ -2,10 +2,11 @@
 
 ## Status
 
-Source-complete-pending-rereview from reconciled base `a553b500`. Initial
-behavior commit is `863b4646`; fix round 1 landed as `661e54a4` from frozen
-review HEAD `5ceb251c`. No target runtime, residency,
-renderer, Ymir, release, or Task 7 claim exists.
+Complete and independently approved for host plus freestanding target-module
+scope from reconciled base `a553b500`. Initial behavior is `863b4646`; fix
+round 1 is `661e54a4`; same-reviewer range `5ceb251c..d0fbc5aa` passed Spec
+PASS / Quality PASS, C0/I0/M0. No target link/run, runtime, residency, renderer,
+Ymir, release, or Task 7 implementation claim exists.
 
 ## Reconciliation and provenance
 
@@ -86,10 +87,16 @@ renderer, Ymir, release, or Task 7 claim exists.
 
 ## Open downstream gates
 
-- Same-reviewer Task 6 spec/quality rereview remains mandatory. Task 7
-  residency/publication, target link/run, runtime activation, renderer/Ymir,
-  release, smoke, visual, desktop, manual, retail, and total-game gates remain
-  unchecked.
+- Task 7 remains closed until this Task 6 approval/status commit. Residency/
+  publication, target link/run, runtime activation, renderer/Ymir, release,
+  smoke, visual, desktop, manual, retail, and total-game gates remain unchecked.
+- Fresh `verify-actor-effects` is a nonblocking later effects/runtime failure:
+  its C effect/order tests run, then the Python oracle exits 1 at `actor effect
+  family source identity drift`. The pre-existing oracle pins family header/
+  payload SHA-256 `56e9a35c2ee24c92e0cf3f7f80f5a10720e87183c9cd0f5a18e135b463a71bad`
+  / `861be66d903460f9e54689a2dccbd611374a9123e3db75c6bc291c0d7ca7f298`
+  rather than current `60c329ab...` / `db611af6...`. It neither covers nor
+  invalidates Task 6 and is intentionally not resealed here.
 
 ## Independent review and fix round 1/5
 
@@ -132,8 +139,20 @@ renderer, Ymir, release, or Task 7 claim exists.
 - Exact installed `sh-elf-gcc` sourceboot-equivalent flags passed both
   `-fsyntax-only` and `-c` for the two production modules. Fix-round object
   sizes are 22,504 bytes (`saturn_ir_texture`) and 25,216 bytes
-  (`saturn_actor_material`). Same-reviewer rereview is still required; Task 7,
-  residency, runtime, renderer, Ymir, release, and manual gates remain closed.
+  (`saturn_actor_material`).
+
+## Same-reviewer closure
+
+- Exact reviewed repair range: `5ceb251c..d0fbc5aa`.
+- Verdict: Spec PASS / Quality PASS, C0/I0/M0; all three original Important
+  findings addressed, with no new or out-of-scope finding.
+- Fresh gates reconfirmed focused IR/material PASS; S64B-v2 86 mutations;
+  family-bank 47/13/14; mixed-S64F 54 mutations; pose; meshlet plus invalid-span
+  mutation; feature-off 6/6; variant/source 40/40; both exact SH-2 syntax and
+  object builds; and scoped diff/cleanliness checks.
+- Task 6 is complete for its host and freestanding target-module boundary.
+  Task 7 and all actual residency/runtime/renderer/Ymir gates stayed closed
+  throughout review and remain closed until this status commit.
 
 ## Commits
 

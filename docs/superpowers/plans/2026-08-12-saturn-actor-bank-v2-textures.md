@@ -31,10 +31,12 @@ C0/I0/M0 after round 1 received C0/I1/M0 for an incomplete transitive host-tool
 prerequisite closure. Its
 initial zero-edit preflight exposed and corrected
 a design error: source-pool family ceilings are not simultaneous resource
-allocations. Task 6 is source-complete-pending-rereview after fix round 1 at
-`661e54a4`; Tasks 7-13 and every runtime, demo, release, reseal, smoke, visual,
-desktop, manual, retail, and total-game gate remain open. No target runtime,
-residency, renderer, or Ymir state changed.
+allocations. Task 6 is complete for host and freestanding target-module scope:
+same-reviewer rereview of `5ceb251c..d0fbc5aa` passed Spec/Quality, C0/I0/M0,
+after fix round 1 at `661e54a4`. Task 7 remains closed until this status commit;
+Tasks 7-13 and every runtime, demo, release, reseal, smoke, visual, desktop,
+manual, retail, and total-game gate remain open. No target runtime, residency,
+renderer, or Ymir state changed.
 
 ## Global Constraints
 
@@ -602,9 +604,10 @@ capacity equations are host-approved; target rendering remains a later gate.
 
 ### Task 6: Bind stable v2 materials to exact VDP1 commands
 
-**Execution status (2026-08-12):** source-complete-pending-rereview from
+**Execution status (2026-08-12):** complete for host and freestanding
+target-module scope from
 reconciled base `a553b500` at behavior commit `863b4646`, with fix round 1
-landed as `661e54a4` from frozen review head `5ceb251c`. Independent review returned Spec
+landed as `661e54a4` from frozen review head `5ceb251c`. Initial independent review returned Spec
 FAIL / Quality needs fixes, C0/I3/M0: IR and actor aggregate address checks
 validated only their start rather than the final byte, post-parse CLUT tile
 ordinals were not locally bounded before global mapping, and the historical
@@ -624,7 +627,10 @@ The formerly adjacent family-bank target is now authorized test-only scope and
 passes against the twice-reproduced Task-5 payload; production family parsing
 and the separate effect oracle are unchanged.
 No residency publication, runtime activation, renderer/Ymir, or Task 7 work is
-claimed. Same-reviewer Task 6 rereview remains open, so Task 7 remains closed.
+claimed. Same-reviewer rereview of exact range `5ceb251c..d0fbc5aa` passed
+Spec PASS / Quality PASS, C0/I0/M0, with fresh focused/full host gates, exact
+SH-2 syntax/object compilation, and scoped diff/cleanliness checks. Task 7
+remains closed until this status commit records that approval.
 
 **Task 6 reference-code provenance:** dependency/API adaptation against the
 pinned libyaul gitlink `6012f79f237773378c8014e70d8998ad95a38d98`
@@ -690,9 +696,15 @@ cmd_size = (uint16_t)(((width / 8U) << 8) | height);
 
 Run IR/material/bank/family host gates and compile the two changed modules with the exact SH-2 flags. Expected: all boundaries pass and feature-off calls are byte/behavior compatible.
 
-- [ ] **Step 5: Commit and independent review**
+- [x] **Step 5: Commit and independent review**
 
-Commit `feat(saturn): lower actor bank materials to VDP1`. Review enum separation, width arithmetic, command mutation, and master-only ownership.
+Behavior `863b4646`, initial evidence `5ceb251c`, repair `661e54a4`, and repair
+evidence `d0fbc5aa`. Same-reviewer rereview of `5ceb251c..d0fbc5aa` passed Spec
+PASS / Quality PASS, C0/I0/M0. Fresh IR/material/bank/family/history gates and
+both exact SH-2 freestanding syntax/object compiles pass; Task 6 is approved
+without claiming residency, runtime activation, renderer integration, or Ymir.
+A nonblocking later effects/runtime gate remains stale at oracle header/payload
+hashes `56e9a35c...` / `861be66d...`; its oracle is intentionally untouched.
 
 ---
 

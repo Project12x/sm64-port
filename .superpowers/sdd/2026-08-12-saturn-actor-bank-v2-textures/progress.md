@@ -15,10 +15,11 @@
   Mario and v2 generic actors; S64P alignment stays 4; texture/CLUT upload
   regions are separate; global lane stride and active texture generation are
   explicit.
-- Current: Tasks 1 and 2 complete and independently approved; Task 3 is
-  source-complete pending independent parser/ABI review. Tasks 4-13 and all
-  material, real-BOB, runtime, demo, release, reseal, smoke, visual, desktop,
-  manual, retail, and total-game gates remain open.
+- Current: Tasks 1-6 are complete and independently approved for their stated
+  scopes. Task 6 has host plus freestanding target-module approval only. Task 7
+  remains closed until the Task 6 status commit; all residency, runtime, demo,
+  release, reseal, smoke, visual, desktop, manual, retail, and total-game gates
+  remain open.
 
 ## Task 1 review loop
 
@@ -511,5 +512,30 @@
   mixed-S64F 54 mutations, pose, meshlet and invalid-span mutation, feature-off
   6/6, and variant/source 40/40. Both production modules pass exact SH-2
   freestanding syntax and object compilation; fix-round objects are 22,504 and
-  25,216 bytes. Repair behavior is `661e54a4`; same-reviewer
-  rereview remains mandatory and every Task 7/runtime/Ymir gate stays closed.
+  25,216 bytes. Repair behavior is `661e54a4`; at that transition same-reviewer
+  rereview remained mandatory and every Task 7/runtime/Ymir gate stayed closed.
+  The closure below records the later verdict.
+
+## Task 6 same-reviewer closure (2026-08-12)
+
+- Same-reviewer rereview of exact repair range `5ceb251c..d0fbc5aa` passed
+  Spec PASS / Quality PASS, C0/I0/M0. All three original Important findings are
+  addressed with no new or out-of-scope finding.
+- Fresh approval evidence reconfirmed IR/material PASS, S64B-v2 86 mutations,
+  family bank 47 families / 13 unsupported representatives / 14 records,
+  mixed-S64F 54 mutations, pose, meshlet plus invalid-span mutation,
+  feature-off 6/6, variant/source 40/40, both exact SH-2 freestanding syntax
+  and object compiles, and scoped diff/cleanliness gates. Fix-round object
+  sizes remain 22,504 and 25,216 bytes.
+- Task 6 is complete for host and freestanding target-module scope. This does
+  not claim a target link/run, residency, publication, runtime activation,
+  renderer, Ymir, release, or manual result. Task 7 remains closed until this
+  status record is committed.
+- Nonblocking adjacent evidence: fresh `verify-actor-effects` reaches its host
+  effect tests, then exits 1 at `actor effect family source identity drift`
+  because the pre-existing effect oracle still pins header/payload SHA-256
+  `56e9a35c2ee24c92e0cf3f7f80f5a10720e87183c9cd0f5a18e135b463a71bad` /
+  `861be66d903460f9e54689a2dccbd611374a9123e3db75c6bc291c0d7ca7f298`
+  instead of the current `60c329ab...` / `db611af6...`. This belongs to the
+  later effects/runtime gate, does not cover Task 6 material binding, and its
+  oracle is intentionally unchanged.
