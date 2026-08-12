@@ -356,7 +356,8 @@ Commit `feat(saturn): validate mixed actor bank versions`. Require parser/ABI re
 
 ### Task 4: Capture and lower the exact measured BOB material subset
 
-**Execution status:** source-complete-pending-review (2026-08-12). The real
+**Execution status:** source-complete-pending-review at behavior commit
+`52c9c1af` (2026-08-12). The real
 34-drawable/47-family replay is frozen; all 14 measured direct-textured keys
 compile as S64B v2, the 18 `GEO_SHADOW`, one `GEO_SCALE`, one `GEO_ASM`, 13
 capability-unsupported families, and two `MODEL_NONE` variants retain named
