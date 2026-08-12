@@ -2,13 +2,14 @@
 
 ## Status
 
-`source-complete-pending-plan-rereview` from approved Task 7 base `dfa8b286` after
+`complete` from approved Task 7 base `dfa8b286` after
 initial behavior `b84103cd`, evidence `0a180e39`, repair `dc81808b`,
 generation-transaction repair `3b81456b`, serialization follow-up `b2f66f5a`,
 canonical-lock repair `58165193`, and test repair `3bcf5ab1`. Reviews returned
 C0/I3/M0, C0/I1/M2, C0/I1/M0, then C0/I1/M0; the last finding was solely the
-authoritative plan's stale Cannon-first/serial-order contradiction. The plan is
-now corrected and its narrow same-reviewer verdict is open. This report claims
+authoritative plan's stale Cannon-first/serial-order contradiction. Plan status
+`ec54cd47` corrected it and the narrow same-reviewer verdict passed
+Spec/Quality C0/I0/M0. This report claims
 package/source ownership plus host and freestanding SH-2 module evidence only;
 Task 9 production cutover, linked target, Ymir, release, and manual gates remain
 unchecked.
@@ -203,3 +204,13 @@ unchecked.
   that minimum link/Ymir commands run inside Task 9 without opening or
   completing formal Task 10. No implementation, package, target, memory, or
   wire bytes changed. A narrow plan-only rereview remains open.
+
+## Final verdict
+
+- Exact plan-only range `3bcf5ab1..ec54cd47`: Spec PASS / Quality PASS,
+  C0/I0/M0. The reviewer verified exactly three documentation files changed,
+  Bob-omb is the global first witness, Cannon is one regression, and the early
+  link/Ymir observation is inside Task 9 without opening formal Task 10.
+- Task 8 is complete. Task 9 is now active for the normal Bob-omb production
+  consumer and immediate target observation. This verdict does not claim a
+  linked target, Ymir actor, audio, release, visual, or manual result.

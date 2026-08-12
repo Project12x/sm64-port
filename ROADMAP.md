@@ -3,18 +3,18 @@
 ## Now — converge on a working generic BOB by 2026-08-14
 
 Freeze new Saturn architecture sprints. Task 7 residency has final
-Spec/Quality C0/I0/M0 approval. Task 8 production behavior passed review; its
-only remaining gate is a test-only C0/I1/M0 repair proving the contender blocks
-on canonical/reordered and genuinely partially overlapping output sets. The
-new regression passes normally, fails when locking is disabled, and the full
-schema is 26/26 with one permitted symlink-capability skip. In the repaired
+Spec/Quality C0/I0/M0 approval. Task 8 is complete at `ec54cd47`; production
+and its repaired canonical/reordered plus genuinely partial-overlap lock test
+passed final same-reviewer Spec/Quality C0/I0/M0. The regression passes
+normally, fails when locking is disabled, and the full schema is 26/26 with one
+permitted symlink-capability skip. In the repaired
 Task 8 implementation, the canonical package is retained in CART, common
 bundle lookup/pose/meshlet preparation is target-compiled, and the 2,560-byte
 cold stage is phase-borrowed
 from the idle VDP1 command bank rather than charged as persistent HWRAM; the
 command prefix is restored only after the borrow retires, dependency identity
-is exact, and all seven outputs publish/rollback as one generation. After rereview, cut
-the normal Task 9 actor path over to the generic queue/bank/material renderer,
+is exact, and all seven outputs publish/rollback as one generation. Task 9 is
+active: cut the normal actor path over to the generic queue/bank/material renderer,
 broaden the remaining 20 drawable BOB source states through common
 Saturn-shaped reductions. The order is now live-consumer-first: admit normally
 spawned Bob-omb through the common shadow omission, cut the production queue

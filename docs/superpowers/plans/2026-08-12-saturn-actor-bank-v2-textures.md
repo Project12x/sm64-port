@@ -37,9 +37,11 @@ same-reviewer rereview of `5ceb251c..d0fbc5aa` passed Spec/Quality, C0/I0/M0,
 after fix round 1 at `661e54a4`. Task 7 is complete after repair commits
 `4c4c24a9`, `c270f363`, and `d1408e00`; same-reviewer final rereview passed
 Spec/Quality C0/I0/M0. Fixed all-resident planning and checked upload publish a
-2,064-byte scalar scene-owned table for the exact 14-bank BOB subset, while
-independent review remains mandatory. Tasks 8-13 and every runtime, demo,
-release, reseal, smoke, visual, desktop,
+2,064-byte scalar scene-owned table for the exact 14-bank BOB subset. Task 8
+is complete at final status `ec54cd47`: production and its repaired lock
+regression passed same-reviewer Spec/Quality C0/I0/M0. Task 9 is active for the
+normally spawned Bob-omb live consumer. Tasks 10-13 and every completed demo,
+release, reseal, visual, desktop,
 manual, retail, and total-game gate remain open. No target runtime, residency,
 renderer, or Ymir state changed.
 
@@ -953,7 +955,7 @@ owner->active_generation = next_generation;
 
 Run package schema/runtime/determinism, scene residency/stream, bundle runtime, texture residency, source owner, actor meshlet/pose/queue/batch, and feature-off gates. Parse the real BOB S64P/S64F and confirm exact hashes/bytes/generation plus no linked duplicate bank.
 
-- [ ] **Step 5: Commit and independent review**
+- [x] **Step 5: Commit and independent review**
 
 Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, cart/VRAM/LWRAM ownership, leases, and no-copy aliases before Task 9.
 
@@ -1069,6 +1071,24 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   the no-lock mutation; full schema passes 26/26 with one permitted symlink
   capability skip. Production/package/target bytes are unchanged. Final
   rereview remains open and Task 9 remains closed until it passes.
+
+#### Task 8 final approval and Task 9 active transition (2026-08-12)
+
+- Test repair `3bcf5ab1` proved both canonical/reordered and genuinely partial
+  overlap contenders block on the shared physical lock; both mutations fail
+  when `_target_lock` is disabled. Full schema remains 26/26 with one permitted
+  capability skip and the source-scene-bundle/determinism gate is GREEN.
+- Same-reviewer final test verdict confirmed the implementation evidence but
+  found the plan still contradicted itself on Cannon-first and early Ymir
+  ordering. Documentation-only `ec54cd47` makes normally spawned
+  `MODEL_BLACK_BOBOMB` / `bhvBobomb` the first witness and defines the minimum
+  link/Ymir run as an observation inside Task 9. Its narrow rereview passed
+  Spec/Quality C0/I0/M0. No production/test/package/target bytes changed in
+  that last range.
+- Task 8 is complete. Task 9 is active only for the Bob-omb compiler RED,
+  existing feature-on queue/emitter cutover, and immediate target/Ymir
+  observation. No new format, generalized-level work, release reseal, or
+  architecture task may intervene.
 
 ---
 

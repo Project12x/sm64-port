@@ -867,3 +867,16 @@
   defines the early Task 10 link/smoke commands as an observation inside Task
   9 rather than prematurely opening Task 10. Production/package/target bytes
   remain unchanged. Final plan-only rereview is required before Task 9 opens.
+
+## Task 8 approved; Task 9 active (2026-08-12)
+
+- Same-reviewer plan-only rereview of `3bcf5ab1..ec54cd47` passed Spec/Quality
+  C0/I0/M0. Exactly the plan/ledger/report changed; production, tests, build
+  files, packages, and target bytes were unchanged. The active contract now
+  consistently requires a normally spawned Bob-omb first and permits the
+  minimum link/Ymir observation inside Task 9 without opening formal Task 10.
+- Task 8 is complete. Task 9 is active for the Bob-omb compiler/live-consumer
+  RED, the existing feature-on queue/emitter seam, and immediate identity-bound
+  target/Ymir feedback. Remaining actors and existing game audio stay in the
+  same convergence chain; architecture, new formats, generalized levels,
+  release reproduction, and audit campaigns remain closed.

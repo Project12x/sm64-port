@@ -11,12 +11,10 @@ models, object-specific renderer branches, and whole-scene stalls are not.
 
 Task 7 residency is complete after repairs `4c4c24a9`, `c270f363`, and
 `d1408e00`; same-reviewer final rereview passed Spec/Quality C0/I0/M0. Task 8
-production behavior passed its latest review, but Quality remains pending on
-one test-only C0/I1/M0 repair: the old concurrency regression did not prove a
-contender blocked. The replacement now proves canonical/reordered and truly
-partially overlapping sets block on the shared physical lock, and both tests
-fail when locking is disabled. Full schema is 26/26 with one permitted
-symlink-capability skip; final rereview remains open. Command-bank restoration,
+is complete at status `ec54cd47`. Its production behavior and repaired
+canonical/reordered plus truly partial-overlap lock regression passed final
+same-reviewer Spec/Quality C0/I0/M0; both tests fail when locking is disabled.
+Full schema is 26/26 with one permitted symlink-capability skip. Command-bank restoration,
 exact dependency identity, and whole-generation atomic publication are now repaired.
 Generation 14 binds one relocation-neutral S64P to the exact
 160,928-byte S64F-v3 CART dependency; a model-agnostic bundle publication and
@@ -27,8 +25,8 @@ source-init stack, and 92/88/112-byte scene begin/commit/load frames. The cold
 not added as persistent HWRAM. The repaired repository-wrapper-selected MSYS
 route is green with a verify-only second inventory and no loader error; direct
 manual invocations and the full link remain unclaimed.
-Task 9 remains closed pending that test-only verdict, then becomes the immediate
-live gate. Its first slice admits normally spawned Bob-omb through the common
+Task 9 is now the immediate active live gate. Its first slice admits normally
+spawned Bob-omb through the common
 shadow-omission reduction, cuts the existing package into the production
 generic job/emitter, links, and runs the identity-bound Ymir smoke before the
 remaining actors are generalized. The remaining normal BOB actors then use the
