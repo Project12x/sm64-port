@@ -3,21 +3,27 @@
 ## Now — converge on a working generic BOB by 2026-08-14
 
 Freeze new Saturn architecture sprints. Task 7 residency has final
-Spec/Quality C0/I0/M0 approval. Task 8 repairs `dc81808b`, `3b81456b`,
-`b2f66f5a`, and `58165193` are
-source-complete-pending-rereview after initial C0/I3/M0 and round-1 C0/I1/M2:
-the canonical package is retained in CART, common bundle lookup/pose/meshlet
-preparation is target-compiled, and the 2,560-byte cold stage is phase-borrowed
+Spec/Quality C0/I0/M0 approval. Task 8 production behavior passed review; its
+only remaining gate is a test-only C0/I1/M0 repair proving the contender blocks
+on canonical/reordered and genuinely partially overlapping output sets. The
+new regression passes normally, fails when locking is disabled, and the full
+schema is 26/26 with one permitted symlink-capability skip. In the repaired
+Task 8 implementation, the canonical package is retained in CART, common
+bundle lookup/pose/meshlet preparation is target-compiled, and the 2,560-byte
+cold stage is phase-borrowed
 from the idle VDP1 command bank rather than charged as persistent HWRAM; the
 command prefix is restored only after the borrow retires, dependency identity
 is exact, and all seven outputs publish/rollback as one generation. After rereview, cut
 the normal Task 9 actor path over to the generic queue/bank/material renderer,
 broaden the remaining 20 drawable BOB source states through common
-Saturn-shaped reductions, then run a short identity-bound Ymir smoke
-immediately. Cannon is one regression, not the milestone. The live gate
-requires all 34 drawable BOB selections to be admitted through the common path
-and representative normally spawned actors to render without simulation stall,
-quarantine, exception, or allocation failure.
+Saturn-shaped reductions. The order is now live-consumer-first: admit normally
+spawned Bob-omb through the common shadow omission, cut the production queue
+and emitter over, then link and run a short identity-bound Ymir smoke before
+generalizing the remaining actors. Cannon is one regression, not the witness.
+After the first smoke, expand all normal BOB actors through the same path with
+repeated short smokes, then replace `audio-stub-v1` with the existing
+scene-selected MC68000/SCSP music and gameplay-SFX path. Only that integrated
+actor-plus-audio result is the new demo.
 
 Capacity campaigns, A/B release reproduction, audit reseal, staging, and final
 manual evidence follow this first live gate. Memory/ownership facts must be

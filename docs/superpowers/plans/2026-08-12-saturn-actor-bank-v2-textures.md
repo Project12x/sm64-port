@@ -1054,6 +1054,21 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   remain open;
   Step 5 and Task 9 stay unchecked.
 
+#### Task 8 repair round 4/5 (2026-08-12)
+
+- Final rereview of `58165193..aa68afe5` passed the production implementation
+  but returned Quality NEEDS FIXES C0/I1/M0 because the checked-in race neither
+  proved a contender blocked on the shared lock nor used genuinely partially
+  overlapping sets. RED confirmed that replacing `_target_lock` with
+  `nullcontext` still passed the old regression.
+- The repaired canonical/reordered race holds the winner after the shared link,
+  observes contender entry, and requires acquisition to remain blocked until
+  winner completion. A separate shared-plus-unique race proves loser-only
+  outputs remain absent. Both pass with production locking and both fail under
+  the no-lock mutation; full schema passes 26/26 with one permitted symlink
+  capability skip. Production/package/target bytes are unchanged. Final
+  rereview remains open and Task 9 remains closed until it passes.
+
 ---
 
 ### Task 9: Cut the production generic actor queue and emitter over to v2
@@ -1072,40 +1087,70 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
 - Consumes: `sm64_saturn_source_scene_bundle_resolve`, Task 16 generalized meshlet workspace, queue/batch ABI, Task 6 material binder, Task 7 current texture mapping.
 - Produces feature-on ACTOR_ADMIT/ACTOR_LOWER work that drains real descriptors; master merge resolves each output record to its validated bank primitive/material/tile and emits painter-ordered commands.
 
-- [ ] **Step 1: Write RED complete-BOB and production-shaped host tests**
+- [ ] **Step 1: Write RED live-consumer and first normal-enemy tests**
 
-Replay all 34 drawable BOB selections and require a valid generic bank/result for
-each. `GEO_SHADOW` is one common telemetry-visible shadow-omission policy while
-its child geometry still compiles; static `GEO_SCALE` is baked into the common
-bank transform; the exact `geo_update_layer_transparency` `GEO_ASM` consumes the
-already-captured source opacity rather than adding an object-specific path.
-Every newly exposed texture/material signature remains closure-attested and
-uses the same v2 lowering. No new wire format or per-object renderer branch is
-allowed.
+First require the existing canonical package plus the common
+telemetry-visible `GEO_SHADOW` omission to compile a normally spawned
+`MODEL_BLACK_BOBOMB` / `bhvBobomb`; Cannon is not the witness. Exercise the
+observer/registry capture through real handoff population, either-SH-2 lane
+claim, pose/meshlet admission, descriptor-owned output, terminal publication,
+master merge/material bind, acknowledge, and queue-owned retirement. No new
+wire format, injected model, forced record, or object-specific renderer branch
+is allowed.
 
-Exercise observer/registry capture through handoff population, either-SH-2 lane claim, pose/meshlet admission, descriptor-owned output, terminal publication, master merge/material bind, acknowledge, and queue-owned retirement. Before descriptor publication, require checked atomic reservation for the complete observed set against 64 live, the post-reservation actor output share, texture-command share, and Gouraud share. Exact fit succeeds; every one-credit overflow quarantines the whole actor generation with zero descriptor/output/VDP1 mutation. Require zero actors to retain the two-world-job graph and a stale texture/package generation to quarantine before command mutation. Assert feature-on wrappers no longer contain unconditional `return false`.
+Before descriptor publication, require checked atomic reservation for the
+observed set against 64 live, the actor output share, texture-command share,
+and Gouraud share. Exact fit succeeds; one-credit overflow quarantines the
+actor generation with zero descriptor/output/VDP1 mutation. Require zero
+actors to retain the two-world-job graph and stale texture/package generation
+to quarantine before command mutation. Assert feature-on wrappers no longer
+contain unconditional `return false`.
 
 - [ ] **Step 2: Run RED**
 
-Run the 34-key compiler replay plus actor runtime handoff, instance queue,
+Run the Bob-omb compiler replay plus actor runtime handoff, instance queue,
 batches, render overlap, demo render, material, and feature-off wrapper gates.
-Expected: the 20 current unsupported rows fail the complete-BOB gate and the
-feature-on ACTOR jobs still fail closed at the compat wrappers.
+Expected: Bob-omb fails at the common `GEO_SHADOW` boundary and feature-on
+ACTOR jobs still fail closed at the compatibility wrappers.
 
-- [ ] **Step 3: Replace only the auditable feature-on seam**
+- [ ] **Step 3: Replace the feature-on seam and admit Bob-omb**
 
-First close the three common Geo envelopes and the exact newly exposed material
-signatures so the canonical BOB report has 34 supported drawable rows and zero
-unsupported drawable rows. Then, after computing the actual Mario obligations,
-dry-sum all selected variants' validated S64B credit fields in canonical snapshot order, then populate the real queue only if the complete essential actor set fits the command/Gouraud frame-bank remainder and dedicated actor output arena. Terrain remains optional and receives only the credits left after Mario plus generic actors. Replace the feature-on compat bodies with queue drain calls; leave the four-job graph/dependencies unchanged; master merge uses current bundle/residency generations and material binder; all retirement flows through the handoff. No partial actor subset is published on overflow. Feature-off retains the exact Mario path.
+Apply the one common shadow-omission reduction while retaining its child
+geometry and telemetry. After computing actual Mario obligations, dry-sum the
+currently resolvable variants' validated S64B credits in canonical snapshot
+order and populate the real queue only if the essential actor set fits the
+frame-bank remainder and dedicated actor output arena. Terrain remains
+optional. Replace feature-on compatibility bodies with queue drain calls;
+leave the four-job graph unchanged; master merge uses current bundle/residency
+generations and material binder; retirement flows through the handoff. No
+partial actor subset publishes on overflow. Feature-off retains exact Mario.
 
-- [ ] **Step 4: Run GREEN, capacity, and rollback proof**
+- [ ] **Step 4: Link and run the first identity-bound Ymir smoke immediately**
 
-Run the full actor/render wave. Accept exact per-resource fits, including 64 lightweight actors when their complete credit sums fit; reject 0 capacity, 65 live, 2,719 records, one-credit command/Gouraud overflow, overlap, stale generations, wrong hashes, and mid-merge failure. Prove overflow leaves no partial descriptor/output/command publication. Build feature-off and compare affected object code or the established exact source-policy proof with pre-task HEAD.
+Run Task 10 Steps 1-4 as soon as Bob-omb and the production seam compile. Build
+the standard package/registry/queue/residency/renderer target and launch the
+short Ymir route before broadening the remaining actors. Require advancing
+simulation/presentation, a successful normally spawned Bob-omb ACTOR path,
+zero exception/allocation failure, and no stale package/texture generation.
+This is an early observation, not the completed demo; stop and diagnose its
+first real-consumer failure before any further compiler generalization.
 
-- [ ] **Step 5: Commit and independent review**
+- [ ] **Step 5: Expand the remaining normal BOB actors on the same path**
 
-Commit `feat(saturn): render textured generic actors in production`. Require two-stage review of dual-SH-2 ownership, painter order, retirement, and feature-off identity.
+Replay all 34 drawable selections. Apply only the two remaining common Geo
+reductions: bake static `GEO_SCALE`, and consume captured opacity for the exact
+`geo_update_layer_transparency` `GEO_ASM`. Every exposed material state remains
+closure-attested and uses the same v2 lowering. Run a short live smoke after
+each common reduction group; do not defer all target feedback to the end.
+
+- [ ] **Step 6: Run rollback gates, commit, and review**
+
+Run the full actor/render wave. Accept exact per-resource fits; reject zero
+capacity, 65 live, 2,719 records, one-credit command/Gouraud overflow, overlap,
+stale generations, wrong hashes, and mid-merge failure without partial output.
+Build feature-off and preserve exact Mario. Then commit
+`feat(saturn): render textured generic actors in production` and review
+dual-SH-2 ownership, painter order, retirement, and feature-off identity.
 
 ---
 
@@ -1155,6 +1200,9 @@ generated inventory, and short-smoke evidence before the full visual gate.
 ### Task 11: Prove the normal generic BOB scene in Ymir
 
 **Files:**
+- Modify: existing `source_audio_semantics` / MC68000-SCSP sourceboot wiring,
+  target profile, and audio package descriptor only as required to replace the
+  current `audio-stub-v1`; no new audio format or backend
 - Modify only if a diagnosed harness defect exists: existing Ymir capture/probe tests and helper
 - Create: `docs/saturn/evidence/reports/bob-generic-actors-2026-08-14.json`
 - Create: `docs/saturn/evidence/screenshots/bob-generic-actors-2026-08-14.png`
@@ -1162,16 +1210,29 @@ generated inventory, and short-smoke evidence before the full visual gate.
 
 **Interfaces:**
 - Consumes the exact Task 10 development ELF/ISO/CUE and established canonical Ymir BIOS/profile.
+- Consumes the already-built scene-selected audio package, sequence VM,
+  MC68000 transport, SCSP voice scheduler, and completion path.
 - Produces identity-bound telemetry and visual evidence for the normal BOB actor
-  set through one generic package/queue/material/render path.
+  set through one generic package/queue/material/render path plus audible BOB
+  music and a game-triggered SFX. Standalone soundtest evidence is insufficient.
 
-- [ ] **Step 1: Verify the candidate before launch**
+- [ ] **Step 1: Replace the audio stub on the same BOB target**
+
+Bind the existing canonical BOB audio package instead of `audio-stub-v1` and
+enable semantic audio on the development target. Record SOUND RAM/command-ring
+bytes, alignment, margin, lifetime/reset owner, SH-2→MC68000 transport, stale
+generation behavior, and the first real source consumer. Require one original
+BOB music sequence and one gameplay-triggered SFX; a synthetic beep or
+standalone soundtest does not satisfy the gate. Build and run the short route
+immediately after wiring.
+
+- [ ] **Step 2: Verify the candidate before final launch**
 
 Rehash ELF/ISO/CUE/S64P/S64F, validate package/bundle/all 34 drawable banks,
 confirm zero unsupported drawable rows and representative registry/bank/material
 identities, and record exact BIOS/profile hashes. Stop if any binding differs.
 
-- [ ] **Step 2: Run the exact headless smoke/capture route**
+- [ ] **Step 3: Run the exact headless smoke/capture route**
 
 Launch the established normal BOB route with dynamic actor closure on. Require
 advancing source/presentation cadence, cart copy complete, package/bank/texture
@@ -1179,19 +1240,24 @@ generation exact, exception zero, allocation failures zero, actor quarantine
 zero, ACTOR_ADMIT/LOWER terminal success, and positive live margins. Telemetry
 must prove normally spawned coin, enemy, sign/cannon, and moving-actor identities
 use the same generic resolver and emitter.
+Require audio generation exact, MC68000 command/completion progress, positive
+voice activity for the bound music and gameplay SFX, and zero audio fault/drop
+for the observed route.
 
-- [ ] **Step 3: Capture and visually inspect the actor**
+- [ ] **Step 4: Capture and inspect the actors and audio**
 
 Save JSON plus PNG/video. Mario, terrain, HUD, and representative normally
 spawned BOB actors must be recognizable; a forced camera may frame them, but
 object spawning/model selection may not be injected. Inspect the image directly
-and record telemetry-visible generic Saturn fidelity reductions.
+and record telemetry-visible generic Saturn fidelity reductions. Capture an
+audible output or exact sound-CPU/SCSP telemetry proving the music and
+game-triggered SFX reached the real backend.
 
-- [ ] **Step 4: Run transition/stale-generation mutations**
+- [ ] **Step 5: Run transition/stale-generation mutations**
 
 Repeat the host transition fixture and one emulator reload/scene-transition route. Require old leases to retire, new texture generation to publish last, and stale descriptor/material mapping to quarantine without command mutation.
 
-- [ ] **Step 5: Commit evidence status and obtain review**
+- [ ] **Step 6: Commit evidence status and obtain review**
 
 Commit `docs(saturn): prove working generic BOB`. Independent evidence review
 must verify artifact hashes, telemetry, visual identities, common-path use, and

@@ -170,3 +170,22 @@ unchecked.
   Windows symlink-capability skip; the full focused wrapper wave passes and
   preserves all seven hashes and timestamps. Python compileall and scoped
   whitespace pass; target bytes/stack are unchanged.
+
+## Repair round 4 — prove the lock regression
+
+- Final rereview of `58165193..aa68afe5` passed the production implementation
+  but returned Quality NEEDS FIXES, C0/I1/M0: the checked-in concurrency test
+  released the winner immediately after submitting the contender, never proved
+  that the contender reached and blocked on the shared lock, and used the same
+  target set in reverse rather than a genuinely partially overlapping set.
+- RED confirmed the defect exactly: with `_target_lock` replaced by
+  `nullcontext`, the original regression still passed 1/1. The repaired test
+  holds the winner after linking the shared target, observes the contender
+  enter the same physical lock, and requires it not to acquire until the winner
+  completes. A second case uses one shared output plus disjoint winner/loser
+  outputs and requires every loser-only output to remain absent.
+- GREEN: both repaired races pass with the production lock; the same two tests
+  fail at the explicit blocked-acquisition assertion when locking is disabled.
+  The complete schema suite passes 26/26 with one permitted Windows
+  symlink-capability skip. No production, package, target, memory, or wire bytes
+  changed. Final rereview remains required; Task 9 and Ymir remain unopened.

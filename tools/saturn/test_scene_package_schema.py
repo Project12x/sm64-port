@@ -2,6 +2,7 @@
 """Mutation tests for the version-one, big-endian S64P package ABI."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import struct
@@ -78,6 +79,79 @@ def mutate_dependencies(package: bytes,
 
 
 class ScenePackageSchemaTest(unittest.TestCase):
+    def _assert_publication_sets_serialize(
+            self,
+            first: tuple[tuple[Path, bytes], ...],
+            second: tuple[tuple[Path, bytes], ...],
+            *,
+            shared_name: str) -> None:
+        from compile_scene_package import publish_or_verify_set
+        import compile_scene_package
+
+        real_link = compile_scene_package.os.link
+        real_target_lock = compile_scene_package._target_lock
+        winner_ident: int | None = None
+        contender_ident: int | None = None
+        winner_linked_shared = threading.Event()
+        contender_attempted_shared = threading.Event()
+        contender_acquired_shared = threading.Event()
+        blockage_observed = threading.Event()
+
+        @contextlib.contextmanager
+        def observed_target_lock(path):
+            is_contender_shared = (
+                threading.get_ident() == contender_ident and
+                Path(path).name == shared_name
+            )
+            if is_contender_shared:
+                contender_attempted_shared.set()
+            with real_target_lock(path):
+                if is_contender_shared:
+                    contender_acquired_shared.set()
+                yield
+
+        def delayed_link(source, target):
+            result = real_link(source, target)
+            if (threading.get_ident() == winner_ident and
+                    Path(target).name == shared_name and
+                    not winner_linked_shared.is_set()):
+                winner_linked_shared.set()
+                self.assertTrue(contender_attempted_shared.wait(timeout=10))
+                self.assertFalse(
+                    contender_acquired_shared.wait(timeout=0.25),
+                    "contender acquired the shared publication lock while "
+                    "the winner still owned it",
+                )
+                blockage_observed.set()
+            return result
+
+        def run_winner():
+            nonlocal winner_ident
+            winner_ident = threading.get_ident()
+            return publish_or_verify_set(first)
+
+        def run_contender():
+            nonlocal contender_ident
+            contender_ident = threading.get_ident()
+            return publish_or_verify_set(second)
+
+        with mock.patch.object(
+                compile_scene_package, "_target_lock",
+                side_effect=observed_target_lock):
+            with mock.patch.object(
+                    compile_scene_package.os, "link", side_effect=delayed_link):
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    winner = pool.submit(run_winner)
+                    self.assertTrue(winner_linked_shared.wait(timeout=10))
+                    contender = pool.submit(run_contender)
+                    winner.result(timeout=10)
+                    with self.assertRaisesRegex(
+                            ValueError, "publication target exists"):
+                        contender.result(timeout=10)
+
+        self.assertTrue(blockage_observed.is_set())
+        self.assertTrue(contender_acquired_shared.is_set())
+
     def test_bob_header_is_big_endian_and_has_exact_fields(self) -> None:
         package, payloads = fixture(provisional=True)
         parsed = validate_scene_package(package, payloads, allow_provisional=True)
@@ -634,51 +708,50 @@ class ScenePackageSchemaTest(unittest.TestCase):
             self.assertEqual(files[-1][0].read_bytes(), files[-1][1])
 
     def test_publication_alias_and_reordered_overlap_share_locks(self) -> None:
-        from compile_scene_package import publish_or_verify_set
-        import compile_scene_package
-
         with tempfile.TemporaryDirectory(prefix="s64p-overlap-lock-") as temporary:
             root = Path(temporary)
             alias = root / "alias"
             alias.mkdir()
-            prefix = root / "prefix.bin"
-            middle = root / "middle.bin"
-            ready = root / "ready.json"
-            first = ((prefix, b"first-prefix"),
+            shared = root / "00-shared.bin"
+            middle = root / "10-middle.bin"
+            ready = root / "99-ready.json"
+            first = ((shared, b"first-shared"),
                      (middle, b"first-middle"),
                      (ready, b"first-ready"))
-            second = ((alias / ".." / "ready.json", b"second-ready"),
-                      (alias / ".." / "middle.bin", b"second-middle"),
-                      (alias / ".." / "prefix.bin", b"second-prefix"))
-            real_link = compile_scene_package.os.link
-            first_linked = threading.Event()
-            release_first = threading.Event()
+            second = ((alias / ".." / "99-ready.json", b"second-ready"),
+                      (alias / ".." / "10-middle.bin", b"second-middle"),
+                      (alias / ".." / "00-shared.bin", b"second-shared"))
 
-            def delayed_link(source, target):
-                result = real_link(source, target)
-                if Path(target).name == "prefix.bin" and not first_linked.is_set():
-                    first_linked.set()
-                    self.assertTrue(release_first.wait(timeout=10))
-                return result
-
-            errors = []
-            with mock.patch.object(
-                    compile_scene_package.os, "link", side_effect=delayed_link):
-                with ThreadPoolExecutor(max_workers=2) as pool:
-                    first_future = pool.submit(publish_or_verify_set, first)
-                    self.assertTrue(first_linked.wait(timeout=10))
-                    second_future = pool.submit(publish_or_verify_set, second)
-                    release_first.set()
-                    for future in (first_future, second_future):
-                        try:
-                            future.result(timeout=10)
-                        except ValueError as exc:
-                            errors.append(str(exc))
+            self._assert_publication_sets_serialize(
+                first, second, shared_name=shared.name)
             self.assertEqual(
-                (prefix.read_bytes(), middle.read_bytes(), ready.read_bytes()),
-                (b"first-prefix", b"first-middle", b"first-ready"))
-            self.assertEqual(len(errors), 1)
-            self.assertIn("publication target exists", errors[0])
+                (shared.read_bytes(), middle.read_bytes(), ready.read_bytes()),
+                (b"first-shared", b"first-middle", b"first-ready"))
+
+    def test_partially_overlapping_publication_sets_serialize(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="s64p-partial-lock-") as temporary:
+            root = Path(temporary)
+            alias = root / "alias"
+            alias.mkdir()
+            shared = root / "00-shared.bin"
+            winner_only = root / "10-winner-only.bin"
+            winner_ready = root / "90-winner-ready.json"
+            loser_only = root / "20-loser-only.bin"
+            loser_ready = root / "80-loser-ready.json"
+            first = ((shared, b"winner-shared"),
+                     (winner_only, b"winner-only"),
+                     (winner_ready, b"winner-ready"))
+            second = ((alias / ".." / shared.name, b"loser-shared"),
+                      (loser_only, b"loser-only"),
+                      (loser_ready, b"loser-ready"))
+
+            self._assert_publication_sets_serialize(
+                first, second, shared_name=shared.name)
+            self.assertEqual(shared.read_bytes(), b"winner-shared")
+            self.assertEqual(winner_only.read_bytes(), b"winner-only")
+            self.assertEqual(winner_ready.read_bytes(), b"winner-ready")
+            self.assertFalse(loser_only.exists())
+            self.assertFalse(loser_ready.exists())
 
     def test_publication_rejects_output_symlink_when_supported(self) -> None:
         from compile_scene_package import publish_or_verify_set

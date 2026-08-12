@@ -835,3 +835,20 @@
   output hash+mtime 7/7, and compileall all pass. Evidence commit and
   same-reviewer final verdict remain open; Task 9/link/Ymir/release/manual stay
   closed.
+
+## Task 8 repair round 4/5 (2026-08-12)
+
+- Final rereview of `58165193..aa68afe5` passed production behavior but returned
+  Quality NEEDS FIXES C0/I1/M0 because the checked-in race did not establish a
+  blocked contender and did not use genuinely partially overlapping target
+  sets. Task 9 stayed closed.
+- RED: replacing `_target_lock` with `nullcontext` still let the original test
+  pass 1/1. GREEN: the repaired canonical/reordered race and a new shared-plus-
+  unique partial-overlap race both observe contender entry and require lock
+  acquisition to remain blocked until winner completion. Both pass normally;
+  both fail under the no-lock mutation. Full schema is 26/26 with one permitted
+  symlink-capability skip.
+- This round changes test/evidence only. Production/package/target bytes and
+  Saturn memory ownership are unchanged. Status remains
+  `source-complete-pending-rereview`; the next executable work after PASS is the
+  generic BOB live cutover, not another architecture or format task.

@@ -11,10 +11,13 @@ models, object-specific renderer branches, and whole-scene stalls are not.
 
 Task 7 residency is complete after repairs `4c4c24a9`, `c270f363`, and
 `d1408e00`; same-reviewer final rereview passed Spec/Quality C0/I0/M0. Task 8
-is source-complete-pending-rereview at repairs `dc81808b`, `3b81456b`,
-`b2f66f5a`, and `58165193` after
-initial C0/I3/M0 and round-1 C0/I1/M2 reviews. Command-bank restoration, exact
-dependency identity, and whole-generation atomic publication are now repaired.
+production behavior passed its latest review, but Quality remains pending on
+one test-only C0/I1/M0 repair: the old concurrency regression did not prove a
+contender blocked. The replacement now proves canonical/reordered and truly
+partially overlapping sets block on the shared physical lock, and both tests
+fail when locking is disabled. Full schema is 26/26 with one permitted
+symlink-capability skip; final rereview remains open. Command-bank restoration,
+exact dependency identity, and whole-generation atomic publication are now repaired.
 Generation 14 binds one relocation-neutral S64P to the exact
 160,928-byte S64F-v3 CART dependency; a model-agnostic bundle publication and
 two-lane resolver prepare real v2 draw output with no Cannon/model/behavior
@@ -24,12 +27,15 @@ source-init stack, and 92/88/112-byte scene begin/commit/load frames. The cold
 not added as persistent HWRAM. The repaired repository-wrapper-selected MSYS
 route is green with a verify-only second inventory and no loader error; direct
 manual invocations and the full link remain unclaimed.
-Task 9 remains closed pending the same-reviewer verdict, then becomes the immediate gate: broaden the
-20 currently unsupported drawable families through reviewed Saturn reductions,
-cut all 34 drawable BOB selections into the production generic job/emitter,
-link the target, and run the short identity-bound Ymir smoke. Exhaustive
-capacity, release reproduction/reseal, and final manual evidence follow live
-feedback.
+Task 9 remains closed pending that test-only verdict, then becomes the immediate
+live gate. Its first slice admits normally spawned Bob-omb through the common
+shadow-omission reduction, cuts the existing package into the production
+generic job/emitter, links, and runs the identity-bound Ymir smoke before the
+remaining actors are generalized. The remaining normal BOB actors then use the
+same path with a short smoke after each common reduction group. The existing
+scene-selected MC68000/SCSP audio implementation replaces `audio-stub-v1` on
+that same target before any new-demo claim. Exhaustive capacity, release
+reproduction/reseal, and final manual evidence follow live feedback.
 
 The persistent memory-debt rule is authoritative in project `AGENTS.md` and
 `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`.
