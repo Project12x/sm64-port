@@ -76,13 +76,13 @@ parallel infrastructure sprint.
 | Object | Region / maximum | Owner and lifetime | Transport / first consumer |
 | --- | --- | --- | --- |
 | S64P + S64F + embedded S64B | immutable 32-Mbit DRAM CART; current BOB S64F 160,928 B | Task 8 scene residency; load through commit/unload generation | CDFS/cart load; generic bundle resolver |
-| Actor cold upload stage | fixed 2,560 B HWRAM, 32-byte aligned; linked HWRAM margin pending first target | Task 8 scene-transition owner; reused serially, never worker-visible | CPU CART→HWRAM copy, checked SCU DMA HWRAM→VDP1 |
+| Actor cold upload stage | 2,560 B phase-borrowed from the idle VDP1 command bank during boot; zero persistent HWRAM | Task 8 source owner; serial reuse ends before the first frame exposes the command bank | CPU CART→borrowed HWRAM, checked SCU DMA HWRAM→VDP1, wait before reuse/return |
 | Actor VDP1 texture/CLUT bytes | current aggregate 16,640 B texture + 2,816 B CLUT in separate partition regions | master scene activation; publication generation commits last | Task 6 generic material binder / production emitter |
-| Actor texture publication | 2,064 B HWRAM scalar table, 128 mappings | scene residency reset/rollback/commit/unload | master lookup; no pointer enters worker records |
-| Actor pose/meshlet workspace | fixed 1,280 B LWRAM generated ceiling; current bundle uses 1,091 B, margin 189 B; two lanes | Task 8 bundle runtime; lane claim through terminal job publication | transient bank resolution on master/slave; outside the actor output arena |
+| Actor texture publication | 2,064 B inside the fixed 5,556 B Task 8 LWRAM source owner, 128 mappings | scene/source residency reset/rollback/commit/unload | master lookup; no pointer enters worker records |
+| Actor pose/meshlet workspace | fixed 1,280 B LWRAM generated ceiling; current bundle uses 1,091 B, margin 189 B; two lanes; overlaps boot-only 3,348 B root-validation view | Task 8 bundle runtime; lane claim through terminal job publication | transient bank resolution on master/slave; outside the actor output arena |
 | Actor queue/output arena | fixed 65,536 B LWRAM, 2,718 eight-byte records | Task 9 queue/handoff generation | master snapshot→dual-SH-2 jobs→master merge |
 | Frame command/Gouraud credits | 1,351 post-Mario commands, 892 post-Mario Gouraud; exact frame dry-sum | Task 9 master frame policy | generic actor set before optional terrain |
-| Scene validation call stack | current pre-live debt: `begin` 3,920 B and commit validation 3,420 B from package-view/identity locals; Task 8 ceiling ≤256 B per call by reusing state-owned staging view/slot | master scene transition only; no recursive/nested validator | S64P validation then generic bundle owner; exact GCC `-fstack-usage` gate before target wiring |
+| Scene validation call stack | exact SH-2 Task 8 result: begin 92 B, commit 88 B, section load 112 B, source init 220 B; all ≤256 B after reusing state-owned views/slots | master scene transition only; no recursive/nested validator | S64P validation then generic bundle owner; GCC 14.3 `-m2 -mb -fstack-usage` |
 
 Every changed bound must update this table before implementation. Task 10 must
 replace host/measured values with linked-ELF and live telemetry margins, but it
@@ -832,17 +832,19 @@ Commit `feat(saturn): publish actor texture residency generations`. Review DMA b
 
 **Files:**
 - Modify: `tools/saturn/compile_scene_package.py`
+- Modify: `tools/saturn/validate_scene_package.py`
+- Modify: `tools/saturn/emit_scene_package_header.py`
 - Modify: `tools/saturn/test_scene_package_schema.py`
 - Modify: `tools/saturn/test_scene_package_determinism.py`
 - Create: `src/port/saturn/gfx/saturn_actor_bundle_runtime.h/.c`
 - Create: `tools/saturn/actor_bundle_runtime_test.c`
 - Modify: `src/port/saturn/gfx/saturn_actor_meshlets.h/.c`
 - Modify: `tools/saturn/actor_meshlet_test.c`
-- Create: `src/port/saturn/runtime/saturn_scene_stream.h/.c`
-- Create: `tools/saturn/scene_stream_test.c`
+- Modify: `src/port/saturn/runtime/saturn_scene_residency.h/.c`
 - Create: `src/port/saturn/sourceboot/source_scene_bundle.h/.c`
 - Create: `tools/saturn/source_scene_bundle_test.c`
-- Modify: `src/port/saturn/sourceboot/source_cart.h/.c`
+- Modify: `src/port/saturn/sourceboot/main.c`
+- Modify: `src/port/saturn/gfx/saturn_actor_texture_residency.h/.c`
 - Modify: `Makefile.saturn.mk`, sourceboot Makefile, CHANGELOG/docs/ledgers
 
 **Interfaces:**
@@ -902,16 +904,17 @@ void sm64_saturn_source_scene_bundle_release(uint8_t lane,
                                              uint32_t generation);
 ```
 
-Task 8 owns one fixed, 32-byte-aligned actor upload stage sized from the
-generated maximum cold span (currently 2,560 bytes). It passes that stage and
-its capacity to Task 7 activation; the bundle remains in CART and the stage is
-reused only after each checked SCU-DMA wait retires.
+Task 8 owns the lifetime of one 32-byte-aligned 2,560-byte cold-upload span but
+does not add a persistent HWRAM array. During boot, before frame commands are
+visible, sourceboot borrows the first 2,560 bytes of the idle VDP1 command bank,
+passes that span to Task 7 activation, waits after every checked SCU-DMA, and
+returns the bank before gameplay. The bundle remains in CART.
 
-- [ ] **Step 1: Write RED package/runtime/stream fixtures**
+- [x] **Step 1: Write RED package/runtime/owner fixtures**
 
 Require a non-provisional S64P with exactly one actor dependency in CART,
-exact hash/generation, zero root scratch, bounded 16-sector reads while
-suspended, lease drain before reclaim, and direct-to-cart no-copy validation.
+exact hash/generation, zero root scratch, direct CART aliasing, generation-last
+publication, and lane drain before reuse.
 Capture the existing 3,920/3,420-byte scene-validation stack RED, then require
 both transition paths to use the already-owned staging view/identity slot with
 no scene-package-view or resident-identity local and at most 256 bytes per call.
@@ -920,14 +923,17 @@ the bundle-wide stride for raw workspace residues 0..3, exact alignment and
 nonoverlap, texture activation before descriptor publication, and
 generation-last failure behavior.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
-Run `verify-scene-package-schema verify-actor-bundle-runtime verify-scene-stream verify-source-scene-bundle`. Expected: missing strict dependency-manifest/runtime/stream/source owner interfaces.
+Run `verify-scene-package-schema verify-actor-bundle-runtime
+verify-source-scene-bundle`. Expected: missing strict payload-root,
+runtime-publication, and source-owner interfaces.
 
-- [ ] **Step 3: Implement fixed storage and lifecycle**
+- [x] **Step 3: Implement fixed storage and lifecycle**
 
-Retain validated aliases to S64P/S64F already loaded by `source_cart` into their
-final fixed CART addresses; do not add a second CD streamer or copy. Refactor
+Retain validated aliases to S64P/S64F linked into their final CART image; do not
+add a second CD streamer or copy. The root package owner emits the deterministic
+assembly input and sourceboot consumes/seals it. Refactor
 scene validation to reuse its state-owned staging view/slot instead of large
 target-stack locals, validate hashes, activate actor textures, bind the fixed
 1,280-byte two-lane LWRAM workspace, and publish actor descriptors only after
@@ -942,13 +948,52 @@ if (!sm64_saturn_actor_texture_residency_activate(
 owner->active_generation = next_generation;
 ```
 
-- [ ] **Step 4: Run GREEN and exact package binding**
+- [x] **Step 4: Run GREEN and exact package binding**
 
 Run package schema/runtime/determinism, scene residency/stream, bundle runtime, texture residency, source owner, actor meshlet/pose/queue/batch, and feature-off gates. Parse the real BOB S64P/S64F and confirm exact hashes/bytes/generation plus no linked duplicate bank.
 
 - [ ] **Step 5: Commit and independent review**
 
 Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, cart/VRAM/LWRAM ownership, leases, and no-copy aliases before Task 9.
+
+#### Task 8 source-complete transition (2026-08-12)
+
+- Status is `source-complete-pending-review` at behavior commit `b84103cd`.
+  Generation 14 emits one 740-byte
+  S64P root (`9b0a0a4a...d101`) and one 160,928-byte S64F-v3 dependency
+  (`3eee00fd...a523`) through deterministic relocation-neutral assembly
+  (`bde84bb...15fb`). The embedded package identity is
+  `d249a76c...042c`; no terrain/collision/sky payload is duplicated.
+- The real package contains 47 families, 14 S64B-v2 variants, 20 named
+  unsupported drawable selections, and two `MODEL_NONE` source objects. The
+  common runtime successfully resolves and prepares a real v2 bank with
+  nonzero bounded draw output. There is no Cannon/model/behavior-specific
+  production branch. Task 9 must still broaden the 20 drawable selections and
+  cut all 34 through production actor jobs/emission before the live BOB gate.
+- The fixed source owner is 5,556 bytes of LWRAM: a 2,208-byte owner plus one
+  3,348-byte union whose boot-only root view overlaps the 1,280-byte runtime
+  two-lane workspace. Scene residency adds 320 bytes of scalar dependency
+  metadata. Exact SH-2 stack is source init 220 B, scene begin 92 B, commit
+  88 B, and section load 112 B.
+- The prior planned persistent HWRAM upload buffer and second scene streamer
+  were rejected as duplicate ownership. The package already has a final CART
+  address; cold upload phase-borrows 2,560 bytes from the idle VDP1 command
+  bank, waits before reuse, and returns it before the first frame. Actor
+  texture/CLUT regions consume 16,640/2,816 bytes of Yaul remaining capacity,
+  leaving 33,216 bytes.
+- Host gates pass package schema 16/16, determinism 3/3, generic bundle/source
+  owner/texture/scene residency, S64B-v2 86 mutations, mixed S64F 54
+  mutations, pose, meshlets plus invalid-span mutation, instance queue,
+  batches/neutrality 2/2, and feature-off 6/6. Installed GCC 14.3 exact
+  `-m2 -mb -ffreestanding -Werror` object/stack gates pass for all five
+  amended/new modules, and the generated assembly produces a `0x277a4`-byte
+  `.rodata` object with exact root/bundle symbols.
+- Behavior commit `b84103cd` includes the required CHANGELOG entry. A full
+  hermetic sourceboot candidate link remains unchecked because this
+  development worktree's `build/us_pc` fixture resolves outside its root;
+  the identity-assets gate correctly rejects that pre-existing fixture. No
+  MSYS DLL loader failure occurred. Review, linked target, Task 9 production
+  cutover, Ymir, release, and manual gates remain open.
 
 ---
 
@@ -1280,8 +1325,10 @@ Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` res
 - Original C0/I4/M1 plus the publication-stack and cache-control-alias findings
   are closed. P0/P2 upload shapes alone are valid; hostile `0x460`, `0x660`,
   and `0xC60` shapes reject before copy/DMA. Task 7 Step 5 is complete.
-- Task 8 is now active only for the minimum canonical scene-bundle owner. It
-  must eliminate the measured 3,920/3,420-byte scene-validation frames to
-  <=256 bytes per call, alias the already-loaded CART package, own the fixed
-  2,560-byte HWRAM stage and 1,280-byte LWRAM workspace, and avoid a redundant
-  streamer. Runtime cutover, renderer, target link/run, and Ymir remain open.
+- Task 8 opened only for the minimum canonical scene-bundle owner. Its required
+  acceptance was to eliminate the measured 3,920/3,420-byte scene-validation
+  frames to <=256 bytes per call, alias the CART package, bind a 2,560-byte
+  cold-stage lifetime and 1,280-byte LWRAM workspace, and avoid a redundant
+  streamer. The source-complete transition above records the resulting
+  phase-borrowed command-bank stage. Runtime cutover, renderer, target link/run,
+  and Ymir remain open.

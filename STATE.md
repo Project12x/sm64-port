@@ -10,13 +10,20 @@ common telemetry-visible Saturn fidelity reductions are allowed, but injected
 models, object-specific renderer branches, and whole-scene stalls are not.
 
 Task 7 residency is complete after repairs `4c4c24a9`, `c270f363`, and
-`d1408e00`; same-reviewer final rereview passed Spec/Quality C0/I0/M0. Its clean-output gate now
-rebuilds and validates the real bundle, stages CART cold spans through bounded
-HWRAM before SCU DMA, validates publication state centrally, and uses explicit
-unsigned serial ordering. Task 8 is now active for
-canonical package/HWRAM ownership, Task 9 generic cutover plus minimum build
-wiring, then an immediate short identity-bound Ymir smoke. Exhaustive capacity,
-release reproduction/reseal, and final manual evidence follow live feedback.
+`d1408e00`; same-reviewer final rereview passed Spec/Quality C0/I0/M0. Task 8
+is now source-complete-pending-review at behavior `b84103cd` for canonical
+package and runtime ownership. Generation 14 binds one relocation-neutral S64P to the exact
+160,928-byte S64F-v3 CART dependency; a model-agnostic bundle publication and
+two-lane resolver prepare real v2 draw output with no Cannon/model/behavior
+branch. Exact SH-2 compilation proves a 5,556-byte LWRAM source owner, 220-byte
+source-init stack, and 92/88/112-byte scene begin/commit/load frames. The cold
+2,560-byte transfer stage is phase-borrowed from the idle VDP1 command bank,
+not added as persistent HWRAM. Task 9 remains the immediate gate: broaden the
+20 currently unsupported drawable families through reviewed Saturn reductions,
+cut all 34 drawable BOB selections into the production generic job/emitter,
+link the target, and run the short identity-bound Ymir smoke. Exhaustive
+capacity, release reproduction/reseal, and final manual evidence follow live
+feedback.
 
 The persistent memory-debt rule is authoritative in project `AGENTS.md` and
 `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`.

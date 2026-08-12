@@ -705,8 +705,63 @@
 - Actor activation measures 476 bytes of target stack and the scene texture-
   staging accessor 0 bytes. Same-generation publication still refuses
   overwrite. All Task 7 review findings are closed and Step 5 is complete.
-- Task 8 opens from `d1408e00` under the owner convergence rule. Its first RED
-  is the existing 3,920/3,420-byte scene-validation stack; acceptance is
-  <=256 bytes per call using state-owned slots/views. It reuses the package
-  already in CART, one fixed 2,560-byte HWRAM stage, and one fixed 1,280-byte
-  LWRAM workspace. Runtime cutover/renderer/Ymir remain open.
+- Task 8 opened from approved status `dfa8b286` under the owner convergence
+  rule. Its first RED was the existing 3,920/3,420-byte scene-validation stack;
+  acceptance was <=256 bytes per call using state-owned slots/views. It had to
+  reuse the package already in CART, bind the 2,560-byte cold-stage lifetime
+  and fixed 1,280-byte LWRAM workspace, and avoid a redundant streamer. The
+  source-complete record below replaces the provisional persistent-stage
+  assumption with the verified phase-borrowed command-bank owner.
+
+## Task 8 source-complete package/runtime owner (2026-08-12)
+
+- Status: `source-complete-pending-review` from approved Task 7 HEAD
+  `dfa8b286`; behavior commit `b84103cd`. Evidence/status commit and the
+  independent verdict remain open;
+  Task 9, target link, Ymir, release, and manual gates remain unchecked.
+- RED established the missing canonical payload-root contract, bundle runtime,
+  source owner, v1/v2 workspace resolution, and the existing exact SH-2 scene
+  validation stack debt of begin 3,920 B / commit 3,420 B.
+- GREEN generation 14 binds one 740-byte S64P
+  (`9b0a0a4a5ce1f059417175a7ad76e8ec6141a96c26af61065d48475f4a40d101`)
+  to one 160,928-byte S64F-v3
+  (`3eee00fd9a7440ba669c694d947696b8989192d54b0084decd832a95def6a523`).
+  The deterministic CART assembly is
+  `bde84bbbf71e201d3ff6a62f5f3ee1182b2583a75c84ece45285a72ef24f15fb`
+  and assembles to a `0x277a4`-byte `.rodata` section with exact root/bundle
+  symbols. The root duplicates no terrain, collision, or sky payload.
+- The package contains 47 families, 14 v2 variants, 20 named unsupported
+  drawable selections, and two `MODEL_NONE` objects. Common runtime lookup
+  resolves and prepares a real v2 bank with nonzero bounded draw output; new
+  production code contains no Cannon/model/behavior/family special case.
+  Cannon is only one test/result. Task 9 still owns the remaining 20 drawable
+  compiler states and the all-34 production generic job/emitter cutover.
+- The corrected memory owner is Saturn-shaped: the persistent LWRAM source
+  owner is 5,556 bytes (2,208-byte owner plus a 3,348-byte union). Boot root
+  validation and the fixed 1,280-byte/two-lane runtime workspace have disjoint
+  lifetimes and share that union. Scene residency adds 320 bytes of scalar
+  dependency metadata. Exact GCC 14.3 SH-2 stack is source init 220 B, source
+  resolve 44 B, scene begin 92 B, commit 88 B, and section load 112 B.
+- The original fixed-HWRAM-stage wording was corrected before completion.
+  Sourceboot phase-borrows 2,560 bytes from the idle VDP1 command bank during
+  boot, waits after every checked SCU DMA, and returns the bank before its first
+  frame use. This adds zero persistent HWRAM. Actor VDP1 texture/CLUT regions
+  remain 16,640/2,816 bytes and leave 33,216 bytes of Yaul remaining capacity.
+- Package tools now require one explicit payload root and reject absolute or
+  escaping manifest/payload paths before validation, hashing, or generated
+  header emission. Deterministic source uses only repository-relative
+  `.incbin` operands.
+- Final host GREEN: package schema 16/16 and determinism 3/3; actor texture
+  residency, bundle runtime, source owner, scene residency, S64B-v2 86
+  mutations, mixed S64F 54 mutations, pose, meshlets plus invalid-span,
+  instance queue, batches/neutrality 2/2, and feature-off 6/6. Python
+  compileall and scoped whitespace checks pass. Exact installed SH-2 GCC
+  `-m2 -mb -ffreestanding -Wall -Wextra -Werror` syntax/object/stack gates
+  pass for source owner, bundle runtime, meshlets, texture residency, and scene
+  residency.
+- The full hermetic sourceboot candidate is intentionally not claimed. The
+  development worktree's pre-existing `build/us_pc` fixture resolves outside
+  its root, and identity-assets correctly fails closed on that fixture before
+  link. The repository MSYS wrapper and GNU Make 4.4.1 run normally; no MSYS
+  DLL loader failure occurred. A proper clean candidate is required after
+  independent Task 8 review and Task 9 cutover.
