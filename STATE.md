@@ -61,11 +61,14 @@ boundary. Task 4's complete zero-edit replay is now
 (18 shadow, 14 textured rigid/material state, one scale, one ASM), two entries
 are exact `MODEL_NONE` sentinels, and zero bank is compiler-supported across
 the 47-family inventory. Canonical S64F-v3 requires at least one variant, so a
-truthful real BOB bundle cannot be packed. The recommended next decision is an
-additive, exactly specified texture/material-capable Saturn/SH-2 actor-bank
-format that preserves S64B-v1; an empty bundle would not unblock the full-port
-path. Completing and reviewing that revised prerequisite remains the gate
-before Task 16 Task 2 resumes.
+truthful real BOB bundle cannot be packed. The approved additive, exactly
+specified texture/material-capable Saturn/SH-2 actor-bank replacement is now
+executing. Its Task 1 is independently approved through `1e517bac`: one
+version-owned host parser preserves historical S64B-v1 bytes, validates the
+complete 104-byte v1 header, and reserves v2 interpretation for the next task.
+Task 2 is ready for canonical S64B-v2 packing RED. An empty bundle remains
+invalid; Tasks 2-13 and all target/demo/release/manual gates are open before
+Task 16 Task 2 can resume.
 The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that
 profile remains deliberately non-releasable until its complete content/system

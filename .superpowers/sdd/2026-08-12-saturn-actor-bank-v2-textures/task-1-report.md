@@ -169,3 +169,16 @@ payload size `596896`, and source SHA-256
 Both matched the pre-existing `task3-refactor` references exactly. The existing
 S64F-v3 deterministic fixture remains 1,688 bytes with SHA-256
 `4b3334a61f8ce7c8b2c4548a112b0c7354c444b42659ec7943941de5529e4dbc`.
+
+## Independent scoped rereview
+
+The same independent reviewer inspected `89fa92da..1e517bac` and reran the
+focused padding test plus all three affected suites (38 tests, all passing).
+The original Important finding is **ADDRESSED**: `_S64B_HEADER` is exactly 104
+bytes, the parser consumes the explicit final `H`, and either reserved-byte
+mutation rejects. No regression or out-of-scope issue was found; final counts
+are C0/I0/M0 and Task 1 is approved.
+
+Task 1 is complete at evidence head `1e517bac`. Tasks 2-13, target build,
+Ymir Cannon demo, release reproduction/reseal, smoke, visual, desktop, manual,
+retail, and total-game gates remain open.

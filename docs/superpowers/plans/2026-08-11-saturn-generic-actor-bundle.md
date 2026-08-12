@@ -49,9 +49,11 @@ full-game-complete. The written design passed scoped self-review and exact
 layout/reference checks, was committed as `62f16de8`, and received owner
 approval on 2026-08-12. Its dependency-ordered replacement plan is
 `docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`, committed
-as `3338de20`. Task 4 is ready for Task 1 RED under the owner-selected
-subagent-driven workflow; no production RED or code edit had begun at this
-status transition.
+as `3338de20`. Replacement-plan Task 1 is complete through `1e517bac`: the
+version-owned host parser preserves historical v1 bytes, explicitly validates
+all 104 v1 header bytes, and received independent C0/I0/M0 approval. Task 2 is
+ready for canonical S64B-v2 packing RED; this plan's Task 4 remains superseded
+and paused until replacement Tasks 1-5 complete.
 
 ## Global Constraints
 
@@ -690,7 +692,9 @@ BOB non-Mario actor through the production mixed v1/v2 path in Ymir. Written-
 spec owner approval was received 2026-08-12. The self-reviewed replacement
 implementation plan is
 `docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`; it was
-committed as `3338de20`. Task 4 is ready for Task 1 RED; all later tasks and
+committed as `3338de20`. Replacement Task 1 completed through evidence
+`1e517bac` with scoped independent approval C0/I0/M0 and exact historical-byte
+preservation. Replacement Task 2 is ready for RED; this Task 4 and all later
 target/release gates remain open. Design commit: `62f16de8`.
 
 **Files:**

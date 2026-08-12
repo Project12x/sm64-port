@@ -195,3 +195,16 @@ Task 4, Tasks 5–11, Task 16 Tasks 2–5, target/release/reseal, sourceboot
 selection, cart/LWRAM/HWRAM map/capacity, P2/Ymir, heterogeneous lanes,
 feature-off identity, transition, smoke, visual, desktop, owner-manual, and
 total-game gates all remain open and unchecked.
+
+## Replacement-plan Task 1 status — 2026-08-12
+
+The approved S64B-v2 replacement plan's Task 1 is complete through evidence
+`1e517bac`. Its version-owned host parser preserves historical Mario and
+S64F-v3 bytes, fails v2 at the exact named unimplemented boundary, and now
+explicitly owns all 104 bytes of the v1 header. Scoped independent rereview
+passed C0/I0/M0 with the padding finding addressed and no new issue.
+
+Replacement Task 2 is ready for canonical v2 packing/validation RED. This
+Task 4 remains superseded and paused until replacement Tasks 1-5 complete; no
+target, Ymir, release, smoke, visual, desktop, manual, or total-game claim is
+made by this transition.

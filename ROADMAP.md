@@ -34,11 +34,13 @@ source-complete with scoped rereview PASS C0/I0/M0; the real chain-part key adva
 to the preserved `GEO_SHADOW` unsupported boundary without fabricating
 model-less geometry. Task 4's completed zero-edit inventory is now blocked
 before RED: all 34 nonzero BOB drawable keys are named unsupported and the
-canonical v3 writer rejects the resulting zero-variant document. Revise the
-plan around an additive, exactly specified texture/material-capable Saturn/SH-2
-actor-bank format while preserving S64B-v1, then resume the real scene-local
-DRAM-cart bundle and fixed dual-SH-2 LWRAM workspace. Permitting an empty
-bundle is explicitly not a full-port path; stopping leaves Task 16 and Task 10
+canonical v3 writer rejects the resulting zero-variant document. The approved
+additive Saturn/SH-2 S64B-v2 replacement is now active. Task 1 completed
+through `1e517bac` with independent C0/I0/M0 approval, exact v1-byte
+preservation, and full 104-byte v1-header validation; Task 2 is ready for its
+canonical v2 packer/validator RED. The later tasks still own the real
+scene-local DRAM-cart bundle and fixed dual-SH-2 LWRAM workspace. Permitting an
+empty bundle is explicitly not a full-port path; Task 16 and Task 10 remain
 blocked. After eventual target-byte changes, rerun Task 9's
 build/repro/v4/staging chain before Task 10.
 

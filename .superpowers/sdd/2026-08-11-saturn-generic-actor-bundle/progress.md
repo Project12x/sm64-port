@@ -293,3 +293,14 @@
   `4b3334a61f8ce7c8b2c4548a112b0c7354c444b42659ec7943941de5529e4dbc`.
 - Status: `source-complete-review-repair-round-1; rereview pending`. Task 3,
   Task 16 production handoff, and all target/release/manual gates remain open.
+
+## S64B-v2 replacement Task 1 transition — 2026-08-12
+
+- Replacement plan Task 1 is complete at evidence head `1e517bac` after fix
+  behavior `9d5fc03c`. The version-owned host parser preserves v1 bytes and
+  owns/rejects mutations across the full 104-byte v1 header.
+- Independent scoped rereview: PASS, C0/I0/M0; original padding-ownership
+  finding addressed, no new regression. Replacement Task 2 is ready for RED.
+- This plan's Task 4 remains superseded/paused until replacement Tasks 1-5
+  finish. Task 16 production, target, release/reseal, smoke, visual, desktop,
+  manual, retail, and total-game gates remain open.
