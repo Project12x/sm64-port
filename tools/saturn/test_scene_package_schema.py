@@ -8,6 +8,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -631,6 +632,69 @@ class ScenePackageSchemaTest(unittest.TestCase):
                 publish_or_verify_set(files)
             self.assertFalse(any(path.exists() for path, _ in files[:-1]))
             self.assertEqual(files[-1][0].read_bytes(), files[-1][1])
+
+    def test_publication_alias_and_reordered_overlap_share_locks(self) -> None:
+        from compile_scene_package import publish_or_verify_set
+        import compile_scene_package
+
+        with tempfile.TemporaryDirectory(prefix="s64p-overlap-lock-") as temporary:
+            root = Path(temporary)
+            alias = root / "alias"
+            alias.mkdir()
+            prefix = root / "prefix.bin"
+            middle = root / "middle.bin"
+            ready = root / "ready.json"
+            first = ((prefix, b"first-prefix"),
+                     (middle, b"first-middle"),
+                     (ready, b"first-ready"))
+            second = ((alias / ".." / "ready.json", b"second-ready"),
+                      (alias / ".." / "middle.bin", b"second-middle"),
+                      (alias / ".." / "prefix.bin", b"second-prefix"))
+            real_link = compile_scene_package.os.link
+            first_linked = threading.Event()
+            release_first = threading.Event()
+
+            def delayed_link(source, target):
+                result = real_link(source, target)
+                if Path(target).name == "prefix.bin" and not first_linked.is_set():
+                    first_linked.set()
+                    self.assertTrue(release_first.wait(timeout=10))
+                return result
+
+            errors = []
+            with mock.patch.object(
+                    compile_scene_package.os, "link", side_effect=delayed_link):
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    first_future = pool.submit(publish_or_verify_set, first)
+                    self.assertTrue(first_linked.wait(timeout=10))
+                    second_future = pool.submit(publish_or_verify_set, second)
+                    release_first.set()
+                    for future in (first_future, second_future):
+                        try:
+                            future.result(timeout=10)
+                        except ValueError as exc:
+                            errors.append(str(exc))
+            self.assertEqual(
+                (prefix.read_bytes(), middle.read_bytes(), ready.read_bytes()),
+                (b"first-prefix", b"first-middle", b"first-ready"))
+            self.assertEqual(len(errors), 1)
+            self.assertIn("publication target exists", errors[0])
+
+    def test_publication_rejects_output_symlink_when_supported(self) -> None:
+        from compile_scene_package import publish_or_verify_set
+
+        with tempfile.TemporaryDirectory(prefix="s64p-output-symlink-") as temporary:
+            root = Path(temporary)
+            foreign = root / "foreign.bin"
+            output = root / "output.bin"
+            foreign.write_bytes(b"foreign")
+            try:
+                output.symlink_to(foreign)
+            except OSError:
+                self.skipTest("output symlink creation is unavailable")
+            with self.assertRaisesRegex(ValueError, "target is a symlink"):
+                publish_or_verify_set(((output, b"expected"),))
+            self.assertEqual(foreign.read_bytes(), b"foreign")
 
     def test_validator_and_header_reports_never_clobber_drift(self) -> None:
         package = compile_package(9, 1, [], [])

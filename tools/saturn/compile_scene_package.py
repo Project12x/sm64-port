@@ -356,11 +356,18 @@ def _published_bytes_match(path: Path, raw: bytes) -> bool:
             path.is_file() and path.read_bytes() == raw)
 
 
+def _canonical_publication_target(path: Path) -> Path:
+    path = Path(path).absolute()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if os.path.lexists(path) and path.is_symlink():
+        raise ValueError(f"publication target is a symlink: {path}")
+    return path.parent.resolve(strict=True) / path.name
+
+
 @contextlib.contextmanager
-def _publication_lock(paths: Sequence[Path]):
-    key = hashlib.sha256(b"\0".join(
-        os.path.normcase(str(path)).encode("utf-8")
-        for path in paths)).hexdigest()[:24]
+def _target_lock(path: Path):
+    key = hashlib.sha256(
+        os.path.normcase(str(path)).encode("utf-8")).hexdigest()[:24]
     lock_path = Path(tempfile.gettempdir()) / f"sm64-saturn-s64p-{key}.lock"
     with lock_path.open("a+b") as stream:
         stream.seek(0, os.SEEK_END)
@@ -395,12 +402,17 @@ def publish_or_verify_set(
     A late conflict rolls back only links whose file identity still matches
     this transaction; identical concurrent winners are accepted.
     """
-    normalized = tuple((Path(path).absolute(), bytes(raw))
+    normalized = tuple((_canonical_publication_target(path), bytes(raw))
                        for path, raw in files)
     keys = tuple(os.path.normcase(str(path)) for path, _ in normalized)
     if len(keys) != len(set(keys)):
         raise ValueError("duplicate publication target")
-    with _publication_lock(tuple(path for path, _ in normalized)):
+    ordered_targets = tuple(sorted(
+        (path for path, _ in normalized),
+        key=lambda path: os.path.normcase(str(path))))
+    with contextlib.ExitStack() as locks:
+        for path in ordered_targets:
+            locks.enter_context(_target_lock(path))
         _publish_or_verify_set_locked(normalized)
 
 

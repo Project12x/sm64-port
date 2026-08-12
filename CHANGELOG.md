@@ -8,8 +8,11 @@
   transaction after rereview showed that per-file no-clobber could still leave
   a partial generation when a later sidecar conflicted. The compiler now
   computes root, payload manifest, assembly, validation, generated header, ABI,
-  and report bytes before the first link; acquires one OS-held generation lock
-  in the host temp namespace; preflights every target; stages every byte
+  and report bytes before the first link; canonicalizes each target through its
+  physical parent, rejects output symlinks and canonical duplicates, and
+  acquires OS-held per-target locks in stable sorted order from the host temp
+  namespace. Reordered or partially overlapping output sets therefore share
+  locks instead of racing under different textual aliases. It preflights every target; stages every byte
   privately; and rolls back only links whose filesystem identity still belongs
   to the failing transaction. The metadata report is linked last as the
   consumer-ready marker, and an existing marker with missing siblings is

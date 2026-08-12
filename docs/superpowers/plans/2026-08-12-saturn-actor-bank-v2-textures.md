@@ -1041,13 +1041,17 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   last, and rolls back only links whose exact file identity still belongs to
   the failed transaction. Identical concurrent producers converge; divergent
   contenders cannot leave a mixed generation.
-- Package schema is 23/23; determinism remains 3/3. The full focused
+- Package schema is 25/25 with one Windows symlink-capability skip;
+  determinism remains 3/3. The full focused
   actor/package/scene Make wave passes through the exact repository MSYS
   wrapper, and its generation-set inventory remains hash-and-mtime identical
   7/7. Exact GCC 14.3 evidence is init 220 B, init-from 96 B, resolve 44 B and
   an ELF32 big-endian SuperH object. Repair commit `3b81456b` owns the set
   transaction; self-review follow-up `b2f66f5a` adds the OS-held lock and
-  incomplete ready-set rejection. Evidence status and rereview remain open;
+  incomplete ready-set rejection. Rereview then found textual alias and
+  overlapping-set lock keys; the current uncommitted follow-up canonicalizes
+  physical targets and acquires stable per-target locks. Its commit, evidence
+  status, and rereview remain open;
   Step 5 and Task 9 stay unchecked.
 
 ---
