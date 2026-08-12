@@ -36,7 +36,10 @@ from actor_variant_bank import (
     compile_actor_variant,
 )
 from gen_actor_identity_registry import closure_family_key, parse_model_ids
+from hermetic_manifest import normalize_repo_path
 from inventory_actor_family_bundles import AUTHORITATIVE_LIMITS, prove_resource_inventory
+from compile_actor_bank import compile_actor_family_banks
+from target_profile import PACKAGE_CLASSES, resolve_target_profile
 
 
 PROFILE = "tools/saturn/profiles/sourceboot-bob-demo-v1.json"
@@ -74,28 +77,56 @@ def _family_records(closure: Mapping[str, object]) -> dict[str, list[dict[str, o
 
 def _package_class_bytes(root: Path) -> tuple[tuple[str, ...], dict[str, int]]:
     profile = _load_object(root / PROFILE, "target profile")
-    classes = tuple(profile.get("package_classes", ()))
-    if classes != AUTHORITATIVE_LIMITS.package_classes:
-        raise ValueError("target profile package classes differ from canonical ten")
-    result = {kind: 0 for kind in classes}
-    descriptors = profile.get("package_descriptors")
-    if not isinstance(descriptors, list):
-        raise ValueError("target profile descriptors are invalid")
-    for relative in descriptors:
-        if not isinstance(relative, str):
-            raise ValueError("target profile descriptor path is invalid")
-        descriptor = _load_object(root / relative, "package descriptor")
-        kind, inputs = descriptor.get("package_class"), descriptor.get("inputs")
-        if kind not in result or not isinstance(inputs, list):
-            raise ValueError("package descriptor class/inputs are invalid")
-        for item in inputs:
-            if not isinstance(item, dict) or set(item) != {"path"}:
-                raise ValueError("package descriptor input is invalid")
-            payload = root / str(item["path"])
-            if not payload.is_file():
-                raise ValueError(f"package payload is missing: {item['path']}")
-            result[str(kind)] += payload.stat().st_size
-    return classes, result
+    configuration = profile.get("release_config")
+    if not isinstance(configuration, dict):
+        raise ValueError("target profile release_config is invalid")
+    with tempfile.TemporaryDirectory(prefix="actor-bundle-profile-") as temporary:
+        resolved = resolve_target_profile(
+            root, root / PROFILE, configuration, Path(temporary), mode="development")
+        package_rows = resolved.package_set_document.get("packages")
+        if not isinstance(package_rows, list):
+            raise ValueError("target profile package set is invalid")
+        ownership = [str(row.get("package_class")) for row in package_rows
+                     if isinstance(row, dict)]
+        if tuple(sorted(ownership, key=PACKAGE_CLASSES.index)) != PACKAGE_CLASSES or \
+                len(ownership) != len(PACKAGE_CLASSES):
+            raise ValueError("target profile must own exactly one package per package class")
+        result: dict[str, int] = {}
+        for kind in PACKAGE_CLASSES:
+            aggregate = _load_object(resolved.package_class_manifests[kind],
+                                     f"{kind} package-class manifest")
+            packages = aggregate.get("packages")
+            if not isinstance(packages, list) or len(packages) != 1:
+                raise ValueError("target profile must own exactly one package per package class")
+            inputs = packages[0].get("inputs") if isinstance(packages[0], dict) else None
+            if not isinstance(inputs, list) or not inputs:
+                raise ValueError("target profile package inputs are invalid")
+            result[kind] = sum((root / str(item["path"])).stat().st_size
+                               for item in inputs if isinstance(item, dict))
+        return PACKAGE_CLASSES, result
+
+
+def _repo_input(root: Path, path: Path, label: str) -> Path:
+    try:
+        return root / normalize_repo_path(root, path)
+    except ValueError as error:
+        raise ValueError(f"{label} must be a repository path") from error
+
+
+def _reconcile_family_report(
+    root: Path, closure_path: Path, supplied_path: Path, package_generation: int,
+) -> dict[str, object]:
+    supplied = _load_object(supplied_path, "family report")
+    with tempfile.TemporaryDirectory(prefix="actor-family-reconcile-") as temporary:
+        authoritative = compile_actor_family_banks(
+            root, closure_path, Path(temporary), package_generation)
+    supplied_semantics = dict(supplied)
+    authoritative_semantics = dict(authoritative)
+    supplied_semantics.pop("payload", None)
+    authoritative_semantics.pop("payload", None)
+    if supplied_semantics != authoritative_semantics:
+        raise ValueError("family report does not match closure-derived semantics")
+    return authoritative_semantics
 
 
 def _scene_package_bytes(root: Path) -> int:
@@ -160,6 +191,96 @@ def _require_fresh_publication(output_dir: Path) -> None:
         raise ValueError("publication target exists")
 
 
+def validate_publication(
+    output_dir: Path, *, root: Path | None = None, closure_path: Path | None = None,
+    family_report_path: Path | None = None, model_ids_path: Path | None = None,
+    package_generation: int | None = None,
+) -> dict[str, object]:
+    """Validate all four published sidecars and current resource semantics."""
+    output_dir = Path(output_dir)
+    expected_order = (BUNDLE_NAME, DEPENDENCY_NAME, HEADER_NAME, REPORT_NAME)
+    paths = {name: output_dir / name for name in expected_order}
+    if any(not path.is_file() for path in paths.values()):
+        raise ValueError("actor family bundle publication is incomplete")
+    report_bytes = paths[REPORT_NAME].read_bytes()
+    report = _load_object(paths[REPORT_NAME], "actor family bundle report")
+    if report_bytes != _json_bytes(report) or \
+            tuple(report.get("publication_order", ())) != expected_order or \
+            report.get("outputs") != {
+                "bundle": BUNDLE_NAME, "dependency": DEPENDENCY_NAME,
+                "header": HEADER_NAME, "report": REPORT_NAME,
+            }:
+        raise ValueError("actor family bundle report is noncanonical")
+    payload = paths[BUNDLE_NAME].read_bytes()
+    bundle = validate_bundle(payload)
+    dependency = _load_object(paths[DEPENDENCY_NAME], "actor dependency")
+    if paths[DEPENDENCY_NAME].read_bytes() != _json_bytes(dependency) or \
+            dependency != report.get("actor_dependency") or \
+            dependency.get("byte_count") != len(payload) or \
+            dependency.get("sha256") != hashlib.sha256(payload).hexdigest() or \
+            dependency.get("generation") != bundle.package_generation:
+        raise ValueError("actor dependency sidecar mismatch")
+    if paths[HEADER_NAME].read_bytes() != _capacity_header(report):
+        raise ValueError("actor capacity header sidecar mismatch")
+    rows = report.get("banks")
+    totals = report.get("bundle_totals")
+    inventory = report.get("resource_inventory")
+    if not isinstance(rows, list) or not isinstance(totals, dict) or \
+            not isinstance(inventory, dict):
+        raise ValueError("actor family bundle report inventory is invalid")
+    bank_payloads = embedded_bank_payloads(bundle)
+    bank_views = tuple(validate_actor_bank(raw) for raw in bank_payloads)
+    measured_totals = {
+        "payload_bytes": len(payload),
+        "embedded_s64b_bytes": sum(len(raw) for raw in bank_payloads),
+        "texture_bytes": sum(view.texture_payload_size for view in bank_views),
+        "clut_bytes": sum(view.clut_payload_size for view in bank_views),
+        "workspace_lane_stride": bundle.workspace_lane_stride,
+        "workspace_bytes": bundle.maximum_scratch,
+    }
+    if report.get("family_count") != bundle.family_count or \
+            report.get("supported_variant_count") != bundle.variant_count or \
+            totals != measured_totals:
+        raise ValueError("actor family bundle report totals mismatch")
+    costs = tuple((int(row["family_ordinal"]), int(row["model_id"]),
+                   int(row["maximum_live_instances"]),
+                   int(row["draw_records_per_instance"]),
+                   int(row["texture_commands_per_instance"]),
+                   int(row["gouraud_tables_per_instance"])) for row in rows)
+    package_bytes = inventory.get("package_class_source_bytes")
+    cart = inventory.get("cart")
+    if not isinstance(package_bytes, dict) or not isinstance(cart, dict):
+        raise ValueError("actor family bundle package inventory is invalid")
+    if set(package_bytes) != set(AUTHORITATIVE_LIMITS.package_classes):
+        raise ValueError("actor family bundle package inventory classes mismatch")
+    ordered_package_bytes = {
+        kind: int(package_bytes[kind]) for kind in AUTHORITATIVE_LIMITS.package_classes}
+    recomputed = prove_resource_inventory(
+        costs, texture_bytes=int(totals["texture_bytes"]),
+        clut_bytes=int(totals["clut_bytes"]), bundle_bytes=len(payload),
+        workspace_bytes=int(totals["workspace_bytes"]),
+        package_class_bytes=ordered_package_bytes,
+        scene_package_bytes=int(cart["scene_package_bytes"]),
+    )
+    if recomputed != inventory:
+        raise ValueError("actor family bundle report resource inventory is stale")
+    current_inputs = (root, closure_path, family_report_path, model_ids_path,
+                      package_generation)
+    if any(item is not None for item in current_inputs):
+        if any(item is None for item in current_inputs):
+            raise ValueError("current publication validation inputs are incomplete")
+        with tempfile.TemporaryDirectory(prefix="actor-bundle-current-") as temporary:
+            current = Path(temporary) / "publication"
+            compile_scene_bundle(
+                Path(root), Path(closure_path), Path(family_report_path),
+                Path(model_ids_path), int(package_generation), current)
+            for name in expected_order:
+                if paths[name].read_bytes() != (current / name).read_bytes():
+                    raise ValueError(
+                        "actor family bundle publication is stale for current inputs")
+    return report
+
+
 def compile_scene_bundle(
     root: Path, closure_path: Path, family_report_path: Path,
     model_ids_path: Path, package_generation: int, output_dir: Path,
@@ -169,8 +290,12 @@ def compile_scene_bundle(
     _require_fresh_publication(Path(output_dir))
     if type(package_generation) is not int or not 0 < package_generation <= 0xFFFFFFFF:
         raise ValueError("package generation must be a nonzero uint32")
-    closure = _load_object(Path(closure_path), "scene closure")
-    family_report = _load_object(Path(family_report_path), "family report")
+    closure_path = _repo_input(root, Path(closure_path), "scene closure")
+    family_report_path = _repo_input(root, Path(family_report_path), "family report")
+    model_ids_path = _repo_input(root, Path(model_ids_path), "model IDs")
+    closure = _load_object(closure_path, "scene closure")
+    family_report = _reconcile_family_report(
+        root, closure_path, family_report_path, package_generation)
     if closure.get("schema") != "sm64-saturn-scene-closure-v1" or \
             family_report.get("schema") != "sm64-saturn-actor-family-bank-v2":
         raise ValueError("closure/family report schema mismatch")
@@ -178,7 +303,7 @@ def compile_scene_bundle(
     if not isinstance(families, list) or len(families) != 47:
         raise ValueError("real BOB family report must contain exactly 47 families")
     grouped = _family_records(closure)
-    model_ids = parse_model_ids(Path(model_ids_path).read_text(encoding="utf-8"))
+    model_ids = parse_model_ids(model_ids_path.read_text(encoding="utf-8"))
     supported = set(BOB_DIRECT_TEXTURED_KEYS)
     banks: dict[VariantKey, bytes] = {}
     bank_rows: list[dict[str, object]] = []
@@ -350,7 +475,14 @@ def main() -> int:
     parser.add_argument("--model-ids", required=True, type=Path)
     parser.add_argument("--package-generation", required=True, type=int)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--verify-publication", action="store_true")
     args = parser.parse_args()
+    if args.verify_publication:
+        validate_publication(
+            args.output_dir, root=args.root, closure_path=args.closure,
+            family_report_path=args.family_report, model_ids_path=args.model_ids,
+            package_generation=args.package_generation)
+        return 0
     compile_scene_bundle(args.root, args.closure, args.family_report,
                          args.model_ids, args.package_generation, args.output_dir)
     return 0

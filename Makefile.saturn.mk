@@ -46,6 +46,31 @@ SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
 HOST_CC_ENV ?= env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS
 HOST_EXEEXT :=
 endif
+ACTOR_FAMILY_BUNDLE_TOOL_INPUTS := \
+	$(SATURN_REPO_ROOT)/tools/saturn/compile_actor_family_bundle.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/compile_actor_bank.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/collect_scene_closure.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/scene_package_schema.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/inventory_actor_family_bundles.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/actor_family_bundle.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/actor_variant_bank.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/actor_bank_format.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/actor_material_v2.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/gen_actor_identity_registry.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/target_profile.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/hermetic_manifest.py
+ACTOR_FAMILY_BUNDLE_PROFILE_INPUTS := $(shell cd "$(SATURN_REPO_ROOT)" && \
+	"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; import sys; sys.path.insert(0, 'tools/saturn'); from target_profile import target_profile_source_paths; root=Path('.').resolve(); print(' '.join((root / item).as_posix() for item in target_profile_source_paths(root, Path('tools/saturn/profiles/sourceboot-bob-demo-v1.json'))))")
+ACTOR_FAMILY_BUNDLE_CLOSURE_INPUTS = $(shell cd "$(SATURN_REPO_ROOT)" && \
+	"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; import json; root=Path('.').resolve(); closure=Path('build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)/closure.json'); print(' '.join((root / item).as_posix() for item in sorted(json.loads(closure.read_text(encoding='utf-8'))['source_hashes'])) if closure.is_file() else '')")
+ACTOR_FAMILY_BUNDLE_INPUTS = \
+	$(SCENE_CLOSURE_OUTPUT) \
+	$(ACTOR_FAMILY_BANK_REPORT) \
+	$(SCENE_PACKAGE_PROVISIONAL_REPORT) \
+	$(SATURN_REPO_ROOT)/include/model_ids.h \
+	$(ACTOR_FAMILY_BUNDLE_TOOL_INPUTS) \
+	$(ACTOR_FAMILY_BUNDLE_PROFILE_INPUTS) \
+	$(ACTOR_FAMILY_BUNDLE_CLOSURE_INPUTS)
 # ymir-headless is built out-of-tree in the sibling ymir-agent checkout (two
 # directories above this worktree, alongside work/yaul-install -- see
 # docs/saturn/HWTEST.md). The BIOS/IPL image lives under the shared
@@ -1057,7 +1082,7 @@ verify-actor-family-bundle: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; from tools.saturn.test_actor_family_bundle import write_c_fixture; from tools.saturn.test_actor_bank_v2 import write_target_fixtures; root=Path('build/saturn/host-tests'); write_c_fixture(root/'actor-family-bundle-v3.bin'); write_target_fixtures(root)"
 	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/actor-family-bundle-test$(HOST_EXEEXT)" "build/saturn/host-tests/actor-family-bundle-v3.bin" "build/saturn/host-tests/actor-family-bundle-mixed-v3.bin"
 
-$(ACTOR_FAMILY_BUNDLE_REPORT): | compile-actor-banks compile-provisional-scene-package check-host-tools
+$(ACTOR_FAMILY_BUNDLE_REPORT): $(ACTOR_FAMILY_BUNDLE_INPUTS) | check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_actor_family_bundle.py" \
 	  --root "$(SATURN_REPO_ROOT)" --closure "$(SCENE_CLOSURE_OUTPUT)" \
 	  --family-report "$(ACTOR_FAMILY_BANK_REPORT)" \
@@ -1066,6 +1091,12 @@ $(ACTOR_FAMILY_BUNDLE_REPORT): | compile-actor-banks compile-provisional-scene-p
 	  --output-dir "$(ACTOR_FAMILY_BUNDLE_DIR)"
 
 compile-actor-family-bundle: $(ACTOR_FAMILY_BUNDLE_REPORT)
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_actor_family_bundle.py" \
+	  --root "$(SATURN_REPO_ROOT)" --closure "$(SCENE_CLOSURE_OUTPUT)" \
+	  --family-report "$(ACTOR_FAMILY_BANK_REPORT)" \
+	  --model-ids "$(SATURN_REPO_ROOT)/include/model_ids.h" \
+	  --package-generation "$(SCENE_PACKAGE_GENERATION)" \
+	  --output-dir "$(ACTOR_FAMILY_BUNDLE_DIR)" --verify-publication
 
 inventory-actor-family-bundles: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/inventory_actor_family_bundles.py" \

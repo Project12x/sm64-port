@@ -20,7 +20,7 @@ from hermetic_manifest import (  # noqa: E402
     normalize_repo_path,
     reject_case_collisions,
 )
-from target_profile import resolve_target_profile  # noqa: E402
+from target_profile import resolve_target_profile, target_profile_source_paths  # noqa: E402
 
 
 CLASSES = (
@@ -282,6 +282,22 @@ class TargetProfileTests(unittest.TestCase):
                 resolve_target_profile(self.root, profile, self.config, self.output,
                                        mode="development")
         self.assertFalse(self.output.exists())
+
+    def test_source_paths_are_canonical_complete_and_read_only(self) -> None:
+        profile = ROOT / "tools/saturn/profiles/sourceboot-bob-demo-v1.json"
+        paths = target_profile_source_paths(ROOT, profile)
+        document = json.loads(profile.read_text(encoding="utf-8"))
+        descriptors = tuple(document["package_descriptors"])
+        payloads = tuple(sorted(
+            item["path"]
+            for descriptor in descriptors
+            for item in json.loads((ROOT / descriptor).read_text(
+                encoding="utf-8"))["inputs"]))
+        self.assertEqual(paths, (
+            "tools/saturn/profiles/sourceboot-bob-demo-v1.json",
+            *descriptors, *payloads))
+        self.assertTrue(all((ROOT / relative).is_file() for relative in paths))
+        self.assertFalse((ROOT / "route-packages.json").exists())
 
     def test_incomplete_full_game_profile_cannot_release(self) -> None:
         with self.assertRaisesRegex(ValueError, "sm64-saturn-full.*release-enabled"):

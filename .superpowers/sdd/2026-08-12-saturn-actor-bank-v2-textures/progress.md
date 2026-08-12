@@ -302,7 +302,8 @@
 
 ## Task 5 source-complete implementation evidence (2026-08-12)
 
-- Status: source-complete pending independent review and behavior commit. The
+- Status: source-complete at behavior commit `65a3fdb9`, pending independent
+  review. The
   prescribed RED failed only on the two missing compiler/inventory modules;
   the focused GREEN is 8/8 including real-artifact C Make wiring, relocation
   neutrality, no-clobber,
@@ -350,3 +351,37 @@
   1,280-byte-capacity header SHA is `c0faab4a...`. Independent review remains
   open. All target residency, runtime admission, renderer, Ymir, manual,
   release, and whole-game gates remain unchecked.
+
+## Task 5 review and fix round 1/5 (2026-08-12)
+
+- Independent review of `d2a14c63..65a3fdb9`: Spec FAIL / Quality Needs
+  fixes, C0/I3/M0. Verified findings were unauthenticated family-report input,
+  a stale-generation Make graph, and manual target-profile/package ownership
+  parsing. Task 6 remained closed.
+- Fix-round RED proved that altered Cannon ceiling, package generation,
+  capabilities, source hash/count, and absolute/escaping/case-colliding source
+  paths were accepted; that changed inputs silently reused generation-1
+  outputs; and that absolute/outside/incomplete package descriptors bypassed
+  the intended profile boundary.
+- The compiler now regenerates family semantics through the owning
+  `compile_actor_family_banks` implementation and exact-compares every field
+  except its generated payload pathname, then consumes only regenerated
+  values. Package inventory now uses `resolve_target_profile`; the shared
+  read-only dependency API returns the fully validated canonical profile,
+  descriptor, and payload input set for Make.
+- The bundle report has real source/tool/profile/descriptor/payload
+  prerequisites. An unchanged generation is verify-only; a changed input for
+  an existing generation invokes publication and fails at the no-clobber
+  boundary. Verification requires all four sidecars, checks their mutual
+  semantics, and byte-compares them with a private deterministic rebuild from
+  current closure/family/profile/model/generation inputs.
+- Focused GREEN is 11/11 plus the direct target-profile API test. The final fresh
+  generation-9 combined closure/provisional/family/bundle build passed, an
+  unchanged repeat invoked only verification, and the prior generation-1
+  stale-input probe failed closed with `publication target exists`. Missing or
+  corrupt mutation of each sidecar is rejected. The complete Make wave passed:
+  54 mixed-S64F mutations, real 47-family/14-bank S64F, 86 S64B-v2 mutations,
+  and both capability gates. Broader historical/parser/closure/profile coverage
+  passed 112/112; compileall, scoped diff, and four-sidecar hash checks pass.
+  Task 5 remains source-complete-pending-rereview and all
+  Task 6+/runtime/residency/renderer/Ymir gates remain open.

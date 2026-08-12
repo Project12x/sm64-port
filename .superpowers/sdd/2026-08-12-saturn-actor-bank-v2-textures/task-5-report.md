@@ -1,6 +1,7 @@
 # Task 5 evidence report: bounded textured BOB actor bundle
 
-**Status (2026-08-12):** source-complete pending independent review. This is
+**Status (2026-08-12):** source-complete after fix round 1/5, pending scoped
+independent rereview. The initial `65a3fdb9` review found C0/I3/M0. This is
 host-only evidence. Target residency, renderer cutover, Ymir, manual visual,
 release, and whole-game gates remain open.
 
@@ -72,6 +73,20 @@ margin is 1,692,940 bytes.
   texture, CLUT, cart, workspace, output, command, and Gouraud capacity.
 - Package ownership is exactly the ten canonical classes: route, input,
   camera, cart, level, shared-data, actor, animation, audio, and texture.
+- Family input is not trusted: the owning family compiler deterministically
+  recomputes the closure-derived report, exact-compares every semantic field
+  except the generated payload pathname, and downstream compilation consumes
+  only the recomputed values. Mutated ceiling, generation, capability, source
+  hash/count, and absolute/escaping/case-colliding source paths all reject.
+- Package bytes are derived through canonical `target_profile` containment,
+  collision, descriptor, payload, and exact one-per-class ownership machinery.
+  Make's read-only dependency discovery uses the same validator.
+- Make tracks closure, family report, provisional S64P report, model IDs,
+  owning host tools, profile, all descriptors, and all descriptor payloads as
+  real prerequisites. Repeating unchanged generation 6 is verify-only; a
+  changed input for an already-published generation invokes the publisher and
+  fails closed at no-clobber. The always-run verifier requires all four
+  sidecars and compares them to a private current-input rebuild.
 
 ## Provenance
 
@@ -108,4 +123,12 @@ mode are serialized in the build report.
   `d83789cbf6c33dc287d6c8326b220a6a6e482744e6ca2bb99063921a557b3012`
   (generation is serialized), and its capacity header SHA is
   `c0faab4ae9b0d0141474ac4ce716cd830ab703d5df6178cd4ca9878550459b94`.
-  Independent review is still required before Task 5 is complete.
+  Independent review found C0/I3/M0; fix round 1 is source-complete and scoped
+  rereview is still required before Task 5 is complete. Generation-9 build,
+  unchanged-repeat verification, each-sidecar missing/corrupt mutations, and
+  11 focused tests plus the direct target-profile dependency API test pass.
+  The complete C/Make wave passes (54 mixed-S64F mutations, real 47/14 S64F,
+  86 S64B-v2 mutations, both capability gates); broader historical/parser/
+  closure/profile coverage is 112/112. Generation-9 S64F SHA-256 is
+  `ee786f5c907ac7f88dbec007170fe1bd6db778f39df81e7d71e8813f9b602b56`;
+  compileall, scoped diff, and sidecar hash checks pass.

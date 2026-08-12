@@ -22,7 +22,15 @@
   maximum, reserving 1,280 bytes with 189 bytes of static margin. The host
   capability fixture's generated-family trust anchor is also resealed to the
   twice-reproduced PNG-attested closure digest; this is expected-output
-  maintenance only and does not change target validation semantics.
+  maintenance only and does not change target validation semantics. The build
+  now recomputes and exactly reconciles closure-derived family semantics before
+  consuming them, routes the ten package classes through the canonical target-
+  profile containment/collision/ownership validator, and tracks real source,
+  descriptor, payload, and host-tool prerequisites. Unchanged generations are
+  verify-only no-ops; a changed input for an already-published generation
+  invokes no-clobber publication and fails closed instead of silently reusing
+  stale bytes. Every verification pass checks all four sidecars and compares
+  them byte-for-byte with a private deterministic rebuild from current inputs.
 
 - Added host-only, closure-attested Fast3D material capture and S64B-v2
   lowering for the exact 14 measured direct-textured BOB keys. The existing

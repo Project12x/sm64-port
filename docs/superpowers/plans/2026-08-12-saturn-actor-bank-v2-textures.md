@@ -25,8 +25,8 @@ opaque mixed-S64F delegation; 86 direct S64B mutations, 54 S64F mutations, 63
 broader Python tests, the historical actor gates, and the freestanding SH-2
 syntax check pass. Task 4 behavior `52c9c1af` plus repair `86de51cc` compiles
 the exact 14 measured direct-textured BOB keys, including Cannon, and its scoped
-rereview passed C0/I0/M0 through `f5a03808`. Task 5 is source-complete pending
-independent review after its initial zero-edit preflight exposed and corrected
+rereview passed C0/I0/M0 through `f5a03808`. Task 5 fix round 1/5 is
+source-complete pending scoped rereview after its initial zero-edit preflight exposed and corrected
 a design error: source-pool family ceilings are not simultaneous resource
 allocations. Task 5 review, Tasks 6-13, and every target-material, runtime,
 demo, release, reseal, smoke, visual, desktop, manual, retail, and total-game
@@ -468,8 +468,14 @@ Commit `feat(saturn): bake BOB actor materials for VDP1`. Review source closure,
 
 ### Task 5: Build the real mixed BOB S64F and prove aggregate budgets
 
-**Execution status:** source-complete pending independent review after the
-prescribed missing-module RED. Source-ceiling
+**Execution status:** source-complete after fix round 1/5, pending scoped
+rereview. Initial behavior commit `65a3fdb9` received C0/I3/M0 for an
+unreconciled family report, stale-generation Make graph, and manual package-
+profile intake. The repair recomputes exact family semantics through the owning
+compiler (excluding only generated payload pathname), consumes only those
+values, routes package inventory and Make dependency discovery through the
+canonical target-profile validator, and verifies all four sidecars against a
+private current-input rebuild. Source-ceiling
 correction `acef808d`, frame-policy/partition correction `833c9bfb`. Applying the original
 family-sum equation to the real 14-bank set counted 5,288 mutually incompatible
 live contributions against the global 64-observer cap and produced impossible

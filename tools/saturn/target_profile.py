@@ -37,6 +37,31 @@ class ResolvedTargetProfile:
     package_set_sha256: str
 
 
+def target_profile_source_paths(root: Path, profile_path: Path) -> tuple[str, ...]:
+    """Return every canonical profile/descriptor/payload input without writes."""
+    root = root.resolve()
+    profile, relative_profile = _profile(root, profile_path)
+    requested_payloads: list[str] = []
+    payloads: list[str] = []
+    ownership: list[str] = []
+    for descriptor_path in profile["package_descriptors"]:
+        requested, normalized = _preflight_descriptor_payload_paths(root, descriptor_path)
+        requested_payloads.extend(requested)
+        payloads.extend(normalized)
+        # Run the full descriptor validator too; dependency discovery must not
+        # accept a path that canonical resolution would later reject.
+        descriptor, _, _ = _descriptor(root, descriptor_path)
+        ownership.append(descriptor["package_class"])
+    reject_case_collisions(requested_payloads)
+    reject_case_collisions(payloads)
+    if len(set(payloads)) != len(payloads):
+        raise ValueError("target profile has duplicate payload paths")
+    if len(ownership) != len(PACKAGE_CLASSES) or \
+            any(ownership.count(kind) != 1 for kind in PACKAGE_CLASSES):
+        raise ValueError("target profile must own exactly one package per package class")
+    return (relative_profile, *profile["package_descriptors"], *sorted(payloads))
+
+
 def _read_object(path: Path, label: str) -> dict[str, Any]:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
