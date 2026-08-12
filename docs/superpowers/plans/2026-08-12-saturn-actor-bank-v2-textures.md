@@ -25,7 +25,7 @@ opaque mixed-S64F delegation; 86 direct S64B mutations, 54 S64F mutations, 63
 broader Python tests, the historical actor gates, and the freestanding SH-2
 syntax check pass. Tasks 5-13 and every target-material, real-BOB bundle,
 runtime, demo, release, reseal, smoke, visual, desktop, manual, retail, and
-total-game gate remain open. Task 4 is source-complete-pending-review: the host compiler now
+total-game gate remain open. Task 4 fix round 1 is source-complete-pending-rereview: the host compiler now
 admits only the 14 closure-measured direct-textured BOB keys, including real
 family 29 / `MODEL_CANNON_BASE` `0x0080` / `bhvCannon`, and emits Task 2
 bindings/materials/tiles/CLUTs with source path/hash and bake-policy identity.
@@ -356,8 +356,9 @@ Commit `feat(saturn): validate mixed actor bank versions`. Require parser/ABI re
 
 ### Task 4: Capture and lower the exact measured BOB material subset
 
-**Execution status:** source-complete-pending-review at behavior commit
-`52c9c1af` (2026-08-12). The real
+**Execution status:** fix round 1 source-complete-pending-rereview after
+independent review found C0/I2/M1 at behavior commit `52c9c1af` (2026-08-12).
+The repair commit is recorded after final verification. The real
 34-drawable/47-family replay is frozen; all 14 measured direct-textured keys
 compile as S64B v2, the 18 `GEO_SHADOW`, one `GEO_SCALE`, one `GEO_ASM`, 13
 capability-unsupported families, and two `MODEL_NONE` variants retain named
@@ -384,6 +385,19 @@ per-triangle bake pattern), and Task 2 `tools/saturn/actor_bank_v2.py`
 direct same-repository adaptation/close-port; no third-party source or new
 license obligation was introduced.
 
+**Fix round 1 design/file-list correction:** exact admission now freezes the
+evaluated command-local trace and final state across the complete reached
+display-list graph, including recognized state after the final triangle and
+ambient/diffuse light commands. `collect_scene_closure.py` now owns unique
+texture declaration resolution and checked-in `.rgba16`/`.ia16` PNG path/hash
+attestation for both `gsDPSetTextureImage` and `gsDPLoadTextureBlock` before
+validation/publication; `_SourceIndex` requires and decodes those exact bytes,
+and downstream `SourceRecord` synthesis is forbidden. Scalar shift operands
+and counts are bounded before evaluation. This narrowly adds
+`tools/saturn/collect_scene_closure.py`, `test_scene_closure.py`, and
+`test_bob_scene_closure.py` to Task 4; schema, target ABI/runtime, Task 5, and
+later scope remain unchanged.
+
 **Files:**
 - Create: `tools/saturn/actor_material_v2.py`
 - Create: `tools/saturn/test_actor_material_v2.py`
@@ -391,6 +405,9 @@ license obligation was introduced.
 - Modify: `tools/saturn/test_actor_variant_bank.py`
 - Modify: `tools/saturn/test_actor_source.py`
 - Modify: `tools/saturn/vdp1_texture.py`
+- Modify: `tools/saturn/collect_scene_closure.py`
+- Modify: `tools/saturn/test_scene_closure.py`
+- Modify: `tools/saturn/test_bob_scene_closure.py`
 - Modify: `CHANGELOG.md`, this plan, and SDD ledger/report
 
 **Interfaces:**
@@ -427,12 +444,13 @@ Run `python -m unittest tools.saturn.test_actor_material_v2 tools.saturn.test_ac
 Extend the existing Fast3D compiler state machine rather than adding a second parser. Every recognized state-changing command updates an immutable canonical state; every unknown command rejects. For each accepted textured triangle, call the reviewed weight/bake helpers and emit one unpaired tile.
 
 ```python
-resources, material_sources, material_report = compile_materials_v2(
+resources, late_sources, material_report = compile_materials_v2(
     index, reached_lists, geometry.primitives, sources)
 digest = source_identity_v2(family_ordinal, model_id,
-                            sources + material_sources,
+                            sources,
                             resources.bake_policy_id,
                             material_report["policy"])
+# late_sources is retained only for interface compatibility and must be empty.
 payload, packed = pack_actor_bank_v2(core, digest, resources)
 ```
 

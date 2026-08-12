@@ -22,7 +22,7 @@ from actor_source import (  # noqa: E402
     render_legacy_mario_anims,
     validate_geo_node_vocabulary,
 )
-from vdp1_texture import read_png_rgb1555  # noqa: E402
+from vdp1_texture import decode_png_rgb1555, read_png_rgb1555  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -158,11 +158,15 @@ static const struct Animation bad_anim[] = {
 
     def test_actor_texture_png_decode_has_canonical_transparent_zero(self) -> None:
         """Transparent source RGB cannot leak into CLUT quantizer identity."""
-        width, height, pixels = read_png_rgb1555(
-            ROOT / "actors/explosion/explosion_0.rgba16.png")
+        path = ROOT / "actors/explosion/explosion_0.rgba16.png"
+        width, height, pixels = read_png_rgb1555(path)
         self.assertEqual((width, height), (32, 32))
         self.assertTrue(any(value == 0 for value in pixels))
         self.assertTrue(all(value == 0 or value & 0x8000 for value in pixels))
+        self.assertEqual(
+            decode_png_rgb1555(path.read_bytes(), str(path)),
+            (width, height, pixels),
+        )
 
     def test_missing_and_duplicate_animation_ids_fail_closed(self) -> None:
         valid = "enum MarioAnimID { MARIO_ANIM_ZERO, MARIO_ANIM_ONE };"

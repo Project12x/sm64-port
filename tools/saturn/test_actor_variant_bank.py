@@ -13,6 +13,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from actor_variant_bank import (  # noqa: E402
+    _Fast3DCompiler,
+    _fast3d_scalar,
     ActorAnimationBindingError,
     ActorJointOwnershipError,
     MalformedActorSourceError,
@@ -235,6 +237,27 @@ def _add_model_none_variant(fixture: _Fixture, model_id: int = 0,
 
 
 class ActorVariantBankTest(unittest.TestCase):
+    def test_fast3d_scalar_rejects_shift_bounds_before_evaluation(self) -> None:
+        with self.assertRaisesRegex(MalformedActorSourceError, "shift count"):
+            _fast3d_scalar("1 << 1000000", "adversarial")
+        with self.assertRaisesRegex(MalformedActorSourceError, "shift operand"):
+            _fast3d_scalar("0x100000000 << 1", "adversarial")
+
+    def test_material_trace_binds_canonical_command_even_when_final_state_matches(self) -> None:
+        """Already-set geometry bits cannot make distinct commands trace-identical."""
+        traces = []
+        for mode in ("G_LIGHTING", "G_CULL_BACK"):
+            compiler = _Fast3DCompiler(None, {}, {}, 4, 0x00CD)
+            compiler._material_command("gsSPSetGeometryMode", mode, "fixture")
+            compiler._trace_material_state(
+                "actors/fixture/model.inc.c", "fixture", "gsSPSetGeometryMode",
+                compiler._material_command_snapshot(
+                    "gsSPSetGeometryMode", mode, "fixture"),
+            )
+            traces.append((compiler._state_snapshot(), compiler.material_trace))
+        self.assertEqual(traces[0][0], traces[1][0])
+        self.assertNotEqual(traces[0][1], traces[1][1])
+
     def test_crlf_model_none_identity_does_not_poison_selected_drawable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = _Fixture(Path(directory), _RIGID_GEO)

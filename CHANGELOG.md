@@ -47,6 +47,19 @@
 
 ### Fixed
 
+- Sealed the host-only BOB material compiler after independent review. Exact
+  admission now covers the evaluated command-local trace and final state for
+  every recognized relevant Fast3D command, including ambient/diffuse lights
+  and state changes after the final triangle, so unused tail state cannot
+  bypass the measured whitelist. Scene closure now resolves each reached
+  `gsDPSetTextureImage`/`gsDPLoadTextureBlock` symbol to one declaration and
+  checked-in `.rgba16`/`.ia16` PNG, records its path and SHA-256 on the owning
+  actor before closure validation/publication, and makes decoding consume the
+  already-attested bytes; missing, ambiguous, computed, unsupported, or
+  noncanonical paths fail closed. Fast3D scalar shifts also validate the
+  uint32 operand and 0..31 count before Python evaluates them, preventing
+  adversarial host work without changing historical S64B-v1 Mario bytes.
+
 - Checked target animation stream word-count multiplication before any span
   or pointer use. A hostile `0x80000000` value-count previously wrapped its
   byte length to zero in freestanding C even though the host parser rejected

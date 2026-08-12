@@ -18,6 +18,7 @@ from actor_material_v2 import BOB_DIRECT_TEXTURED_KEYS  # noqa: E402
 from actor_variant_bank import (  # noqa: E402
     _SourceIndex,
     _source_model_id,
+    ActorSourceDriftError,
     UnsupportedActorSourceError,
     compile_actor_variant,
 )
@@ -166,6 +167,12 @@ class ActorMaterialV2Test(unittest.TestCase):
                           compiled.payload),
                          (repeated.source_sha256, repeated.payload_sha256,
                           repeated.payload))
+        self.assertEqual(
+            (compiled.source_sha256, compiled.payload_sha256, len(compiled.payload)),
+            ("bb972afe2022977f4b7290d11e28e081f869c7cc7b62b378e28bac17bf76dc4f",
+             "2c8eee36768f0a42063949298eca8351bacb74838165a8188520a4b180d63c6d",
+             2952),
+        )
         self.assertEqual(compiled.report["material_policy"]["textured_triangle_count"], 8)
         self.assertEqual(compiled.report["material_policy"]["textured_pair_count"], 0)
         self.assertEqual(compiled.report["format"]["header_size"], 192)
@@ -176,7 +183,7 @@ class ActorMaterialV2Test(unittest.TestCase):
                    for item in compiled.report["sources"]}
         self.assertEqual(sources[texture_path], hashlib.sha256(
             (ROOT / texture_path).read_bytes()).hexdigest())
-        self.assertEqual(len(compiled.report["material_policy"]["category_sha256"]), 12)
+        self.assertEqual(len(compiled.report["material_policy"]["category_sha256"]), 13)
 
     def _copied_cannon(self, directory: str) -> tuple[Path, list[dict[str, object]]]:
         root = Path(directory)
@@ -232,6 +239,11 @@ class ActorMaterialV2Test(unittest.TestCase):
                               "gsSPEndDisplayList(),\n};\n\n// 0x080056D0",
                               "gsSPBranchList(cannon_base_seg8_dl_080056D0),\n};\n\n// 0x080056D0"),
             "texture coordinate": (model, "{     0,   1758}", "{    32,   1758}"),
+            "material state trace": (
+                model,
+                "gsSPSetGeometryMode(G_SHADING_SMOOTH),\n    gsSPEndDisplayList(),",
+                "gsSPSetGeometryMode(G_SHADING_SMOOTH),\n"
+                "    gsDPSetEnvColor(1, 2, 3, 4),\n    gsSPEndDisplayList(),"),
         }
         for reason, mutation in mutations.items():
             with self.subTest(reason=reason), tempfile.TemporaryDirectory() as directory:
@@ -246,8 +258,21 @@ class ActorMaterialV2Test(unittest.TestCase):
             payload = bytearray(texture.read_bytes())
             payload[-13] ^= 1
             texture.write_bytes(payload)
-            with self.assertRaisesRegex(UnsupportedActorSourceError,
-                                        "texture source.*actors/cannon_base"):
+            with self.assertRaisesRegex(
+                    ActorSourceDriftError,
+                    "closure source hash drift.*actors/cannon_base"):
+                compile_actor_variant(root, 29, 0x0080, records)
+
+    def test_cannon_texture_png_must_be_in_the_input_closure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, records = self._copied_cannon(directory)
+            png = "actors/cannon_base/cannon_base.rgba16.png"
+            for record in records:
+                record["sources"] = [source for source in record["sources"]
+                                     if source["path"] != png]
+            with self.assertRaisesRegex(
+                    UnsupportedActorSourceError,
+                    "texture PNG source is not closure-attested.*cannon_base"):
                 compile_actor_variant(root, 29, 0x0080, records)
 
 

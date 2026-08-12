@@ -9,14 +9,20 @@ from pathlib import Path
 
 
 def read_png_rgb1555(path: Path) -> tuple[int, int, list[int]]:
-    """Decode one checked-in RGBA/IA exporter PNG to canonical RGB1555.
+    """Read and decode one checked-in RGBA/IA exporter PNG."""
+    source = Path(path)
+    return decode_png_rgb1555(source.read_bytes(), str(source))
+
+
+def decode_png_rgb1555(data: bytes, label: str) -> tuple[int, int, list[int]]:
+    """Decode attested RGBA/IA PNG bytes to canonical RGB1555.
 
     This is a close port of ``bake_bob_tiles._png_pixels``.  The shared form
     additionally owns chunk CRCs, terminal structure, scanline length, and
     non-interlaced 8-bit constraints so a malformed source image cannot enter
     a bank through permissive host image-library behavior.
     """
-    data = Path(path).read_bytes()
+    path = label
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValueError(f"{path}: texture source is not a PNG")
     offset = 8

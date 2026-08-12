@@ -60,7 +60,16 @@ class SceneClosureTest(unittest.TestCase):
             const BehaviorScript bhvEffect[] = {};
         """)
         write(root / "actors/parent/geo.inc.c", "const GeoLayout parent_geo[] = { GEO_ANIMATED_PART(0, 0, 0, 0, parent_dl), GEO_BRANCH_AND_LINK(parent_shared_geo), GEO_SHADOW(1, 2, 3), GEO_END(), };\n")
-        write(root / "actors/parent/model.inc.c", "const Gfx parent_dl[] = { gsSPDisplayList(parent_child_dl), gsSPEndDisplayList(), };\n")
+        write(root / "actors/parent/model.inc.c", """
+            ALIGNED8 static const Texture parent_texture[] = {
+            #include "actors/parent/parent.rgba16.inc.c"
+            };
+            const Gfx parent_dl[] = {
+                gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, parent_texture),
+                gsSPDisplayList(parent_child_dl), gsSPEndDisplayList(),
+            };
+        """)
+        (root / "actors/parent/parent.rgba16.png").write_bytes(b"fixture-png")
         write(root / "actors/shared/geo.inc.c", "const GeoLayout parent_shared_geo[] = { GEO_NODE_START(), GEO_RETURN(), };\n")
         write(root / "actors/shared/model.inc.c", "const Gfx parent_child_dl[] = { gsSPSetLights1(parent_light), gsSPVertex(parent_vtx, 3, 0), gsSP1Triangle(0, 1, 2, 0), gsSPBranchList(parent_tail_dl), };\n")
         write(root / "actors/shared/tail.inc.c", "const Gfx parent_tail_dl[] = { gsSPEndDisplayList(), };\n")
@@ -153,6 +162,7 @@ class SceneClosureTest(unittest.TestCase):
         reached = {
             "actors/parent/geo.inc.c",
             "actors/parent/model.inc.c",
+            "actors/parent/parent.rgba16.png",
             "actors/shared/geo.inc.c",
             "actors/shared/model.inc.c",
             "actors/shared/tail.inc.c",
@@ -163,6 +173,59 @@ class SceneClosureTest(unittest.TestCase):
             digest = hashlib.sha256((root / path).read_bytes()).hexdigest()
             self.assertEqual(sources[path], digest)
             self.assertEqual(closure["source_hashes"][path], digest)
+
+    def test_reached_texture_source_missing_ambiguous_computed_and_unsupported_fail(self) -> None:
+        cases = (
+            ("missing declaration", "missing_texture", (),
+             "missing reached Texture missing_texture"),
+            ("computed symbol", "select_texture(1)", (),
+             "unsupported reached texture image expression"),
+            ("ambiguous declaration", "shared_texture", (
+                ("actors/texture_a/model.inc.c",
+                 'ALIGNED8 static const Texture shared_texture[] = {\n#include "actors/parent/parent.rgba16.inc.c"\n};\n'),
+                ("actors/texture_b/model.inc.c",
+                 'ALIGNED8 static const Texture shared_texture[] = {\n#include "actors/parent/parent.rgba16.inc.c"\n};\n'),
+            ), "ambiguous reached Texture shared_texture"),
+            ("unsupported include", "bad_texture", (
+                ("actors/texture_a/model.inc.c",
+                 'ALIGNED8 static const Texture bad_texture[] = {\n#include "actors/parent/parent.ci8.inc.c"\n};\n'),
+            ), "unsupported reached texture source path"),
+            ("noncanonical include", "backslash_texture", (
+                ("actors/texture_a/model.inc.c",
+                 'ALIGNED8 static const Texture backslash_texture[] = {\n#include "actors\\parent\\parent.rgba16.inc.c"\n};\n'),
+            ), "unsupported reached texture source path"),
+            ("missing PNG", "missing_png_texture", (
+                ("actors/texture_a/model.inc.c",
+                 'ALIGNED8 static const Texture missing_png_texture[] = {\n#include "actors/parent/missing.rgba16.inc.c"\n};\n'),
+            ), "missing reached texture PNG"),
+        )
+        for label, expression, files, reason in cases:
+            with self.subTest(label=label):
+                root = self.fixture()
+                for relative, source in files:
+                    write(root / relative, source)
+                model = root / "actors/parent/model.inc.c"
+                source = model.read_text(encoding="utf-8")
+                source = source.replace("parent_texture),", f"{expression}),")
+                write(model, source)
+                with self.assertRaisesRegex(ClosureError, reason):
+                    self.collect(root)
+
+    def test_reached_load_texture_block_attests_its_png(self) -> None:
+        root = self.fixture()
+        model = root / "actors/parent/model.inc.c"
+        source = model.read_text(encoding="utf-8")
+        source = source.replace(
+            "gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, parent_texture)",
+            "gsDPLoadTextureBlock(parent_texture, G_IM_FMT_RGBA, G_IM_SIZ_16b, "
+            "32, 32, 0, G_TX_WRAP, G_TX_WRAP, 5, 5, 0, 0)",
+        )
+        write(model, source)
+        closure = self.collect(root)
+        record = next(record for record in closure["records"]
+                      if record["stable_id"] == "bhvParent")
+        self.assertIn("actors/parent/parent.rgba16.png",
+                      {item["path"] for item in record["sources"]})
 
     def test_missing_reached_actor_source_fails_closed(self) -> None:
         root = self.fixture()

@@ -76,26 +76,27 @@ _CATEGORY_LABELS = {
     "tail_transfer": "tail transfer",
     "uv": "texture coordinate",
     "texture_source": "texture source",
+    "material_state_trace": "material state trace",
 }
 
 # Filled from the closure-attested all-34-key RED inventory.  Each digest is
 # SHA-256 over canonical category JSON, so a source/state change cannot gain
 # admission merely by remaining syntactically valid.
 _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
-    (4, 0x00CD): "06a92434a46b40fb10b0897ba50e0653009bd6c919d71cdd14c249ae610f1494",
-    (6, 0x00DB): "d3571dda965615a33b5ec0bfdd73c2be822817cbbabd3f5b3aeaf84eabee3ffe",
-    (8, 0x008F): "d3a0073046729f03661d4f92ee6f024b66261cfa4d6241417bdfc8fb1d97feef",
-    (13, 0x00A3): "8c0fd6358747dd04af71bfa97007aa4f906f19221e4077789327f2e4b0ff1aba",
-    (18, 0x00A4): "e5357825792cbedbab42530165196b78ae2f8c703ec9b6cae9bbf382b58dbc2a",
-    (19, 0x00C9): "1c3a1504c849a963c8c04ed45eec4803dfed99d60af9234fe9c666621f34fdc2",
-    (21, 0x00A8): "05c08410a7c4ec55e674c1981aa21fa644b5117dd78e70b44e2e4225a83ad757",
-    (24, 0x007F): "8d2a5b6c3d78033dce96d246638947fbeca740a5d5e65b9dce7408207c237f51",
-    (28, 0x0084): "1a53480fb485557189c8212f6f04065b3ef8294787444263e2881882d80e18e6",
-    (29, 0x0080): "95f51fbb4ae4e41009b63569a6b1b253d347973ecc4d83febf5018a61bcfd65a",
-    (32, 0x0096): "86c61303d743b60ec31cfffbfaa81b362593cc03be166e53394eab482156bb16",
-    (39, 0x00A5): "d9f6dbc24cb9f3f84454073e29c5a581c7b2603a8d26a6c888f29b586629ee49",
-    (40, 0x0095): "ef527666236c94ff6f5c4330abe36e5e1c9e1a7432dd517a0f6d68768f365611",
-    (46, 0x00A6): "c335c496d34275af1e39110931aee9f62575210725c9780fd08752efb7dff38b",
+    (4, 0x00CD): "5effdad14956faaf30891aa37c1a749334b2eec6c86561a3521bc789456636de",
+    (6, 0x00DB): "dec1090d31a6109f0103cc88ee950d35f6e186e726981a3a9a1829c3d414510f",
+    (8, 0x008F): "ab424ba6e19a80f0d0fcf86efbfb063ad750674a35f71c2ed54c47006eb9232c",
+    (13, 0x00A3): "d8f2d5208b0e3df4c256e74138fb6c9160b5de9bea512001990d6938d66492d2",
+    (18, 0x00A4): "c3561e3b23d73e251b09d617a0c3d4b21593b2c663f0094d6937a32ee0afaa77",
+    (19, 0x00C9): "f9153e587b41473b28ea6ba145926d1a0b17d8eb4bf28ee7b280aea44313b6ee",
+    (21, 0x00A8): "81a7ec0e7739cf2e513f9ae969b6d8cfc967eecf116be75769dab21a572466ee",
+    (24, 0x007F): "40f44e5dcf0f38019b3e36b06350886a863373cd4b33677e73a5a9778cb02e27",
+    (28, 0x0084): "2912fe9e1635306effadb3b86776dda5471685d92c2d4e7415312642daf13a79",
+    (29, 0x0080): "046ecadc6ba3b29eafa7b7130bd750e27f7147a4e8b037ed872288c37c33a969",
+    (32, 0x0096): "4db45f30e715f7ffe8f18a8830337b8e60aa36f9709f09ed7025ca8e2afea7b4",
+    (39, 0x00A5): "9aebb9ed6f67e1e315570ca109e572ed0fba24ab7de250c627ada93f57bf59c9",
+    (40, 0x0095): "92357dc51fcc0b157596b9df97455eb30a949ff860111c4b569e7c8d2974628f",
+    (46, 0x00A6): "a9a763a4ca33fac8c6dea8dbe4fd6f5dda773d462762b50d9d3e86ada407a45d",
 }
 _EXPECTED_CATEGORY_HASHES: dict[tuple[int, int], dict[str, str]] = {
     (29, 0x0080): {
@@ -111,6 +112,7 @@ _EXPECTED_CATEGORY_HASHES: dict[tuple[int, int], dict[str, str]] = {
         "tile_size": "af01b95edbc457eee3ebdb345a3f0236d510b1603fef0c6a2c818a61969123e4",
         "tile_wrap_clamp": "a21c4c7947338bbcd906975de7ad9afd43b3eae46371e014d3f8409fd8b108c6",
         "uv": "db165321cafa47ef328a051ea4ea31b95f2d2f6ded173d4dd90c51e09ec8176c",
+        "material_state_trace": "14b02cbf5119caf0baec7b21985a8162c731a9eea0fb56ab227bd8bcffb915d2",
     },
 }
 
@@ -201,6 +203,10 @@ def _capture_category_hashes(capture: Mapping[str, object]) -> dict[str, str]:
                                if edge[2] == "gsSPBranchList"]
     values["uv"] = [(item["display_list"], item["list_ordinal"], item["uv"])
                     for item in triangles if item["signature"].texture_path is not None]
+    values["material_state_trace"] = {
+        "trace": capture["material_trace"],
+        "final_state": capture["final_material_state"],
+    }
     return {name: _canonical_hash(value) for name, value in values.items()}
 
 
@@ -338,10 +344,15 @@ def compile_materials_v2(
         bindings.append(RenderBindingV2(material_id, len(tiles)))
         tiles.append(_bake_tile(triangle))
         textured_count += 1
-    material_sources = tuple(display_lists["material_sources"])
-    existing = {item.path for item in source_identity_inputs}
-    if any(item.path in existing for item in material_sources):
-        raise ActorMaterialV2Error("duplicate material source identity path")
+    identity_sources = {item.path: item.sha256 for item in source_identity_inputs}
+    texture_sources = {
+        item["signature"].texture_path: item["signature"].texture_sha256
+        for item in materials if item["signature"].texture_path is not None
+    }
+    for path, digest in texture_sources.items():
+        if identity_sources.get(path) != digest:
+            raise ActorMaterialV2Error(
+                f"texture source is not closure-attested with exact hash: {path}")
     resources = ActorBankResourcesV2(
         tuple(bindings), targets, tuple(tiles), BAKE_POLICY_ID)
     report: dict[str, object] = {
@@ -352,7 +363,7 @@ def compile_materials_v2(
         "textured_pair_count": 0,
         "source_triangle_count": len(triangles),
         "tile_input_count": len(tiles),
-        "source_paths": [item.path for item in material_sources],
+        "source_paths": sorted(texture_sources),
         "saturn_fidelity": POLICY_DOCUMENT["fidelity"],
     }
-    return resources, material_sources, report
+    return resources, (), report

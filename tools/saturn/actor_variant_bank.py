@@ -43,7 +43,7 @@ from extract_mario_actor import (
     matrix_apply,
 )
 from saturn_mesh_ir import compile_mesh_ir
-from vdp1_texture import read_png_rgb1555
+from vdp1_texture import decode_png_rgb1555
 
 
 class ActorVariantError(ValueError):
@@ -149,13 +149,20 @@ def _fast3d_scalar(value: str, label: str) -> int:
         }
         if isinstance(node, ast.BinOp) and type(node.op) in operations:
             left, right = visit(node.left), visit(node.right)
-            if right < 0 and isinstance(node.op, (ast.LShift, ast.RShift)):
-                raise ValueError
+            if isinstance(node.op, (ast.LShift, ast.RShift)):
+                if not 0 <= left <= 0xFFFFFFFF:
+                    raise MalformedActorSourceError(
+                        f"{label} shift operand exceeds uint32")
+                if not 0 <= right <= 31:
+                    raise MalformedActorSourceError(
+                        f"{label} shift count is outside 0..31")
             return operations[type(node.op)](left, right)
         raise ValueError
 
     try:
         result = visit(root)
+    except MalformedActorSourceError:
+        raise
     except (ValueError, OverflowError) as error:
         raise MalformedActorSourceError(f"computed {label} state") from error
     if not -(1 << 31) <= result <= 0xFFFFFFFF:
@@ -379,7 +386,8 @@ class _SourceIndex:
         # Source discovery is intentionally bounded by the closure. Looking
         # through the host checkout here would allow an unattested same-name
         # definition to change selection without entering source_identity().
-        self.candidates = tuple(sorted(self.expected))
+        self.candidates = tuple(sorted(path for path in self.expected
+                                       if path.endswith((".c", ".h"))))
         self._bytes: dict[str, bytes] = {}
         self._text: dict[str, str] = {}
         self._definitions: dict[tuple[str, str, str], tuple[str, ...]] = {}
@@ -538,15 +546,15 @@ class _SourceIndex:
             raise UnsupportedActorSourceError(
                 f"unapproved texture source include: {relative}")
         png_path = _normal_path(relative[:-6] + ".png")
-        source = self.root / png_path
-        if not source.is_file():
-            raise ActorSourceSelectionError(f"texture source is missing: {png_path}")
+        self.require_attested(png_path, "texture PNG source")
         try:
-            payload = source.read_bytes()
-            width, height, pixels = read_png_rgb1555(source)
+            payload = self._load(png_path)
+            width, height, pixels = decode_png_rgb1555(payload, png_path)
         except (OSError, ValueError) as error:
             raise UnsupportedActorSourceError(
                 f"texture source rejected: {png_path}: {error}") from error
+        if hashlib.sha256(payload).digest() != self.expected[png_path]:
+            raise ActorSourceDriftError(f"closure source hash drift: {png_path}")
         result: dict[str, object] = {
             "symbol": symbol,
             "path": png_path,
@@ -878,10 +886,12 @@ class _Fast3DCompiler:
         self.cache: list[tuple[tuple[int, ...], str, str, int] | None] = [None] * 32
         self.light: str | None = None
         self.light_rgb: tuple[int, int, int] | None = None
+        self.ambient_light: str | None = None
         self.materials: list[dict[str, object]] = []
         self.material_ids: dict[tuple[object, ...], int] = {}
         self.triangles: list[dict[str, object]] = []
         self.transfers: list[tuple[str, str, str, str]] = []
+        self.material_trace: list[tuple[object, ...]] = []
         self.combine_mode: tuple[str, ...] = ()
         self.geometry_mode = {"G_LIGHTING", "G_SHADING_SMOOTH", "G_CULL_BACK"}
         self.env_color: tuple[int, int, int, int] | None = None
@@ -895,7 +905,62 @@ class _Fast3DCompiler:
         self.tiles: dict[int, dict[str, object]] = {}
         self.load_state: tuple[int, ...] | None = None
         self.load_complete = False
-        self.material_sources: dict[str, SourceRecord] = {}
+
+    def _state_snapshot(self) -> tuple[object, ...]:
+        tiles = tuple((tile_id, tuple(sorted(tile.items())))
+                      for tile_id, tile in sorted(self.tiles.items()))
+        image = None if self.texture_image is None else tuple(
+            sorted(self.texture_image.items()))
+        return (
+            self.light, self.light_rgb, self.ambient_light, self.combine_mode,
+            tuple(sorted(self.geometry_mode)), self.env_color,
+            self.alpha_compare, int(self.texture_enabled), self.texture_scale_s,
+            self.texture_scale_t, self.texture_level, self.texture_tile, image,
+            tiles, self.load_state, int(self.load_complete),
+        )
+
+    def _material_command_snapshot(
+            self, macro: str, args: str, name: str) -> tuple[object, ...]:
+        """Return the evaluated command-local state used by exact admission."""
+        fields = _arguments(args)
+        if macro in ("gsDPLoadSync", "gsDPTileSync"):
+            return ()
+        if macro == "gsDPSetTextureImage":
+            return tuple(sorted(self.texture_image.items()))  # type: ignore[union-attr]
+        if macro == "gsDPLoadTextureBlock":
+            return (
+                tuple(sorted(self.texture_image.items())),  # type: ignore[union-attr]
+                tuple(sorted(self.tiles[0].items())), self.load_state,
+            )
+        if macro == "gsSPTexture":
+            return (
+                self.texture_scale_s, self.texture_scale_t, self.texture_level,
+                self.texture_tile, int(self.texture_enabled),
+            )
+        if macro == "gsDPSetCombineMode":
+            return self.combine_mode
+        if macro in ("gsSPSetGeometryMode", "gsSPClearGeometryMode"):
+            return tuple(sorted(_geometry_modes(fields[0], name)))
+        if macro == "gsDPSetEnvColor":
+            return self.env_color  # type: ignore[return-value]
+        if macro == "gsDPSetAlphaCompare":
+            return (self.alpha_compare,)
+        if macro == "gsDPLoadBlock":
+            return self.load_state  # type: ignore[return-value]
+        if macro == "gsDPSetTile":
+            tile_id = _fast3d_scalar(fields[4], f"tile state in {name}")
+            return (tile_id, tuple(sorted(self.tiles[tile_id].items())))
+        if macro == "gsDPSetTileSize":
+            tile_id = _fast3d_scalar(fields[0], f"tile size in {name}")
+            return (tile_id, tuple(sorted(self.tiles[tile_id].items())))
+        raise UnsupportedActorSourceError(
+            f"unknown Fast3D material trace state: {macro}")
+
+    def _trace_material_state(
+            self, path: str, name: str, macro: str,
+            command_state: tuple[object, ...]) -> None:
+        self.material_trace.append(
+            (path, name, macro, command_state, self._state_snapshot()))
 
     def _texture_signature(self, part: dict[str, object], path: str,
                            name: str) -> tuple[MaterialSignatureV2,
@@ -924,8 +989,6 @@ class _Fast3DCompiler:
         except ActorSourceSelectionError as error:
             raise UnsupportedActorSourceError(
                 f"unapproved texture image state/source in {name}: {error}") from error
-        self.material_sources[str(source["path"])] = SourceRecord(
-            str(source["path"]), source["sha256"])
         uls, ult = int(tile["uls"]), int(tile["ult"])
         lrs, lrt = int(tile["lrs"]), int(tile["lrt"])
         if lrs < uls or lrt < ult or any(value & 3 for value in (uls, ult, lrs, lrt)):
@@ -1151,6 +1214,9 @@ class _Fast3DCompiler:
                     raise UnsupportedActorSourceError(
                         f"S64B v1 cannot represent Fast3D state {macro} in {name}")
                 self._material_command(macro, args, name)
+                self._trace_material_state(
+                    path, name, macro,
+                    self._material_command_snapshot(macro, args, name))
             elif macro == "gsSPDisplayList":
                 child = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*", args)
                 if child is None:
@@ -1189,12 +1255,20 @@ class _Fast3DCompiler:
                 light_index = _integer_literal(selected.group(3),
                                                f"gsSPLight index in {name}")
                 if kind == "a" and light_index == 2 and self.allow_v2:
+                    self.ambient_light = selected.group(1)
+                    self._trace_material_state(
+                        path, name, macro,
+                        (selected.group(1), kind, light_index))
                     continue
                 if kind != "l" or light_index != 1:
                     raise UnsupportedActorSourceError(
                         f"S64B v1 cannot represent ambient/alternate light state in {name}")
                 self.light = selected.group(1)
                 self.light_rgb = self.index.light_rgb(self.light, path)
+                if self.allow_v2:
+                    self._trace_material_state(
+                        path, name, macro,
+                        (selected.group(1), kind, light_index))
             elif macro in ("gsSP1Triangle", "gsSP2Triangles"):
                 expected_count = 8 if macro == "gsSP2Triangles" else 4
                 values = _integer_fields(args, expected_count, f"{macro} in {name}")
@@ -1456,8 +1530,8 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         "materials": tuple(fast.materials),
         "triangles": tuple(fast.triangles),
         "transfers": tuple(fast.transfers),
-        "material_sources": tuple(fast.material_sources[path]
-                                  for path in sorted(fast.material_sources)),
+        "material_trace": tuple(fast.material_trace),
+        "final_material_state": fast._state_snapshot(),
         "actual_sites": tuple(actual_sites),
         "expected_sites": tuple(expected_sites),
         "primitives": tuple(primitive_documents),

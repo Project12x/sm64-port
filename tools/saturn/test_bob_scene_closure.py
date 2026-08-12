@@ -38,6 +38,18 @@ class BobSceneClosureTest(unittest.TestCase):
             sources["actors/wooden_signpost/model.inc.c"],
         )
 
+    def test_real_cannon_closure_attests_checked_in_texture_png(self) -> None:
+        closure = collect_scene_closure(
+            ROOT, "bob", 1, ROOT / "tools/saturn/behavior_spawn_rules.json")
+        record = next(record for record in closure["records"]
+                      if record["stable_id"] == "bhvCannon")
+        path = "actors/cannon_base/cannon_base.rgba16.png"
+        sources = {source["path"]: source["sha256"]
+                   for source in record["sources"]}
+        digest = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+        self.assertEqual(sources[path], digest)
+        self.assertEqual(closure["source_hashes"][path], digest)
+
     def test_bob_closure_is_byte_stable_and_complete(self) -> None:
         with tempfile.TemporaryDirectory(prefix="bob-scene-closure-") as temp:
             first_path = Path(temp) / "first.json"

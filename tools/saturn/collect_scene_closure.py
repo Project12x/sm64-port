@@ -275,8 +275,8 @@ def _actor_asset_definition_index(root: Path) -> dict[tuple[str, str], tuple[str
         raise ClosureError(
             f"repository actor asset source index limit exceeded: {len(paths)} C sources")
     pattern = re.compile(
-        r"^\s*(?:static\s+)?(?:const\s+)?"
-        r"(GeoLayout|Gfx|Vtx|Lights1)\s+([A-Za-z_]\w*)\s*"
+        r"^\s*(?:ALIGNED8\s+)?(?:static\s+)?(?:const\s+)?"
+        r"(GeoLayout|Gfx|Vtx|Lights1|Texture|u8|u16)\s+([A-Za-z_]\w*)\s*"
         r"(?:\[[^]]*\])?\s*=",
         re.MULTILINE,
     )
@@ -286,6 +286,8 @@ def _actor_asset_definition_index(root: Path) -> dict[tuple[str, str], tuple[str
         relative = _relative(root, path)
         text = path.read_text(encoding="utf-8", errors="ignore")
         for kind, symbol in pattern.findall(text):
+            if kind in ("Texture", "u8", "u16"):
+                kind = "Texture"
             found[(kind, symbol)].append(relative)
             count += 1
             if count > 65536:
@@ -473,6 +475,34 @@ def _reached_actor_sources(
             raise ClosureError(f"unsupported reached {label} expression: {expression.strip()}")
         return found.group(1)
 
+    def texture_png(symbol: str, preferred: str) -> str:
+        declaration_path = resolve("Texture", symbol, preferred)
+        clean = _comment_free(_read(root, declaration_path))
+        declaration = re.compile(
+            r"(?:ALIGNED8\s+)?(?:static\s+)?const\s+(?:Texture|u8|u16)\s+" +
+            re.escape(symbol) +
+            r"\s*\[\]\s*=\s*\{\s*#include\s+\"([^\"]+)\"\s*\}\s*;",
+            re.DOTALL,
+        )
+        includes = declaration.findall(clean)
+        if len(includes) != 1:
+            detail = "missing" if not includes else "ambiguous"
+            raise ClosureError(
+                f"{detail} reached Texture include {symbol}: {declaration_path}")
+        include = includes[0]
+        include_path = PurePosixPath(include)
+        if ("\\" in include or include_path.is_absolute() or
+                ".." in include_path.parts or
+                include_path.as_posix() != include or
+                not include.endswith((".rgba16.inc.c", ".ia16.inc.c"))):
+            raise ClosureError(f"unsupported reached texture source path: {include}")
+        png = include[:-6] + ".png"
+        if not (root / png).is_file():
+            raise ClosureError(f"missing reached texture PNG {png}")
+        sources.add(declaration_path)
+        sources.add(png)
+        return png
+
     def visit(kind: str, symbol: str, preferred: str,
               stack: tuple[tuple[str, str], ...] = (), *, declared: bool = False) -> None:
         if len(stack) >= 256:
@@ -523,19 +553,28 @@ def _reached_actor_sources(
         else:
             for macro, arguments in commands:
                 fields = _arguments(arguments)
-                reference = _ACTOR_GFX_SOURCE_REFERENCE_COMMANDS.get(macro)
-                if reference is not None:
-                    target_kind, target_index, expected_fields, pattern = reference
+                if macro in ("gsDPSetTextureImage", "gsDPLoadTextureBlock"):
+                    expected_fields = 4 if macro == "gsDPSetTextureImage" else 12
+                    texture_index = 3 if macro == "gsDPSetTextureImage" else 0
                     if len(fields) != expected_fields:
                         raise ClosureError(
-                            f"unsupported reached {target_kind} expression")
-                    target = identifier(fields[target_index], target_kind, pattern)
-                    visit(target_kind, target, path, next_stack)
-                elif macro in _ACTOR_GFX_UNMODELED_REFERENCE_COMMANDS:
-                    raise ClosureError(
-                        f"unsupported reference-bearing Gfx command {macro}")
-                elif macro not in _ACTOR_GFX_NON_REFERENCE_COMMANDS:
-                    raise ClosureError(f"unknown reached Gfx command {macro}")
+                            "unsupported reached texture image expression")
+                    target = identifier(fields[texture_index], "texture image")
+                    texture_png(target, path)
+                else:
+                    reference = _ACTOR_GFX_SOURCE_REFERENCE_COMMANDS.get(macro)
+                    if reference is not None:
+                        target_kind, target_index, expected_fields, pattern = reference
+                        if len(fields) != expected_fields:
+                            raise ClosureError(
+                                f"unsupported reached {target_kind} expression")
+                        target = identifier(fields[target_index], target_kind, pattern)
+                        visit(target_kind, target, path, next_stack)
+                    elif macro in _ACTOR_GFX_UNMODELED_REFERENCE_COMMANDS:
+                        raise ClosureError(
+                            f"unsupported reference-bearing Gfx command {macro}")
+                    elif macro not in _ACTOR_GFX_NON_REFERENCE_COMMANDS:
+                        raise ClosureError(f"unknown reached Gfx command {macro}")
 
     visit(root_kinds[0], entry, declared_source, declared=True)
     return sources
