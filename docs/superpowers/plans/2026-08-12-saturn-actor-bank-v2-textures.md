@@ -14,6 +14,10 @@ in BOB under Ymir before rebuilding and resealing the release.
 
 **Approved design:** `docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`, architecture commit `62f16de8`, owner written-spec approval received 2026-08-12.
 
+**Execution status (2026-08-12):** implementation plan self-reviewed and
+committed as `3338de20`; ready for Task 1 RED under the owner-selected
+subagent-driven workflow. No production/test behavior change has begun.
+
 ## Global Constraints
 
 - S64B v1 remains version 1 with a 104-byte header; historical Mario JSON/S64B bytes and SHA-256 remain exact.

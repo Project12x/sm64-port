@@ -191,9 +191,13 @@
   remains 4; texture and CLUT use independent bounded VDP1 upload regions;
   bundle-wide heterogeneous workspace stride and active texture generation are
   explicit APIs.
-- Current status remains `blocked-before-RED` until the implementation plan is
-  committed and dispatched. No v2 production/test/Make/CHANGELOG edit or
-  target gate has started.
+- Plan commit: `3338de20` (`docs(saturn): plan textured actor bank
+  implementation`), exact five documentation/status paths. Scoped
+  self-review passed 13-task/65-step coverage, placeholder, type/API, existing
+  path/Make-target, hardware-budget, and whitespace checks.
+- Current status: `ready-for-Task-1-RED` under the owner-selected
+  subagent-driven workflow. No v2 production/test/Make/CHANGELOG edit or
+  target gate had started at this transition.
 - Open: Task 4, Tasks 5-11, Task 16 Tasks 2-5, all target/release/reseal,
   sourceboot, map/capacity, P2/Ymir, transition, smoke/visual/desktop/manual,
   and total-game gates remain unchecked.

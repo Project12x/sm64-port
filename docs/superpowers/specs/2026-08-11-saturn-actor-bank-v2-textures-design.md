@@ -3,7 +3,8 @@
 **Status:** Owner-approved architecture and written specification. The spec was
 self-reviewed and committed at `62f16de8`; owner written-spec approval was
 received 2026-08-12. The implementation plan is
-`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`.
+`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`, committed
+as `3338de20`.
 
 **Date:** 2026-08-11
 
@@ -539,10 +540,10 @@ The verbal architecture was approved by the owner on 2026-08-11. The written
 specification passed scoped self-review and binary-layout arithmetic/reference
 checks, was committed as `62f16de8`, and received owner approval on 2026-08-12.
 The dependency-ordered implementation plan is
-`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`. Task 4
-remains `blocked-before-RED` until that plan is committed and execution is
-dispatched; no v2 production or test change is authorized by this design
-document alone.
+`docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md`, committed
+as `3338de20`. Task 4 is ready for Task 1 RED under the owner-selected
+subagent-driven workflow; no v2 production or test change had begun at this
+status transition.
 
 Task 4, Tasks 5-11, Task 16 Tasks 2-5, target/release/reseal, sourceboot,
 capacity/map, P2/Ymir, transition, smoke, visual, desktop, owner-manual,

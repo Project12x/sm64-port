@@ -169,10 +169,13 @@ while historical v1 Mario and v2 generic actors prove the mixed-version scene
 path; it also retains S64P alignment 4 and explicitly separates bounded CLUT
 upload, global lane stride, and active texture generation.
 
-This resolution does not unblock code yet. Task 4 remains
-`blocked-before-RED` until the implementation plan is committed and dispatched.
-No production, test, Make, CLI, CHANGELOG, target, or release behavior changed
-in this design/plan transition.
+The plan was committed as `3338de20` (`docs(saturn): plan textured actor bank
+implementation`) after its 13 tasks/65 steps passed scoped coverage,
+placeholder, API/type, existing-path/Make-target, hardware-budget, and
+whitespace checks. Task 4 is now `ready-for-Task-1-RED` under the owner-selected
+subagent-driven workflow. No production, test, Make, CLI, CHANGELOG, target, or
+release behavior had changed at this status transition; every later task and
+target/release gate remains open.
 
 ## Reference/reuse record
 
