@@ -332,6 +332,8 @@ def _validate_v2(payload: bytes) -> ActorBankView:
     if (magic != b"S64B" or version != 2 or header_size != S64B_V2_HEADER_SIZE or
             record_size != _S64B_ANIMATION.size or header_padding):
         raise ValueError("malformed S64B v2 header")
+    if not meshlet_count or not primitive_count:
+        raise ValueError("S64B v2 meshlet/primitive count")
     if (binding_record_size != _S64B_V2_BINDING.size or
             material_record_size != _S64B_V2_MATERIAL.size or
             tile_record_size != _S64B_V2_TILE.size or v2_flags or

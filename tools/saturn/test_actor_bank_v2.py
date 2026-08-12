@@ -10,9 +10,11 @@ import sys
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import actor_bank_v2 as actor_bank_v2_module  # noqa: E402
 from actor_bank_format import validate_actor_bank  # noqa: E402
 from actor_bank_v2 import (  # noqa: E402
     ActorBankResourcesV2,
@@ -56,6 +58,81 @@ def textured_resources() -> ActorBankResourcesV2:
         tiles=(first, duplicate, second),
         bake_policy_id=7,
     )
+
+
+def zero_draw_core(source_hash: bytes) -> bytes:
+    """Build a hand-derived v1 bank whose required draw counts are zero."""
+    header = struct.Struct(">4s9HI32sHH10IH")
+    animation = struct.Struct(">IIHHHh")
+    geometry_header = struct.Struct(">4s7H7I")
+    payload = bytearray(104)
+    records_offset = len(payload)
+    payload.extend(bytes(animation.size))
+    indices_offset = len(payload)
+    payload.extend(struct.pack(">I12H", 12, 1, 0, 1, 0, 1, 0,
+                               1, 0, 1, 0, 1, 0))
+    indices_size = len(payload) - indices_offset
+    values_offset = len(payload)
+    payload.extend(struct.pack(">Ih", 1, 0))
+    values_size = len(payload) - values_offset
+    while len(payload) % 4:
+        payload.append(0)
+    vertices_offset = len(payload)
+    payload.extend(struct.pack(">hhhHH", 0, 0, 0, 0, 0) * 3)
+    vertices_size = len(payload) - vertices_offset
+    while len(payload) % 4:
+        payload.append(0)
+    geometry_offset = len(payload)
+    joint_offset = geometry_header.size
+    part_offset = joint_offset + 12
+    material_offset = part_offset + 4
+    terminal = material_offset + 4
+    payload.extend(geometry_header.pack(
+        b"GEO1", 1, 1, 1, 0, 0, 0, 0, joint_offset, part_offset,
+        material_offset, terminal, terminal, terminal, terminal))
+    payload.extend(struct.pack(">hhhhhH", -1, 0, 0, 0, 0, 0))
+    payload.extend(struct.pack(">HH", 0, 0))
+    payload.extend(bytes(4))
+    geometry_size = len(payload) - geometry_offset
+    payload[records_offset:records_offset + animation.size] = animation.pack(
+        values_offset + 4, indices_offset + 4, 1, 1, 0, 1)
+    payload[:header.size] = header.pack(
+        b"S64B", 1, 1, 7, 1, 1, 0, 0, 3, 1, 0x1F, source_hash,
+        104, 16, records_offset, indices_offset, indices_size,
+        values_offset, values_size, vertices_offset, vertices_size,
+        geometry_offset, geometry_size, 203, 0)
+    return bytes(payload)
+
+
+def unchecked_zero_draw_v2(core: bytes, source_hash: bytes) -> bytes:
+    """Promote the zero-draw core mechanically, bypassing the production packer."""
+    header = struct.Struct(">4s9HI32sHH10IH")
+    animation = struct.Struct(">IIHHHh")
+    fields = list(header.unpack_from(core))
+    delta = 88
+    for index in (14, 15, 17, 19, 21):
+        fields[index] += delta
+    fields[1] = 2
+    fields[11] = source_hash
+    fields[12] = 192
+    payload = bytearray(192)
+    payload.extend(core[104:])
+    payload[:header.size] = header.pack(*fields)
+    values, indices, frames, joints, flags, divisor = animation.unpack_from(payload, 192)
+    payload[192:208] = animation.pack(values + delta, indices + delta,
+                                      frames, joints, flags, divisor)
+    binding_offset = len(payload)
+    material_offset = binding_offset
+    payload.extend(V2_MATERIAL.pack(1, 0, 0, 0, 0, 0))
+    tile_offset = len(payload)
+    texture_offset = (tile_offset + 7) & ~7
+    payload.extend(bytes(texture_offset - len(payload)))
+    extension = V2_EXTENSION.pack(
+        8, 8, 16, 0, binding_offset, 0, material_offset, 8,
+        tile_offset, 0, texture_offset, 0, texture_offset, 0,
+        0, 0, 0, 0, 0, len(payload), 1, bytes(12))
+    payload[104:192] = extension
+    return bytes(payload)
 
 
 class ActorBankV2Test(unittest.TestCase):
@@ -315,6 +392,35 @@ class ActorBankV2Test(unittest.TestCase):
             pack_actor_bank_v2(self.core, bytes(31), base)
         with self.assertRaises(ValueError):
             pack_actor_bank_v2(self.core + b"\0", self.v2_source, base)
+
+    def test_v2_rejects_structurally_valid_zero_required_draw_counts(self) -> None:
+        """Catches v2 accepting a bank with no meshlet and no primitive."""
+        core = zero_draw_core(self.core_source)
+        self.assertEqual(validate_actor_bank(core).version, 1)
+        raw_v2 = unchecked_zero_draw_v2(core, self.v2_source)
+        with self.assertRaisesRegex(ValueError, "meshlet/primitive count"):
+            validate_actor_bank(raw_v2)
+        resources = ActorBankResourcesV2(
+            bindings=(), materials=(TargetMaterialV2(1, 0, 0),), tiles=(),
+            bake_policy_id=1)
+        with self.assertRaisesRegex(ValueError, "meshlet/primitive count"):
+            pack_actor_bank_v2(core, self.v2_source, resources)
+
+    def test_packer_preflights_final_bound_before_any_allocation(self) -> None:
+        """Catches output growth before aggregate checked-bound validation."""
+        cases = (
+            (len(self.core) + 87, untextured_resources(), "S64B v2 total size limit"),
+            (7, textured_resources(), "texture payload accumulation limit"),
+            (16, textured_resources(), "CLUT payload accumulation limit"),
+        )
+        for reduced_limit, resources, message in cases:
+            with self.subTest(limit=reduced_limit, message=message), \
+                    patch.object(actor_bank_v2_module, "_PACK_SIZE_LIMIT", reduced_limit), \
+                    patch.object(actor_bank_v2_module, "bytearray",
+                                 side_effect=AssertionError("allocation preceded preflight"),
+                                 create=True), \
+                    self.assertRaisesRegex(ValueError, message):
+                pack_actor_bank_v2(self.core, self.v2_source, resources)
 
 
 if __name__ == "__main__":

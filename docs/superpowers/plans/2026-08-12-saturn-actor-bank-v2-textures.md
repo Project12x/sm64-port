@@ -181,6 +181,15 @@ packs dense first-use target resources, and reparses the completed bytes
 through the version-owned validator. Focused and broader host gates are green;
 no target/runtime evidence is claimed and Task 3 remains closed until review.
 
+**Fix round 1/5:** source-complete, pending scoped rereview. The initial review
+found two Important gaps (C0/I2/M0): v2 accepted zero required draw counts,
+and aggregate output bounds were enforced after bytearray growth. V2 now
+rejects zero meshlet/primitive counts in both parser and packer while v1 keeps
+its historical behavior. A checked reduced-limit preflight covers the promoted
+core, every table/alignment/texture/CLUT/record/copy span, and total size before
+the sole output allocation. Sixteen focused and 62 broader tests plus all host
+gates pass; canonical v2 and Mario/S64F fixture bytes remain exact.
+
 **Files:**
 - Create: `tools/saturn/actor_bank_v2.py`
 - Create: `tools/saturn/test_actor_bank_v2.py`

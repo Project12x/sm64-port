@@ -24,6 +24,16 @@
 
 ### Fixed
 
+- Hardened the new S64B-v2 host boundary after independent review. V2 now
+  rejects structurally valid v1 cores whose required meshlet or primitive
+  count is zero, while historical v1 acceptance remains unchanged. The packer
+  also preflights the complete promoted core, resource directories, every
+  aligned texture/CLUT accumulation, every record/copy span, and final size
+  against a checked bound before its sole output allocation. Oversized input
+  therefore fails with a named format error instead of growing intermediate
+  bytearrays or leaking `MemoryError`; canonical fixture and Mario bytes stay
+  exact.
+
 - Made the final two bytes of the S64B-v1 104-byte header an explicit
   zero-reserved field in the version-owned parser. Nonzero padding now fails
   closed instead of being structurally unowned; historical Mario and S64F-v3

@@ -20,6 +20,7 @@ from actor_family_bundle import SourceRecord
 
 
 UINT32_MAX = (1 << 32) - 1
+_PACK_SIZE_LIMIT = UINT32_MAX
 _COMMON_HEADER = struct.Struct(">4s9HI32sHH10IH")
 _ANIMATION = struct.Struct(">IIHHHh")
 _EXTENSION = struct.Struct(">4H17I12s")
@@ -81,9 +82,37 @@ def _align8(value: int, name: str) -> int:
     return _add(value, 7, name) & ~7
 
 
-def _pad8(payload: bytearray) -> None:
-    target = _align8(len(payload), "S64B v2 alignment")
-    payload.extend(bytes(target - len(payload)))
+def _pack_add(a: int, b: int, name: str) -> int:
+    limit = _PACK_SIZE_LIMIT
+    if (not isinstance(limit, int) or isinstance(limit, bool) or
+            limit < 0 or limit > UINT32_MAX):
+        raise ValueError("S64B v2 pack size limit")
+    if a < 0 or b < 0 or a > limit or b > limit - a:
+        raise ValueError(f"{name} limit")
+    return a + b
+
+
+def _pack_mul(a: int, b: int, name: str) -> int:
+    limit = _PACK_SIZE_LIMIT
+    if (not isinstance(limit, int) or isinstance(limit, bool) or
+            limit < 0 or limit > UINT32_MAX):
+        raise ValueError("S64B v2 pack size limit")
+    if a < 0 or b < 0 or (a and b > limit // a):
+        raise ValueError(f"{name} limit")
+    return a * b
+
+
+def _pack_align8(value: int, name: str) -> int:
+    return _pack_add(value, (-value) & 7, name)
+
+
+def _pack_record_spans(base: int, count: int, size: int,
+                       name: str) -> tuple[tuple[int, int], ...]:
+    spans = []
+    for index in range(count):
+        offset = _pack_add(base, _pack_mul(index, size, name), name)
+        spans.append((offset, _pack_add(offset, size, name)))
+    return tuple(spans)
 
 
 def _policy_value(value: object, name: str) -> object:
@@ -186,6 +215,9 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
     core_view = validate_actor_bank(core_v1)
     if core_view.version != 1:
         raise ValueError("S64B v2 promotion requires a v1 core")
+    common = _COMMON_HEADER.unpack_from(core_v1)
+    if not common[6] or not common[7]:
+        raise ValueError("S64B v2 meshlet/primitive count")
     if not isinstance(source_sha256, bytes) or len(source_sha256) != 32 or not any(source_sha256):
         raise ValueError("S64B v2 source SHA-256")
     if not isinstance(resources, ActorBankResourcesV2):
@@ -220,6 +252,8 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
             raise ValueError(f"invalid binding {index}")
         material_id = _integer(binding.material_id, 0, 0xFFFF,
                                f"binding {index} material")
+        if material_id >= len(materials):
+            raise ValueError(f"binding {index} material is outside input")
         tile_id = _integer(binding.tile_id, 0, 0xFFFF, f"binding {index} tile")
         if tile_id == 0xFFFF:
             packed_bindings.append(RenderBindingV2(material_id, tile_id))
@@ -237,12 +271,13 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
 
     cluts: list[bytes] = []
     clut_ids: dict[bytes, int] = {}
-    texture_payload = bytearray()
-    tile_records: list[bytes] = []
+    tile_layouts: list[tuple[int, int]] = []
+    texture_size = 0
     for index, tile in enumerate(canonical_tiles):
-        _pad8(texture_payload)
-        relative = len(texture_payload)
-        texture_payload.extend(tile.pixels)
+        relative = _pack_align8(texture_size,
+                                "S64B v2 texture payload accumulation")
+        texture_size = _pack_add(relative, len(tile.pixels),
+                                 "S64B v2 texture payload accumulation")
         if tile.format == ActorTileFormatV2.CLUT16:
             clut = tile.clut
             if clut is None:
@@ -253,12 +288,12 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
             clut_id = clut_ids[clut]
         else:
             clut_id = 0xFFFF
-        tile_records.append(_TILE.pack(relative, len(tile.pixels), tile.width,
-                                       tile.height, clut_id, tile.format, 0))
-    _pad8(texture_payload)
-    clut_payload = b"".join(cluts)
+        tile_layouts.append((relative, clut_id))
+    texture_size = _pack_align8(texture_size,
+                                "S64B v2 texture payload accumulation")
+    clut_size = _pack_mul(len(cluts), 32,
+                          "S64B v2 CLUT payload accumulation")
 
-    common = _COMMON_HEADER.unpack_from(core_v1)
     (magic, _version, family_id, model_id, joint_count, animation_count,
      meshlet_count, primitive_count, vertex_count, max_instances, feature_mask,
      _old_source, _header_size, record_size, records_offset, indices_offset,
@@ -267,51 +302,96 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
     if header_padding:
         raise ValueError("S64B v1 core header padding")
     delta = S64B_V2_HEADER_SIZE - S64B_V1_HEADER_SIZE
-    payload = bytearray(S64B_V2_HEADER_SIZE)
-    payload.extend(core_v1[S64B_V1_HEADER_SIZE:])
-    new_records_offset = _add(records_offset, delta, "S64B v2 records")
+    common_end = _pack_add(len(core_v1), delta, "S64B v2 total size")
+    binding_size = _pack_mul(len(packed_bindings), _BINDING.size,
+                             "S64B v2 binding table")
+    material_size = _pack_mul(len(materials), _MATERIAL.size,
+                              "S64B v2 material table")
+    tile_size = _pack_mul(len(canonical_tiles), _TILE.size,
+                          "S64B v2 tile table")
+    binding_offset = common_end
+    material_offset = _pack_add(binding_offset, binding_size,
+                                "S64B v2 total size")
+    tile_offset = _pack_add(material_offset, material_size,
+                            "S64B v2 total size")
+    tile_end = _pack_add(tile_offset, tile_size, "S64B v2 total size")
+    texture_offset = _pack_align8(tile_end, "S64B v2 total size")
+    texture_end = _pack_add(texture_offset, texture_size, "S64B v2 total size")
+    clut_offset = _pack_align8(texture_end, "S64B v2 total size")
+    total_size = _pack_add(clut_offset, clut_size, "S64B v2 total size")
+
+    new_records_offset = _pack_add(records_offset, delta, "S64B v2 records")
+    new_indices_offset = _pack_add(indices_offset, delta, "S64B v2 indices")
+    new_values_offset = _pack_add(values_offset, delta, "S64B v2 values")
+    new_vertices_offset = _pack_add(vertices_offset, delta, "S64B v2 vertices")
+    new_geometry_offset = _pack_add(geometry_offset, delta, "S64B v2 geometry")
+    rebased_animations: list[tuple[int, int, bytes]] = []
     for index in range(animation_count):
-        old_record = records_offset + index * _ANIMATION.size
+        record_delta = _pack_mul(index, _ANIMATION.size,
+                                 "S64B v2 animation record")
+        old_record = _pack_add(records_offset, record_delta,
+                               "S64B v2 animation record")
         values, indices, frames, joints, flags, divisor = _ANIMATION.unpack_from(
             core_v1, old_record)
         encoded = _ANIMATION.pack(
-            _add(values, delta, "S64B v2 pose values"),
-            _add(indices, delta, "S64B v2 pose indices"),
+            _pack_add(values, delta, "S64B v2 pose values"),
+            _pack_add(indices, delta, "S64B v2 pose indices"),
             frames, joints, flags, divisor)
-        target = new_records_offset + index * _ANIMATION.size
-        payload[target:target + _ANIMATION.size] = encoded
+        target = _pack_add(new_records_offset, record_delta,
+                           "S64B v2 animation record")
+        target_end = _pack_add(target, _ANIMATION.size,
+                               "S64B v2 animation record")
+        rebased_animations.append((target, target_end, encoded))
+    binding_spans = _pack_record_spans(
+        binding_offset, len(packed_bindings), _BINDING.size,
+        "S64B v2 binding record")
+    material_spans = _pack_record_spans(
+        material_offset, len(materials), _MATERIAL.size,
+        "S64B v2 material record")
+    tile_spans = _pack_record_spans(
+        tile_offset, len(canonical_tiles), _TILE.size,
+        "S64B v2 tile record")
+    texture_spans = []
+    for tile, (relative, _clut_id) in zip(canonical_tiles, tile_layouts):
+        start = _pack_add(texture_offset, relative,
+                          "S64B v2 texture payload copy")
+        texture_spans.append((start, _pack_add(
+            start, len(tile.pixels), "S64B v2 texture payload copy")))
+    clut_spans = _pack_record_spans(
+        clut_offset, len(cluts), 32, "S64B v2 CLUT payload copy")
+
+    # All output span/table/payload arithmetic is complete and bounded before
+    # this sole allocation. Copies below use only the preflighted offsets.
+    payload = bytearray(total_size)
+    payload[S64B_V2_HEADER_SIZE:binding_offset] = core_v1[S64B_V1_HEADER_SIZE:]
+    for target, target_end, encoded in rebased_animations:
+        payload[target:target_end] = encoded
     header = _COMMON_HEADER.pack(
         magic, 2, family_id, model_id, joint_count, animation_count,
         meshlet_count, primitive_count, vertex_count, max_instances,
         feature_mask, source_sha256, S64B_V2_HEADER_SIZE, record_size,
-        new_records_offset, _add(indices_offset, delta, "S64B v2 indices"), indices_size,
-        _add(values_offset, delta, "S64B v2 values"), values_size,
-        _add(vertices_offset, delta, "S64B v2 vertices"), vertices_size,
-        _add(geometry_offset, delta, "S64B v2 geometry"), geometry_size,
+        new_records_offset, new_indices_offset, indices_size,
+        new_values_offset, values_size, new_vertices_offset, vertices_size,
+        new_geometry_offset, geometry_size,
         maximum_scratch, 0)
     payload[:len(header)] = header
 
-    binding_offset = len(payload)
-    for binding in packed_bindings:
-        payload.extend(_BINDING.pack(binding.material_id, binding.tile_id, 0, 0))
-    binding_size = len(payload) - binding_offset
-    material_offset = len(payload)
-    for material in materials:
-        payload.extend(_MATERIAL.pack(material.recipe, material.layer,
-                                      material.alpha_mode, material.selector_kind, 0, 0))
-    material_size = len(payload) - material_offset
-    tile_offset = len(payload)
-    for record in tile_records:
-        payload.extend(record)
-    tile_size = len(payload) - tile_offset
-    _pad8(payload)
-    texture_offset = len(payload)
-    payload.extend(texture_payload)
-    texture_size = len(texture_payload)
-    _pad8(payload)
-    clut_offset = len(payload)
-    payload.extend(clut_payload)
-    clut_size = len(clut_payload)
+    for binding, (offset, end) in zip(packed_bindings, binding_spans):
+        payload[offset:end] = _BINDING.pack(
+            binding.material_id, binding.tile_id, 0, 0)
+    for material, (offset, end) in zip(materials, material_spans):
+        payload[offset:end] = _MATERIAL.pack(
+            material.recipe, material.layer, material.alpha_mode,
+            material.selector_kind, 0, 0)
+    for tile, layout, (offset, end), (pixels, pixels_end) in zip(
+            canonical_tiles, tile_layouts, tile_spans, texture_spans):
+        relative, clut_id = layout
+        payload[offset:end] = _TILE.pack(
+            relative, len(tile.pixels), tile.width, tile.height,
+            clut_id, tile.format, 0)
+        payload[pixels:pixels_end] = tile.pixels
+    for clut, (offset, end) in zip(cluts, clut_spans):
+        payload[offset:end] = clut
 
     texture_commands = sum(binding.tile_id != 0xFFFF for binding in packed_bindings)
     gouraud_recipes = {
@@ -327,7 +407,7 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
         binding_offset, binding_size, material_offset, material_size,
         tile_offset, tile_size, texture_offset, texture_size,
         clut_offset, clut_size, texture_size, clut_size,
-        primitive_count, texture_commands, gouraud_tables, len(payload),
+        primitive_count, texture_commands, gouraud_tables, total_size,
         bake_policy_id, bytes(12))
     payload[S64B_V1_HEADER_SIZE:S64B_V2_HEADER_SIZE] = extension
     packed = bytes(payload)
