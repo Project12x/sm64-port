@@ -2,10 +2,10 @@
 
 ## Status
 
-Source-complete-pending-review from reconciled base `ce28a7d9`. The behavior
-commit is the Task 7 `feat(saturn): publish actor texture residency generations`
-transition; its exact SHA is recorded in the ledger/evidence follow-up after
-Git creates it. This is host and freestanding SH-2 module evidence, not target
+Source-complete-pending-review from reconciled base `ce28a7d9`. Behavior commit
+`7cbd06ed` is the Task 7
+`feat(saturn): publish actor texture residency generations` transition. This
+is host and freestanding SH-2 module evidence, not target
 runtime evidence. Task 8/runtime/renderer/Ymir/release gates remain closed.
 
 ## Reconciliation and design corrections

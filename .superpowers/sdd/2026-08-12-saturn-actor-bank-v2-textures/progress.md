@@ -558,10 +558,9 @@
 
 ## Task 7 source-complete evidence (2026-08-12)
 
-- Status: source-complete-pending-review from base `ce28a7d9`; the behavior
-  transition is `feat(saturn): publish actor texture residency generations`.
-  Its exact SHA will be recorded by the evidence follow-up after Git creates
-  it. Task 8/runtime activation/renderer/Ymir/release remain closed.
+- Status: source-complete-pending-review from base `ce28a7d9`; behavior commit
+  `7cbd06ed` is `feat(saturn): publish actor texture residency generations`.
+  Task 8/runtime activation/renderer/Ymir/release remain closed.
 - Authorized file/design corrections are complete: `saturn_ir_texture.c` owns
   the new bounded-region initializer while its old initializer delegates;
   checked queue submit/wait replaces uncheckable raw libyaul DMA; the unchanged

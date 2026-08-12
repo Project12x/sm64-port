@@ -34,7 +34,7 @@ a design error: source-pool family ceilings are not simultaneous resource
 allocations. Task 6 is complete for host and freestanding target-module scope:
 same-reviewer rereview of `5ceb251c..d0fbc5aa` passed Spec/Quality, C0/I0/M0,
 after fix round 1 at `661e54a4`. Task 7 is source-complete-pending-review in
-this transition: fixed all-resident planning and checked upload publish a
+behavior commit `7cbd06ed`: fixed all-resident planning and checked upload publish a
 2,064-byte scalar scene-owned table for the exact 14-bank BOB subset, while
 independent review remains mandatory. Tasks 8-13 and every runtime, demo,
 release, reseal, smoke, visual, desktop,
@@ -1114,7 +1114,8 @@ Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` res
 
 ## Task 7 source-complete transition (2026-08-12)
 
-- Status is source-complete-pending-review. The implementation owns a fixed
+- Status is source-complete-pending-review at behavior commit `7cbd06ed`. The
+  implementation owns a fixed
   128-entry / 2,064-byte scalar publication in scene residency, keeps the
   public scene header Yaul-free, and retains Task 6's exact 16-byte mapping
   layout by moving only its typedef into the new lightweight header. Failed
