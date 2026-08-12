@@ -66,6 +66,9 @@ static bool address_span_last(uintptr_t base, uint32_t bytes,
 }
 
 #define SH2_PHYSICAL_ADDRESS_MASK UINT32_C(0x1FFFFFFF)
+#define SH2_AREA_MASK UINT32_C(0xE0000000)
+#define SH2_AREA_CACHED UINT32_C(0x00000000)
+#define SH2_AREA_CACHE_THROUGH UINT32_C(0x20000000)
 #define SH2_HWRAM_PHYSICAL_START UINT32_C(0x06000000)
 #define SH2_HWRAM_PHYSICAL_END UINT32_C(0x06100000)
 
@@ -95,6 +98,7 @@ static bool stage_span_is_hwram(const void *staging,
                                 uint32_t staging_capacity)
 {
     uintptr_t address = (uintptr_t)staging;
+    uint32_t area;
     uint32_t physical;
 #if defined(SM64_SATURN_ACTOR_TEXTURE_RESIDENCY_HOST_TEST)
     uintptr_t ignored_last;
@@ -105,6 +109,13 @@ static bool stage_span_is_hwram(const void *staging,
     if (address > UINT32_MAX) return false;
 #endif
     if (staging == NULL || staging_capacity == 0U) return false;
+    /* Yaul's SH-2 cache ABI exposes HWRAM through the ordinary cached P0
+     * shape and the P2 cache-through shape only. P1/P3/P4-shaped aliases are
+     * cache-control/address/data arrays, not CPU-copyable memory, even when
+     * masking their high bits happens to yield an HWRAM physical address. */
+    area = (uint32_t)address & SH2_AREA_MASK;
+    if (area != SH2_AREA_CACHED && area != SH2_AREA_CACHE_THROUGH)
+        return false;
     physical = (uint32_t)address & SH2_PHYSICAL_ADDRESS_MASK;
     return physical >= SH2_HWRAM_PHYSICAL_START &&
            physical < SH2_HWRAM_PHYSICAL_END &&

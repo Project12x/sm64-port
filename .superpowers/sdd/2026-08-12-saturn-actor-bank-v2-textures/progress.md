@@ -658,7 +658,8 @@
   decidable. A separate Make RED proved the actor residency target did not own
   the real Task 5 producer/validator chain.
 - GREEN now permits only a nonempty caller-owned HWRAM span ending at or before
-  `0x06100000`, normalizes P1/P2 aliases, and rejects overlap with the S64F
+  `0x06100000`, normalizes only P0 cached/P2 cache-through aliases, and rejects
+  P1/P3/P4 cache-control shapes plus overlap with the S64F
   bundle, scalar publication, or either complete VDP1 destination region before
   any queue preflight, CPU copy, or DMA. Generation replacement uses explicit
   unsigned half-range serial arithmetic; the half-range ambiguity rejects.
@@ -676,3 +677,19 @@
   usage). RED was captured with installed GCC 14.3 `-fstack-usage`. The
   follow-up scans scalar fields/128 mappings in place, including a last-unused-
   row mutation regression; no publication-sized local object remains.
+- Pre-Task-8 memory reconciliation found two previously omitted bound owners:
+  the generated actor workspace is exactly 1,280 bytes LWRAM (1,091 used, 189
+  margin, two lanes), and existing scene begin/commit validation still measures
+  3,920/3,420-byte SH-2 stack frames from package-view/identity locals. Task 8
+  must reuse the state-owned staging view/slot and prove ≤256 bytes per call by
+  exact `-fstack-usage` before any target wiring. The runtime will alias the
+  S64P/S64F already placed by `source_cart`; no redundant streamer is allowed.
+- Same-reviewer rereview then found the HWRAM check normalized every SH-2 area
+  before classification, allowing cache-control shapes such as `0x460FF600`
+  to masquerade as HWRAM. Focused RED reproduced that acceptance. GREEN now
+  requires P0 cached or P2 cache-through shape before physical masking;
+  `0x460FF600`, `0x660FF600`, and `0xC60FF600` reject, while the exact P0/P2
+  2,560-byte top fit remains accepted. The checked-queue host double exempts
+  >32-bit fixture pointers from Saturn area decoding to remove an ASLR-only
+  false failure. Native host actor residency and exact SH-2 freestanding
+  syntax compilation pass; rereview remains open.

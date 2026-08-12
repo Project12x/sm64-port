@@ -33,8 +33,8 @@ initial zero-edit preflight exposed and corrected
 a design error: source-pool family ceilings are not simultaneous resource
 allocations. Task 6 is complete for host and freestanding target-module scope:
 same-reviewer rereview of `5ceb251c..d0fbc5aa` passed Spec/Quality, C0/I0/M0,
-after fix round 1 at `661e54a4`. Task 7 is source-complete-pending-review in
-behavior commit `7cbd06ed`: fixed all-resident planning and checked upload publish a
+after fix round 1 at `661e54a4`. Task 7 is source-complete-pending-rereview after
+repair commits `4c4c24a9` and `c270f363`: fixed all-resident planning and checked upload publish a
 2,064-byte scalar scene-owned table for the exact 14-bank BOB subset, while
 independent review remains mandatory. Tasks 8-13 and every runtime, demo,
 release, reseal, smoke, visual, desktop,
@@ -75,11 +75,13 @@ parallel infrastructure sprint.
 | Object | Region / maximum | Owner and lifetime | Transport / first consumer |
 | --- | --- | --- | --- |
 | S64P + S64F + embedded S64B | immutable 32-Mbit DRAM CART; current BOB S64F 160,928 B | Task 8 scene residency; load through commit/unload generation | CDFS/cart load; generic bundle resolver |
-| Actor cold upload stage | fixed HWRAM, 32-byte aligned, capacity-driven; current measured largest span 2,560 B | Task 8 scene-transition owner; reused serially, never worker-visible | CPU CART→HWRAM copy, checked SCU DMA HWRAM→VDP1 |
+| Actor cold upload stage | fixed 2,560 B HWRAM, 32-byte aligned; linked HWRAM margin pending first target | Task 8 scene-transition owner; reused serially, never worker-visible | CPU CART→HWRAM copy, checked SCU DMA HWRAM→VDP1 |
 | Actor VDP1 texture/CLUT bytes | current aggregate 16,640 B texture + 2,816 B CLUT in separate partition regions | master scene activation; publication generation commits last | Task 6 generic material binder / production emitter |
 | Actor texture publication | 2,064 B HWRAM scalar table, 128 mappings | scene residency reset/rollback/commit/unload | master lookup; no pointer enters worker records |
+| Actor pose/meshlet workspace | fixed 1,280 B LWRAM generated ceiling; current bundle uses 1,091 B, margin 189 B; two lanes | Task 8 bundle runtime; lane claim through terminal job publication | transient bank resolution on master/slave; outside the actor output arena |
 | Actor queue/output arena | fixed 65,536 B LWRAM, 2,718 eight-byte records | Task 9 queue/handoff generation | master snapshot→dual-SH-2 jobs→master merge |
 | Frame command/Gouraud credits | 1,351 post-Mario commands, 892 post-Mario Gouraud; exact frame dry-sum | Task 9 master frame policy | generic actor set before optional terrain |
+| Scene validation call stack | current pre-live debt: `begin` 3,920 B and commit validation 3,420 B from package-view/identity locals; Task 8 ceiling ≤256 B per call by reusing state-owned staging view/slot | master scene transition only; no recursive/nested validator | S64P validation then generic bundle owner; exact GCC `-fstack-usage` gate before target wiring |
 
 Every changed bound must update this table before implementation. Task 10 must
 replace host/measured values with linked-ELF and live telemetry margins, but it
@@ -909,6 +911,9 @@ reused only after each checked SCU-DMA wait retires.
 Require a non-provisional S64P with exactly one actor dependency in CART,
 exact hash/generation, zero root scratch, bounded 16-sector reads while
 suspended, lease drain before reclaim, and direct-to-cart no-copy validation.
+Capture the existing 3,920/3,420-byte scene-validation stack RED, then require
+both transition paths to use the already-owned staging view/identity slot with
+no scene-package-view or resident-identity local and at most 256 bytes per call.
 For two banks with different lane sizes, require concurrent lane 0/1 claims at
 the bundle-wide stride for raw workspace residues 0..3, exact alignment and
 nonoverlap, texture activation before descriptor publication, and
@@ -920,7 +925,12 @@ Run `verify-scene-package-schema verify-actor-bundle-runtime verify-scene-stream
 
 - [ ] **Step 3: Implement fixed storage and lifecycle**
 
-Load S64P/S64F from generated ISO names into the fixed root/cart spans, validate hashes, retain the bundle view, activate actor textures, bind the generated two-lane workspace, and publish actor descriptors only after both package and texture generations agree.
+Retain validated aliases to S64P/S64F already loaded by `source_cart` into their
+final fixed CART addresses; do not add a second CD streamer or copy. Refactor
+scene validation to reuse its state-owned staging view/slot instead of large
+target-stack locals, validate hashes, activate actor textures, bind the fixed
+1,280-byte two-lane LWRAM workspace, and publish actor descriptors only after
+package and texture generations agree.
 
 ```c
 if (!sm64_saturn_actor_texture_residency_activate(
@@ -1254,5 +1264,8 @@ Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` res
   Repair behavior is committed as `4c4c24a9`. Rereview then found one hidden
   2,076-byte SH-2 stack frame in the scene empty-publication check; focused
   RED `-fstack-usage` captured it and the follow-up scans the owned fields in
-  place. Same-reviewer rereview is pending, so Step 5 remains unchecked and
-  Task 8 remains closed.
+  place. Rereview then found the stage classifier accepted P1/P3/P4 cache-
+  control aliases after physical masking. The follow-up permits only the P0
+  cached and P2 cache-through shapes before HWRAM range validation; hostile
+  `0x460`, `0x660`, and `0xC60` shapes reject. Same-reviewer rereview remains
+  pending, so Step 5 remains unchecked and Task 8 remains closed.

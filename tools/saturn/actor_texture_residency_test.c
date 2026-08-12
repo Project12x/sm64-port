@@ -53,8 +53,10 @@ int saturn_dma_queue_request_valid(
     void *destination, const void *source, size_t bytes,
     saturn_dma_queue_mode_t mode)
 {
-    const uint64_t physical =
-        (uintptr_t)source & UINT32_C(0x0FFFFFFF);
+    const uintptr_t source_address = (uintptr_t)source;
+    const uint64_t physical = source_address > UINT32_MAX ?
+        UINT64_C(0x100000000) :
+        source_address & UINT32_C(0x0FFFFFFF);
     const uint64_t end = physical + bytes;
     g_preflight_count++;
     if (g_preflight_count == g_fail_preflight) return 0;
@@ -264,6 +266,12 @@ static void test_stage_memory_policy(void)
         (void *)(uintptr_t)UINT32_C(0x060FF600), 2560U));
     assert(stage_span_is_hwram(
         (void *)(uintptr_t)UINT32_C(0x260FF600), 2560U));
+    assert(!stage_span_is_hwram(
+        (void *)(uintptr_t)UINT32_C(0x460FF600), 2560U));
+    assert(!stage_span_is_hwram(
+        (void *)(uintptr_t)UINT32_C(0x660FF600), 2560U));
+    assert(!stage_span_is_hwram(
+        (void *)(uintptr_t)UINT32_C(0xC60FF600), 2560U));
     assert(!stage_span_is_hwram(
         (void *)(uintptr_t)UINT32_C(0x060FF601), 2560U));
     assert(!stage_span_is_hwram(

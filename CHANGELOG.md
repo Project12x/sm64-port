@@ -24,6 +24,13 @@
   Scene staging checks scan the owned scalar fields in place instead of
   materializing a 2,064-byte zero publication on the SH-2 stack; exact
   `-fstack-usage` evidence removed the former 2,076-byte helper frame.
+  The HWRAM upload-stage classifier also accepts only SH-2 P0 cached and P2
+  cache-through address shapes before physical normalization. P1/P3/P4 cache
+  purge, address-array, and data-array aliases can no longer masquerade as
+  HWRAM and receive a CPU copy merely because their masked low bits fall in
+  `0x06000000..0x06100000`; hostile `0x460`, `0x660`, and `0xC60` shapes are
+  covered directly. Native host fixture pointers bypass Saturn area decoding,
+  removing an ASLR-dependent false failure from the checked-queue double.
   The residency verification target also rebuilds and C-validates an absent-
   output real BOB bundle instead of accepting a fixture-only contract. The
   real BOB subset is measured at 14 mappings, 16,640 texture bytes, and 2,816

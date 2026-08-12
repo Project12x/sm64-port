@@ -175,3 +175,16 @@ helper created a 2,064-byte zero object on the target stack. Installed SH-2 GCC
 follow-up removes that local entirely and scans the fixed scalar table in
 place; a last-unused-row mutation proves the whole publication is checked.
 Fresh host and stack-usage evidence are required before final approval.
+
+Rereview subsequently found that upload-stage validation masked every 32-bit
+SH-2 address to physical form before deciding whether it was HWRAM. This made
+P1/P3/P4 cache purge, cache address-array, and cache data-array shapes such as
+`0x460FF600`, `0x660FF600`, and `0xC60FF600` look like `0x060FF600`, even though
+a CPU `memcpy` through those aliases would touch cache-control space. Focused
+RED captured the first false acceptance. The repair permits only P0 cached and
+P2 cache-through shapes before applying the physical HWRAM/top bound; all three
+hostile aliases now reject and both valid aliases retain the exact 2,560-byte
+top fit. The host DMA preflight double separately preserves ordinary >32-bit
+fixture pointers, removing an ASLR-dependent false negative. Native host actor
+residency and exact SH-2 `-m2 -mb -ffreestanding -Werror` syntax compilation
+pass. Same-reviewer final rereview remains required before Task 8 opens.
