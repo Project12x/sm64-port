@@ -1,8 +1,9 @@
 # Task 5 evidence report: bounded textured BOB actor bundle
 
-**Status (2026-08-12):** source-complete after fix round 2/5, pending scoped
-independent rereview at repair `cf8bef5c`. The initial `65a3fdb9` review found
-C0/I3/M0; fix-round-1 rereview found C0/I1/M0. This is
+**Status (2026-08-12):** complete for host scope after fix round 2/5 at repair
+`cf8bef5c`; scoped independent rereview passed Spec/Quality, C0/I0/M0. The
+initial `65a3fdb9` review found C0/I3/M0; fix-round-1 rereview found C0/I1/M0.
+This is
 host-only evidence. Target residency, renderer cutover, Ymir, manual visual,
 release, and whole-game gates remain open.
 
@@ -163,6 +164,8 @@ mode are serialized in the build report.
   `c0faab4ae9b0d0141474ac4ce716cd830ab703d5df6178cd4ca9878550459b94`,
   and report
   `5f0a69ade9e8a92b2dc6e9af52d6bfaa8c5c28199dec1f5d56961b1293b61ea3`.
-  Scoped rereview is
-  still required; Task 6 and all runtime/residency/renderer/Ymir gates remain
-  closed.
+  Scoped rereview independently recomputed 21 local modules, found all of them
+  in the 23 declared inputs with zero missing/nonexistent paths and only the
+  intentional `collect_scene_closure.py` / `scene_package_schema.py` extras,
+  and returned Spec PASS / Quality PASS, C0/I0/M0. Task 6 and all runtime/
+  residency/renderer/Ymir gates remain closed.

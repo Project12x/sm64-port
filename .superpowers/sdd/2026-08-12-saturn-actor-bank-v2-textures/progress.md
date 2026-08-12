@@ -407,6 +407,13 @@
   12+3, focused 12, mixed S64F 54, real BOB 47/14, S64B-v2 86, and both
   capability families). Post-hardening focused is 12/12, broader historical/
   parser/closure/profile is 112/112, and compileall/diff/hash gates pass.
-- Task 5 is source-complete-pending-rereview at `cf8bef5c`; same-reviewer round-2
-  verdict remains open. Task 6 and every target/runtime/residency/renderer/Ymir
+- Same-reviewer round-2 verdict at `13854e17`: Spec PASS / Quality PASS,
+  C0/I0/M0. Independent closure is 21 local modules, all present in the 23
+  declared inputs with zero missing/nonexistent paths and only the intentional
+  `collect_scene_closure.py` / `scene_package_schema.py` extras. The reviewer
+  independently reconfirmed baseline verifier-only, forced publisher+verifier,
+  no-clobber failure, focused/profile/C/capability/source-policy/diff/AST/hash,
+  docs, and scope gates.
+- Task 5 is complete for host scope at `cf8bef5c` plus evidence `13854e17` and
+  this verdict record. Task 6 and every target/runtime/residency/renderer/Ymir
   gate remain closed.

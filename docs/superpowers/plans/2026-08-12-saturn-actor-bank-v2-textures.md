@@ -25,12 +25,13 @@ opaque mixed-S64F delegation; 86 direct S64B mutations, 54 S64F mutations, 63
 broader Python tests, the historical actor gates, and the freestanding SH-2
 syntax check pass. Task 4 behavior `52c9c1af` plus repair `86de51cc` compiles
 the exact 14 measured direct-textured BOB keys, including Cannon, and its scoped
-rereview passed C0/I0/M0 through `f5a03808`. Task 5 fix round 2/5 is
-source-complete at `cf8bef5c`, pending scoped rereview after round 1 received
-C0/I1/M0 for an incomplete transitive host-tool prerequisite closure. Its
+rereview passed C0/I0/M0 through `f5a03808`. Task 5 is complete for its host
+scope after fix round 2/5 at `cf8bef5c`; scoped rereview passed Spec/Quality,
+C0/I0/M0 after round 1 received C0/I1/M0 for an incomplete transitive host-tool
+prerequisite closure. Its
 initial zero-edit preflight exposed and corrected
 a design error: source-pool family ceilings are not simultaneous resource
-allocations. Task 5 review, Tasks 6-13, and every target-material, runtime,
+allocations. Tasks 6-13 and every target-material, runtime,
 demo, release, reseal, smoke, visual, desktop, manual, retail, and total-game
 gate remain open. No target runtime, residency, renderer, or Ymir state changed.
 
@@ -470,8 +471,9 @@ Commit `feat(saturn): bake BOB actor materials for VDP1`. Review source closure,
 
 ### Task 5: Build the real mixed BOB S64F and prove aggregate budgets
 
-**Execution status:** source-complete after fix round 2/5 at repair `cf8bef5c`,
-pending scoped rereview. Initial behavior commit `65a3fdb9` received C0/I3/M0 for an
+**Execution status:** complete for host scope after fix round 2/5 at repair
+`cf8bef5c`; scoped rereview passed Spec/Quality, C0/I0/M0. Initial behavior
+commit `65a3fdb9` received C0/I3/M0 for an
 unreconciled family report, stale-generation Make graph, and manual package-
 profile intake. The repair recomputes exact family semantics through the owning
 compiler (excluding only generated payload pathname), consumes only those
@@ -589,9 +591,11 @@ pre-Task-4 `56e9a35c...` digest to twice-regenerated PNG-attested closure digest
 `60c329ab...`; production parser/runtime semantics and the separate effect
 oracle remain unchanged.
 
-- [ ] **Step 5: Commit and independent review**
+- [x] **Step 5: Commit and independent review**
 
-Commit `feat(saturn): build bounded textured BOB actor bundle`. Review generated inventory and capacity equations before target rendering.
+Behavior `65a3fdb9`, repair rounds `2cc767c0` and `cf8bef5c`; scoped
+fix-round-2 rereview passed Spec/Quality, C0/I0/M0. Generated inventory and
+capacity equations are host-approved; target rendering remains a later gate.
 
 ---
 
