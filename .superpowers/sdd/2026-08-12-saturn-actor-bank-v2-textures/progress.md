@@ -274,7 +274,8 @@
   otherwise it quarantines the whole actor generation with no partial
   descriptor/output/VDP1 mutation. No subset selection, count rewrite, or
   hidden working set is permitted.
-- Task 5 status: active after docs-only adjudication. Required REDs now
+- Task 5 status: active after docs-only adjudication commit `acef808d`.
+  Required REDs now
   distinguish the named unconstrained source-ceiling diagnostic from
   all-resident/individual-bank acceptance, inject each one-credit overflow,
   and prove a positive computed service floor. Task 11 remains responsible for

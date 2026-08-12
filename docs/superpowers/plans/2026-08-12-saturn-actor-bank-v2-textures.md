@@ -468,7 +468,8 @@ Commit `feat(saturn): bake BOB actor materials for VDP1`. Review source closure,
 
 ### Task 5: Build the real mixed BOB S64F and prove aggregate budgets
 
-**Execution status:** active after a zero-edit design stop. Applying the original
+**Execution status:** active after a zero-edit design stop; normative correction
+commit `acef808d`. Applying the original
 family-sum equation to the real 14-bank set counted 5,288 mutually incompatible
 live contributions against the global 64-observer cap and produced impossible
 85,512-record / 65,788-command / 29,352-Gouraud totals. These family fields are
