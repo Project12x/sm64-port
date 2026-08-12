@@ -37,8 +37,9 @@ before RED: all 34 nonzero BOB drawable keys are named unsupported and the
 canonical v3 writer rejects the resulting zero-variant document. The approved
 additive Saturn/SH-2 S64B-v2 replacement is now active. Tasks 1 and 2 completed
 through `d5914059` with independent C0/I0/M0 approval, exact v1-byte
-preservation, and checked 192-byte v2 packing/validation; Task 3 is ready for
-target parser/mixed-S64F RED. The later tasks still own the real
+preservation, and checked 192-byte v2 packing/validation. Task 3 completed
+through `ca3318cd` with independent C0/I0/M0 target parser/ABI approval; Task 4
+is ready for exact measured BOB material RED. The later tasks still own the real
 scene-local DRAM-cart bundle and fixed dual-SH-2 LWRAM workspace. Permitting an
 empty bundle is explicitly not a full-port path; Task 16 and Task 10 remain
 blocked. After eventual target-byte changes, rerun Task 9's

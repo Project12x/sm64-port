@@ -278,12 +278,13 @@ Commit `feat(saturn): define canonical actor bank v2 bytes`. Review arithmetic, 
 
 ### Task 3: Add target S64B v2 and mixed S64F validation
 
-**Execution status:** source-complete at behavior commit `87be53b6` pending
-independent review. The target dispatches once between v1 and v2, retains the
+**Execution status:** complete and independently approved at behavior
+`87be53b6`, evidence `ca3318cd`. The target dispatches once between v1 and v2, retains the
 historical no-write-on-failure v1 view contract, validates every v2 extension/
 resource before access, and S64F validation/resolve delegates opaque embedded
-bytes to the S64B owner. No material compiler, residency, renderer, or Task 4+
-work is open.
+bytes to the S64B owner. Independent parser/ABI review passed C0/I0/M0. No
+material compiler, residency, renderer, or Task 4+ claim is made; Task 4 may
+now open.
 
 **Files:**
 - Create: `tools/saturn/actor_bank_v2_test.c`
@@ -343,7 +344,7 @@ default:
 
 Run `verify-actor-bank-v2 verify-actor-family-bundle verify-actor-pose-bank verify-actor-meshlets verify-actor-feature-off-wrapper`, plus the target compiler dry-run for `saturn_actor_bank.c`. Expected: host/target agreement and unchanged v1 callers.
 
-- [ ] **Step 5: Commit and independent review**
+- [x] **Step 5: Commit and independent review**
 
 Commit `feat(saturn): validate mixed actor bank versions`. Require parser/ABI review before source material work.
 

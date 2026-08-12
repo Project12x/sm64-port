@@ -317,3 +317,13 @@
 - Replacement Task 3 is ready for target parser/mixed-S64F RED. This plan's
   Task 4, Task 16 production, target, release/reseal, Ymir, smoke, visual,
   desktop, manual, retail, and total-game gates remain open.
+
+## S64B-v2 replacement Task 3 transition — 2026-08-12
+
+- Replacement Task 3 behavior `87be53b6`, evidence `ca3318cd`: freestanding
+  target S64B v1/v2 validation and opaque mixed-S64F delegation.
+- Independent parser/ABI review PASS, Spec/Quality C0/I0/M0; 86 S64B and 54
+  S64F mutations, historical pose/meshlet/feature-off, Python parity,
+  freestanding SH-2 compile, and exact historical hashes pass.
+- Replacement Task 4 is ready for exact measured BOB material RED. This plan's
+  Task 4 and all runtime/target/demo/release/manual gates remain open.

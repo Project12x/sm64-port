@@ -126,3 +126,11 @@
 - Status: source-complete-pending-review at behavior commit `87be53b6`. Task 4
   and every material, real-BOB, runtime, Ymir, release, smoke, visual,
   desktop, manual, retail, and total-game gate remain closed.
+- Independent Task 3 review of `efd70710..ca3318cd`: Spec PASS / Quality PASS,
+  C0/I0/M0, no out-of-scope change. Fresh 86-mutation S64B, 54-mutation mixed
+  S64F, pose, meshlet, feature-off, 51-test Python, freestanding SH-2 compile,
+  and diff checks pass.
+- Task 3: complete (commits `efd70710..ca3318cd`, review clean). Task 4 may
+  open for exact measured BOB material capture/lowering. Every actual target
+  execution, real BOB bundle, residency/runtime, Ymir, release, smoke, visual,
+  desktop, manual, retail, and total-game gate remains open.

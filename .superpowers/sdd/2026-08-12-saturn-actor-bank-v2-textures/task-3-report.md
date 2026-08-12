@@ -92,3 +92,17 @@ Two regression cycles followed:
 - Task 4 exact measured BOB material capture/lowering and all later bundle,
   residency, runtime, Cannon/Ymir, release, smoke, visual, desktop, manual,
   retail, and total-game gates remain unchecked.
+
+## Independent parser/ABI review
+
+Independent review of `efd70710..ca3318cd` passed Spec and Quality at
+C0/I0/M0 with no out-of-scope change. The reviewer confirmed exact host/target
+192-byte layout parity, checked span arithmetic before pointer formation,
+complete extension/reserved validation, v1 no-write-on-failure preservation,
+bounded copied accessors, opaque S64F delegation, and mutation coverage.
+
+Fresh review gates passed: S64B 86 mutations, mixed S64F 54 mutations, pose,
+meshlets including invalid span, feature-off 6/6, 51 focused Python tests,
+freestanding `sh-elf-gcc -Werror -fsyntax-only`, and scoped diff check. Task 3
+is approved; Task 4 may open. No actual target execution or later acceptance
+gate is claimed.
