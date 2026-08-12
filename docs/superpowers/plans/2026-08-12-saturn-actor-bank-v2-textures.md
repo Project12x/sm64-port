@@ -14,11 +14,12 @@ in BOB under Ymir before rebuilding and resealing the release.
 
 **Approved design:** `docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`, architecture commit `62f16de8`, owner written-spec approval received 2026-08-12.
 
-**Execution status (2026-08-12):** Task 1 is independently approved. Task 2 is
-source-complete and pending independent review: the host owns the exact
+**Execution status (2026-08-12):** Tasks 1 and 2 are independently approved.
+Task 2 behavior `83cfc1ad` plus repair `95de6457` owns the exact
 192-byte S64B-v2 extension, deterministic v1-core rebasing, target-resource
 deduplication, and fail-closed validation while historical Mario/S64F bytes
-remain exact. Task 3 is not started. Tasks 3-13 and every target, demo,
+remain exact; scoped rereview passed C0/I0/M0 through `d5914059`. Task 3 is
+ready for RED. Tasks 3-13 and every target, demo,
 release, reseal, smoke, visual, desktop, manual, retail, and total-game gate
 remain open.
 
@@ -174,21 +175,24 @@ Stage only the listed behavior/tests/docs and commit `refactor(saturn): centrali
 
 ### Task 2: Implement canonical host S64B v2 packing and validation
 
-**Execution status:** source-complete, pending independent review
-(2026-08-12), behavior commit `83cfc1ad`. The host now promotes a validated v1 core into the exact
+**Execution status:** complete and independently approved (2026-08-12),
+behavior `83cfc1ad`, repair `95de6457`, evidence `d5914059`. The host now
+promotes a validated v1 core into the exact
 192-byte pointer-free v2 layout, rebases bank-absolute pose/span offsets,
 packs dense first-use target resources, and reparses the completed bytes
 through the version-owned validator. Focused and broader host gates are green;
-no target/runtime evidence is claimed and Task 3 remains closed until review.
+scoped rereview passed C0/I0/M0. No target/runtime evidence is claimed; Task 3
+may now open.
 
-**Fix round 1/5:** source-complete at behavior `95de6457`, pending scoped rereview. The initial review
+**Fix round 1/5:** complete and approved at behavior `95de6457`. The initial review
 found two Important gaps (C0/I2/M0): v2 accepted zero required draw counts,
 and aggregate output bounds were enforced after bytearray growth. V2 now
 rejects zero meshlet/primitive counts in both parser and packer while v1 keeps
 its historical behavior. A checked reduced-limit preflight covers the promoted
 core, every table/alignment/texture/CLUT/record/copy span, and total size before
 the sole output allocation. Sixteen focused and 62 broader tests plus all host
-gates pass; canonical v2 and Mario/S64F fixture bytes remain exact.
+gates pass; canonical v2 and Mario/S64F fixture bytes remain exact. Scoped
+rereview found both Important issues addressed with no new findings.
 
 **Files:**
 - Create: `tools/saturn/actor_bank_v2.py`

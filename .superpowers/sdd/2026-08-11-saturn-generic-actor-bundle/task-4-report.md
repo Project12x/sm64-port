@@ -208,3 +208,9 @@ Replacement Task 2 is ready for canonical v2 packing/validation RED. This
 Task 4 remains superseded and paused until replacement Tasks 1-5 complete; no
 target, Ymir, release, smoke, visual, desktop, manual, or total-game claim is
 made by this transition.
+
+Replacement Task 2 subsequently completed through evidence `d5914059`. The
+exact 192-byte host format passed scoped C0/I0/M0 rereview after v2-only
+zero-draw rejection and checked pre-allocation bounds were added. Historical
+Mario/S64F bytes remain exact. Replacement Task 3 is ready for target parser
+and mixed-S64F RED; this Task 4 and every target/runtime/demo gate remain open.

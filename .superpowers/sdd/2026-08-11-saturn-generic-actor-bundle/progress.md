@@ -304,3 +304,16 @@
 - This plan's Task 4 remains superseded/paused until replacement Tasks 1-5
   finish. Task 16 production, target, release/reseal, smoke, visual, desktop,
   manual, retail, and total-game gates remain open.
+
+## S64B-v2 replacement Task 2 transition — 2026-08-12
+
+- Replacement Task 2 behavior `83cfc1ad`, repair `95de6457`, evidence
+  `d5914059`. Exact 192-byte pointer-free v2 packing/validation preserves the
+  historical Mario/S64F bytes.
+- Independent initial review C0/I2/M0 found zero-draw v2 acceptance and late
+  allocation bounds. Fix round 1 added v2-only required-count rejection and
+  checked reduced-limit preflight before allocation. Scoped rereview: both
+  findings ADDRESSED, no new issue, Spec/Quality PASS C0/I0/M0.
+- Replacement Task 3 is ready for target parser/mixed-S64F RED. This plan's
+  Task 4, Task 16 production, target, release/reseal, Ymir, smoke, visual,
+  desktop, manual, retail, and total-game gates remain open.
