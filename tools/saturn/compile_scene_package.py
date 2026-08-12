@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import os
+import tempfile
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -349,6 +350,74 @@ def _input_within_root(path: Path, root: Path, label: str) -> Path:
     return resolved
 
 
+def publish_or_verify(path: Path, raw: bytes) -> None:
+    """Exclusively publish new bytes or verify an identical prior result.
+
+    This is the same-project no-clobber/report-last pattern used by
+    compile_actor_family_bundle. The private hard link makes a concurrent
+    winner visible without replacing it; an existing divergent byte is a
+    same-generation publication failure.
+    """
+    path = path.absolute()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        if not path.is_file() or path.read_bytes() != raw:
+            raise ValueError(f"publication target exists: {path}")
+        return
+    descriptor, private_name = tempfile.mkstemp(
+        prefix=f".{path.name}.private-", dir=path.parent)
+    private = Path(private_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            written = stream.write(raw)
+            if written != len(raw):
+                raise OSError(f"short private write: {written}/{len(raw)}")
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(private, path)
+        except FileExistsError:
+            if not path.is_file() or path.read_bytes() != raw:
+                raise ValueError(f"publication target exists: {path}")
+    finally:
+        private.unlink(missing_ok=True)
+
+
+def _assembly_bytes(root_package: Path, actor_bundle: Path,
+                    assembly_base: Path) -> bytes:
+    try:
+        base = assembly_base.resolve(strict=True)
+        root_relative = Path(os.path.relpath(
+            root_package.absolute(), base)).as_posix()
+        bundle_relative = Path(os.path.relpath(
+            actor_bundle.resolve(strict=True), base)).as_posix()
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise ValueError("assembly inputs cannot be made relative") from exc
+    lines = (
+        ".section .rodata",
+        ".align 4",
+        ".global _sm64_saturn_sourceboot_scene_package_root",
+        "_sm64_saturn_sourceboot_scene_package_root:",
+        f'.incbin "{root_relative}"',
+        "_sm64_saturn_sourceboot_scene_package_root_end:",
+        ".align 4",
+        ".global _sm64_saturn_sourceboot_scene_package_root_size",
+        "_sm64_saturn_sourceboot_scene_package_root_size:",
+        ".long _sm64_saturn_sourceboot_scene_package_root_end - _sm64_saturn_sourceboot_scene_package_root",
+        ".align 4",
+        ".global _sm64_saturn_sourceboot_actor_bundle",
+        "_sm64_saturn_sourceboot_actor_bundle:",
+        f'.incbin "{bundle_relative}"',
+        "_sm64_saturn_sourceboot_actor_bundle_end:",
+        ".align 4",
+        ".global _sm64_saturn_sourceboot_actor_bundle_size",
+        "_sm64_saturn_sourceboot_actor_bundle_size:",
+        ".long _sm64_saturn_sourceboot_actor_bundle_end - _sm64_saturn_sourceboot_actor_bundle",
+        "",
+    )
+    return "\n".join(lines).encode("ascii")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--level-id", type=int, required=True)
@@ -363,11 +432,15 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--metadata-output", type=Path)
     parser.add_argument("--payload-manifest-output", type=Path)
+    parser.add_argument("--assembly-output", type=Path)
+    parser.add_argument("--assembly-base", type=Path)
     args = parser.parse_args()
     if len(args.dependency_manifest) != len(args.dependency_payload):
         parser.error("each dependency manifest requires one dependency payload")
     if args.dependency_manifest and args.payload_root is None:
         parser.error("external dependencies require --payload-root")
+    if (args.assembly_output is None) != (args.assembly_base is None):
+        parser.error("--assembly-output and --assembly-base are required together")
     inputs = [SectionInput(kind, path.read_bytes(), alignment=16)
               for kind, path in args.section]
     dependency_manifests = [_input_within_root(
@@ -381,14 +454,7 @@ def main() -> None:
                         dependency_manifests, dependency_payloads)]
     package = compile_package(args.level_id, args.area_id, inputs, dependencies,
                               provisional=args.provisional)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_bytes(package)
-    if args.metadata_output is not None:
-        metadata = parse_package(package)
-        metadata["schema"] = "sm64-saturn-scene-package-report-v1"
-        args.metadata_output.parent.mkdir(parents=True, exist_ok=True)
-        args.metadata_output.write_text(
-            json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    payload_manifest_raw = None
     if args.payload_manifest_output is not None:
         output = args.payload_manifest_output
         payloads = [{
@@ -397,11 +463,29 @@ def main() -> None:
             "generation": dependency.generation,
         } for dependency, payload_path in zip(
             dependencies, dependency_payloads)]
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(
+        payload_manifest_raw = (
             json.dumps({"payloads": payloads}, separators=(",", ":"),
-                       sort_keys=True) + "\n",
-            encoding="utf-8", newline="\n")
+                       sort_keys=True) + "\n").encode("utf-8")
+    metadata_raw = None
+    if args.metadata_output is not None:
+        metadata = parse_package(package)
+        metadata["schema"] = "sm64-saturn-scene-package-report-v1"
+        metadata_raw = (json.dumps(
+            metadata, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    assembly_raw = None
+    if args.assembly_output is not None:
+        if len(dependency_payloads) != 1:
+            raise ValueError("sourceboot assembly requires exactly one dependency")
+        assembly_raw = _assembly_bytes(
+            args.output, dependency_payloads[0], args.assembly_base)
+
+    publish_or_verify(args.output, package)
+    if payload_manifest_raw is not None:
+        publish_or_verify(args.payload_manifest_output, payload_manifest_raw)
+    if assembly_raw is not None:
+        publish_or_verify(args.assembly_output, assembly_raw)
+    if metadata_raw is not None:  # Human-readable report publishes last.
+        publish_or_verify(args.metadata_output, metadata_raw)
 
 
 if __name__ == "__main__":

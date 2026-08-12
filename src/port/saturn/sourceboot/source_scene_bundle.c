@@ -64,6 +64,13 @@ static void *source_scene_upload_stage_get(void)
 volatile sm64_saturn_source_scene_bundle_probe_t
     g_sm64_saturn_source_scene_bundle_probe;
 
+static const uint8_t source_scene_actor_dependency_id[32] =
+    "bob-area1-actors-v3";
+
+enum {
+    SOURCE_SCENE_LIFETIME_SCENE = 2U
+};
+
 static bool bytes_equal(const uint8_t *left, const uint8_t *right,
                         uint32_t byte_count)
 {
@@ -83,6 +90,10 @@ static bool dependency_matches(
     return dependency != NULL && bundle != NULL && bundle_bytes != NULL &&
         dependency->payload_kind == SM64_SATURN_SCENE_ACTOR_DEPENDENCIES &&
         dependency->destination_class == SM64_SATURN_SCENE_DESTINATION_CART &&
+        dependency->lifetime == SOURCE_SCENE_LIFETIME_SCENE &&
+        bytes_equal(dependency->stable_id,
+                    source_scene_actor_dependency_id,
+                    sizeof(source_scene_actor_dependency_id)) &&
         dependency->byte_count == byte_count && dependency->alignment == 4U &&
         dependency->dependency_mask == 0U &&
         dependency->maximum_scratch == 0U && dependency->generation != 0U &&

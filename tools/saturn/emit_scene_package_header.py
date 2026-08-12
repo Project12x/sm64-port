@@ -8,7 +8,7 @@ from pathlib import Path
 
 from compile_scene_package import (
     DEPENDENCY_DESCRIPTOR_SIZE, HEADER_SIZE, SECTION_DESCRIPTOR_SIZE,
-    SECTION_KINDS, parse_package,
+    SECTION_KINDS, parse_package, publish_or_verify,
 )
 from validate_scene_package import load_payloads, validate_scene_package
 
@@ -131,11 +131,9 @@ def main() -> None:
                                args.payload_manifest, args.payload_root),
                            allow_provisional=args.allow_provisional)
     text = emit_header(package, args.symbol_prefix)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(text, encoding="utf-8", newline="\n")
+    publish_or_verify(args.output, text.encode("utf-8"))
     if args.abi_output is not None:
-        args.abi_output.parent.mkdir(parents=True, exist_ok=True)
-        args.abi_output.write_text(emit_abi_header(), encoding="utf-8", newline="\n")
+        publish_or_verify(args.abi_output, emit_abi_header().encode("utf-8"))
 
 
 if __name__ == "__main__":

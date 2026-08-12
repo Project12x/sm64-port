@@ -14,7 +14,7 @@ from compile_scene_package import (
     DEPENDENCY_STRUCT, DESTINATION_CLASSES, DESTINATION_NAMES, FLAG_PROVISIONAL,
     HEADER_SIZE, HEADER_STRUCT, KNOWN_FLAGS, LIFETIMES, LIFETIME_NAMES, MAGIC,
     PACKAGE_SHA256_OFFSET, SECTION_DESCRIPTOR_SIZE, SECTION_KINDS, SECTION_NAMES,
-    SECTION_STRUCT, VERSION,
+    SECTION_STRUCT, VERSION, publish_or_verify,
 )
 
 DEFAULT_BUDGETS = {
@@ -297,9 +297,9 @@ def main() -> None:
                                                   args.payload_root),
                                     allow_provisional=args.allow_provisional)
     if args.report is not None:
-        args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n",
-                               encoding="utf-8")
+        publish_or_verify(
+            args.report,
+            (json.dumps(report, indent=2, sort_keys=True) + "\n").encode("utf-8"))
 
 
 if __name__ == "__main__":

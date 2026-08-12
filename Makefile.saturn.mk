@@ -1651,7 +1651,9 @@ compile-actor-scene-package: verify-scene-package-schema
 	  --payload-root "$(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)" \
 	  --output "$(SCENE_PACKAGE_FINAL_ROOT)" \
 	  --metadata-output "$(SCENE_PACKAGE_FINAL_REPORT)" \
-	  --payload-manifest-output "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)"
+	  --payload-manifest-output "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)" \
+	  --assembly-output "$(SCENE_PACKAGE_FINAL_ASM)" \
+	  --assembly-base "$(SATURN_REPO_ROOT)/src/port/saturn/sourceboot"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/validate_scene_package.py" \
 	  --input "$(SCENE_PACKAGE_FINAL_ROOT)" \
 	  --payload-manifest "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)" \
@@ -1664,27 +1666,6 @@ compile-actor-scene-package: verify-scene-package-schema
 	  --abi-output "$(SCENE_PACKAGE_ABI_HEADER)" \
 	  --symbol-prefix "$(SCENE_LEVEL)_area$(SCENE_AREA)_actors_v3" \
 	  --output "$(SCENE_PACKAGE_FINAL_HEADER)"
-	@mkdir -p "$(dir $(SCENE_PACKAGE_FINAL_ASM))"
-	@printf '%s\n' \
-	  '.section .rodata' \
-	  '.align 4' \
-	  '.global _sm64_saturn_sourceboot_scene_package_root' \
-	  '_sm64_saturn_sourceboot_scene_package_root:' \
-	  '.incbin "../../../../$(patsubst $(SATURN_REPO_ROOT)/%,%,$(SCENE_PACKAGE_FINAL_ROOT))"' \
-	  '_sm64_saturn_sourceboot_scene_package_root_end:' \
-	  '.align 4' \
-	  '.global _sm64_saturn_sourceboot_scene_package_root_size' \
-	  '_sm64_saturn_sourceboot_scene_package_root_size:' \
-	  '.long _sm64_saturn_sourceboot_scene_package_root_end - _sm64_saturn_sourceboot_scene_package_root' \
-	  '.align 4' \
-	  '.global _sm64_saturn_sourceboot_actor_bundle' \
-	  '_sm64_saturn_sourceboot_actor_bundle:' \
-	  '.incbin "../../../../$(patsubst $(SATURN_REPO_ROOT)/%,%,$(ACTOR_FAMILY_BUNDLE_PAYLOAD))"' \
-	  '_sm64_saturn_sourceboot_actor_bundle_end:' \
-	  '.align 4' \
-	  '.global _sm64_saturn_sourceboot_actor_bundle_size' \
-	  '_sm64_saturn_sourceboot_actor_bundle_size:' \
-	  '.long _sm64_saturn_sourceboot_actor_bundle_end - _sm64_saturn_sourceboot_actor_bundle' > "$(SCENE_PACKAGE_FINAL_ASM)"
 
 # Z-Treme-style LWRAM -> HWRAM promotion contract: alignment, bounded
 # capacity, copied bytes, and source immutability are all host-verifiable.

@@ -958,7 +958,10 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
 
 #### Task 8 source-complete transition (2026-08-12)
 
-- Status is `source-complete-pending-review` at behavior commit `b84103cd`.
+- Initial status was `source-complete-pending-review` at behavior commit
+  `b84103cd`, with evidence/status commit `0a180e39`. Independent review
+  returned Spec FAIL / Quality needs fixes, C0/I3/M0; the repair is now
+  source-complete-pending-rereview and Task 9 remains closed.
   Generation 14 emits one 740-byte
   S64P root (`9b0a0a4a...d101`) and one 160,928-byte S64F-v3 dependency
   (`3eee00fd...a523`) through deterministic relocation-neutral assembly
@@ -981,7 +984,7 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   bank, waits before reuse, and returns it before the first frame. Actor
   texture/CLUT regions consume 16,640/2,816 bytes of Yaul remaining capacity,
   leaving 33,216 bytes.
-- Host gates pass package schema 16/16, determinism 3/3, generic bundle/source
+- Initial host gates passed package schema 16/16, determinism 3/3, generic bundle/source
   owner/texture/scene residency, S64B-v2 86 mutations, mixed S64F 54
   mutations, pose, meshlets plus invalid-span mutation, instance queue,
   batches/neutrality 2/2, and feature-off 6/6. Installed GCC 14.3 exact
@@ -994,6 +997,32 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   the identity-assets gate correctly rejects that pre-existing fixture. No
   MSYS DLL loader failure occurred. Review, linked target, Task 9 production
   cutover, Ymir, release, and manual gates remain open.
+
+#### Task 8 independent review and repair round 1 (2026-08-12)
+
+- Review of `dfa8b286..0a180e39` found no Critical or Minor issue and three
+  Important defects. The cold stage overwrote command bank 0 after its fixed
+  VDP1 prefix had been initialized; activation did not bind the exact actor
+  dependency stable ID and scene lifetime; and root/sidecar/assembly outputs
+  were overwritten unconditionally despite the claimed no-clobber contract.
+- RED reproduced all three boundaries: source order placed both backend
+  initializers before scene activation; separately resealed stable-ID and
+  lifetime mutations still activated; and foreign root/report/header/ABI or
+  assembly bytes were replaced. GREEN moves both command-prefix writes after
+  cold-stage retirement, validates exact `bob-area1-actors-v3` plus scene
+  lifetime, and close-ports Task 5's exclusive private-link publisher for the
+  S64P, payload manifest, assembly, reports, and generated headers.
+- Package schema is now 19/19 and determinism remains 3/3. The exact repository
+  MSYS wrapper runs the repaired `verify-source-scene-bundle` gate twice; the
+  second run leaves hashes and write times unchanged for all seven published
+  files. The complete focused actor/package/scene host wave passes, generated
+  assembly keeps SHA-256 `bde84bb...15fb`, and `source_scene_bundle.c` compiles
+  with installed GCC 14.3 to an ELF32 big-endian SuperH object. Two old derived
+  JSON files differed only by CRLF and were moved recoverably to
+  `.superseded-crlf-*` before canonical LF publication.
+- The repair behavior commit and same-reviewer verdict remain to be recorded.
+  Step 5, Task 9, linked target, Ymir, release, visual, and manual gates stay
+  unchecked until rereview passes.
 
 ---
 

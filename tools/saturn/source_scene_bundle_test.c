@@ -19,6 +19,7 @@ typedef struct vdp1_vram_partitions {
 #include "../../src/port/saturn/sourceboot/source_scene_bundle.h"
 #include "../../src/port/saturn/gpl/slavedriver_dma_queue.h"
 #include "../../src/port/saturn/gfx/saturn_texture_residency.h"
+#include "../../src/port/saturn/runtime/saturn_scene_package.h"
 
 #define SM64_SATURN_ACTOR_TEXTURE_RESIDENCY_HOST_TEST 1
 
@@ -96,6 +97,64 @@ static uint32_t fixture_read_be32(const uint8_t *bytes)
            ((uint32_t)bytes[2] << 8) | bytes[3];
 }
 
+static uint8_t *fixture_find(uint8_t *bytes, uint32_t byte_count,
+                             const uint8_t *needle, uint32_t needle_bytes)
+{
+    uint32_t offset;
+    if (needle_bytes == 0U || needle_bytes > byte_count) return NULL;
+    for (offset = 0U; offset <= byte_count - needle_bytes; offset++)
+        if (memcmp(bytes + offset, needle, needle_bytes) == 0)
+            return bytes + offset;
+    return NULL;
+}
+
+static bool fixture_reseal_root(uint8_t *root, uint32_t root_bytes)
+{
+    uint8_t digest[32];
+    uint8_t dependency_canonical[81] = "S64P-DEPS\0\1";
+    uint8_t *dependency;
+    uint32_t descriptor_offset = 0U, section_offset = 0U, section_bytes = 0U;
+    uint16_t section_index, section_count;
+    if (root == NULL || root_bytes < 148U)
+        return false;
+    section_count = fixture_read_be16(root + 16U);
+    for (section_index = 0U; section_index < section_count; section_index++) {
+        const uint32_t candidate = 84U + (uint32_t)section_index * 64U;
+        if (candidate > root_bytes || 64U > root_bytes - candidate)
+            return false;
+        if (fixture_read_be16(root + candidate) == 5U) {
+            descriptor_offset = candidate;
+            section_offset = fixture_read_be32(root + candidate + 8U);
+            section_bytes = fixture_read_be32(root + candidate + 12U);
+            break;
+        }
+    }
+    if (descriptor_offset == 0U)
+        return false;
+    if (section_offset > root_bytes || section_bytes > root_bytes - section_offset ||
+        section_bytes < 100U)
+        return false;
+    dependency = root + section_offset + 4U;
+    if (!sm64_saturn_scene_package_sha256(
+            root + section_offset, section_bytes, digest))
+        return false;
+    memcpy(root + descriptor_offset + 28U, digest, 32U);
+    dependency_canonical[11] = dependency[0];
+    dependency_canonical[12] = dependency[1];
+    memcpy(dependency_canonical + 13U, dependency + 4U, 32U);
+    memcpy(dependency_canonical + 45U, dependency + 84U, 4U);
+    memcpy(dependency_canonical + 49U, dependency + 52U, 32U);
+    if (!sm64_saturn_scene_package_sha256(
+            dependency_canonical, sizeof(dependency_canonical), digest))
+        return false;
+    memcpy(root + 52U, digest, 32U);
+    memset(root + 20U, 0, 32U);
+    if (!sm64_saturn_scene_package_sha256(root, root_bytes, digest))
+        return false;
+    memcpy(root + 20U, digest, 32U);
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     _Alignas(32) static uint8_t texture_vram[20000];
@@ -132,6 +191,27 @@ int main(int argc, char **argv)
         root, root_bytes, bundle, bundle_bytes, 9U, 1U, 0x10000U,
         &partitions));
     root[20] = saved;
+
+    {
+        static const uint8_t stable_id[32] = "bob-area1-actors-v3";
+        uint8_t *id = fixture_find(root, root_bytes, stable_id,
+                                   sizeof(stable_id));
+        CHECK(id != NULL);
+        id[0] = (uint8_t)'x';
+        CHECK(fixture_reseal_root(root, root_bytes));
+        CHECK(!sm64_saturn_source_scene_bundle_init_from(
+            root, root_bytes, bundle, bundle_bytes, 9U, 1U, 0x10000U,
+            &partitions));
+        id[0] = (uint8_t)'b';
+        CHECK(fixture_reseal_root(root, root_bytes));
+        id[-1] = 3U;
+        CHECK(fixture_reseal_root(root, root_bytes));
+        CHECK(!sm64_saturn_source_scene_bundle_init_from(
+            root, root_bytes, bundle, bundle_bytes, 9U, 1U, 0x10000U,
+            &partitions));
+        id[-1] = 2U;
+        CHECK(fixture_reseal_root(root, root_bytes));
+    }
 
     initialized = sm64_saturn_source_scene_bundle_init_from(
         root, root_bytes, bundle, bundle_bytes, 9U, 1U, 0x10000U,

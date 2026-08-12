@@ -404,13 +404,135 @@ class ScenePackageSchemaTest(unittest.TestCase):
         self.assertIn("--metadata-output", recipe)
         self.assertIn("--payload-manifest-output", recipe)
         self.assertIn("$(SCENE_PACKAGE_FINAL_ASM)", recipe)
-        self.assertIn("_sm64_saturn_sourceboot_scene_package_root", recipe)
-        self.assertIn("_sm64_saturn_sourceboot_actor_bundle", recipe)
         self.assertIn("$(SCENE_PACKAGE_FINAL_ROOT)", recipe)
         self.assertIn("$(ACTOR_FAMILY_BUNDLE_PAYLOAD)", recipe)
-        self.assertIn("../../../../$(patsubst", recipe)
+        self.assertIn("--assembly-output", recipe)
+        self.assertIn("--assembly-base", recipe)
+        self.assertNotIn('> "$(SCENE_PACKAGE_FINAL_ASM)"', recipe)
         self.assertNotIn("--provisional", recipe)
         self.assertNotIn("--section", recipe)
+        repo_root = Path(__file__).resolve().parents[2]
+        compiler = (repo_root / "tools" / "saturn" /
+                    "compile_scene_package.py").read_text(encoding="utf-8")
+        self.assertIn("_sm64_saturn_sourceboot_scene_package_root", compiler)
+        self.assertIn("_sm64_saturn_sourceboot_actor_bundle", compiler)
+
+    def test_final_publication_is_verify_only_and_never_clobbers(self) -> None:
+        payload = b"S64F-v3-actor-bundle"
+        with tempfile.TemporaryDirectory(prefix="s64p-no-clobber-") as temporary:
+            root = Path(temporary)
+            payload_path = root / "actors.s64f"
+            manifest_path = root / "actors-dependency.json"
+            output_path = root / "scene.s64p"
+            report_path = root / "scene.json"
+            payload_manifest_path = root / "payloads.json"
+            assembly_path = root / "actor_scene_bundle.sx"
+            payload_path.write_bytes(payload)
+            manifest_path.write_text(json.dumps({
+                "alignment": 4,
+                "byte_count": len(payload),
+                "destination_class": "CART",
+                "generation": 14,
+                "kind": "ACTOR_DEPENDENCIES",
+                "lifetime": "SCENE",
+                "max_scratch": 0,
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "stable_id": "bob-area1-actors-v3",
+            }, sort_keys=True), encoding="utf-8")
+            command = [
+                sys.executable,
+                str(Path(__file__).with_name("compile_scene_package.py")),
+                "--level-id", "9", "--area-id", "1",
+                "--dependency-manifest", str(manifest_path),
+                "--dependency-payload", str(payload_path),
+                "--payload-root", str(root),
+                "--output", str(output_path),
+                "--metadata-output", str(report_path),
+                "--payload-manifest-output", str(payload_manifest_path),
+                "--assembly-output", str(assembly_path),
+                "--assembly-base", str(root),
+            ]
+            first = subprocess.run(
+                command, text=True, capture_output=True, check=False)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            published = {
+                path: path.read_bytes() for path in (
+                    output_path, report_path, payload_manifest_path,
+                    assembly_path)
+            }
+            repeat = subprocess.run(
+                command, text=True, capture_output=True, check=False)
+            self.assertEqual(repeat.returncode, 0, repeat.stderr)
+            self.assertEqual(published, {
+                path: path.read_bytes() for path in published
+            })
+            damaged = bytearray(output_path.read_bytes())
+            damaged[-1] ^= 1
+            output_path.write_bytes(damaged)
+            before_failed_repeat = {
+                path: path.read_bytes() for path in published
+            }
+            failed = subprocess.run(
+                command, text=True, capture_output=True, check=False)
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("publication target exists", failed.stderr)
+            self.assertEqual(before_failed_repeat, {
+                path: path.read_bytes() for path in published
+            })
+
+    def test_validator_and_header_reports_never_clobber_drift(self) -> None:
+        package = compile_package(9, 1, [], [])
+        with tempfile.TemporaryDirectory(prefix="s64p-sidecar-no-clobber-") as temporary:
+            root = Path(temporary)
+            package_path = root / "scene.s64p"
+            validation_path = root / "validation.json"
+            header_path = root / "scene.h"
+            abi_path = root / "abi.h"
+            package_path.write_bytes(package)
+            validator = [
+                sys.executable,
+                str(Path(__file__).with_name("validate_scene_package.py")),
+                "--input", str(package_path), "--report", str(validation_path),
+            ]
+            header = [
+                sys.executable,
+                str(Path(__file__).with_name("emit_scene_package_header.py")),
+                "--input", str(package_path), "--output", str(header_path),
+                "--abi-output", str(abi_path), "--symbol-prefix", "fixture",
+            ]
+            self.assertEqual(subprocess.run(
+                validator, text=True, capture_output=True,
+                check=False).returncode, 0)
+            self.assertEqual(subprocess.run(
+                header, text=True, capture_output=True,
+                check=False).returncode, 0)
+            validation_path.write_bytes(b"foreign validation\n")
+            header_path.write_bytes(b"foreign header\n")
+            abi_path.write_bytes(b"foreign abi\n")
+            for command, expected in (
+                    (validator, b"foreign validation\n"),
+                    (header, b"foreign header\n")):
+                result = subprocess.run(
+                    command, text=True, capture_output=True, check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("publication target exists", result.stderr)
+                target = validation_path if command is validator else header_path
+                self.assertEqual(target.read_bytes(), expected)
+            self.assertEqual(abi_path.read_bytes(), b"foreign abi\n")
+
+    def test_sourceboot_restores_command_prefix_after_cold_stage(self) -> None:
+        source = Path(__file__).resolve().parents[2].joinpath(
+            "src/port/saturn/sourceboot/main.c").read_text(encoding="utf-8")
+        activation = source.index("sm64_saturn_source_scene_bundle_init(")
+        initializers = []
+        cursor = 0
+        needle = "sm64_saturn_vdp1_backend_init_with_storage("
+        while (position := source.find(needle, cursor)) >= 0:
+            initializers.append(position)
+            cursor = position + len(needle)
+        self.assertEqual(len(initializers), 2)
+        self.assertTrue(all(position > activation for position in initializers),
+                        "command prefixes must be initialized after the borrowed cold stage retires")
 
 
 if __name__ == "__main__":

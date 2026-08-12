@@ -1723,29 +1723,6 @@ int main(void) {
 #endif
 
     {
-        const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
-        const int16_vec2_t local = INT16_VEC2_INITIALIZER(0, 0);
-        if (!sm64_saturn_vdp1_backend_init_with_storage(
-                &sourceboot_vdp1_backend, sourceboot_vdp1_cmdts[0],
-                SOURCEBOOT_VDP1_COMMAND_CAPACITY, clip, local)) {
-            dbgio_puts("sourceboot: VDP1 backend init failed\n");
-            dbgio_flush();
-            for (;;) {}
-        }
-        /* Both scene paths can acquire either source bank. Initialize bank 1's
-         * fixed system/local/END prefix unconditionally; binding storage does
-         * not synthesize those commands. */
-        sm64_saturn_vdp1_backend_t spare_backend;
-        if (!sm64_saturn_vdp1_backend_init_with_storage(
-                &spare_backend, sourceboot_vdp1_cmdts[1],
-                SOURCEBOOT_VDP1_COMMAND_CAPACITY, clip, local)) {
-            dbgio_puts("sourceboot: spare VDP1 backend init failed\n");
-            dbgio_flush();
-            for (;;) {}
-        }
-    }
-
-    {
         vdp1_vram_partitions_t partitions;
         uintptr_t cmd_end = (uintptr_t)VDP1_VRAM(0) +
             (uintptr_t)SOURCEBOOT_VDP1_COMMAND_CAPACITY *
@@ -1886,6 +1863,28 @@ int main(void) {
             dbgio_puts("sourceboot: generic BOB scene bundle failed\n");
             dbgio_flush();
             for (;;) {}
+        }
+        {
+            const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
+            const int16_vec2_t local = INT16_VEC2_INITIALIZER(0, 0);
+            /* The cold actor upload has retired and returned bank 0. Write
+             * both fixed system/local/END prefixes only now: frame-bank bind
+             * resets cursors but intentionally does not synthesize commands. */
+            if (!sm64_saturn_vdp1_backend_init_with_storage(
+                    &sourceboot_vdp1_backend, sourceboot_vdp1_cmdts[0],
+                    SOURCEBOOT_VDP1_COMMAND_CAPACITY, clip, local)) {
+                dbgio_puts("sourceboot: VDP1 backend init failed\n");
+                dbgio_flush();
+                for (;;) {}
+            }
+            sm64_saturn_vdp1_backend_t spare_backend;
+            if (!sm64_saturn_vdp1_backend_init_with_storage(
+                    &spare_backend, sourceboot_vdp1_cmdts[1],
+                    SOURCEBOOT_VDP1_COMMAND_CAPACITY, clip, local)) {
+                dbgio_puts("sourceboot: spare VDP1 backend init failed\n");
+                dbgio_flush();
+                for (;;) {}
+            }
         }
     }
 
