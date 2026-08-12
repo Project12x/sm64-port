@@ -181,7 +181,7 @@ packs dense first-use target resources, and reparses the completed bytes
 through the version-owned validator. Focused and broader host gates are green;
 no target/runtime evidence is claimed and Task 3 remains closed until review.
 
-**Fix round 1/5:** source-complete, pending scoped rereview. The initial review
+**Fix round 1/5:** source-complete at behavior `95de6457`, pending scoped rereview. The initial review
 found two Important gaps (C0/I2/M0): v2 accepted zero required draw counts,
 and aggregate output bounds were enforced after bytearray growth. V2 now
 rejects zero meshlet/primitive counts in both parser and packer while v1 keeps
