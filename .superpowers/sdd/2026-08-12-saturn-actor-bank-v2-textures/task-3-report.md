@@ -2,8 +2,8 @@
 
 ## Status
 
-Source-complete pending independent parser/ABI review. Behavior commit is
-pending. Task 4 and all material/compiler/runtime/demo/release gates remain
+Source-complete at behavior commit `87be53b6` pending independent parser/ABI
+review. Task 4 and all material/compiler/runtime/demo/release gates remain
 closed.
 
 ## Reconciliation and scope

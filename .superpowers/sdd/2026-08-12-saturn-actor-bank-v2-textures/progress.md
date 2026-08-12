@@ -123,6 +123,6 @@
   `60f942e6f30d4a153393a47ac53626ee53d90ebeb750ee5d244d5ef2a16925c1`,
   and historical S64F-v3 1,688 bytes / SHA-256
   `4b3334a61f8ce7c8b2c4548a112b0c7354c444b42659ec7943941de5529e4dbc`.
-- Status: source-complete-pending-review; behavior commit pending. Task 4 and
-  every material, real-BOB, runtime, Ymir, release, smoke, visual, desktop,
-  manual, retail, and total-game gate remain closed.
+- Status: source-complete-pending-review at behavior commit `87be53b6`. Task 4
+  and every material, real-BOB, runtime, Ymir, release, smoke, visual,
+  desktop, manual, retail, and total-game gate remain closed.

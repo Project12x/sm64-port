@@ -19,11 +19,11 @@ Task 2 behavior `83cfc1ad` plus repair `95de6457` owns the exact
 192-byte S64B-v2 extension, deterministic v1-core rebasing, target-resource
 deduplication, and fail-closed validation while historical Mario/S64F bytes
 remain exact; scoped rereview passed C0/I0/M0 through `d5914059`. Task 3 is
-source-complete pending independent parser/ABI review: the target owns v1/v2
-dispatch, linear v2 validation/accessors, and opaque mixed-S64F delegation;
-86 direct S64B mutations, 54 S64F mutations, 63 broader Python tests, the
-historical actor gates, and the freestanding SH-2 syntax check pass. Tasks
-4-13 and every material, real-BOB, runtime, demo,
+source-complete at behavior commit `87be53b6` pending independent parser/ABI
+review: the target owns v1/v2 dispatch, linear v2 validation/accessors, and
+opaque mixed-S64F delegation; 86 direct S64B mutations, 54 S64F mutations, 63
+broader Python tests, the historical actor gates, and the freestanding SH-2
+syntax check pass. Tasks 4-13 and every material, real-BOB, runtime, demo,
 release, reseal, smoke, visual, desktop, manual, retail, and total-game gate
 remain open.
 
@@ -278,11 +278,12 @@ Commit `feat(saturn): define canonical actor bank v2 bytes`. Review arithmetic, 
 
 ### Task 3: Add target S64B v2 and mixed S64F validation
 
-**Execution status:** source-complete pending independent review. The target
-dispatches once between v1 and v2, retains the historical no-write-on-failure
-v1 view contract, validates every v2 extension/resource before access, and
-S64F validation/resolve delegates opaque embedded bytes to the S64B owner.
-No material compiler, residency, renderer, or Task 4+ work is open.
+**Execution status:** source-complete at behavior commit `87be53b6` pending
+independent review. The target dispatches once between v1 and v2, retains the
+historical no-write-on-failure v1 view contract, validates every v2 extension/
+resource before access, and S64F validation/resolve delegates opaque embedded
+bytes to the S64B owner. No material compiler, residency, renderer, or Task 4+
+work is open.
 
 **Files:**
 - Create: `tools/saturn/actor_bank_v2_test.c`
