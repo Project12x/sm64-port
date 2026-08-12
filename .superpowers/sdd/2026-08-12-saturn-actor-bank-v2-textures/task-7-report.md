@@ -2,11 +2,11 @@
 
 ## Status
 
-Source-complete-pending-review from reconciled base `ce28a7d9`. Behavior commit
-`7cbd06ed` is the Task 7
-`feat(saturn): publish actor texture residency generations` transition. This
-is host and freestanding SH-2 module evidence, not target
-runtime evidence. Task 8/runtime/renderer/Ymir/release gates remain closed.
+Complete for the host and freestanding SH-2 residency scope from reconciled
+base `ce28a7d9`. Behavior `7cbd06ed`, repair commits `4c4c24a9`, `c270f363`,
+and `d1408e00`, and same-reviewer final verdict Spec PASS / Quality PASS /
+C0/I0/M0 form the approved Task 7 transition. This is not target runtime or
+Ymir evidence; Task 8 opens only for canonical package/runtime ownership.
 
 ## Reconciliation and design corrections
 
@@ -187,4 +187,18 @@ hostile aliases now reject and both valid aliases retain the exact 2,560-byte
 top fit. The host DMA preflight double separately preserves ordinary >32-bit
 fixture pointers, removing an ASLR-dependent false negative. Native host actor
 residency and exact SH-2 `-m2 -mb -ffreestanding -Werror` syntax compilation
-pass. Same-reviewer final rereview remains required before Task 8 opens.
+pass. Same-reviewer final rereview is recorded below before Task 8 opens.
+
+## Final independent rereview
+
+Same-reviewer rereview of `97dae9b2..d1408e00` passed Spec PASS, Quality PASS,
+C0/I0/M0. It independently repeated the absent-output real bundle (47 families
+/ 14 variants), 13/13 publication/inventory tests, the actor/scene/DMA/IR/
+material/frame/Gouraud/bank/bundle/pose/meshlet/feature-off/variant gates, and
+installed SH-2 GCC compilation. Actor activation uses 476 bytes of target
+stack and the scene staging accessor uses 0 bytes. P0/P2 are the only accepted
+stage address shapes, and same-generation publication continues to refuse
+overwrite. All original and rereview findings are closed; Task 7 Step 5 is
+complete. Existing 3,920/3,420-byte scene-validation frames are explicitly
+Task 8 debt with a <=256-byte-per-call acceptance ceiling. Runtime cutover,
+renderer, target link/run, Ymir, release, and manual gates remain open.

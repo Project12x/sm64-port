@@ -33,8 +33,9 @@ initial zero-edit preflight exposed and corrected
 a design error: source-pool family ceilings are not simultaneous resource
 allocations. Task 6 is complete for host and freestanding target-module scope:
 same-reviewer rereview of `5ceb251c..d0fbc5aa` passed Spec/Quality, C0/I0/M0,
-after fix round 1 at `661e54a4`. Task 7 is source-complete-pending-rereview after
-repair commits `4c4c24a9` and `c270f363`: fixed all-resident planning and checked upload publish a
+after fix round 1 at `661e54a4`. Task 7 is complete after repair commits
+`4c4c24a9`, `c270f363`, and `d1408e00`; same-reviewer final rereview passed
+Spec/Quality C0/I0/M0. Fixed all-resident planning and checked upload publish a
 2,064-byte scalar scene-owned table for the exact 14-bank BOB subset, while
 independent review remains mandatory. Tasks 8-13 and every runtime, demo,
 release, reseal, smoke, visual, desktop,
@@ -821,7 +822,7 @@ nonzero generation/committed.
 
 Run residency, scene residency, VDP1 frame bank, transfer pipeline, Gouraud transfer, bundle, and feature-off gates. Expected: no old-generation reuse is claimed after a failed new activation.
 
-- [ ] **Step 5: Commit and independent review**
+- [x] **Step 5: Commit and independent review**
 
 Commit `feat(saturn): publish actor texture residency generations`. Review DMA bounds, publication ordering, and failure semantics before runtime cutover.
 
@@ -1267,5 +1268,20 @@ Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` res
   place. Rereview then found the stage classifier accepted P1/P3/P4 cache-
   control aliases after physical masking. The follow-up permits only the P0
   cached and P2 cache-through shapes before HWRAM range validation; hostile
-  `0x460`, `0x660`, and `0xC60` shapes reject. Same-reviewer rereview remains
-  pending, so Step 5 remains unchecked and Task 8 remains closed.
+  `0x460`, `0x660`, and `0xC60` shapes reject.
+
+## Task 7 approval and Task 8 active transition (2026-08-12)
+
+- Same-reviewer final rereview of `97dae9b2..d1408e00` passed Spec PASS,
+  Quality PASS, C0/I0/M0. It independently repeated the absent-output real
+  47-family/14-variant bundle, residency/material/queue/scene gates, and exact
+  SH-2 compiles. Actor activation stack is 476 bytes and the scene staging
+  accessor is 0 bytes.
+- Original C0/I4/M1 plus the publication-stack and cache-control-alias findings
+  are closed. P0/P2 upload shapes alone are valid; hostile `0x460`, `0x660`,
+  and `0xC60` shapes reject before copy/DMA. Task 7 Step 5 is complete.
+- Task 8 is now active only for the minimum canonical scene-bundle owner. It
+  must eliminate the measured 3,920/3,420-byte scene-validation frames to
+  <=256 bytes per call, alias the already-loaded CART package, own the fixed
+  2,560-byte HWRAM stage and 1,280-byte LWRAM workspace, and avoid a redundant
+  streamer. Runtime cutover, renderer, target link/run, and Ymir remain open.

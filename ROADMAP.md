@@ -2,8 +2,8 @@
 
 ## Now — converge on a working generic BOB by 2026-08-14
 
-Freeze new Saturn architecture sprints. Finish only the Task 7 residency safety
-repair, bind Task 8's canonical package and fixed HWRAM upload stage, cut the
+Freeze new Saturn architecture sprints. Task 7 residency now has final
+Spec/Quality C0/I0/M0 approval. Bind Task 8's canonical package and fixed HWRAM upload stage, cut the
 normal Task 9 actor path over to the generic queue/bank/material renderer, and
 run a short identity-bound Ymir smoke immediately. Cannon is one regression,
 not the milestone. The live gate requires all 34 drawable BOB selections to be

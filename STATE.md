@@ -9,11 +9,11 @@ renderer. All 34 drawable BOB selections must be admitted through that path;
 common telemetry-visible Saturn fidelity reductions are allowed, but injected
 models, object-specific renderer branches, and whole-scene stalls are not.
 
-Task 7 safety repair is committed as `4c4c24a9` after C0/I4/M1 review and is
-source-complete pending rereview. Its clean-output gate now
+Task 7 residency is complete after repairs `4c4c24a9`, `c270f363`, and
+`d1408e00`; same-reviewer final rereview passed Spec/Quality C0/I0/M0. Its clean-output gate now
 rebuilds and validates the real bundle, stages CART cold spans through bounded
 HWRAM before SCU DMA, validates publication state centrally, and uses explicit
-unsigned serial ordering. After Task 7 review, the critical path is Task 8
+unsigned serial ordering. Task 8 is now active for
 canonical package/HWRAM ownership, Task 9 generic cutover plus minimum build
 wiring, then an immediate short identity-bound Ymir smoke. Exhaustive capacity,
 release reproduction/reseal, and final manual evidence follow live feedback.

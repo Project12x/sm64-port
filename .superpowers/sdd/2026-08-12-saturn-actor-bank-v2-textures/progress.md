@@ -692,4 +692,21 @@
   2,560-byte top fit remains accepted. The checked-queue host double exempts
   >32-bit fixture pointers from Saturn area decoding to remove an ASLR-only
   false failure. Native host actor residency and exact SH-2 freestanding
-  syntax compilation pass; rereview remains open.
+  syntax compilation pass; rereview was still open at this checkpoint and is
+  closed by the final verdict below.
+
+## Task 7 approved; Task 8 active (2026-08-12)
+
+- Same-reviewer final rereview of `97dae9b2..d1408e00` passed Spec PASS,
+  Quality PASS, C0/I0/M0. Fresh evidence includes the isolated absent-output
+  real bundle (47 families / 14 variants), 13/13 publisher/inventory tests,
+  actor/scene/DMA/IR/material/frame/Gouraud/bank/bundle/pose/meshlet/feature-off
+  and 40/40 variant-source gates, plus installed SH-2 GCC compilation.
+- Actor activation measures 476 bytes of target stack and the scene texture-
+  staging accessor 0 bytes. Same-generation publication still refuses
+  overwrite. All Task 7 review findings are closed and Step 5 is complete.
+- Task 8 opens from `d1408e00` under the owner convergence rule. Its first RED
+  is the existing 3,920/3,420-byte scene-validation stack; acceptance is
+  <=256 bytes per call using state-owned slots/views. It reuses the package
+  already in CART, one fixed 2,560-byte HWRAM stage, and one fixed 1,280-byte
+  LWRAM workspace. Runtime cutover/renderer/Ymir remain open.
