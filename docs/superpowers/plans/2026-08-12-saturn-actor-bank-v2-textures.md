@@ -82,6 +82,12 @@ subagent-driven workflow. No production/test behavior change has begun.
 
 ### Task 1: Establish version-owned host S64B parsing
 
+**Execution status:** source-complete-pending-review (2026-08-12). The shared
+v1 parser moved to `actor_bank_format`; v2 dispatch fails closed at its named
+unimplemented boundary. Fresh host tests and the historical Mario/S64F-v3
+byte proofs passed; independent spec-compliance and code-quality reviews are
+still required before Task 2.
+
 **Files:**
 - Create: `tools/saturn/actor_bank_format.py`
 - Create: `tools/saturn/test_actor_bank_format.py`

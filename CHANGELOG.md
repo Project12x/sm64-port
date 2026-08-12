@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Centralized host S64B parsing in a version-owned authority. Historical v1
+  validation, source binding, Mario bytes, and S64F-v3 bundle bytes remain
+  exact; version 2 now fails at its explicit unimplemented contract boundary
+  so later texture work cannot be accepted through the v1 parser.
+
 - Consolidated the duplicate freestanding SHA-256 implementations used by the
   S64P scene-package and S64F v2 actor-family-bank validators into one
   incremental target primitive. Existing serialized bytes and hashes remain

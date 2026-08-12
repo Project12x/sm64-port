@@ -18,7 +18,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from actor_family_bundle import SourceRecord, _validate_s64b, source_identity
+from actor_bank_format import validate_actor_bank
+from actor_family_bundle import SourceRecord, source_identity
 from actor_source import (
     AnimationRecord,
     parse_animation_table_text,
@@ -1329,7 +1330,7 @@ def compile_actor_variant(
     except (ValueError, TypeError, OverflowError, struct.error) as error:
         raise MalformedActorSourceError(f"S64B packing rejected variant: {error}") from error
     try:
-        bank = _validate_s64b(payload)
+        bank = validate_actor_bank(payload)
     except ValueError as error:
         raise MalformedActorSourceError(f"packed S64B failed validation: {error}") from error
     if (bank.family_ordinal != family_ordinal or bank.model_id != model_id or

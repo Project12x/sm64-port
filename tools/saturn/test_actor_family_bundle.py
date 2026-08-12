@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import actor_family_bundle as actor_family_bundle_module  # noqa: E402
 from actor_family_bundle import (  # noqa: E402
     FAMILY_FLAG_GEOMETRY,
     FAMILY_FLAG_SUPPORTED,
@@ -122,6 +123,11 @@ def write_c_fixture(path: Path) -> None:
 
 
 class ActorFamilyBundleTest(unittest.TestCase):
+    def test_bundle_uses_the_version_owned_actor_bank_parser(self) -> None:
+        """Fails if bundle validation regains an independent S64B parser."""
+        self.assertFalse(hasattr(actor_family_bundle_module, "_S64B_HEADER"))
+        self.assertFalse(hasattr(actor_family_bundle_module, "_validate_s64b"))
+
     def test_exact_record_sizes_and_canonical_source_identity(self) -> None:
         self.assertEqual(S64F_V3_HEADER.size, 96)
         self.assertEqual(S64F_V3_FAMILY.size, 64)

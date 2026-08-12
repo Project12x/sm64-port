@@ -21,6 +21,7 @@ from actor_variant_bank import (  # noqa: E402
     UnsupportedActorSourceError,
     compile_actor_variant,
 )
+from actor_bank_format import validate_actor_bank  # noqa: E402
 from compile_actor_bank import decode_animation_channels  # noqa: E402
 
 
@@ -957,6 +958,9 @@ const GeoLayout test_alt_geo[] = {
             "780d1b65c6c27a8c7d1c77867f816ec07fd239f7fffcfa0c84a48a338fad68f7",
         )
         self.assertEqual(compiled.maximum_scratch, 3 + 2 * compiled.lane_bytes)
+        view = validate_actor_bank(compiled.payload)
+        self.assertEqual(view.version, 1)
+        self.assertEqual(view.source_sha256.hex(), compiled.source_sha256)
         self.assertEqual(
             [source.path for source in compiled.sources],
             [
