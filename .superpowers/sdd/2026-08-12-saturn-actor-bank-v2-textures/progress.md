@@ -765,3 +765,28 @@
   link. The repository MSYS wrapper and GNU Make 4.4.1 run normally; no MSYS
   DLL loader failure occurred. A proper clean candidate is required after
   independent Task 8 review and Task 9 cutover.
+
+## Task 8 review and repair round 1/5 (2026-08-12)
+
+- Independent review of `dfa8b286..0a180e39` returned Spec FAIL / Quality
+  needs fixes C0/I3/M0. Findings were: command bank 0's boot-stage borrow
+  overwrote the already-initialized system/local/END prefix; activation omitted
+  exact stable-ID and scene-lifetime binding; root/sidecar/assembly generation
+  overwrote existing bytes despite the no-clobber contract. Task 9 remained
+  closed.
+- Focused RED reproduced all three defects. GREEN repair `dc81808b` moves both
+  backend initializers after cold-stage retirement, binds exact
+  `bob-area1-actors-v3` plus scene lifetime, and close-ports the reviewed Task 5
+  exclusive private-link publisher for all final S64P outputs. Assembly is now
+  compiler-generated; Make has no overwrite redirection.
+- Fresh evidence: package schema 19/19; determinism 3/3; exact repository MSYS
+  wrapper `verify-source-scene-bundle` PASS twice; second-run hash+mtime
+  inventory unchanged 7/7; focused actor/package/scene Make wave PASS; Python
+  compileall PASS; exact installed GCC 14.3 ELF32 big-endian SuperH object PASS.
+  S64P/S64F/assembly identities remain `9b0a0a4a...d101`,
+  `3eee00fd...a523`, and `bde84bb...15fb`.
+- Two pre-repair JSON sidecars differed only by CRLF (160 and 137 line endings)
+  and were moved recoverably to `.superseded-crlf-*` before canonical LF
+  publication. No MSYS DLL loader failure occurred. Status is
+  `source-complete-pending-rereview`; evidence commit and same-reviewer verdict
+  remain open, and Task 9/link/Ymir/release/visual/manual remain unchecked.

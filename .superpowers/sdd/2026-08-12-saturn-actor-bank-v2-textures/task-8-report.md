@@ -2,9 +2,10 @@
 
 ## Status
 
-`source-complete-pending-review` from approved Task 7 base `dfa8b286` at
-behavior commit `b84103cd`. Evidence/status commit and independent verdict are
-open. This report claims
+`source-complete-pending-rereview` from approved Task 7 base `dfa8b286` after
+initial behavior `b84103cd`, evidence `0a180e39`, and review-repair behavior
+`dc81808b`. Initial review returned Spec FAIL / Quality needs fixes C0/I3/M0;
+the same-reviewer repair verdict is open. This report claims
 package/source ownership plus host and freestanding SH-2 module evidence only;
 Task 9 production cutover, linked target, Ymir, release, and manual gates remain
 unchecked.
@@ -84,7 +85,7 @@ unchecked.
 
 ## Honest open gates
 
-- Independent Task 8 spec/quality review and behavior/evidence commits.
+- Same-reviewer Task 8 repair verdict and final status commit.
 - Full hermetic sourceboot candidate link: this development worktree's
   pre-existing `build/us_pc` fixture resolves outside the worktree root, so
   identity-assets correctly fails before link. A clean candidate must own the
@@ -101,3 +102,26 @@ unchecked.
 - Same-repository source-cart, scene residency, Task 7 residency, generic actor
   bank/bundle/pose/meshlet, and generated-assembly patterns were close-ported
   or extended. No new external code was copied.
+
+## Independent review and repair round 1
+
+- Initial review of `dfa8b286..0a180e39` found C0/I3/M0. It proved the borrowed
+  command-bank prefix could remain overwritten into the first frame, resealed
+  dependency metadata could change stable ID/lifetime and still activate, and
+  final generated files were overwritten despite the documented no-clobber
+  boundary.
+- Repair `dc81808b` initializes both VDP1 command prefixes only after cold-stage
+  retirement; requires the exact `bob-area1-actors-v3` scene dependency; and
+  centralizes exclusive publish-or-verify for the S64P, metadata, payload
+  manifest, assembly, validation report, generated header, and ABI header.
+  The compiler owns assembly bytes; Make no longer redirects over them.
+- Fresh repair evidence: schema 19/19, determinism 3/3, source scene bundle
+  PASS, complete focused actor/package/scene host wave PASS, Python compileall,
+  and exact ELF32 big-endian SuperH object compilation PASS. An unchanged
+  second exact wrapper invocation preserves hashes and timestamps for all seven
+  outputs. Assembly remains `bde84bb...15fb`; root/S64F identities remain
+  `9b0a0a4a...d101` / `3eee00fd...a523`.
+- The first repaired run encountered two legacy JSON sidecars whose semantic
+  content was identical but whose 160/137 line endings were CRLF. They were
+  moved recoverably to `.superseded-crlf-*`, canonical LF copies were
+  published, and subsequent runs were verify-only. This was not a DLL error.

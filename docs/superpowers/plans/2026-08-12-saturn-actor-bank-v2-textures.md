@@ -1020,7 +1020,8 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   with installed GCC 14.3 to an ELF32 big-endian SuperH object. Two old derived
   JSON files differed only by CRLF and were moved recoverably to
   `.superseded-crlf-*` before canonical LF publication.
-- The repair behavior commit and same-reviewer verdict remain to be recorded.
+- Repair behavior commit is `dc81808b`; the evidence/status commit and
+  same-reviewer verdict remain to be recorded.
   Step 5, Task 9, linked target, Ymir, release, visual, and manual gates stay
   unchecked until rereview passes.
 

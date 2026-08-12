@@ -11,14 +11,17 @@ models, object-specific renderer branches, and whole-scene stalls are not.
 
 Task 7 residency is complete after repairs `4c4c24a9`, `c270f363`, and
 `d1408e00`; same-reviewer final rereview passed Spec/Quality C0/I0/M0. Task 8
-is now source-complete-pending-review at behavior `b84103cd` for canonical
-package and runtime ownership. Generation 14 binds one relocation-neutral S64P to the exact
+is source-complete-pending-rereview at repair behavior `dc81808b` after its
+initial review returned C0/I3/M0 for command-bank restoration, exact dependency
+identity, and no-clobber publication. Generation 14 binds one relocation-neutral S64P to the exact
 160,928-byte S64F-v3 CART dependency; a model-agnostic bundle publication and
 two-lane resolver prepare real v2 draw output with no Cannon/model/behavior
 branch. Exact SH-2 compilation proves a 5,556-byte LWRAM source owner, 220-byte
 source-init stack, and 92/88/112-byte scene begin/commit/load frames. The cold
 2,560-byte transfer stage is phase-borrowed from the idle VDP1 command bank,
-not added as persistent HWRAM. Task 9 remains the immediate gate: broaden the
+not added as persistent HWRAM. The repaired exact MSYS wrapper gate is green
+twice with a verify-only second inventory; there is no MSYS DLL-loader defect.
+Task 9 remains closed pending the same-reviewer verdict, then becomes the immediate gate: broaden the
 20 currently unsupported drawable families through reviewed Saturn reductions,
 cut all 34 drawable BOB selections into the production generic job/emitter,
 link the target, and run the short identity-bound Ymir smoke. Exhaustive

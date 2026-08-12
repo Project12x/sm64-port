@@ -3,11 +3,13 @@
 ## Now — converge on a working generic BOB by 2026-08-14
 
 Freeze new Saturn architecture sprints. Task 7 residency has final
-Spec/Quality C0/I0/M0 approval, and Task 8 behavior `b84103cd` is
-source-complete-pending-review:
+Spec/Quality C0/I0/M0 approval. Task 8 repair behavior `dc81808b` is
+source-complete-pending-rereview after closing initial C0/I3/M0 findings:
 the canonical package is retained in CART, common bundle lookup/pose/meshlet
 preparation is target-compiled, and the 2,560-byte cold stage is phase-borrowed
-from the idle VDP1 command bank rather than charged as persistent HWRAM. Cut
+from the idle VDP1 command bank rather than charged as persistent HWRAM; the
+command prefix is restored only after the borrow retires, dependency identity
+is exact, and all final outputs publish without clobber. After rereview, cut
 the normal Task 9 actor path over to the generic queue/bank/material renderer,
 broaden the remaining 20 drawable BOB source states through common
 Saturn-shaped reductions, then run a short identity-bound Ymir smoke
