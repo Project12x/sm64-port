@@ -175,7 +175,7 @@ Stage only the listed behavior/tests/docs and commit `refactor(saturn): centrali
 ### Task 2: Implement canonical host S64B v2 packing and validation
 
 **Execution status:** source-complete, pending independent review
-(2026-08-12). The host now promotes a validated v1 core into the exact
+(2026-08-12), behavior commit `83cfc1ad`. The host now promotes a validated v1 core into the exact
 192-byte pointer-free v2 layout, rebases bank-absolute pose/span offsets,
 packs dense first-use target resources, and reparses the completed bytes
 through the version-owned validator. Focused and broader host gates are green;
