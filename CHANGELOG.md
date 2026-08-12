@@ -4,6 +4,25 @@
 
 ### Changed
 
+- Added master-owned, fixed-capacity actor texture residency for the validated
+  BOB S64F-v3 dependency. Scene activation now prevalidates every selected
+  S64B-v2 bank, hash, source/destination span, independent texture/CLUT bound,
+  VDP1 offset/index limit, and the complete canonical 128-entry plan before it
+  submits any transfer through the existing checked SCU-DMA queue. Successful
+  activation publishes only a 2,064-byte pointer-free scalar table, writing
+  the nonzero residency generation and committed flag last; every lifecycle,
+  malformed-input, stale-generation, submit, or wait failure invalidates both
+  old and partial publication, so dirty VRAM can never become reachable. The
+  real BOB subset is measured at 14 mappings, 16,640 texture bytes, and 2,816
+  CLUT bytes, including Cannon, while opaque v1 banks remain unmapped. Scene
+  residency owns and clears this state on failed staging, mismatched commit,
+  reset, and matching unload without yet activating the renderer. The legacy
+  texture initializer now delegates to an explicit bounded-region initializer;
+  this authorized file-list correction and moving Task 6's unchanged 16-byte
+  mapping ABI into a Yaul-free header preserve existing material binders. This
+  is host and freestanding SH-2 module evidence only: Task 8 streaming/runtime,
+  renderer, Ymir, release, and full-game proof remain deliberately closed.
+
 - Hardened the new S64B-v2 material-to-VDP1 boundary after independent review
   found three fail-open edges: texture/CLUT address checks now cover the final
   required byte of every nonempty IR tile and actor-bank aggregate before any

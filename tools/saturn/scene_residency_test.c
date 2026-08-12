@@ -5,6 +5,38 @@
 #include "saturn_render_snapshot.h"
 #include "saturn_vdp1_frame_bank.h"
 
+_Static_assert(sizeof(sm64_saturn_actor_texture_mapping_t) == 16U,
+               "scene owner must retain Task 6's scalar mapping ABI");
+_Static_assert(sizeof(sm64_saturn_actor_texture_publication_t) == 2064U,
+               "scene-owned actor publication has a fixed HWRAM footprint");
+
+static void test_actor_texture_publication_ownership(void)
+{
+    sm64_saturn_scene_residency_t state;
+    uint32_t capacity[SM64_SATURN_SCENE_DESTINATION_COUNT] = {0};
+    sm64_saturn_scene_residency_reset(&state, 0U, capacity);
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 1U) == NULL);
+    assert(sm64_saturn_scene_residency_actor_texture_active(&state, 1U) == NULL);
+    state.staging_generation = 7U;
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 7U) ==
+           &state.actor_texture_publication);
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 6U) == NULL);
+    state.staging_generation = 0U;
+    state.active_generation = 7U;
+    state.actor_texture_publication.generation = 7U;
+    state.actor_texture_publication.committed = 1U;
+    assert(sm64_saturn_scene_residency_actor_texture_active(&state, 7U) ==
+           &state.actor_texture_publication);
+    assert(sm64_saturn_scene_residency_actor_texture_active(&state, 6U) == NULL);
+    state.actor_texture_publication.committed = 0U;
+    assert(sm64_saturn_scene_residency_actor_texture_active(&state, 7U) == NULL);
+    state.actor_texture_publication.generation = 7U;
+    state.actor_texture_publication.committed = 1U;
+    sm64_saturn_scene_residency_reset(&state, 0U, capacity);
+    assert(state.actor_texture_publication.committed == 0U &&
+           state.actor_texture_publication.generation == 0U);
+}
+
 static const uint32_t ample_capacity[SM64_SATURN_SCENE_DESTINATION_COUNT]={0U,4096U,4096U,4096U,4096U,4096U};
 typedef struct test_storage {
     uint8_t root[8192];
@@ -37,9 +69,13 @@ static void test_dependency_order_and_atomic_rollback(void)
 {
     test_scene_fixture_t fixture; sm64_saturn_scene_package_view_t view; sm64_saturn_scene_residency_t state;
     prepare(&fixture,&view,&state,7U); assert(sm64_saturn_scene_residency_begin(&state,&view,10U));
+    state.actor_texture_publication.generation=10U;
+    state.actor_texture_publication.committed=1U;
     assert(!sm64_saturn_scene_residency_load_section(&state,6U));
     assert(!sm64_saturn_scene_residency_commit(&state,10U)); assert(sm64_saturn_scene_residency_active(&state)==NULL);
     assert(state.quarantine_count==1U && state.staging_generation==0U);
+    assert(state.actor_texture_publication.committed==0U &&
+           state.actor_texture_publication.generation==0U);
 }
 
 static void test_section_dependency_order(void)
@@ -111,7 +147,11 @@ static void test_commit_snapshot_retention_and_exact_retirement(void)
     assert(sm64_saturn_scene_residency_actor_bank_acquire(&state,10U,0xA001U));
     assert(sm64_saturn_scene_residency_actor_bank_acquire(&state,10U,0xA002U));
     assert(sm64_saturn_scene_residency_audio_voice_acquire(&state,10U,0xB001U));
+    state.actor_texture_publication.generation=10U;
+    state.actor_texture_publication.committed=1U;
     assert(sm64_saturn_scene_residency_begin(&state,&view,11U)); load_all(&state); assert(sm64_saturn_scene_residency_commit(&state,11U));
+    assert(state.actor_texture_publication.committed==0U &&
+           state.actor_texture_publication.generation==0U);
     assert(!sm64_saturn_scene_residency_begin(&state,&view,11U));
     assert(!sm64_saturn_scene_residency_actor_bank_acquire(&state,10U,0xA003U));
     assert(!sm64_saturn_scene_residency_unload(&state,10U));
@@ -127,7 +167,11 @@ static void test_commit_snapshot_retention_and_exact_retirement(void)
     assert(sm64_saturn_scene_residency_actor_bank_release(&state,10U,0xA002U));
     assert(sm64_saturn_scene_residency_audio_voice_release(&state,10U,0xB001U));
     assert(!sm64_saturn_scene_residency_audio_voice_release(&state,10U,0xB001U));
+    state.actor_texture_publication.generation=10U;
+    state.actor_texture_publication.committed=1U;
     assert(sm64_saturn_scene_residency_unload(&state,10U));
+    assert(state.actor_texture_publication.committed==0U &&
+           state.actor_texture_publication.generation==0U);
     assert(!sm64_saturn_scene_residency_render_snapshot_release(&state,&snapshot));
 }
 
@@ -166,11 +210,38 @@ static void test_failed_replacement_preserves_active_generation(void)
 {
     test_scene_fixture_t fixture; sm64_saturn_scene_package_view_t view; sm64_saturn_scene_residency_t state;
     prepare(&fixture,&view,&state,7U); assert(sm64_saturn_scene_residency_begin(&state,&view,40U)); load_all(&state);
+    state.actor_texture_publication.generation=40U;
+    state.actor_texture_publication.committed=1U;
     assert(sm64_saturn_scene_residency_commit(&state,40U));
     assert(sm64_saturn_scene_residency_begin(&state,&view,41U));
     assert(sm64_saturn_scene_residency_load_section(&state,0U));
     assert(!sm64_saturn_scene_residency_commit(&state,41U));
     assert(sm64_saturn_scene_residency_active(&state)->generation==40U);
+    assert(state.actor_texture_publication.committed==1U &&
+           state.actor_texture_publication.generation==40U);
+    assert(sm64_saturn_scene_residency_begin(&state,&view,42U));
+    state.actor_texture_publication.generation=42U;
+    state.actor_texture_publication.committed=1U;
+    assert(sm64_saturn_scene_residency_load_section(&state,0U));
+    assert(!sm64_saturn_scene_residency_commit(&state,42U));
+    assert(state.actor_texture_publication.committed==0U &&
+           state.actor_texture_publication.generation==0U);
+}
+
+static void test_old_unload_preserves_current_texture_publication(void)
+{
+    test_scene_fixture_t fixture; sm64_saturn_scene_package_view_t view;
+    sm64_saturn_scene_residency_t state;
+    prepare(&fixture,&view,&state,7U);
+    assert(sm64_saturn_scene_residency_begin(&state,&view,80U)); load_all(&state);
+    assert(sm64_saturn_scene_residency_commit(&state,80U));
+    assert(sm64_saturn_scene_residency_begin(&state,&view,81U)); load_all(&state);
+    state.actor_texture_publication.generation=81U;
+    state.actor_texture_publication.committed=1U;
+    assert(sm64_saturn_scene_residency_commit(&state,81U));
+    assert(sm64_saturn_scene_residency_unload(&state,80U));
+    assert(state.actor_texture_publication.committed==1U &&
+           state.actor_texture_publication.generation==81U);
 }
 
 static void test_zero_section_package_commits(void)
@@ -179,7 +250,12 @@ static void test_zero_section_package_commits(void)
     test_make_zero_fixture(&fixture); assert(sm64_saturn_scene_package_validate(fixture.root,fixture.root_size,&view));
     sm64_saturn_scene_residency_reset(&state,7U,ample_capacity); assert(sm64_saturn_scene_residency_bind_payloads(&state,NULL,0U));
     bind_storage(&state);
-    assert(sm64_saturn_scene_residency_begin(&state,&view,30U)); assert(sm64_saturn_scene_residency_commit(&state,30U));
+    assert(sm64_saturn_scene_residency_begin(&state,&view,30U));
+    state.actor_texture_publication.generation=30U;
+    state.actor_texture_publication.committed=1U;
+    assert(sm64_saturn_scene_residency_commit(&state,30U));
+    assert(sm64_saturn_scene_residency_actor_texture_active(&state,30U)==
+           &state.actor_texture_publication);
 }
 
 static void test_committed_bytes_are_owned_and_rehashed(void)
@@ -243,11 +319,13 @@ static void test_zero_byte_zero_generation_payload_is_owned(void)
 }
 
 int main(void) { test_dependency_order_and_atomic_rollback(); test_section_dependency_order();
+    test_actor_texture_publication_ownership();
     test_payload_hash_generation_and_capacity_fail_closed();
     test_root_capacity_and_overlapping_storage_fail_closed();
     test_commit_snapshot_retention_and_exact_retirement(); test_inactive_payloads_validate_without_residency();
     test_consumer_lease_tokens_are_bounded();
     test_failed_replacement_preserves_active_generation(); test_zero_section_package_commits();
+    test_old_unload_preserves_current_texture_publication();
     test_committed_bytes_are_owned_and_rehashed();
     test_sound_scratch_exact_fit_and_cross_generation_alignment();
     test_zero_byte_zero_generation_payload_is_owned(); return 0; }

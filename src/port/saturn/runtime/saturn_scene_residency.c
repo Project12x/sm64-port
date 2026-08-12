@@ -6,6 +6,23 @@
 #include "../gfx/saturn_render_snapshot.h"
 #include "../gfx/saturn_vdp1_frame_bank.h"
 
+static inline void actor_texture_publication_fence(void)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    __asm__ volatile("" ::: "memory");
+#endif
+}
+
+static void actor_texture_publication_invalidate(
+    sm64_saturn_scene_residency_t *state)
+{
+    state->actor_texture_publication.committed = 0U;
+    actor_texture_publication_fence();
+    memset(&state->actor_texture_publication, 0,
+           sizeof(state->actor_texture_publication));
+    actor_texture_publication_fence();
+}
+
 static bool bytes_equal(const uint8_t a[32], const uint8_t b[32])
 {
     return memcmp(a, b, 32U) == 0;
@@ -370,6 +387,10 @@ bool sm64_saturn_scene_residency_load_section(sm64_saturn_scene_residency_t *sta
 
 static void rollback_staging(sm64_saturn_scene_residency_t *state)
 {
+    if (state->staging_generation != 0U &&
+        state->actor_texture_publication.generation ==
+            state->staging_generation)
+        actor_texture_publication_invalidate(state);
     if (state->staging_slot >= 0) {
         clear_identity_storage(state, &state->slot[(uint8_t)state->staging_slot]);
         memset(&state->slot[(uint8_t)state->staging_slot], 0, sizeof(state->slot[0]));
@@ -436,6 +457,9 @@ bool sm64_saturn_scene_residency_commit(sm64_saturn_scene_residency_t *state,
             state->staging_view.dependencies[slot].payload_kind == SM64_SATURN_SCENE_AUDIO_DEPENDENCIES)
             identity->consumer_open_mask |= SM64_SATURN_SCENE_RETIRE_VOICE;
     identity->committed = 1U;
+    if (state->actor_texture_publication.committed != 1U ||
+        state->actor_texture_publication.generation != generation)
+        actor_texture_publication_invalidate(state);
     state->active_generation = generation;
     memset(&state->staging_view, 0, sizeof(state->staging_view));
     state->staging_generation = 0U;
@@ -615,6 +639,8 @@ bool sm64_saturn_scene_residency_unload(sm64_saturn_scene_residency_t *state,
         for (token = 0U; token < SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES; token++)
             if (identity->consumer_reference_token[index][token] != 0U) return false;
     }
+    if (state->actor_texture_publication.generation == generation)
+        actor_texture_publication_invalidate(state);
     clear_identity_storage(state, identity);
     memset(identity, 0, sizeof(*identity));
     return true;
@@ -685,4 +711,26 @@ const uint8_t *sm64_saturn_scene_residency_dependency_bytes(
         return state->destination_storage[dependency->destination_class] + offset;
     }
     return NULL;
+}
+
+sm64_saturn_actor_texture_publication_t *
+sm64_saturn_scene_residency_actor_texture_staging(
+    sm64_saturn_scene_residency_t *state, uint32_t generation)
+{
+    if (state == NULL || generation == 0U ||
+        state->staging_generation != generation)
+        return NULL;
+    return &state->actor_texture_publication;
+}
+
+const sm64_saturn_actor_texture_publication_t *
+sm64_saturn_scene_residency_actor_texture_active(
+    const sm64_saturn_scene_residency_t *state, uint32_t generation)
+{
+    if (state == NULL || generation == 0U ||
+        state->active_generation != generation ||
+        state->actor_texture_publication.committed != 1U ||
+        state->actor_texture_publication.generation != generation)
+        return NULL;
+    return &state->actor_texture_publication;
 }

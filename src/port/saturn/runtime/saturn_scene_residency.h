@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "saturn_scene_package.h"
+#include "../gfx/saturn_actor_texture_residency.h"
 #include "../platform/saturn_build_identity.h"
 
 struct sm64_saturn_render_snapshot;
@@ -66,6 +67,7 @@ typedef struct sm64_saturn_scene_residency {
     uint16_t payload_count;
     int8_t staging_slot;
     uint8_t quarantine_count;
+    sm64_saturn_actor_texture_publication_t actor_texture_publication;
 } sm64_saturn_scene_residency_t;
 
 void sm64_saturn_scene_residency_reset(
@@ -138,5 +140,11 @@ const uint8_t *sm64_saturn_scene_residency_root_bytes(
 const uint8_t *sm64_saturn_scene_residency_dependency_bytes(
     const sm64_saturn_scene_residency_t *state, uint32_t generation,
     uint16_t dependency_index, uint32_t *byte_count);
+sm64_saturn_actor_texture_publication_t *
+sm64_saturn_scene_residency_actor_texture_staging(
+    sm64_saturn_scene_residency_t *state, uint32_t generation);
+const sm64_saturn_actor_texture_publication_t *
+sm64_saturn_scene_residency_actor_texture_active(
+    const sm64_saturn_scene_residency_t *state, uint32_t generation);
 
 #endif

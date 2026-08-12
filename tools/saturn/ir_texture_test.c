@@ -342,6 +342,25 @@ static void test_address_span_boundaries(void)
         VDP1_CMDT_CC_REPLACE, k_vertices));
 }
 
+static void test_residency_region_initializer(void)
+{
+    uint8_t region[96];
+    sm64_saturn_texture_residency_t direct, legacy, before;
+    vdp1_vram_partitions_t value = partitions();
+    sm64_saturn_texture_residency_init_region(&direct, region, sizeof(region));
+    assert(direct.base == region && direct.capacity == sizeof(region));
+    assert(direct.used == 0U && direct.peak == 0U && !direct.overflowed);
+    sm64_saturn_texture_residency_init(&legacy, &value);
+    assert(legacy.base == value.texture_base &&
+           legacy.capacity == value.texture_size);
+    assert(legacy.used == 0U && legacy.peak == 0U && !legacy.overflowed);
+    memset(&legacy, 0xA5, sizeof(legacy));
+    before = legacy;
+    sm64_saturn_texture_residency_init(&legacy, NULL);
+    assert(memcmp(&legacy, &before, sizeof(legacy)) == 0);
+    sm64_saturn_texture_residency_init_region(NULL, region, sizeof(region));
+}
+
 int main(void)
 {
     assert(sizeof(vdp1_cmdt_t) == 32U);
@@ -349,6 +368,7 @@ int main(void)
     test_width_boundaries();
     test_failures_are_atomic();
     test_address_span_boundaries();
+    test_residency_region_initializer();
     puts("IR texture binding: PASS");
     return 0;
 }

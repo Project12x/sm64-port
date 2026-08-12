@@ -1134,7 +1134,24 @@ verify-actor-bank-v2: check-host-tools
 	  "build/saturn/host-tests/actor-bank-v2-rgb1555.bin" \
 	  "build/saturn/host-tests/actor-bank-v2-padded.bin"
 
-.PHONY: verify-ir-texture verify-actor-material
+.PHONY: verify-ir-texture verify-actor-material verify-actor-texture-residency
+
+verify-actor-texture-residency: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; path=Path('build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)/actors-v3-g$(SCENE_PACKAGE_GENERATION)/bob-area1-actors-v3.s64f'); assert path.is_file(), f'missing real Task 5 bundle: {path}'"
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; from tools.saturn.test_actor_bank_v2 import write_target_fixtures; write_target_fixtures(Path('build/saturn/host-tests'))"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_texture_residency_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bundle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bank.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_sha256.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-texture-residency-test$(HOST_EXEEXT)"
+	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/actor-texture-residency-test$(HOST_EXEEXT)" \
+	  "build/saturn/host-tests/actor-family-bundle-mixed-v3.bin" \
+	  "$(ACTOR_FAMILY_BUNDLE_DIR)/bob-area1-actors-v3.s64f"
 
 verify-ir-texture: check-host-tools
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"

@@ -21,6 +21,10 @@ void sm64_saturn_texture_residency_init(
     sm64_saturn_texture_residency_t *residency,
     const vdp1_vram_partitions_t *partitions);
 
+void sm64_saturn_texture_residency_init_region(
+    sm64_saturn_texture_residency_t *residency,
+    void *base, size_t capacity);
+
 bool sm64_saturn_texture_residency_upload(
     sm64_saturn_texture_residency_t *residency, size_t offset,
     const void *source, size_t bytes);

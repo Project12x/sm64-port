@@ -539,3 +539,68 @@
   instead of the current `60c329ab...` / `db611af6...`. This belongs to the
   later effects/runtime gate, does not cover Task 6 material binding, and its
   oracle is intentionally unchanged.
+
+## Task 7 active transition (2026-08-12)
+
+- Base `ce28a7d9`; Task 6 is independently approved and Task 7 is now active.
+  Scope is fixed all-resident actor texture/CLUT planning, checked master queue
+  upload, scalar generation-last publication, and scene-residency ownership.
+  Task 8/runtime/renderer/Ymir/release and every target evidence gate stay
+  closed.
+- Authorized corrections: add existing `saturn_ir_texture.c` solely for
+  `sm64_saturn_texture_residency_init_region` because it owns the current
+  implementation; use the existing checked GPL-3.0-or-later
+  `saturn_dma_queue_submit`/`wait` boundary because pinned MIT libyaul's raw
+  SCU-DMA calls return void. No queue source or Task 6 binder edit is allowed.
+- Reference record and exact requirements are in `task-7-brief.md`; report is
+  `task-7-report.md`. RED/GREEN, SH-2 compilation, behavior commit, and
+  independent review are pending.
+
+## Task 7 source-complete evidence (2026-08-12)
+
+- Status: source-complete-pending-review from base `ce28a7d9`; the behavior
+  transition is `feat(saturn): publish actor texture residency generations`.
+  Its exact SHA will be recorded by the evidence follow-up after Git creates
+  it. Task 8/runtime activation/renderer/Ymir/release remain closed.
+- Authorized file/design corrections are complete: `saturn_ir_texture.c` owns
+  the new bounded-region initializer while its old initializer delegates;
+  checked queue submit/wait replaces uncheckable raw libyaul DMA; the unchanged
+  16-byte scalar mapping ABI moved into a lightweight Yaul-free publication
+  header for the scene owner. Production asserts fix mapping size/alignment/
+  offsets, 128-entry capacity, generation/commit offsets, and the 2,064-byte
+  HWRAM footprint.
+- Residency generation is deliberately independent from S64F package
+  generation. S64F's validated unique nonzero scalar bank IDs make one mapping
+  per canonical selected v2 variant the exact rule; distinct hashes never
+  deduplicate on a 32-bit alias. Real BOB is exactly 14 mappings / 16,640
+  texture bytes / 2,816 CLUT bytes and includes Cannon.
+- Complete S64F/S64B/hash/aggregate/source/destination planning precedes the
+  first DMA. Inclusive-last checked `uintptr_t` arithmetic covers legal spans
+  ending at `UINTPTR_MAX`; no typed pointer addition precedes the proof. Queue
+  submit/wait failures and every input/lifecycle failure leave mappings/counts/
+  generation/committed zero, while transferred bytes may be dirty but are
+  unreachable. Publication writes generation and committed last with compiler
+  fences.
+- Scene-owned lifecycle is fail-closed without changing existing return
+  semantics: reset clears publication; failed staging clears the matching
+  staged generation; commit retains only an exact matching committed actor
+  generation; matching inactive unload clears stale state. The scene header
+  remains consumable without Yaul and no renderer path is activated.
+- TDD RED: the exact actor target exited 1 at the absent implementation, and
+  the combined `-k` actor/scene wave also failed at the absent publication
+  type/accessors before production edits. Focused actor residency, scene
+  residency, IR texture, and actor material GREEN passes after implementation.
+- Broader fresh host evidence passes: historical bank/bundle Python 26/26;
+  S64B-v2 86 mutations; S64F 54 mutations; actor-family 47/13/14; VDP1 frame
+  bank; checked DMA queue; Gouraud; pose; meshlet and invalid-span mutation;
+  feature-off 6/6; variant/source 40/40. Exact GCC 14.3.0 SH-2 freestanding
+  syntax and object compiles pass for all four amended/new production modules;
+  final objects are 35,092 bytes actor residency, 23,144 IR texture, 25,184
+  actor material, and 64,528 scene residency. Scoped and staged diff checks pass;
+  explicit inventory contains only the 16 Task 7 paths and leaves unrelated
+  dirty/untracked work unstaged.
+- The untouched adjacent A8 deferred-transfer runtime source contract remains
+  5/7 at its known destination-poison and VDP2-camera/frame-bank requirements.
+  It is not Task 7 evidence and sourceboot is not edited. Independent Task 7
+  spec/quality review, target link/run, runtime, Task 8+, renderer, Ymir,
+  release, visual/manual, and total-game gates stay unchecked.

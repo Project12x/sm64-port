@@ -33,8 +33,11 @@ initial zero-edit preflight exposed and corrected
 a design error: source-pool family ceilings are not simultaneous resource
 allocations. Task 6 is complete for host and freestanding target-module scope:
 same-reviewer rereview of `5ceb251c..d0fbc5aa` passed Spec/Quality, C0/I0/M0,
-after fix round 1 at `661e54a4`. Task 7 remains closed until this status commit;
-Tasks 7-13 and every runtime, demo, release, reseal, smoke, visual, desktop,
+after fix round 1 at `661e54a4`. Task 7 is source-complete-pending-review in
+this transition: fixed all-resident planning and checked upload publish a
+2,064-byte scalar scene-owned table for the exact 14-bank BOB subset, while
+independent review remains mandatory. Tasks 8-13 and every runtime, demo,
+release, reseal, smoke, visual, desktop,
 manual, retail, and total-game gate remain open. No target runtime, residency,
 renderer, or Ymir state changed.
 
@@ -715,8 +718,11 @@ hashes `56e9a35c...` / `861be66d...`; its oracle is intentionally untouched.
 - Create: `src/port/saturn/gfx/saturn_actor_texture_residency.c`
 - Create: `tools/saturn/actor_texture_residency_test.c`
 - Modify: `src/port/saturn/gfx/saturn_texture_residency.h`
+- Modify (authorized correction): `src/port/saturn/gfx/saturn_ir_texture.c`
+- Modify (authorized type move only): `src/port/saturn/gfx/saturn_actor_material.h`
 - Modify: `src/port/saturn/runtime/saturn_scene_residency.h/.c`
-- Modify: `Makefile.saturn.mk`, `CHANGELOG.md`, this plan, and ledger/report
+- Modify: `tools/saturn/ir_texture_test.c`, `scene_residency_test.c`,
+  `Makefile.saturn.mk`, `CHANGELOG.md`, this plan, and ledger/report
 
 **Interfaces:**
 
@@ -742,15 +748,19 @@ bool sm64_saturn_actor_texture_residency_lookup(
     sm64_saturn_actor_texture_mapping_t *out);
 ```
 
-- [ ] **Step 1: Write RED lifecycle/DMA tests**
+- [x] **Step 1: Write RED lifecycle/DMA tests**
 
-Prove sorted variant assignment, exact deduped bank count, separate texture/CLUT ranges, checked SCU-DMA calls, generation/committed written last, lookup by scalar identity, no worker pointer, and no publication for false suspended/idle, bad hash, short VRAM, stale generation, transfer failure, or any aggregate mismatch.
+Prove sorted variant assignment, exact unique selected-v2 mapping count,
+separate texture/CLUT ranges, checked queue submit/wait, generation/committed
+written last, lookup by scalar identity, no worker pointer, and no publication
+for false suspended/idle, bad hash, short VRAM, stale generation, transfer
+failure, or any aggregate mismatch.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `verify-actor-texture-residency verify-scene-residency`. Expected: missing API.
 
-- [ ] **Step 3: Implement fixed all-resident activation**
+- [x] **Step 3: Implement fixed all-resident activation**
 
 Extend the existing bounded uploader with
 `sm64_saturn_texture_residency_init_region(residency, base, capacity)`, then
@@ -760,7 +770,7 @@ canonical S64F order; upload texture and CLUT spans only after validating every
 bank and the complete plan; fence, write scalars/table, fence, then publish
 nonzero generation/committed.
 
-- [ ] **Step 4: Run GREEN and lease regressions**
+- [x] **Step 4: Run GREEN and lease regressions**
 
 Run residency, scene residency, VDP1 frame bank, transfer pipeline, Gouraud transfer, bundle, and feature-off gates. Expected: no old-generation reuse is claimed after a failed new activation.
 
@@ -1075,3 +1085,60 @@ emission to the active texture generation.
 Execute Tasks 1-13 serially. A task may not begin until the prior task's behavior commit and both independent reviews pass. Stop immediately on a format/interface contradiction, inability to compile the exact Cannon key, nonpositive all-resident or individual-bank margin, nonpositive guaranteed service floor, host/target parser disagreement, dirty/unbound source input, target crash/stall/quarantine on the accepted route, nonidentical A/B release, failed v4, or failed smoke/visual/manual gate. The unconstrained source-ceiling diagnostic is not a simultaneous-scene acceptance margin. Record every failure without weakening flags, budgets, source identity, or acceptance.
 
 Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` resumes only through Tasks 1-5 here. Its downstream Tasks 5-11 and Task 16 Tasks 2-5 are satisfied/reconciled through Tasks 7-13 here; do not run the stale v1-only Task 4 instructions in parallel.
+
+## Task 7 active transition (2026-08-12)
+
+- Reconciled plan, ledger, and HEAD `ce28a7d9`; Task 7 is active for fixed
+  all-resident actor texture/CLUT planning, checked master-owned DMA queue
+  transfer, scalar generation-last publication, and scene-residency ownership
+  only. Task 8/runtime/renderer/Ymir/release gates remain closed.
+- File-map correction authorized: the existing residency implementation lives
+  in `saturn_ir_texture.c`, so Task 7 may add `init_region` there and make the
+  old partition initializer delegate without changing Task 6 binders.
+- DMA correction authorized: pinned libyaul's raw SCU calls are void. Actor
+  activation uses the already-owned in-tree GPL-3.0-or-later
+  `saturn_dma_queue_submit(..., SATURN_DMA_QUEUE_SCU)` plus checked
+  `saturn_dma_queue_wait`; no queue source changes and no activation-time queue
+  initialization are permitted. Complete planning precedes the first submit;
+  a later failure leaves possibly dirty VRAM bytes unreachable and publishes
+  no generation.
+- Reference inspection pinned libyaul gitlink `6012f79f` (MIT), its VDP1 VRAM
+  partition and SCU-DMA declarations, the in-tree SlaveDriver-derived checked
+  queue (`a898659...`, GPL-3.0-or-later), and current actor bundle/bank,
+  material, texture residency, scene residency, frame-bank, and Gouraud
+  generation/fence patterns. Reuse is dependency/API use plus same-repository
+  close-port/shared-core extension.
+- TDD gate is open: the actor/scene residency RED fixtures must fail at the
+  absent API before production edits. No Task 7 GREEN, SH-2 compile, behavior
+  commit, review, or target evidence is claimed yet.
+
+## Task 7 source-complete transition (2026-08-12)
+
+- Status is source-complete-pending-review. The implementation owns a fixed
+  128-entry / 2,064-byte scalar publication in scene residency, keeps the
+  public scene header Yaul-free, and retains Task 6's exact 16-byte mapping
+  layout by moving only its typedef into the new lightweight header. Failed
+  staging, a scene commit without the matching actor generation, reset, and
+  matching inactive unload invalidate the publication; matching commit keeps
+  it. Existing scene begin/commit/unload return semantics are unchanged.
+- Two more authorized corrections refine the active design: residency
+  generation is independent from immutable bundle package generation (Task 8
+  will carry both), and the S64F validator's unique nonzero scalar-bank-ID rule
+  means residency performs no deduplication. Thus mapping count is exactly the
+  number of canonical selected v2 variants; the real BOB bundle publishes 14.
+- Complete planning revalidates S64F and every S64B before DMA, checks each
+  texture/CLUT source and destination through its inclusive last byte, forms
+  pointers only after checked `uintptr_t` addition, and accepts a legal span
+  ending at `UINTPTR_MAX`. Upload uses only checked queue submit/wait. Any
+  post-transfer failure may dirty bytes but leaves generation/committed zero.
+- Focused residency/scene/IR/material GREEN, real-Bundle 14/16,640/2,816/Cannon
+  assertions, historical Python bank/bundle 26/26, S64B 86 mutations, S64F 54
+  mutations, family 47/13/14, VDP1 frame-bank, DMA queue, Gouraud, pose,
+  meshlet, feature-off 6/6, variant/source 40/40, and exact SH-2 freestanding
+  syntax/object compilation pass. The untouched adjacent A8 deferred-transfer
+  source contract remains 5/7 at its pre-existing destination-poison and
+  VDP2-camera/bank requirements; Task 7 does not edit sourceboot.
+- Step 5 remains unchecked until the behavior commit is recorded and fresh
+  independent spec/quality review passes. Task 8/runtime activation/renderer,
+  target link/run, Ymir, release, visual/manual, and total-game gates remain
+  closed.
