@@ -702,11 +702,15 @@ committed as `3338de20`. Replacement Tasks 1 and 2 completed through evidence
 `d5914059`, each with independent C0/I0/M0 approval and exact historical-byte
 preservation. Replacement Task 3 completed through `ca3318cd` with independent
 C0/I0/M0 parser/ABI approval. Replacement Task 4 completed through `f5a03808`
-with independent C0/I0/M0 approval. Replacement Task 5 fix round 1/5 is
-source-complete at repair `2cc767c0`, pending scoped rereview after initial behavior `65a3fdb9`
-received C0/I3/M0. The repair binds family input to deterministic closure
+with independent C0/I0/M0 approval. Replacement Task 5 fix round 2/5 is
+source-complete at repair `cf8bef5c`, pending scoped rereview. Initial behavior
+`65a3fdb9` received C0/I3/M0; fix-round-1 behavior `2cc767c0` passed those
+boundaries but its rereview returned C0/I1/M0 for eleven missing transitive
+host-tool prerequisites. The repair binds family input to deterministic closure
 recomputation, package intake to canonical target-profile ownership, and Make
-publication to real prerequisites plus current-input four-sidecar verification.
+publication to real prerequisites plus current-input four-sidecar verification;
+round 2 completes the local Python import prerequisite closure and locks it with
+a deterministic AST/existence regression.
 Its real BOB bundle remains 160,928 bytes with 47
 families, 14 v2 banks, and exact unsupported inventory, and its corrected
 Saturn resource proof guarantees any mixture of 19 supported actors. This

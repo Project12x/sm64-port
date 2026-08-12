@@ -386,3 +386,27 @@
   Repair behavior is `2cc767c0`. Task 5 remains
   source-complete-pending-rereview and all
   Task 6+/runtime/residency/renderer/Ymir gates remain open.
+
+## Task 5 review and fix round 2/5 (2026-08-12)
+
+- Scoped rereview of `65a3fdb9..8f1cacbe`: Spec FAIL / Quality Needs Fixes,
+  C0/I1/M0. Round 1 cleared family reconciliation, publication freshness,
+  four-sidecar validation, and canonical package ownership. The sole remaining
+  finding was eleven output-affecting repository-local Python imports missing
+  from `ACTOR_FAMILY_BUNDLE_TOOL_INPUTS`; current-input verification rejected
+  semantic drift, but Make did not invoke publisher/no-clobber for those tools.
+- TDD RED's deterministic recursive AST closure named exactly the eleven
+  omitted modules. Repair `cf8bef5c` adds those normal prerequisites and makes
+  the regression require closure coverage plus existence of every declared
+  tool path. No compiler, parser, target, runtime, residency, renderer, or Ymir
+  behavior changed.
+- Generation-11 `make -W` on formerly omitted `vdp1_texture.py` now selects
+  publisher and verifier; the actual same-generation call fails closed with
+  `publication target exists`. The unchanged generation-11 repeat is
+  verifier-only and GREEN. The full fresh Make/C wave is GREEN (scene-package
+  12+3, focused 12, mixed S64F 54, real BOB 47/14, S64B-v2 86, and both
+  capability families). Post-hardening focused is 12/12, broader historical/
+  parser/closure/profile is 112/112, and compileall/diff/hash gates pass.
+- Task 5 is source-complete-pending-rereview at `cf8bef5c`; same-reviewer round-2
+  verdict remains open. Task 6 and every target/runtime/residency/renderer/Ymir
+  gate remain closed.

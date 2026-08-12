@@ -1,8 +1,8 @@
 # Task 5 evidence report: bounded textured BOB actor bundle
 
-**Status (2026-08-12):** source-complete after fix round 1/5, pending scoped
-independent rereview at repair `2cc767c0`. The initial `65a3fdb9` review found
-C0/I3/M0. This is
+**Status (2026-08-12):** source-complete after fix round 2/5, pending scoped
+independent rereview at repair `cf8bef5c`. The initial `65a3fdb9` review found
+C0/I3/M0; fix-round-1 rereview found C0/I1/M0. This is
 host-only evidence. Target residency, renderer cutover, Ymir, manual visual,
 release, and whole-game gates remain open.
 
@@ -124,8 +124,10 @@ mode are serialized in the build report.
   `d83789cbf6c33dc287d6c8326b220a6a6e482744e6ca2bb99063921a557b3012`
   (generation is serialized), and its capacity header SHA is
   `c0faab4ae9b0d0141474ac4ce716cd830ab703d5df6178cd4ca9878550459b94`.
-  Independent review found C0/I3/M0; fix round 1 is source-complete and scoped
-  rereview is still required before Task 5 is complete. Generation-9 build,
+  Independent review found C0/I3/M0. Fix round 1 repaired those findings, but
+  scoped rereview found C0/I1/M0: eleven output-affecting modules in the local
+  Python import closure were absent from Make's publisher prerequisites.
+  Generation-9 build,
   unchanged-repeat verification, each-sidecar missing/corrupt mutations, and
   11 focused tests plus the direct target-profile dependency API test pass.
   The complete C/Make wave passes (54 mixed-S64F mutations, real 47/14 S64F,
@@ -133,3 +135,34 @@ mode are serialized in the build report.
   closure/profile coverage is 112/112. Generation-9 S64F SHA-256 is
   `ee786f5c907ac7f88dbec007170fe1bd6db778f39df81e7d71e8813f9b602b56`;
   compileall, scoped diff, and sidecar hash checks pass.
+
+## Fix round 2/5 evidence
+
+- TDD RED recursively parsed the repository-local import closure of
+  `compile_actor_family_bundle.py` and named exactly eleven omissions:
+  `actor_bank_v2.py`, `actor_source.py`, `bake_castle_uv.py`,
+  `compile_castle_bsp.py`, `dl_rigid_groups.py`, `extract_mario_actor.py`,
+  `extract_mario_textures.py`, `quad_pairing.py`, `saturn_mesh_ir.py`,
+  `static_bsp.py`, and `vdp1_texture.py`.
+- Repair `cf8bef5c` adds only those normal prerequisites plus an AST regression
+  proving the local import closure is a subset of the intentionally broader
+  Make tool set and that every declared path exists. A generation-11 `make -W`
+  probe on formerly omitted `vdp1_texture.py` selects publisher plus verifier;
+  its real same-generation invocation fails at `publication target exists`.
+  An unchanged generation-11 repeat is verifier-only and passes.
+- The fresh generation-11 full Make/C wave passes: scene-package 12+3, focused
+  12, mixed S64F 54 mutations, real BOB 47 families/14 v2 variants, S64B-v2 86
+  mutations, and opaque/surface/collectible/articulated capability gates.
+  Post-hardening focused coverage is 12/12 and historical/parser/closure/profile
+  coverage is 112/112; compileall and scoped diff checks pass. Generation-11
+  sidecar SHA-256 values are S64F
+  `6bdccf90bcf581f060d03919dfbc4e26342b1975039303ad01f4a535c449458b`,
+  dependency
+  `5aecf2914a7154ad7406af225a30a9ca07cae652565424ae99cc7e93a89e54e6`,
+  capacity header
+  `c0faab4ae9b0d0141474ac4ce716cd830ab703d5df6178cd4ca9878550459b94`,
+  and report
+  `5f0a69ade9e8a92b2dc6e9af52d6bfaa8c5c28199dec1f5d56961b1293b61ea3`.
+  Scoped rereview is
+  still required; Task 6 and all runtime/residency/renderer/Ymir gates remain
+  closed.
