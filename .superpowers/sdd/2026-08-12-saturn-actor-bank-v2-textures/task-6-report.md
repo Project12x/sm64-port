@@ -3,8 +3,8 @@
 ## Status
 
 Source-complete-pending-rereview from reconciled base `a553b500`. Initial
-behavior commit is `863b4646`; fix round 1 is prepared from frozen review HEAD
-`5ceb251c`. No target runtime, residency,
+behavior commit is `863b4646`; fix round 1 landed as `661e54a4` from frozen
+review HEAD `5ceb251c`. No target runtime, residency,
 renderer, Ymir, release, or Task 7 claim exists.
 
 ## Reconciliation and provenance
@@ -139,5 +139,7 @@ renderer, Ymir, release, or Task 7 claim exists.
 
 - Behavior `863b4646` (`feat(saturn): lower actor bank materials to VDP1`),
   including the CHANGELOG, active plan, ledger, tests, and initial report.
-- This docs/evidence status commit records the behavior SHA and remains part of
-  the exact review range `a553b500..HEAD`.
+- Initial evidence `5ceb251c` records source-complete-pending-review status.
+- Fix round 1 behavior `661e54a4` (`fix(saturn): close actor material address
+  spans`) includes its CHANGELOG, tests, active plan, ledger, and this report.
+  The same-reviewer repair range begins at frozen HEAD `5ceb251c`.

@@ -511,5 +511,5 @@
   mixed-S64F 54 mutations, pose, meshlet and invalid-span mutation, feature-off
   6/6, and variant/source 40/40. Both production modules pass exact SH-2
   freestanding syntax and object compilation; fix-round objects are 22,504 and
-  25,216 bytes. The repair commit is pending this transition; same-reviewer
+  25,216 bytes. Repair behavior is `661e54a4`; same-reviewer
   rereview remains mandatory and every Task 7/runtime/Ymir gate stays closed.

@@ -31,9 +31,10 @@ C0/I0/M0 after round 1 received C0/I1/M0 for an incomplete transitive host-tool
 prerequisite closure. Its
 initial zero-edit preflight exposed and corrected
 a design error: source-pool family ceilings are not simultaneous resource
-allocations. Tasks 6-13 and every target-material, runtime,
-demo, release, reseal, smoke, visual, desktop, manual, retail, and total-game
-gate remain open. No target runtime, residency, renderer, or Ymir state changed.
+allocations. Task 6 is source-complete-pending-rereview after fix round 1 at
+`661e54a4`; Tasks 7-13 and every runtime, demo, release, reseal, smoke, visual,
+desktop, manual, retail, and total-game gate remain open. No target runtime,
+residency, renderer, or Ymir state changed.
 
 ## Global Constraints
 
@@ -603,7 +604,7 @@ capacity equations are host-approved; target rendering remains a later gate.
 
 **Execution status (2026-08-12):** source-complete-pending-rereview from
 reconciled base `a553b500` at behavior commit `863b4646`, with fix round 1
-prepared from frozen review head `5ceb251c`. Independent review returned Spec
+landed as `661e54a4` from frozen review head `5ceb251c`. Independent review returned Spec
 FAIL / Quality needs fixes, C0/I3/M0: IR and actor aggregate address checks
 validated only their start rather than the final byte, post-parse CLUT tile
 ordinals were not locally bounded before global mapping, and the historical
