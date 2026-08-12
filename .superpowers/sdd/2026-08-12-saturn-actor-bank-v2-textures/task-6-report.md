@@ -3,7 +3,7 @@
 ## Status
 
 Source-complete-pending-review from reconciled base `a553b500`. Behavior commit
-is recorded below after explicit staging. No target runtime, residency,
+is `863b4646`. No target runtime, residency,
 renderer, Ymir, release, or Task 7 claim exists.
 
 ## Reconciliation and provenance
@@ -100,5 +100,7 @@ renderer, Ymir, release, or Task 7 claim exists.
 
 ## Commits
 
-- Pending explicit-path behavior commit including `CHANGELOG.md`, followed by
-  a docs/evidence status commit if the behavior SHA must be recorded.
+- Behavior `863b4646` (`feat(saturn): lower actor bank materials to VDP1`),
+  including the CHANGELOG, active plan, ledger, tests, and initial report.
+- This docs/evidence status commit records the behavior SHA and remains part of
+  the exact review range `a553b500..HEAD`.

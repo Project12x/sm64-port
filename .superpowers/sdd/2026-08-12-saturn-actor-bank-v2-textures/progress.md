@@ -440,7 +440,7 @@
 ## Task 6 source-complete evidence (2026-08-12)
 
 - Status: source-complete-pending-review from base `a553b500`; behavior commit
-  is recorded in the Task 6 report after explicit staging. Task 7 and every
+  `863b4646`. Task 7 and every
   residency/publication/runtime/renderer/Ymir/release gate remain closed.
 - TDD RED: `make -k -f Makefile.saturn.mk verify-ir-texture
   verify-actor-material` exited 1. The IR test compiled then aborted at the

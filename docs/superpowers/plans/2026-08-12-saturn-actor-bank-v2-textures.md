@@ -602,7 +602,7 @@ capacity equations are host-approved; target rendering remains a later gate.
 ### Task 6: Bind stable v2 materials to exact VDP1 commands
 
 **Execution status (2026-08-12):** source-complete-pending-review from
-reconciled base `a553b500`. Both IR binders use a checked `uint16_t` width and
+reconciled base `a553b500` at behavior commit `863b4646`. Both IR binders use a checked `uint16_t` width and
 the new master-only final-emission boundary translates all seven stable
 S64B-owned recipes to exact Yaul command fields only after validating the bank,
 mapping generation/identity, tile/material ordinals, complete texture/CLUT
