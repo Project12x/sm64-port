@@ -11,6 +11,7 @@ encoder. Unknown source constructs fail closed instead of being omitted.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import re
 import struct
@@ -19,7 +20,15 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from actor_bank_format import validate_actor_bank
+from actor_bank_v2 import pack_actor_bank_v2, source_identity_v2
 from actor_family_bundle import SourceRecord, source_identity
+from actor_material_v2 import (
+    ActorMaterialV2Error,
+    BOB_DIRECT_TEXTURED_KEYS,
+    MaterialSignatureV2,
+    compile_materials_v2,
+    partial_transfer_divergence_v2,
+)
 from actor_source import (
     AnimationRecord,
     parse_animation_table_text,
@@ -34,6 +43,7 @@ from extract_mario_actor import (
     matrix_apply,
 )
 from saturn_mesh_ir import compile_mesh_ir
+from vdp1_texture import read_png_rgb1555
 
 
 class ActorVariantError(ValueError):
@@ -92,6 +102,85 @@ class _ModelBinding:
 
 
 _C_INTEGER = re.compile(r"-?(?:0[xX][0-9A-Fa-f]+|\d+)")
+
+_FAST3D_SCALARS = {
+    "G_IM_FMT_RGBA": 0,
+    "G_IM_FMT_IA": 3,
+    "G_IM_SIZ_16b": 2,
+    "G_IM_SIZ_16b_BYTES": 2,
+    "G_TX_LOADTILE": 7,
+    "G_TX_RENDERTILE": 0,
+    "G_TX_WRAP": 0,
+    "G_TX_NOMIRROR": 0,
+    "G_TX_CLAMP": 2,
+    "G_TX_NOMASK": 0,
+    "G_TX_NOLOD": 0,
+    "G_TEXTURE_IMAGE_FRAC": 2,
+    "G_ON": 1,
+    "G_OFF": 0,
+}
+
+
+def _fast3d_scalar(value: str, label: str) -> int:
+    """Evaluate one bounded integer-only Fast3D macro expression."""
+    try:
+        root = ast.parse(value.strip(), mode="eval")
+    except SyntaxError as error:
+        raise MalformedActorSourceError(f"computed {label} state") from error
+
+    def visit(node: ast.AST) -> int:
+        if isinstance(node, ast.Expression):
+            return visit(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, int) and \
+                not isinstance(node.value, bool):
+            return node.value
+        if isinstance(node, ast.Name) and node.id in _FAST3D_SCALARS:
+            return _FAST3D_SCALARS[node.id]
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            operand = visit(node.operand)
+            return operand if isinstance(node.op, ast.UAdd) else -operand
+        operations = {
+            ast.Add: lambda a, b: a + b,
+            ast.Sub: lambda a, b: a - b,
+            ast.Mult: lambda a, b: a * b,
+            ast.LShift: lambda a, b: a << b,
+            ast.RShift: lambda a, b: a >> b,
+            ast.BitOr: lambda a, b: a | b,
+        }
+        if isinstance(node, ast.BinOp) and type(node.op) in operations:
+            left, right = visit(node.left), visit(node.right)
+            if right < 0 and isinstance(node.op, (ast.LShift, ast.RShift)):
+                raise ValueError
+            return operations[type(node.op)](left, right)
+        raise ValueError
+
+    try:
+        result = visit(root)
+    except (ValueError, OverflowError) as error:
+        raise MalformedActorSourceError(f"computed {label} state") from error
+    if not -(1 << 31) <= result <= 0xFFFFFFFF:
+        raise MalformedActorSourceError(f"{label} state exceeds uint32")
+    return result
+
+
+def _geometry_modes(value: str, label: str) -> tuple[str, ...]:
+    fields = tuple(item.strip() for item in value.split("|"))
+    allowed = {"G_LIGHTING", "G_SHADING_SMOOTH", "G_CULL_BACK"}
+    if not fields or any(item not in allowed for item in fields) or len(set(fields)) != len(fields):
+        raise UnsupportedActorSourceError(f"unapproved geometry mode state in {label}")
+    return fields
+
+
+def _tile_axis_mode(value: str, label: str) -> tuple[bool, bool]:
+    fields = tuple(item.strip() for item in value.split("|"))
+    allowed = {"G_TX_WRAP", "G_TX_NOMIRROR", "G_TX_CLAMP", "G_TX_MIRROR"}
+    if not fields or any(item not in allowed for item in fields):
+        raise UnsupportedActorSourceError(f"unapproved tile wrap/clamp state in {label}")
+    clamp = "G_TX_CLAMP" in fields
+    mirror = "G_TX_MIRROR" in fields
+    if clamp and "G_TX_WRAP" in fields or mirror and "G_TX_NOMIRROR" in fields:
+        raise UnsupportedActorSourceError(f"ambiguous tile wrap/clamp state in {label}")
+    return clamp, mirror
 
 
 def _strip_comments(source: str, label: str) -> str:
@@ -294,6 +383,7 @@ class _SourceIndex:
         self._bytes: dict[str, bytes] = {}
         self._text: dict[str, str] = {}
         self._definitions: dict[tuple[str, str, str], tuple[str, ...]] = {}
+        self._textures: dict[tuple[str, str], dict[str, object]] = {}
         self.used: set[str] = set()
 
     def _load(self, path: str) -> bytes:
@@ -418,12 +508,79 @@ class _SourceIndex:
             raise MalformedActorSourceError(f"unsupported gdSPDefLights1 shape: {symbol}")
         return tuple(max(0, min(31, value >> 3)) for value in values[3:6])
 
+    def texture_source(self, symbol: str, preferred: str) -> dict[str, object]:
+        """Resolve a texture declaration and its exact checked-in PNG source."""
+        key = (symbol, preferred)
+        if key in self._textures:
+            return self._textures[key]
+        if not re.fullmatch(r"[A-Za-z_]\w*", symbol):
+            raise ActorSourceSelectionError(f"invalid texture image symbol: {symbol}")
+        pattern = re.compile(
+            r"(?:ALIGNED8\s+)?(?:static\s+)?const\s+(?:Texture|u8|u16)\s+" +
+            re.escape(symbol) +
+            r"\s*\[\]\s*=\s*\{\s*#include\s+\"([^\"]+)\"\s*\}\s*;",
+            re.DOTALL)
+        preferred_matches = pattern.findall(_strip_comments(self.text(preferred), preferred))
+        if len(preferred_matches) > 1:
+            raise ActorSourceSelectionError(f"ambiguous texture image source: {symbol}")
+        matches = [(preferred, preferred_matches[0])] if preferred_matches else []
+        if not matches:
+            matches = [(path, include) for path in self.candidates
+                       for include in pattern.findall(_strip_comments(self.text(path), path))]
+        if len(matches) != 1:
+            detail = "missing" if not matches else "ambiguous"
+            raise ActorSourceSelectionError(
+                f"{detail} texture image source: {symbol}")
+        declaration_path, include_path = matches[0]
+        self.mark_used(declaration_path)
+        relative = _normal_path(include_path)
+        if not relative.endswith((".rgba16.inc.c", ".ia16.inc.c")):
+            raise UnsupportedActorSourceError(
+                f"unapproved texture source include: {relative}")
+        png_path = _normal_path(relative[:-6] + ".png")
+        source = self.root / png_path
+        if not source.is_file():
+            raise ActorSourceSelectionError(f"texture source is missing: {png_path}")
+        try:
+            payload = source.read_bytes()
+            width, height, pixels = read_png_rgb1555(source)
+        except (OSError, ValueError) as error:
+            raise UnsupportedActorSourceError(
+                f"texture source rejected: {png_path}: {error}") from error
+        result: dict[str, object] = {
+            "symbol": symbol,
+            "path": png_path,
+            "sha256": hashlib.sha256(payload).digest(),
+            "width": width,
+            "height": height,
+            "pixels": pixels,
+            "source_bytes": len(payload),
+        }
+        self._textures[key] = result
+        return result
+
     def source_records(self) -> tuple[SourceRecord, ...]:
         return tuple(SourceRecord(path, self.digest(path)) for path in sorted(self.used))
 
 
 def _arguments(args: str) -> list[str]:
-    return [field.strip() for field in args.split(",")]
+    fields: list[str] = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(args):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                raise MalformedActorSourceError("unbalanced command arguments")
+        elif char == "," and depth == 0:
+            fields.append(args[start:index].strip())
+            start = index + 1
+    if depth:
+        raise MalformedActorSourceError("unbalanced command arguments")
+    fields.append(args[start:].strip())
+    return fields
 
 
 def _display_list_arg(macro: str, args: str) -> tuple[str, str] | None:
@@ -701,7 +858,7 @@ class _GeoCompiler:
 
 
 class _Fast3DCompiler:
-    _UNREPRESENTABLE = {
+    _MATERIAL_COMMANDS = {
         "gsDPSetTextureImage", "gsDPLoadTextureBlock", "gsSPTexture",
         "gsDPSetCombineMode", "gsSPSetGeometryMode", "gsSPClearGeometryMode",
         "gsDPSetEnvColor", "gsDPSetAlphaCompare", "gsDPLoadSync",
@@ -710,32 +867,272 @@ class _Fast3DCompiler:
 
     def __init__(self, index: _SourceIndex,
                  lists: Mapping[str, list[tuple[str, str]]],
-                 list_paths: Mapping[str, str]) -> None:
+                 list_paths: Mapping[str, str], family_ordinal: int,
+                 model_id: int) -> None:
         self.index = index
         self.lists = lists
         self.list_paths = list_paths
+        self.family_ordinal = family_ordinal
+        self.model_id = model_id
+        self.allow_v2 = (family_ordinal, model_id) in BOB_DIRECT_TEXTURED_KEYS
         self.cache: list[tuple[tuple[int, ...], str, str, int] | None] = [None] * 32
         self.light: str | None = None
         self.light_rgb: tuple[int, int, int] | None = None
         self.materials: list[dict[str, object]] = []
         self.material_ids: dict[tuple[object, ...], int] = {}
         self.triangles: list[dict[str, object]] = []
+        self.transfers: list[tuple[str, str, str, str]] = []
+        self.combine_mode: tuple[str, ...] = ()
+        self.geometry_mode = {"G_LIGHTING", "G_SHADING_SMOOTH", "G_CULL_BACK"}
+        self.env_color: tuple[int, int, int, int] | None = None
+        self.alpha_compare: str | None = None
+        self.texture_enabled = False
+        self.texture_scale_s = 0
+        self.texture_scale_t = 0
+        self.texture_level = 0
+        self.texture_tile = 0
+        self.texture_image: dict[str, object] | None = None
+        self.tiles: dict[int, dict[str, object]] = {}
+        self.load_state: tuple[int, ...] | None = None
+        self.load_complete = False
+        self.material_sources: dict[str, SourceRecord] = {}
 
-    def _material(self, part: dict[str, object]) -> int:
-        if self.light is None or self.light_rgb is None:
+    def _texture_signature(self, part: dict[str, object], path: str,
+                           name: str) -> tuple[MaterialSignatureV2,
+                                               dict[str, object] | None,
+                                               dict[str, object] | None]:
+        if not self.texture_enabled:
+            signature = MaterialSignatureV2(
+                None, None, self.combine_mode, tuple(sorted(self.geometry_mode)),
+                (), str(part["layer"]), 0 if part["opacity"] == "opaque" else 1)
+            return signature, None, None
+        image = self.texture_image
+        tile = self.tiles.get(self.texture_tile)
+        if image is None:
+            raise UnsupportedActorSourceError(f"partial texture image state in {name}")
+        if tile is None or "lrs" not in tile or "lrt" not in tile:
+            raise UnsupportedActorSourceError(f"partial tile size state in {name}")
+        if not self.load_complete or self.load_state is None:
+            raise UnsupportedActorSourceError(f"partial texture load state in {name}")
+        if not self.combine_mode:
+            raise UnsupportedActorSourceError(f"partial combine mode state in {name}")
+        if (int(image["fmt"]) != int(tile["fmt"]) or
+                int(image["size"]) != int(tile["size"])):
+            raise UnsupportedActorSourceError(f"ambiguous texture image/tile state in {name}")
+        try:
+            source = self.index.texture_source(str(image["symbol"]), path)
+        except ActorSourceSelectionError as error:
+            raise UnsupportedActorSourceError(
+                f"unapproved texture image state/source in {name}: {error}") from error
+        self.material_sources[str(source["path"])] = SourceRecord(
+            str(source["path"]), source["sha256"])
+        uls, ult = int(tile["uls"]), int(tile["ult"])
+        lrs, lrt = int(tile["lrs"]), int(tile["lrt"])
+        if lrs < uls or lrt < ult or any(value & 3 for value in (uls, ult, lrs, lrt)):
+            raise UnsupportedActorSourceError(f"unapproved tile size state in {name}")
+        width = (lrs - uls) // 4 + 1
+        height = (lrt - ult) // 4 + 1
+        tile_state = (
+            int(image["fmt"]), int(image["size"]), int(image["width"]),
+            self.texture_tile, uls, ult, lrs, lrt, width, height,
+            int(tile["mask_s"]), int(tile["mask_t"]),
+            int(tile["shift_s"]), int(tile["shift_t"]),
+            self.texture_scale_s, self.texture_scale_t,
+            int(bool(tile["clamp_s"])), int(bool(tile["clamp_t"])),
+            int(bool(tile["mirror_s"])), int(bool(tile["mirror_t"])),
+            int(tile["line"]), int(tile["tmem"]), int(tile["palette"]),
+            *self.load_state,
+        )
+        signature = MaterialSignatureV2(
+            str(source["path"]), source["sha256"], self.combine_mode,
+            tuple(sorted(self.geometry_mode)), tile_state, str(part["layer"]),
+            0 if part["opacity"] == "opaque" else 1)
+        sample_state = {
+            "width": width, "height": height,
+            "uls": uls, "ult": ult, "lrs": lrs, "lrt": lrt,
+            "mask_s": int(tile["mask_s"]), "mask_t": int(tile["mask_t"]),
+            "shift_s": int(tile["shift_s"]), "shift_t": int(tile["shift_t"]),
+            "clamp_s": bool(tile["clamp_s"]), "clamp_t": bool(tile["clamp_t"]),
+            "mirror_s": bool(tile["mirror_s"]), "mirror_t": bool(tile["mirror_t"]),
+            "sp_scale_s": self.texture_scale_s,
+            "sp_scale_t": self.texture_scale_t,
+        }
+        texture = (int(source["width"]), int(source["height"]),
+                   source["pixels"], source["sha256"].hex(),
+                   int(source["source_bytes"]))
+        return signature, sample_state, texture
+
+    def _material(self, part: dict[str, object], path: str,
+                  name: str) -> tuple[int, MaterialSignatureV2,
+                                      dict[str, object] | None,
+                                      dict[str, object] | None]:
+        signature, tile, texture = self._texture_signature(part, path, name)
+        lit = (signature.texture_path is None or
+               signature.combine_mode ==
+               ("G_CC_MODULATERGB", "G_CC_MODULATERGB")) and \
+            "G_LIGHTING" in self.geometry_mode
+        if lit and (self.light is None or self.light_rgb is None):
             raise ActorSourceSelectionError(
                 f"display list {part['display_list']} emits geometry without a diffuse light")
-        key = (self.light_rgb, self.light, part["layer"])
+        rgb = self.light_rgb if lit else (31, 31, 31)
+        light = self.light if lit else None
+        key = (rgb, light, signature, self.env_color, self.alpha_compare)
         if key not in self.material_ids:
             material_id = len(self.materials)
             self.material_ids[key] = material_id
             self.materials.append({
-                "material_id": material_id, "rgb": list(self.light_rgb),
-                "light": self.light, "texture": None,
-                "combine_mode": None, "cull_back": True,
-                "env_color": None, "alpha_compare": None, "layer": part["layer"],
+                "material_id": material_id, "rgb": list(rgb),
+                "light": light, "texture": signature.texture_path,
+                "texture_symbol": None if self.texture_image is None else self.texture_image["symbol"],
+                "combine_mode": list(signature.combine_mode) or None,
+                "cull_back": "G_CULL_BACK" in self.geometry_mode,
+                "env_color": None if self.env_color is None else list(self.env_color),
+                "alpha_compare": self.alpha_compare, "layer": part["layer"],
+                "signature": signature,
             })
-        return self.material_ids[key]
+        return self.material_ids[key], signature, tile, texture
+
+    def _set_texture_image(self, fields: list[str], name: str) -> None:
+        if len(fields) != 4 or re.fullmatch(r"[A-Za-z_]\w*", fields[3]) is None:
+            raise MalformedActorSourceError(f"malformed texture image state in {name}")
+        fmt = _fast3d_scalar(fields[0], f"texture image format in {name}")
+        size = _fast3d_scalar(fields[1], f"texture image size in {name}")
+        width = _fast3d_scalar(fields[2], f"texture image width in {name}")
+        if fmt not in (0, 3) or size != 2 or width <= 0:
+            raise UnsupportedActorSourceError(f"unapproved texture image state in {name}")
+        self.texture_image = {"fmt": fmt, "size": size, "width": width,
+                              "symbol": fields[3]}
+        self.load_state = None
+        self.load_complete = False
+
+    def _set_tile(self, fields: list[str], name: str) -> None:
+        if len(fields) != 12:
+            raise MalformedActorSourceError(f"malformed tile state in {name}")
+        values = [_fast3d_scalar(fields[index], f"tile state in {name}")
+                  for index in (0, 1, 2, 3, 4, 5, 7, 8, 10, 11)]
+        fmt, size, line, tmem, tile_id, palette, mask_t, shift_t, mask_s, shift_s = values
+        if fmt not in (0, 3) or size != 2 or tile_id not in (0, 7):
+            raise UnsupportedActorSourceError(f"unapproved tile image state in {name}")
+        clamp_t, mirror_t = _tile_axis_mode(fields[6], name)
+        clamp_s, mirror_s = _tile_axis_mode(fields[9], name)
+        self.tiles[tile_id] = {
+            "fmt": fmt, "size": size, "line": line, "tmem": tmem,
+            "palette": palette, "mask_t": mask_t, "shift_t": shift_t,
+            "mask_s": mask_s, "shift_s": shift_s,
+            "clamp_t": clamp_t, "mirror_t": mirror_t,
+            "clamp_s": clamp_s, "mirror_s": mirror_s,
+        }
+
+    def _material_command(self, macro: str, args: str, name: str) -> None:
+        fields = _arguments(args)
+        if macro in ("gsDPLoadSync", "gsDPTileSync"):
+            if args.strip():
+                raise MalformedActorSourceError(f"malformed {macro} in {name}")
+        elif macro == "gsDPSetTextureImage":
+            self._set_texture_image(fields, name)
+        elif macro == "gsDPSetCombineMode":
+            if len(fields) != 2 or any(re.fullmatch(r"G_CC_[A-Z0-9_]+", item) is None
+                                       for item in fields):
+                raise MalformedActorSourceError(f"malformed combine mode state in {name}")
+            self.combine_mode = tuple(fields)
+        elif macro in ("gsSPSetGeometryMode", "gsSPClearGeometryMode"):
+            if len(fields) != 1:
+                raise MalformedActorSourceError(f"malformed geometry mode state in {name}")
+            modes = _geometry_modes(fields[0], name)
+            if macro == "gsSPSetGeometryMode":
+                self.geometry_mode.update(modes)
+            else:
+                self.geometry_mode.difference_update(modes)
+        elif macro == "gsDPSetEnvColor":
+            values = [_fast3d_scalar(item, f"environment color in {name}") for item in fields]
+            if len(values) != 4 or any(value < 0 or value > 255 for value in values):
+                raise MalformedActorSourceError(f"malformed environment color state in {name}")
+            self.env_color = tuple(values)
+        elif macro == "gsDPSetAlphaCompare":
+            if len(fields) != 1 or re.fullmatch(r"G_AC_[A-Z0-9_]+", fields[0]) is None:
+                raise MalformedActorSourceError(f"malformed alpha compare state in {name}")
+            self.alpha_compare = fields[0]
+        elif macro == "gsSPTexture":
+            if len(fields) != 5:
+                raise MalformedActorSourceError(f"malformed texture enable state in {name}")
+            values = [_fast3d_scalar(item, f"texture enable in {name}") for item in fields]
+            if values[2] != 0 or values[3] != 0 or values[4] not in (0, 1):
+                raise UnsupportedActorSourceError(f"unapproved texture enable state in {name}")
+            self.texture_scale_s, self.texture_scale_t = values[0], values[1]
+            self.texture_level, self.texture_tile = values[2], values[3]
+            self.texture_enabled = bool(values[4])
+        elif macro == "gsDPSetTile":
+            self._set_tile(fields, name)
+        elif macro == "gsDPSetTileSize":
+            if len(fields) != 5:
+                raise MalformedActorSourceError(f"malformed tile size state in {name}")
+            values = [_fast3d_scalar(item, f"tile size in {name}") for item in fields]
+            tile_id = values[0]
+            if tile_id not in self.tiles:
+                raise UnsupportedActorSourceError(f"partial tile size state in {name}")
+            self.tiles[tile_id].update({"uls": values[1], "ult": values[2],
+                                        "lrs": values[3], "lrt": values[4]})
+        elif macro == "gsDPLoadBlock":
+            if len(fields) != 5 or self.texture_image is None:
+                raise UnsupportedActorSourceError(f"partial texture load state in {name}")
+            tile_id = _fast3d_scalar(fields[0], f"texture load tile in {name}")
+            if tile_id != 7 or tile_id not in self.tiles:
+                raise UnsupportedActorSourceError(f"unapproved texture load tile state in {name}")
+            block = tuple(_fast3d_scalar(field, f"texture load block in {name}")
+                          for field in fields[1:4])
+            dxt = re.fullmatch(
+                r"CALC_DXT\(([^,]+),\s*G_IM_SIZ_16b_BYTES\)", fields[4])
+            if dxt is None:
+                raise UnsupportedActorSourceError(f"computed texture load state in {name}")
+            dxt_width = _fast3d_scalar(dxt.group(1), f"texture load DXT width in {name}")
+            load_tile = self.tiles[tile_id]
+            self.load_state = (
+                0, tile_id, *block, dxt_width,
+                int(load_tile["fmt"]), int(load_tile["size"]),
+                int(load_tile["line"]), int(load_tile["tmem"]),
+                int(load_tile["palette"]), int(load_tile["mask_s"]),
+                int(load_tile["mask_t"]), int(load_tile["shift_s"]),
+                int(load_tile["shift_t"]), int(bool(load_tile["clamp_s"])),
+                int(bool(load_tile["clamp_t"])), int(bool(load_tile["mirror_s"])),
+                int(bool(load_tile["mirror_t"])),
+            )
+            self.load_complete = True
+        elif macro == "gsDPLoadTextureBlock":
+            if len(fields) != 12 or re.fullmatch(r"[A-Za-z_]\w*", fields[0]) is None:
+                raise MalformedActorSourceError(f"malformed texture block state in {name}")
+            fmt = _fast3d_scalar(fields[1], f"texture block format in {name}")
+            size = _fast3d_scalar(fields[2], f"texture block size in {name}")
+            width = _fast3d_scalar(fields[3], f"texture block width in {name}")
+            height = _fast3d_scalar(fields[4], f"texture block height in {name}")
+            if fmt not in (0, 3) or size != 2 or width <= 0 or height <= 0:
+                raise UnsupportedActorSourceError(f"unapproved texture image state in {name}")
+            clamp_s, mirror_s = _tile_axis_mode(fields[6], name)
+            clamp_t, mirror_t = _tile_axis_mode(fields[7], name)
+            mask_s = _fast3d_scalar(fields[8], f"texture block mask in {name}")
+            mask_t = _fast3d_scalar(fields[9], f"texture block mask in {name}")
+            shift_s = _fast3d_scalar(fields[10], f"texture block shift in {name}")
+            shift_t = _fast3d_scalar(fields[11], f"texture block shift in {name}")
+            self.texture_image = {"fmt": fmt, "size": size, "width": 1,
+                                  "symbol": fields[0]}
+            self.tiles[0] = {
+                "fmt": fmt, "size": size, "line": width // 4, "tmem": 0,
+                "palette": _fast3d_scalar(fields[5], f"texture block palette in {name}"),
+                "mask_s": mask_s, "mask_t": mask_t,
+                "shift_s": shift_s, "shift_t": shift_t,
+                "clamp_s": clamp_s, "clamp_t": clamp_t,
+                "mirror_s": mirror_s, "mirror_t": mirror_t,
+                "uls": 0, "ult": 0, "lrs": (width - 1) * 4,
+                "lrt": (height - 1) * 4,
+            }
+            self.texture_tile = 0
+            self.load_state = (
+                1, 7, 0, 0, width * height - 1, width,
+                fmt, size, 0, 0, 0, 0, 0, 0, 0,
+                1, 1, 0, 0,
+            )
+            self.load_complete = True
+        else:
+            raise UnsupportedActorSourceError(f"unknown Fast3D material/list state: {macro}")
 
     def walk(self, name: str, part: dict[str, object], stack: tuple[str, ...] = ()) -> None:
         if name in stack:
@@ -749,18 +1146,22 @@ class _Fast3DCompiler:
             raise ActorSourceSelectionError(f"missing reached display list: {name}")
         local_ordinal = 0
         for macro, args in body:
-            if macro in self._UNREPRESENTABLE:
-                raise UnsupportedActorSourceError(
-                    f"S64B v1 cannot represent Fast3D state {macro} in {name}")
-            if macro == "gsSPDisplayList":
+            if macro in self._MATERIAL_COMMANDS:
+                if not self.allow_v2:
+                    raise UnsupportedActorSourceError(
+                        f"S64B v1 cannot represent Fast3D state {macro} in {name}")
+                self._material_command(macro, args, name)
+            elif macro == "gsSPDisplayList":
                 child = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*", args)
                 if child is None:
                     raise MalformedActorSourceError(f"malformed gsSPDisplayList in {name}")
+                self.transfers.append((path, name, macro, child.group(1)))
                 self.walk(child.group(1), part, stack + (name,))
             elif macro == "gsSPBranchList":
                 child = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*", args)
                 if child is None:
                     raise MalformedActorSourceError(f"malformed gsSPBranchList in {name}")
+                self.transfers.append((path, name, macro, child.group(1)))
                 self.walk(child.group(1), part, stack + (name,))
                 return
             elif macro == "gsSPVertex":
@@ -784,9 +1185,12 @@ class _Fast3DCompiler:
                     _C_INTEGER.pattern + r")\s*", args)
                 if selected is None:
                     raise MalformedActorSourceError(f"malformed gsSPLight in {name}")
-                if (selected.group(2) != "l" or
-                        _integer_literal(selected.group(3),
-                                         f"gsSPLight index in {name}") != 1):
+                kind = selected.group(2)
+                light_index = _integer_literal(selected.group(3),
+                                               f"gsSPLight index in {name}")
+                if kind == "a" and light_index == 2 and self.allow_v2:
+                    continue
+                if kind != "l" or light_index != 1:
                     raise UnsupportedActorSourceError(
                         f"S64B v1 cannot represent ambient/alternate light state in {name}")
                 self.light = selected.group(1)
@@ -802,7 +1206,7 @@ class _Fast3DCompiler:
                            else (values[0:3],))
                 if any(len(triple) != 3 for triple in triples):
                     raise MalformedActorSourceError(f"malformed {macro} in {name}")
-                material = self._material(part)
+                material, signature, tile, texture = self._material(part, path, name)
                 for triple in triples:
                     if any(vertex < 0 or vertex >= 32 or self.cache[vertex] is None
                            for vertex in triple):
@@ -815,7 +1219,10 @@ class _Fast3DCompiler:
                         "material": material, "joint_ordinal": part["joint_ordinal"],
                         "branch_ordinal": part["branch_ordinal"], "local_positions": local,
                         "opacity": 0 if part["opacity"] == "opaque" else 1,
-                        "texture": None,
+                        "texture": texture,
+                        "tile": tile,
+                        "uv": [list(row[0][4:6]) for row in rows],
+                        "signature": signature,
                     })
                     local_ordinal += 1
             elif macro in ("gsSPMatrix", "gsSPPopMatrix"):
@@ -895,9 +1302,10 @@ def _meshlets(primitives: Sequence[dict[str, object]], positions: Sequence[list[
 
 
 def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
-                      model_binding: _ModelBinding
+                      model_binding: _ModelBinding, family_ordinal: int,
+                      model_id: int
                       ) -> tuple[tuple[Joint, ...], tuple[Vertex, ...], Geometry,
-                                 dict[str, object]]:
+                                 dict[str, object], dict[str, object]]:
     layouts: dict[str, list[tuple[str, str]]] = {}
     layout_paths: dict[str, str] = {}
     lists: dict[str, list[tuple[str, str]]] = {}
@@ -928,17 +1336,27 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         structural_sites = walk_geo_layout(layouts, lists, entry)
     except ValueError as error:
         raise ActorSourceSelectionError(str(error)) from error
-    unsupported = sorted({reason for site in structural_sites for reason in site.reasons})
+    allow_v2 = (family_ordinal, model_id) in BOB_DIRECT_TEXTURED_KEYS
+    unsupported = sorted({reason for site in structural_sites for reason in site.reasons
+                          if not (allow_v2 and reason == "textured")})
     if unsupported:
         raise UnsupportedActorSourceError(f"unsupported rigid-group source: {unsupported[0]}")
 
-    fast = _Fast3DCompiler(index, lists, list_paths)
+    fast = _Fast3DCompiler(index, lists, list_paths, family_ordinal, model_id)
     for part in source_parts:
-        fast.walk(str(part["display_list"]), part)
+        try:
+            fast.walk(str(part["display_list"]), part)
+        except UnsupportedActorSourceError as error:
+            divergence = partial_transfer_divergence_v2(
+                family_ordinal, model_id, fast.transfers)
+            if divergence is not None:
+                raise UnsupportedActorSourceError(
+                    f"unapproved BOB {divergence} state/source") from error
+            raise
     actual_sites = [(str(item["display_list"]), int(item["list_ordinal"]))
                     for item in fast.triangles]
     expected_sites = [(site.display_list, site.list_ordinal) for site in structural_sites]
-    if actual_sites != expected_sites:
+    if actual_sites != expected_sites and not allow_v2:
         raise MalformedActorSourceError("Fast3D extraction disagrees with rigid-group walk")
 
     vertices: list[Vertex] = []
@@ -975,8 +1393,11 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         compiled, primitives, pairing = compile_mesh_ir(mesh_ir)
     except (ValueError, TypeError, OverflowError) as error:
         raise MalformedActorSourceError(f"generic Mesh IR rejected geometry: {error}") from error
-    primitive_documents = [{"material": primitive.material,
-                            "indices": list(primitive.vertices)} for primitive in primitives]
+    primitive_documents = [{
+        "material": primitive.material,
+        "indices": list(primitive.vertices),
+        "source_triangles": list(compiled["primitives"][index]["source_triangles"]),
+    } for index, primitive in enumerate(primitives)]
     primitive_opacity: list[int] = []
     for item in compiled["primitives"]:
         source_triangles = item["source_triangles"]
@@ -988,8 +1409,29 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
     parts = [{"branch_ordinal": int(item["branch_ordinal"]),
               "joint_ordinal": int(item["joint_ordinal"]),
               "display_list": str(item["display_list"])} for item in source_parts]
+    serialized_primitives = tuple({"material": item["material"],
+                                   "indices": item["indices"]}
+                                  for item in primitive_documents)
     geometry = Geometry(tuple(parts), tuple(fast.materials), tuple(meshlets),
-                        tuple(primitive_documents))
+                        serialized_primitives)
+    reported_materials: list[dict[str, object]] = []
+    for item in fast.materials:
+        document = {key: value for key, value in item.items() if key != "signature"}
+        if not allow_v2:
+            document.pop("texture_symbol", None)
+        else:
+            signature = item["signature"]
+            document["signature"] = {
+                "texture_path": signature.texture_path,
+                "texture_sha256": (None if signature.texture_sha256 is None
+                                    else signature.texture_sha256.hex()),
+                "combine_mode": list(signature.combine_mode),
+                "geometry_mode": list(signature.geometry_mode),
+                "tile_state": list(signature.tile_state),
+                "layer": signature.layer,
+                "opacity": signature.opacity,
+            }
+        reported_materials.append(document)
     metadata = {
         "positions": positions,
         "joints": [{"joint_ordinal": item.joint_ordinal,
@@ -1000,15 +1442,27 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         "vertices": [{"local": list(item.local),
                       "joint_ordinal": item.joint_ordinal,
                       "branch_ordinal": item.branch_ordinal} for item in vertices],
-        "parts": parts, "materials": fast.materials,
-        "primitives": primitive_documents, "meshlets": meshlets,
+        "parts": parts, "materials": reported_materials,
+        "primitives": list(serialized_primitives), "meshlets": meshlets,
         "mesh_ir_report": pairing,
         "switches": geo.switches, "billboards": geo.billboards,
         "layers": [{"part_ordinal": int(item["branch_ordinal"]),
                     "layer": str(item["layer"]), "opacity": str(item["opacity"])}
                    for item in source_parts if item["layer"] != "LAYER_OPAQUE"],
     }
-    return joints, tuple(vertices), geometry, metadata
+    capture = {
+        "family_ordinal": family_ordinal,
+        "model_id": model_id,
+        "materials": tuple(fast.materials),
+        "triangles": tuple(fast.triangles),
+        "transfers": tuple(fast.transfers),
+        "material_sources": tuple(fast.material_sources[path]
+                                  for path in sorted(fast.material_sources)),
+        "actual_sites": tuple(actual_sites),
+        "expected_sites": tuple(expected_sites),
+        "primitives": tuple(primitive_documents),
+    }
+    return joints, tuple(vertices), geometry, metadata, capture
 
 
 def _animation_records(index: _SourceIndex, records: Sequence[dict[str, object]],
@@ -1303,8 +1757,8 @@ def compile_actor_variant(
                 raise ActorSourceSelectionError(f"closure model {label} is incomplete")
             index.require_attested(binding[label], f"model {label}")
 
-    joints, vertices, geometry, geometry_report = _compile_geometry(
-        index, geo_path, geo_root, model_binding)
+    joints, vertices, geometry, geometry_report, material_capture = _compile_geometry(
+        index, geo_path, geo_root, model_binding, family_ordinal, model_id)
     animations, animation_bindings = _animation_records(
         index, records, len(joints), geo_path)
     sources = index.source_records()
@@ -1323,12 +1777,36 @@ def compile_actor_variant(
     if not 0 < maximum_live <= 0xFFFF:
         raise ActorSourceSelectionError("variant maximum live instances exceeds uint16")
     try:
-        payload, packed = pack_actor_bank(
+        core_payload, core_packed = pack_actor_bank(
             family_id=family_ordinal, model_id=model_id, max_instances=maximum_live,
             source_digest=digest, joints=joints, animations=animations,
             vertices=vertices, geometry=geometry)
     except (ValueError, TypeError, OverflowError, struct.error) as error:
         raise MalformedActorSourceError(f"S64B packing rejected variant: {error}") from error
+    payload = core_payload
+    packed = core_packed
+    material_report: dict[str, object] | None = None
+    if (family_ordinal, model_id) in BOB_DIRECT_TEXTURED_KEYS:
+        try:
+            resources, material_sources, material_report = compile_materials_v2(
+                index, material_capture, material_capture["primitives"], sources)
+            combined_sources = tuple(sorted(sources + material_sources,
+                                            key=lambda item: item.path))
+            digest = source_identity_v2(
+                family_ordinal, model_id, combined_sources,
+                resources.bake_policy_id, material_report["policy"])
+            payload, v2_packed = pack_actor_bank_v2(core_payload, digest, resources)
+            packed = {**core_packed, **v2_packed,
+                      "lane_bytes": core_packed["lane_bytes"],
+                      "max_scratch": core_packed["max_scratch"],
+                      "compact_channel_bytes": core_packed["compact_channel_bytes"],
+                      "animations": core_packed["animations"]}
+            sources = combined_sources
+        except ActorMaterialV2Error as error:
+            raise UnsupportedActorSourceError(str(error)) from error
+        except (ValueError, TypeError, OverflowError, struct.error) as error:
+            raise MalformedActorSourceError(
+                f"S64B v2 material packing rejected variant: {error}") from error
     try:
         bank = validate_actor_bank(payload)
     except ValueError as error:
@@ -1337,8 +1815,9 @@ def compile_actor_variant(
             bank.source_sha256 != digest or bank.maximum_scratch != packed["max_scratch"]):
         raise MalformedActorSourceError("packed S64B validation identity mismatch")
     source_documents = [{"path": item.path, "sha256": item.sha256.hex()} for item in sources]
+    version = bank.version
     report: dict[str, object] = {
-        "schema": "sm64-saturn-actor-bank-v1", "version": 1, "magic": "S64B",
+        "schema": f"sm64-saturn-actor-bank-v{version}", "version": version, "magic": "S64B",
         "family_id": family_ordinal, "family_ordinal": family_ordinal,
         "model_id": model_id, "joint_count": len(joints),
         "animation_count": len(animations), "meshlet_count": len(geometry.meshlets),
@@ -1366,6 +1845,15 @@ def compile_actor_variant(
         },
         "format": packed["format"],
     }
+    if material_report is not None:
+        report["material_policy"] = material_report
+        report["resources"] = {
+            key: packed[key] for key in (
+                "material_count", "tile_count", "clut_count",
+                "texture_resident_bytes", "clut_resident_bytes",
+                "draw_records_per_instance", "texture_commands_per_instance",
+                "gouraud_tables_per_instance")
+        }
     return CompiledActorVariant(
         family_ordinal, model_id, digest.hex(), str(packed["payload_sha256"]),
         int(packed["lane_bytes"]), int(packed["max_scratch"]), sources, payload, report)

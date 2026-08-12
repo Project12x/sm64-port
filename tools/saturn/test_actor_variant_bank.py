@@ -812,6 +812,9 @@ const GeoLayout test_alt_geo[] = {
                 fixture.compile(model=1)
 
     def test_unrepresentable_fast3d_material_and_texture_states_fail_closed(self) -> None:
+        # This synthetic fixture is intentionally outside the measured BOB-v2
+        # key set.  It freezes the v1 boundary while the same compiler state
+        # machine admits only closure-attested Task 4 signatures.
         states = {
             "texture_image": "gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, tex),",
             "texture_block": "gsDPLoadTextureBlock(tex, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),",

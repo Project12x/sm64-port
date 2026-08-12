@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Added host-only, closure-attested Fast3D material capture and S64B-v2
+  lowering for the exact 14 measured direct-textured BOB keys. The existing
+  strict display-list compiler now owns texture/load/tile/combiner/geometry/
+  layer/opacity/call/tail/UV state, binds checked-in PNG paths and SHA-256s
+  into v2 source identity, and bakes one deterministic 16x16 or 32x32 CLUT16
+  input per textured source triangle before Task 2's exact resource
+  deduplication. This makes real family 29 / `MODEL_CANNON_BASE` `0x0080` /
+  `bhvCannon` pack as pointer-free v2 without pairing while every unmeasured,
+  computed, partial, ambiguous, unknown, `GEO_SHADOW`, `GEO_SCALE`, and
+  `GEO_ASM` state remains fail-closed. The change deliberately adds no target
+  residency, renderer, Ymir, or full-game claim; those remain later gates.
+
 - Added the freestanding Saturn S64B-v2 parser and opaque mixed-bank S64F-v3
   delegation boundary. The target now dispatches once on v1/v2, validates the
   exact 192-byte v2 header, canonical hot/cold spans, stable material/tile

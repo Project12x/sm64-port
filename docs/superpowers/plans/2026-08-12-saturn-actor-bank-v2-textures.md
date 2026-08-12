@@ -14,18 +14,22 @@ in BOB under Ymir before rebuilding and resealing the release.
 
 **Approved design:** `docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`, architecture commit `62f16de8`, owner written-spec approval received 2026-08-12.
 
-**Execution status (2026-08-12):** Tasks 1 and 2 are independently approved.
+**Execution status (2026-08-12):** Tasks 1 through 3 are independently approved.
 Task 2 behavior `83cfc1ad` plus repair `95de6457` owns the exact
 192-byte S64B-v2 extension, deterministic v1-core rebasing, target-resource
 deduplication, and fail-closed validation while historical Mario/S64F bytes
 remain exact; scoped rereview passed C0/I0/M0 through `d5914059`. Task 3 is
-source-complete at behavior commit `87be53b6` pending independent parser/ABI
-review: the target owns v1/v2 dispatch, linear v2 validation/accessors, and
+complete at behavior commit `87be53b6`; the target owns v1/v2 dispatch,
+linear v2 validation/accessors, and
 opaque mixed-S64F delegation; 86 direct S64B mutations, 54 S64F mutations, 63
 broader Python tests, the historical actor gates, and the freestanding SH-2
-syntax check pass. Tasks 4-13 and every material, real-BOB, runtime, demo,
-release, reseal, smoke, visual, desktop, manual, retail, and total-game gate
-remain open.
+syntax check pass. Tasks 5-13 and every target-material, real-BOB bundle,
+runtime, demo, release, reseal, smoke, visual, desktop, manual, retail, and
+total-game gate remain open. Task 4 is source-complete-pending-review: the host compiler now
+admits only the 14 closure-measured direct-textured BOB keys, including real
+family 29 / `MODEL_CANNON_BASE` `0x0080` / `bhvCannon`, and emits Task 2
+bindings/materials/tiles/CLUTs with source path/hash and bake-policy identity.
+No target runtime, residency, renderer, or Ymir state changed.
 
 ## Global Constraints
 
@@ -352,6 +356,33 @@ Commit `feat(saturn): validate mixed actor bank versions`. Require parser/ABI re
 
 ### Task 4: Capture and lower the exact measured BOB material subset
 
+**Execution status:** source-complete-pending-review (2026-08-12). The real
+34-drawable/47-family replay is frozen; all 14 measured direct-textured keys
+compile as S64B v2, the 18 `GEO_SHADOW`, one `GEO_SCALE`, one `GEO_ASM`, 13
+capability-unsupported families, and two `MODEL_NONE` variants retain named
+fail-closed outcomes. Cannon emits 30 draws, eight unpaired textured inputs,
+1,024 texture bytes, 256 CLUT bytes, eight texture commands, and 30 Gouraud
+tables per instance. These are host-packed records only, not target budget or
+runtime evidence; Task 5 aggregate scene budgeting remains open.
+
+**Reference-code provenance:** direct same-project adaptation at reconciled
+`Project12x/sm64-port` commit
+`05b77e6472a09facd3d4faf01100ad09b2d9882e` (repository has no blanket root
+license, so no external code was copied): `tools/saturn/actor_variant_bank.py`
+(last owning commit `68ceec9c66070d48d05d6442e11c76e2b9b6b903`, close-port/extension of its
+tokenizer and sole Fast3D state machine), `tools/saturn/dl_rigid_groups.py`
+(`a78db8c9b777074e1e60b7260f3aaaa9596f1c10`, structural-walk reuse),
+`tools/saturn/vdp1_texture.py`
+(`2e5b41e6dfc2fe45a5c28d5c2b6c3d4c0b40c161`, direct extension),
+`tools/saturn/bake_castle_uv.py`
+(`b295928ef54aeadc00b0b578c89bb6e700878134`, direct weight/quantizer reuse),
+`tools/saturn/bake_bob_tiles.py`
+(`4c60f4fe35ea918361ed6d1ee2c598ca62627516`, close-port of strict PNG and
+per-triangle bake pattern), and Task 2 `tools/saturn/actor_bank_v2.py`
+(`95de64570cc20eefa94839ec13b9a33a9c28096e`, dependency/reuse). Reuse mode is
+direct same-repository adaptation/close-port; no third-party source or new
+license obligation was introduced.
+
 **Files:**
 - Create: `tools/saturn/actor_material_v2.py`
 - Create: `tools/saturn/test_actor_material_v2.py`
@@ -382,15 +413,15 @@ compile_materials_v2(index, display_lists, primitives,
                          dict[str, object]]
 ```
 
-- [ ] **Step 1: Freeze real BOB signatures and RED mutations**
+- [x] **Step 1: Freeze real BOB signatures and RED mutations**
 
 Replay all 34 drawable keys. Assert the 14 direct textured keys reach a complete signature. Require family 29/model `0x0080`/`bhvCannon` to compile. Mutate texture image, tile size, mask/shift, wrap/clamp, combiner, geometry mode, layer, opacity, call/tail transfer, UV, and texture bytes; each must fail by exact state/source name. `GEO_SHADOW`, `GEO_SCALE`, and `GEO_ASM` remain named unsupported.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `python -m unittest tools.saturn.test_actor_material_v2 tools.saturn.test_actor_variant_bank tools.saturn.test_actor_source -v`. Expected: missing module and existing `unsupported rigid-group source: textured` for Cannon.
 
-- [ ] **Step 3: Implement strict material state and offline baking**
+- [x] **Step 3: Implement strict material state and offline baking**
 
 Extend the existing Fast3D compiler state machine rather than adding a second parser. Every recognized state-changing command updates an immutable canonical state; every unknown command rejects. For each accepted textured triangle, call the reviewed weight/bake helpers and emit one unpaired tile.
 
@@ -404,7 +435,7 @@ digest = source_identity_v2(family_ordinal, model_id,
 payload, packed = pack_actor_bank_v2(core, digest, resources)
 ```
 
-- [ ] **Step 4: Run GREEN and full-key inventory**
+- [x] **Step 4: Run GREEN and full-key inventory**
 
 Run the focused suites, then replay all 47 families. Expected: Cannon and every exact whitelisted textured signature compile as v2; all remaining keys have one deterministic named reason; two `MODEL_NONE` entries remain non-drawable. Re-run pose/meshlet and historical Mario hash gates.
 
