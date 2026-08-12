@@ -29,8 +29,9 @@ additive S64B version, but they do not require replacing the container,
 identity, residency, or dual-SH-2 ownership model.
 
 The first runtime policy is all-resident per scene. The master SH-2 validates
-the complete S64P/S64F/S64B chain, proves aggregate cart/VDP1/command/Gouraud/
-workspace budgets, uploads cold texture data after VDP1 becomes idle, and then
+the complete S64P/S64F/S64B chain, proves aggregate cart/VDP1 residency and
+workspace budgets, validates the atomic per-frame command/Gouraud/output credit
+policy, uploads cold texture data after VDP1 becomes idle, and then
 publishes a nonzero residency generation. Workers read immutable hot bank data
 and write the existing scalar draw records only. Final VDP1 command emission
 and residency lookup remain master-only.
@@ -364,20 +365,37 @@ shared scene resources. Before packaging or target activation, the planner:
 1. Parses every unique embedded bank once.
 2. Sums all v2 texture and CLUT residency because every BOB variant may become
    visible and v2 has no eviction.
-3. Separately computes worst-case family draw demand. For each family, multiply
-   its maximum live count by the maximum per-instance draw, texture-command,
-   and Gouraud demand among its variants; then sum families.
+3. Preserves each family `maximum_live_instances` as the source-attested upper
+   bound that it is. Those bounds are not added: recurrent families can each
+   inherit the same 240-object source-pool ceiling, so treating them as
+   simultaneously resident would count the same global pool many times.
 4. Adds terrain, Mario, command-table, Gouraud, CLUT, HUD, and other profile
-   reservations before comparing with hardware partitions.
-5. Proves the complete S64F dependency and scene package fit the fixed cart
+   reservations before deriving the fixed actor shares.
+5. Computes the exact per-variant draw, texture-command, and Gouraud credits
+   used by atomic per-frame admission. The complete observed actor set must
+   satisfy all of `count <= 64`, `sum(draw) <= actor_output_share`,
+   `sum(texture_commands) <= actor_command_share`, and
+   `sum(Gouraud) <= actor_Gouraud_share` before any descriptor, output, or VDP1
+   command for that generation is published. A failing set quarantines the
+   complete actor generation; the runtime never selects a smaller subset.
+6. Reports two distinct diagnostics. The unconstrained source-ceiling envelope
+   applies each family upper bound and is allowed to exceed hardware because it
+   is not a simultaneous-scene claim. The guaranteed service floor uses the
+   largest per-instance cost in the supported set and the fixed post-reservation
+   actor shares; it must remain positive. Each supported bank must fit by
+   itself, and the later BOB target route must measure positive margins for its
+   actual complete observed set.
+7. Proves the complete S64F dependency and scene package fit the fixed cart
    destination and 32-Mbit package/image boundaries.
-6. Proves the maximum two-lane scratch, fixed actor arena, output-record ceiling,
-   command count, and Gouraud count without enlarging reviewed storage.
+8. Proves the maximum two-lane scratch, fixed actor arena, and each fixed
+   output/command/Gouraud credit ceiling without enlarging reviewed storage.
 
 The build fails rather than selecting a smaller hidden working set, dropping a
-variant, reducing live counts, changing a texture class, or spilling to heap.
-Every budget and its contributing bank/family appears in the deterministic
-report.
+variant, rewriting a source live ceiling, changing a texture class, or spilling
+to heap. Per-frame admission likewise accepts the complete observed set or
+quarantines the complete actor generation; it never partially renders a subset.
+Every budget, credit cost, source ceiling, guaranteed floor, and contributing
+bank/family appears in the deterministic report.
 
 ## Runtime residency and dual-SH-2 ownership
 
@@ -394,6 +412,15 @@ The first runtime supports all-resident scene activation only.
 5. After all transfers complete, master publishes one residency generation and
    a fixed bounded `bank identity -> texture base / CLUT base` table.
 6. Actor descriptor publication occurs only after that generation is visible.
+
+Texture residency and live rendering are intentionally separate. All approved
+scene banks remain resident, while every frame reserves output, texture-command,
+and Gouraud credits for the complete observed actor set using checked arithmetic
+and canonical source order. Reservation is a dry preflight: on overflow no
+descriptor or command is published and the generation is quarantined. This is
+the Saturn/SH-2 fail-closed boundary for scenes whose instantaneous actor demand
+exceeds fixed VDP1 resources; later work may add reviewed culling or degradation,
+but v2 does not silently invent one.
 
 Workers read immutable animation/pose/geometry/material/tile-directory data,
 perform pose/project/admission work, and write the existing eight-byte

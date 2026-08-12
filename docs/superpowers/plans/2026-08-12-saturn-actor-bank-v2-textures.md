@@ -8,13 +8,13 @@ v1 and v2, run historical v1 Mario and v2 generic actors together through the
 production dual-SH-2 scene path, and prove a normally spawned textured Cannon
 in BOB under Ymir before rebuilding and resealing the release.
 
-**Architecture:** The host captures complete closure-attested Fast3D material signatures and lowers only a reviewed BOB whitelist into deterministic, target-ready VDP1 tiles, palettes, and stable S64B-owned material recipes. S64B owns v1/v2 parsing; S64F remains an opaque mixed-bank container. At runtime the master SH-2 validates aggregate budgets, uploads all scene actor textures while VDP1 is idle, publishes one generation last, and emits final commands; worker SH-2s continue to write the existing eight-byte scalar output records without VDP1 pointers or mutable residency state.
+**Architecture:** The host captures complete closure-attested Fast3D material signatures and lowers only a reviewed BOB whitelist into deterministic, target-ready VDP1 tiles, palettes, and stable S64B-owned material recipes. S64B owns v1/v2 parsing; S64F remains an opaque mixed-bank container. At runtime the master SH-2 validates all-resident data budgets and an atomic per-frame output/command/Gouraud credit policy, uploads all scene actor textures while VDP1 is idle, publishes one generation last, and emits final commands; worker SH-2s continue to write the existing eight-byte scalar output records without VDP1 pointers or mutable residency state.
 
 **Tech Stack:** Python 3 deterministic asset compilers and `unittest`; freestanding C11 host/SH-2 validators; GNU Make 4.3+ through `tools/saturn/with-msys-toolchain.ps1`; Yaul/VDP1, SCU DMA, 32-Mbit DRAM cart, S64P/S64F/S64B formats, Ymir capture tooling, and the existing hermetic release-manifest/native-math v4 chain.
 
 **Approved design:** `docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`, architecture commit `62f16de8`, owner written-spec approval received 2026-08-12.
 
-**Execution status (2026-08-12):** Tasks 1 through 3 are independently approved.
+**Execution status (2026-08-12):** Tasks 1 through 4 are independently approved.
 Task 2 behavior `83cfc1ad` plus repair `95de6457` owns the exact
 192-byte S64B-v2 extension, deterministic v1-core rebasing, target-resource
 deduplication, and fail-closed validation while historical Mario/S64F bytes
@@ -23,13 +23,14 @@ complete at behavior commit `87be53b6`; the target owns v1/v2 dispatch,
 linear v2 validation/accessors, and
 opaque mixed-S64F delegation; 86 direct S64B mutations, 54 S64F mutations, 63
 broader Python tests, the historical actor gates, and the freestanding SH-2
-syntax check pass. Tasks 5-13 and every target-material, real-BOB bundle,
+syntax check pass. Task 4 behavior `52c9c1af` plus repair `86de51cc` compiles
+the exact 14 measured direct-textured BOB keys, including Cannon, and its scoped
+rereview passed C0/I0/M0 through `f5a03808`. Task 5 is active after its initial
+zero-edit preflight exposed and corrected a design error: source-pool family
+ceilings are not simultaneous resource allocations. Tasks 5-13 and every target-material, real-BOB bundle,
 runtime, demo, release, reseal, smoke, visual, desktop, manual, retail, and
-total-game gate remain open. Task 4 fix round 1 is source-complete-pending-rereview: the host compiler now
-admits only the 14 closure-measured direct-textured BOB keys, including real
-family 29 / `MODEL_CANNON_BASE` `0x0080` / `bhvCannon`, and emits Task 2
-bindings/materials/tiles/CLUTs with source path/hash and bake-policy identity.
-No target runtime, residency, renderer, or Ymir state changed.
+total-game gate remain open. No target runtime, residency, renderer, or Ymir
+state changed.
 
 ## Global Constraints
 
@@ -40,7 +41,7 @@ No target runtime, residency, renderer, or Ymir state changed.
 - The initial compiler supports only exact measured BOB signatures with reviewed Saturn recipes. Unknown, computed, partial, ambiguous, or unconsumed material state fails offline by source key and command/state name.
 - Textured source triangles are never paired in v2. Each emits one `(A,B,C,C)` distorted-sprite tile; ordinary untextured v1 pairing remains unchanged.
 - The shared VDP1 texture ceiling is 446,432 bytes, not an actor allocation. Scene planning reserves terrain, Mario, command tables, Gouraud tables, CLUTs, and HUD before proving the generic-actor share.
-- Texture bytes and CLUT bytes have separate exact budgets. Command and Gouraud counts are also separate. A build never silently reduces live counts, drops variants, changes formats, or spills to heap.
+- Texture bytes and CLUT bytes have separate exact budgets. Command and Gouraud counts are also separate. Source-attested per-family live ceilings remain unchanged, but are not summed as simultaneous allocations. The complete observed frame is admitted atomically against exact per-variant credits or quarantined as a whole; a build/runtime never silently reduces live counts, drops variants, changes formats, or spills to heap.
 - The reviewed actor arena remains exactly 65,536 bytes with 2,718 eight-byte output records. Package workspace remains two fixed claimant lanes; v2 adds no per-family or per-instance allocation.
 - Immutable hot/cold actor-bank bytes stay in the fixed 32-Mbit DRAM cart. Cold texture/CLUT spans are uploaded to VDP1 only during master-owned scene activation while gameplay is suspended and VDP1 is idle.
 - Cross-SH-2 publication contains scalar IDs, hashes, offsets, counts, lane indexes, and generations only. No pointer, VDP1 address, allocator state, command pointer, or residency-table pointer enters a worker descriptor or queue record.
@@ -467,6 +468,19 @@ Commit `feat(saturn): bake BOB actor materials for VDP1`. Review source closure,
 
 ### Task 5: Build the real mixed BOB S64F and prove aggregate budgets
 
+**Execution status:** active after a zero-edit design stop. Applying the original
+family-sum equation to the real 14-bank set counted 5,288 mutually incompatible
+live contributions against the global 64-observer cap and produced impossible
+85,512-record / 65,788-command / 29,352-Gouraud totals. These family fields are
+source-pool safety ceilings (often the same recurrent 240-object bound, then
+summed for shared families), not a joint scene allocation. The corrected
+Saturn-shaped contract preserves and reports every ceiling, proves all-resident
+data plus single-bank admissibility and a positive guaranteed service floor,
+and reserves exact output/command/Gouraud credits for the complete observed set
+atomically at runtime. No subset selection or count rewrite is allowed. Task 5
+remains host-only; Task 9 owns that runtime preflight and Task 11 must prove the
+actual complete BOB route has positive margins.
+
 **Files:**
 - Create: `tools/saturn/compile_actor_family_bundle.py`
 - Create: `tools/saturn/test_compile_actor_family_bundle.py`
@@ -495,9 +509,11 @@ The report includes each family/key, bank version/hash/source identity, texture/
 
 Require at least Cannon, nonzero variant count, a separate mixed-v1/v2 S64F
 fixture, byte-identical relocated real-BOB builds, exact ten-class BOB package
-ownership, separate texture/CLUT totals, family worst-case command/Gouraud
-math, 446,432-byte shared ceiling after reservations, 65,536/2,718 arena
-limits, 32-Mbit cart fit, no host paths, report-last publication, no overwrite,
+ownership, separate texture/CLUT totals, preserved family source ceilings, the
+named unconstrained source-ceiling diagnostic, exact per-bank credit costs, and
+a positive post-reservation guaranteed service floor. Require the fixed
+64-observer/65,536-byte/2,718-record limits, the 446,432-byte shared ceiling
+after reservations, 32-Mbit cart fit, no host paths, report-last publication, no overwrite,
 and named failure for every one-byte overflow. The real generic BOB S64F may
 contain only v2 banks; historical v1 Mario remains a separately owned scene
 bank and proves the mixed-version scene path.
@@ -508,7 +524,14 @@ Run both new suites. Expected: missing compiler/inventory modules.
 
 - [ ] **Step 3: Implement canonical orchestration and planner**
 
-Compile each unique supported key once, keep unsupported rows, pack/validate S64F, compute unique-bank residency and per-family worst cases, write a private staging directory, publish payload/dependency/header first and report last with no-clobber semantics.
+Compile each unique supported key once, keep unsupported rows, pack/validate
+S64F, compute unique-bank residency, preserve per-family source ceilings, and
+compute exact per-variant admission credits. Report the impossible unconstrained
+source-ceiling envelope as diagnostic only. Compute the guaranteed service floor
+from the maximum supported per-instance cost and each fixed post-reservation
+actor share; require it and every individual-bank margin to be positive. Write a
+private staging directory and publish payload/dependency/header first and report
+last with no-clobber semantics.
 
 ```python
 dependency = {
@@ -526,7 +549,7 @@ dependency = {
 
 - [ ] **Step 4: Run real BOB build and GREEN wave**
 
-Run `compile-actor-family-bundle inventory-actor-family-bundles verify-actor-family-bundle-build verify-actor-bank-v2 verify-actor-capability-bank verify-actor-capability-articulated`. Record exact supported/unsupported counts, bytes, hashes, and every positive margin; no target claim yet.
+Run `compile-actor-family-bundle inventory-actor-family-bundles verify-actor-family-bundle-build verify-actor-bank-v2 verify-actor-capability-bank verify-actor-capability-articulated`. Record exact supported/unsupported counts, bytes, hashes, static-residency/individual-bank margins, guaranteed floors, and the explicitly non-acceptance unconstrained diagnostic; no target or actual-frame-fit claim yet.
 
 - [ ] **Step 5: Commit and independent review**
 
@@ -781,7 +804,7 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
 
 - [ ] **Step 1: Write RED production-shaped host tests**
 
-Exercise observer/registry capture through handoff population, either-SH-2 lane claim, pose/meshlet admission, descriptor-owned output, terminal publication, master merge/material bind, acknowledge, and queue-owned retirement. Require zero actors to retain the two-world-job graph and a stale texture/package generation to quarantine before command mutation. Assert feature-on wrappers no longer contain unconditional `return false`.
+Exercise observer/registry capture through handoff population, either-SH-2 lane claim, pose/meshlet admission, descriptor-owned output, terminal publication, master merge/material bind, acknowledge, and queue-owned retirement. Before descriptor publication, require checked atomic reservation for the complete observed set against 64 live, the post-reservation actor output share, texture-command share, and Gouraud share. Exact fit succeeds; every one-credit overflow quarantines the whole actor generation with zero descriptor/output/VDP1 mutation. Require zero actors to retain the two-world-job graph and a stale texture/package generation to quarantine before command mutation. Assert feature-on wrappers no longer contain unconditional `return false`.
 
 - [ ] **Step 2: Run RED**
 
@@ -789,11 +812,11 @@ Run the actor runtime handoff, instance queue, batches, render overlap, demo ren
 
 - [ ] **Step 3: Replace only the auditable feature-on seam**
 
-Populate the real queue from admitted snapshots in `main.c`; replace the feature-on compat bodies with queue drain calls; leave the four-job graph/dependencies unchanged; master merge uses current bundle/residency generations and material binder; all retirement flows through the handoff. Feature-off retains the exact Mario path.
+Dry-sum all selected variants' validated S64B credit fields in canonical snapshot order, then populate the real queue only if the complete set fits every actor share. Replace the feature-on compat bodies with queue drain calls; leave the four-job graph/dependencies unchanged; master merge uses current bundle/residency generations and material binder; all retirement flows through the handoff. No partial subset is published on overflow. Feature-off retains the exact Mario path.
 
 - [ ] **Step 4: Run GREEN, capacity, and rollback proof**
 
-Run the full actor/render wave. Accept 64 live/2,718 records; reject 0 capacity, 65 live, 2,719 records, overlap, stale generations, wrong hashes, and mid-merge failure. Build feature-off and compare affected object code or the established exact source-policy proof with pre-task HEAD.
+Run the full actor/render wave. Accept exact per-resource fits, including 64 lightweight actors when their complete credit sums fit; reject 0 capacity, 65 live, 2,719 records, one-credit command/Gouraud overflow, overlap, stale generations, wrong hashes, and mid-merge failure. Prove overflow leaves no partial descriptor/output/command publication. Build feature-off and compare affected object code or the established exact source-policy proof with pre-task HEAD.
 
 - [ ] **Step 5: Commit and independent review**
 
@@ -947,7 +970,7 @@ emission to the active texture generation.
 - [x] Every S64B-v2 design requirement maps to at least one task and exact test.
 - [x] V1 bytes, S64F-v3 wire bytes, actor arena, output record, queue, and feature-off contracts remain explicit.
 - [x] Host and target public type/function names match across tasks.
-- [x] Texture, CLUT, command, Gouraud, cart, LWRAM, and HWRAM budgets are separate and scene-aggregate.
+- [x] Texture, CLUT, cart, LWRAM, and HWRAM residency budgets are separate and scene-aggregate; output, command, and Gouraud live demand use atomic complete-frame credit admission rather than summing mutually incompatible source-pool ceilings.
 - [x] Master/worker responsibilities are consistent in compiler, residency, queue, and emitter tasks.
 - [x] Cannon demo evidence cannot be satisfied by a synthetic object or injected model.
 - [x] Unknown material/Geo states remain named offline failures.
@@ -957,6 +980,6 @@ emission to the active texture generation.
 
 ## Execution Order and Stop Rules
 
-Execute Tasks 1-13 serially. A task may not begin until the prior task's behavior commit and both independent reviews pass. Stop immediately on a format/interface contradiction, inability to compile the exact Cannon key, nonpositive shared-hardware margin, host/target parser disagreement, dirty/unbound source input, target crash/stall/quarantine, nonidentical A/B release, failed v4, or failed smoke/visual/manual gate. Record the exact failure without weakening flags, budgets, source identity, or acceptance.
+Execute Tasks 1-13 serially. A task may not begin until the prior task's behavior commit and both independent reviews pass. Stop immediately on a format/interface contradiction, inability to compile the exact Cannon key, nonpositive all-resident or individual-bank margin, nonpositive guaranteed service floor, host/target parser disagreement, dirty/unbound source input, target crash/stall/quarantine on the accepted route, nonidentical A/B release, failed v4, or failed smoke/visual/manual gate. The unconstrained source-ceiling diagnostic is not a simultaneous-scene acceptance margin. Record every failure without weakening flags, budgets, source identity, or acceptance.
 
 Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` resumes only through Tasks 1-5 here. Its downstream Tasks 5-11 and Task 16 Tasks 2-5 are satisfied/reconciled through Tasks 7-13 here; do not run the stale v1-only Task 4 instructions in parallel.

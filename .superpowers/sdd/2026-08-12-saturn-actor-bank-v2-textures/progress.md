@@ -247,3 +247,36 @@
   open for real bounded BOB S64F orchestration and aggregate budgets. Every
   actual target/runtime/residency/renderer/Ymir/release/manual gate remains
   open.
+
+## Task 5 preflight and resource-admission design correction (2026-08-12)
+
+- Task 5 stopped before production/test edits under the plan's explicit
+  nonpositive-margin rule. Applying the original equation to the real 14-bank
+  set produced 5,288 live contributions, 85,512 output records, 65,788 texture
+  commands, and 29,352 Gouraud tables against fixed caps 64 / 2,718 / 2,048 /
+  1,536.
+- Root cause: `collect_scene_closure.py` assigns recurrent behaviors the same
+  conservative 240-object source-pool ceiling, and family grouping sums those
+  behavior ceilings for shared geometry. The fields are valid independent
+  safety bounds but not a joint scene allocation; summing them counts the same
+  global pool repeatedly. They remain byte/report exact and are not reduced.
+- A global 64-only envelope is also insufficient: the largest supported bank
+  costs 46 output records and 46 Gouraud tables per instance, so 64 identical
+  instances would require 2,944 of each. Before terrain/Mario/profile
+  reservations, the hard-cap diagnostic guarantees only 33 instances for the
+  worst per-instance Gouraud cost; Task 5 must recompute the final floor from
+  exact post-reservation actor shares rather than pinning 33 as an acceptance
+  constant.
+- Normative correction: static planning proves all-resident texture/CLUT/cart/
+  workspace fit and every bank's individual admissibility. Live rendering uses
+  checked per-variant output/command/Gouraud credits for the complete observed
+  set (at most 64). Task 9 publishes the whole set only when every sum fits;
+  otherwise it quarantines the whole actor generation with no partial
+  descriptor/output/VDP1 mutation. No subset selection, count rewrite, or
+  hidden working set is permitted.
+- Task 5 status: active after docs-only adjudication. Required REDs now
+  distinguish the named unconstrained source-ceiling diagnostic from
+  all-resident/individual-bank acceptance, inject each one-credit overflow,
+  and prove a positive computed service floor. Task 11 remains responsible for
+  measured positive margins on the normally spawned BOB Cannon route; all
+  target/runtime/Ymir/release/manual gates remain open.

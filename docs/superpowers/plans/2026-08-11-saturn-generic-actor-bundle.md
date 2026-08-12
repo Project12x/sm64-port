@@ -55,8 +55,11 @@ packing/validation. Replacement Task 3 is also complete through `ca3318cd`:
 freestanding target v1/v2 parsing and opaque mixed-S64F delegation passed
 independent C0/I0/M0 review. Replacement Task 4 is complete through `f5a03808`:
 the exact measured BOB subset, including real Cannon, passed repaired closure/
-state review C0/I0/M0. Replacement Task 5 is ready; this plan's Task 4 remains
-superseded and paused through that orchestration.
+state review C0/I0/M0. Replacement Task 5 is active after correcting its
+zero-edit preflight: per-family source-pool live ceilings remain exact but are
+not simultaneous allocations; all-resident data is statically budgeted and
+live output/command/Gouraud demand uses atomic complete-frame credits. This
+plan's Task 4 remains superseded and paused through that orchestration.
 
 ## Global Constraints
 
