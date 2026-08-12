@@ -239,3 +239,11 @@
   (`b295928e`), `bake_bob_tiles.py` (`4c60f4fe`), and Task 2
   `actor_bank_v2.py` (`95de6457`), by direct extension/close-port/dependency.
   No external source or target-side budget claim was added.
+- Scoped rereview of `20e5484b..f5a03808`: all three findings ADDRESSED;
+  83 focused/closure tests, real 34-key/47-family Cannon replay, compileall,
+  and diff check pass. No target/runtime/Task 5 scope creep; Spec PASS /
+  Quality PASS, C0/I0/M0.
+- Task 4: complete (commits `05b77e64..f5a03808`, review clean). Task 5 may
+  open for real bounded BOB S64F orchestration and aggregate budgets. Every
+  actual target/runtime/residency/renderer/Ymir/release/manual gate remains
+  open.

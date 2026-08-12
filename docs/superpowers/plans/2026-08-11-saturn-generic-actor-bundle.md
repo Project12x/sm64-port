@@ -53,8 +53,10 @@ as `3338de20`. Replacement-plan Tasks 1 and 2 are complete through `d5914059`:
 the host preserves historical v1 bytes and now owns exact, checked 192-byte v2
 packing/validation. Replacement Task 3 is also complete through `ca3318cd`:
 freestanding target v1/v2 parsing and opaque mixed-S64F delegation passed
-independent C0/I0/M0 review. Replacement Task 4 is ready for exact BOB material
-RED; this plan's Task 4 remains superseded and paused through replacement Task 5.
+independent C0/I0/M0 review. Replacement Task 4 is complete through `f5a03808`:
+the exact measured BOB subset, including real Cannon, passed repaired closure/
+state review C0/I0/M0. Replacement Task 5 is ready; this plan's Task 4 remains
+superseded and paused through that orchestration.
 
 ## Global Constraints
 
@@ -696,7 +698,8 @@ implementation plan is
 committed as `3338de20`. Replacement Tasks 1 and 2 completed through evidence
 `d5914059`, each with independent C0/I0/M0 approval and exact historical-byte
 preservation. Replacement Task 3 completed through `ca3318cd` with independent
-C0/I0/M0 parser/ABI approval. Replacement Task 4 is ready for RED; this Task 4 and all later
+C0/I0/M0 parser/ABI approval. Replacement Task 4 completed through `f5a03808`
+with independent C0/I0/M0 approval. Replacement Task 5 is ready; this Task 4 and all later
 target/release gates remain open. Design commit: `62f16de8`.
 
 **Files:**

@@ -356,16 +356,17 @@ Commit `feat(saturn): validate mixed actor bank versions`. Require parser/ABI re
 
 ### Task 4: Capture and lower the exact measured BOB material subset
 
-**Execution status:** fix round 1 source-complete-pending-rereview after
-independent review found C0/I2/M1 at behavior commit `52c9c1af` (2026-08-12).
+**Execution status:** complete and independently approved after fix round 1.
+Initial review found C0/I2/M1 at behavior commit `52c9c1af` (2026-08-12).
 Repair commit `86de51cc` passed the full host/historical gate set. The real
 34-drawable/47-family replay is frozen; all 14 measured direct-textured keys
 compile as S64B v2, the 18 `GEO_SHADOW`, one `GEO_SCALE`, one `GEO_ASM`, 13
 capability-unsupported families, and two `MODEL_NONE` variants retain named
 fail-closed outcomes. Cannon emits 30 draws, eight unpaired textured inputs,
 1,024 texture bytes, 256 CLUT bytes, eight texture commands, and 30 Gouraud
-tables per instance. These are host-packed records only, not target budget or
-runtime evidence; Task 5 aggregate scene budgeting remains open.
+tables per instance. Scoped rereview of repair `86de51cc` passed C0/I0/M0;
+evidence head `f5a03808`. These are host-packed records only, not target budget
+or runtime evidence; Task 5 aggregate scene budgeting may now open.
 
 **Reference-code provenance:** direct same-project adaptation at reconciled
 `Project12x/sm64-port` commit
@@ -458,7 +459,7 @@ payload, packed = pack_actor_bank_v2(core, digest, resources)
 
 Run the focused suites, then replay all 47 families. Expected: Cannon and every exact whitelisted textured signature compile as v2; all remaining keys have one deterministic named reason; two `MODEL_NONE` entries remain non-drawable. Re-run pose/meshlet and historical Mario hash gates.
 
-- [ ] **Step 5: Commit and independent review**
+- [x] **Step 5: Commit and independent review**
 
 Commit `feat(saturn): bake BOB actor materials for VDP1`. Review source closure, state exhaustiveness, Saturn fidelity declarations, non-pairing, and demo-key truth before Task 5.
 

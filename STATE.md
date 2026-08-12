@@ -67,8 +67,10 @@ executing. Tasks 1 and 2 are independently approved through `d5914059`: the
 host preserves historical S64B-v1 bytes and owns exact, checked 192-byte v2
 packing/validation. Task 3 is independently approved through `ca3318cd` with
 freestanding target v1/v2 parsing and opaque mixed-S64F validation. Task 4 is
-ready for exact measured BOB material RED. An empty bundle remains invalid;
-Tasks 4-13 and all target/demo/release/manual gates are open before
+independently approved through `f5a03808`: the exact measured BOB subset,
+including real Cannon, lowers to closure-bound host v2 bytes while later states
+remain named failures. Task 5 is ready for real bounded BOB S64F/budget RED.
+An empty bundle remains invalid; Tasks 5-13 and all target/demo/release/manual gates are open before
 Task 16 Task 2 can resume.
 The reusable
 `sm64-saturn-full` profile and identity/release architecture exist, but that

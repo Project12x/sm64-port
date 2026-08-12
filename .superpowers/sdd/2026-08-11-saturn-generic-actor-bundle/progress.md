@@ -327,3 +327,13 @@
   freestanding SH-2 compile, and exact historical hashes pass.
 - Replacement Task 4 is ready for exact measured BOB material RED. This plan's
   Task 4 and all runtime/target/demo/release/manual gates remain open.
+
+## S64B-v2 replacement Task 4 transition — 2026-08-12
+
+- Replacement Task 4 behavior `52c9c1af`, repair `86de51cc`, evidence
+  `f5a03808`: exact measured BOB material lowering, including real Cannon.
+- Initial C0/I2/M1 review findings were repaired by complete command/final-state
+  admission, upstream closure-attested PNG inputs, and bounded scalar shifts.
+  Scoped rereview PASS C0/I0/M0 with 83 focused/closure tests.
+- Replacement Task 5 is ready for real BOB S64F and aggregate budget RED. This
+  plan's Task 4 and all target/runtime/demo/release/manual gates remain open.
