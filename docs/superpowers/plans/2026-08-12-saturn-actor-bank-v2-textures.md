@@ -14,12 +14,13 @@ in BOB under Ymir before rebuilding and resealing the release.
 
 **Approved design:** `docs/superpowers/specs/2026-08-11-saturn-actor-bank-v2-textures-design.md`, architecture commit `62f16de8`, owner written-spec approval received 2026-08-12.
 
-**Execution status (2026-08-12):** Task 1 is complete and independently
-approved through behavior `9d5fc03c` and evidence `1e517bac`. The shared host
-authority now owns the complete 104-byte S64B-v1 header, preserves historical
-Mario/S64F bytes exactly, and dispatches v2 only to its named unimplemented
-boundary. Scoped rereview passed C0/I0/M0; Task 2 is ready for RED. Tasks 2-13
-and all target/demo/release/manual gates remain open.
+**Execution status (2026-08-12):** Task 1 is independently approved. Task 2 is
+source-complete and pending independent review: the host owns the exact
+192-byte S64B-v2 extension, deterministic v1-core rebasing, target-resource
+deduplication, and fail-closed validation while historical Mario/S64F bytes
+remain exact. Task 3 is not started. Tasks 3-13 and every target, demo,
+release, reseal, smoke, visual, desktop, manual, retail, and total-game gate
+remain open.
 
 ## Global Constraints
 
@@ -173,6 +174,13 @@ Stage only the listed behavior/tests/docs and commit `refactor(saturn): centrali
 
 ### Task 2: Implement canonical host S64B v2 packing and validation
 
+**Execution status:** source-complete, pending independent review
+(2026-08-12). The host now promotes a validated v1 core into the exact
+192-byte pointer-free v2 layout, rebases bank-absolute pose/span offsets,
+packs dense first-use target resources, and reparses the completed bytes
+through the version-owned validator. Focused and broader host gates are green;
+no target/runtime evidence is claimed and Task 3 remains closed until review.
+
 **Files:**
 - Create: `tools/saturn/actor_bank_v2.py`
 - Create: `tools/saturn/test_actor_bank_v2.py`
@@ -220,15 +228,15 @@ pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
                    resources: ActorBankResourcesV2) -> tuple[bytes, dict[str, object]]
 ```
 
-- [ ] **Step 1: Write exact layout and mutation tests**
+- [x] **Step 1: Write exact layout and mutation tests**
 
 Cover all offsets 104..191, 8/8/16-byte records, canonical span order, alignment, padding, source digest, payload equations, dense ordinals, exact tile/CLUT first-use deduplication, distinct-identical target acceptance, transparency words, aggregate fields, overflow, and trailing bytes. Include one untextured v2 and one CLUT16 textured v2 fixture.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `python -m unittest tools.saturn.test_actor_bank_v2 tools.saturn.test_actor_bank_format -v`. Expected: missing `actor_bank_v2` module and v2 validator rejection.
 
-- [ ] **Step 3: Implement deterministic v2 promotion and parser**
+- [x] **Step 3: Implement deterministic v2 promotion and parser**
 
 Rebase the validated v1 core from header 104 to 192, adjust every absolute animation/span offset, preserve GEO1-relative offsets, append records/payloads in the exact design order, and validate the finished payload before returning it.
 
@@ -241,7 +249,7 @@ _append_v2_resources(payload, resources)
 view = validate_actor_bank(bytes(payload))
 ```
 
-- [ ] **Step 4: Run GREEN plus v1 byte identity**
+- [x] **Step 4: Run GREEN plus v1 byte identity**
 
 Run both suites, full actor-bank/family-bundle Python suites, `verify-actor-family-bundle verify-actor-pose-bank verify-actor-meshlets`, and compare a fresh Mario output byte-for-byte with the pre-task fixture. Expected: v2 green; v1 unchanged.
 

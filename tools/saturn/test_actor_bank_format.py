@@ -54,11 +54,12 @@ class ActorBankFormatTest(unittest.TestCase):
                     self.assertRaisesRegex(ValueError, "S64B header padding"):
                 validate_actor_bank(bytes(corrupt))
 
-    def test_version_two_stops_at_its_named_unimplemented_boundary(self) -> None:
-        """Fails if v2 is accidentally accepted before its contract exists."""
+    def test_version_two_dispatches_to_the_implemented_contract(self) -> None:
+        """Fails if version dispatch retains the temporary unimplemented branch."""
         v2 = self.mario[:4] + b"\x00\x02" + self.mario[6:]
-        with self.assertRaisesRegex(ValueError, "S64B v2 contract is not implemented"):
+        with self.assertRaises(ValueError) as raised:
             validate_actor_bank(v2)
+        self.assertNotIn("not implemented", str(raised.exception))
 
 
 if __name__ == "__main__":

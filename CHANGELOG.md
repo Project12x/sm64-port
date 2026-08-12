@@ -4,10 +4,17 @@
 
 ### Changed
 
-- Centralized host S64B parsing in a version-owned authority. Historical v1
-  validation, source binding, Mario bytes, and S64F-v3 bundle bytes remain
-  exact; version 2 now fails at its explicit unimplemented contract boundary
-  so later texture work cannot be accepted through the v1 parser.
+- Added the canonical pointer-free host S64B-v2 contract needed for Saturn
+  actor textures. A validated v1 core is promoted from its 104-byte header to
+  the additive 192-byte layout with every bank-absolute pose/span offset
+  rebased, while `GEO1`-relative offsets remain exact. Target-ready bindings,
+  stable material recipes, dense first-use texture/CLUT ordinals, checked
+  payload equations, zero padding, transparency words, and per-instance
+  aggregates now fail closed through the version-owned parser. Exact tile and
+  palette deduplication stays offline and linear; the serialized bank contains
+  no host path, pointer, Fast3D stream, or VDP1 address. Historical S64B-v1
+  Mario and S64F-v3 bytes remain unchanged, and later BOB material admission
+  remains closed until the measured lowering table is implemented.
 
 - Consolidated the duplicate freestanding SHA-256 implementations used by the
   S64P scene-package and S64F v2 actor-family-bank validators into one

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from actor_bank_format import validate_actor_bank
 from actor_source import (
     ACTOR_CAPABILITY_NAMES,
     ACTOR_CAPABILITY_BITS,
@@ -868,6 +869,11 @@ def pack_actor_bank(
         vertices_offset, vertices_size, meshlets_offset, meshlets_size, max_scratch)
     payload[:len(header)] = header
     packed = bytes(payload)
+    # S64B-v2 promotion consumes this exact validated v1 core. Keep the
+    # historical encoder byte-identical while making that producer/consumer
+    # boundary explicit instead of relying on validation only at packaging.
+    if validate_actor_bank(packed).version != VERSION:
+        raise ValueError("actor bank v1 self-validation failed")
     return packed, {
         "animations": animation_documents,
         "lane_bytes": lane_bytes,
