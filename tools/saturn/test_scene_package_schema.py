@@ -618,6 +618,20 @@ class ScenePackageSchemaTest(unittest.TestCase):
                         self.assertFalse(
                             path.exists(), f"owned link {index} was not rolled back")
 
+    def test_publication_ready_marker_never_masks_an_incomplete_set(self) -> None:
+        from compile_scene_package import publish_or_verify_set
+
+        with tempfile.TemporaryDirectory(prefix="s64p-set-incomplete-") as temporary:
+            root = Path(temporary)
+            files = tuple((root / f"output-{index}.bin",
+                           f"bytes-{index}".encode())
+                          for index in range(4))
+            files[-1][0].write_bytes(files[-1][1])
+            with self.assertRaisesRegex(ValueError, "incomplete set"):
+                publish_or_verify_set(files)
+            self.assertFalse(any(path.exists() for path, _ in files[:-1]))
+            self.assertEqual(files[-1][0].read_bytes(), files[-1][1])
+
     def test_validator_and_header_reports_never_clobber_drift(self) -> None:
         package = compile_package(9, 1, [], [])
         with tempfile.TemporaryDirectory(prefix="s64p-sidecar-no-clobber-") as temporary:

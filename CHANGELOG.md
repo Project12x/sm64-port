@@ -8,10 +8,12 @@
   transaction after rereview showed that per-file no-clobber could still leave
   a partial generation when a later sidecar conflicted. The compiler now
   computes root, payload manifest, assembly, validation, generated header, ABI,
-  and report bytes before the first link; preflights every target; stages every
-  byte privately; and rolls back only links whose filesystem identity still
-  belongs to the failing transaction. The metadata report is linked last as
-  the consumer-ready marker. Identical concurrent producers converge, while
+  and report bytes before the first link; acquires one OS-held generation lock
+  in the host temp namespace; preflights every target; stages every byte
+  privately; and rolls back only links whose filesystem identity still belongs
+  to the failing transaction. The metadata report is linked last as the
+  consumer-ready marker, and an existing marker with missing siblings is
+  rejected as an incomplete set. Identical concurrent producers converge, while
   divergent producers fail without mixing generations. Standalone header/ABI
   emission uses the same pair transaction. This preserves the fixed Saturn
   artifacts while making interruption, contention, and late conflicts

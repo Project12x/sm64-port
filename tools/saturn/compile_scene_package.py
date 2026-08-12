@@ -8,6 +8,7 @@ external content-addressed payloads.  All integers are big-endian.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -355,6 +356,36 @@ def _published_bytes_match(path: Path, raw: bytes) -> bool:
             path.is_file() and path.read_bytes() == raw)
 
 
+@contextlib.contextmanager
+def _publication_lock(paths: Sequence[Path]):
+    key = hashlib.sha256(b"\0".join(
+        os.path.normcase(str(path)).encode("utf-8")
+        for path in paths)).hexdigest()[:24]
+    lock_path = Path(tempfile.gettempdir()) / f"sm64-saturn-s64p-{key}.lock"
+    with lock_path.open("a+b") as stream:
+        stream.seek(0, os.SEEK_END)
+        if stream.tell() == 0:
+            stream.write(b"\0")
+            stream.flush()
+        stream.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            stream.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
 def publish_or_verify_set(
         files: Sequence[tuple[Path, bytes]] | Iterable[tuple[Path, bytes]]) -> None:
     """Publish one generation set atomically or verify identical prior bytes.
@@ -369,10 +400,19 @@ def publish_or_verify_set(
     keys = tuple(os.path.normcase(str(path)) for path, _ in normalized)
     if len(keys) != len(set(keys)):
         raise ValueError("duplicate publication target")
+    with _publication_lock(tuple(path for path, _ in normalized)):
+        _publish_or_verify_set_locked(normalized)
+
+
+def _publish_or_verify_set_locked(
+        normalized: tuple[tuple[Path, bytes], ...]) -> None:
+    present = tuple(os.path.lexists(path) for path, _ in normalized)
     for path, raw in normalized:
         path.parent.mkdir(parents=True, exist_ok=True)
         if os.path.lexists(path) and not _published_bytes_match(path, raw):
             raise ValueError(f"publication target exists: {path}")
+    if present and present[-1] and not all(present):
+        raise ValueError("publication ready marker exists for an incomplete set")
 
     private_paths: list[Path] = []
     private_files: list[tuple[Path, Path, bytes, tuple[int, int]]] = []
