@@ -637,6 +637,12 @@
   `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`. The active plan now binds CART,
   HWRAM staging, VDP1, publication, LWRAM actor arena, frame-credit ownership,
   transport, lifetime, and first consumer before Task 8 begins.
+- The requested two-week behavior audit is preserved at
+  `audits/audit-20260812-0849.md`, SHA-256
+  `8d979ee55aa9c9d2467656a94ed32e39e07ea0381df1b117583d5c90f8f54ca5`.
+  It records 888 commits, six failed first reviews in seven current-sprint
+  tasks, proof-before-live-use, and repeated late ownership redesign as the
+  process defects this convergence reset is intended to stop.
 - The first short identity-bound Ymir smoke moves directly after the minimum
   Task 8 package plus Task 9 cutover/build path. Exhaustive capacity, release
   reproduction, reseal, and final manual evidence remain later gates.
@@ -661,6 +667,7 @@
   publisher/inventory tests. Exact SH-2 `-m2 -mb -ffreestanding -Werror`
   syntax compilation passes. The task-created four-file output directory was
   verified beneath `build/saturn` and removed; no canonical artifact changed.
-- Status remains source-complete-pending-repair-commit-and-rereview. Task 8,
+- Repair behavior commit is `4c4c24a9` (`fix(saturn): bind actor residency
+  memory ownership`). Status is source-complete-pending-rereview. Task 8,
   runtime activation, renderer, Ymir, release, visual/manual, and total-game
   gates remain open and are not replaced by these host/module results.

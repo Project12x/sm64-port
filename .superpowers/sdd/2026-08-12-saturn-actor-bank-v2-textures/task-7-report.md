@@ -138,8 +138,8 @@ finding is waived:
 5. Generation ordering uses explicit unsigned half-range serial arithmetic,
    not an implementation-defined unsigned-to-signed cast.
 
-Focused repair RED/GREEN is complete; repair commit, same-reviewer rereview,
-and every Task 8+ gate remain pending.
+Focused repair RED/GREEN is complete and behavior is committed as `4c4c24a9`;
+same-reviewer rereview and every Task 8+ gate remain pending.
 
 ## Owner convergence correction
 
