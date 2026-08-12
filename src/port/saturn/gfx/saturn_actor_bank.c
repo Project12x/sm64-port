@@ -32,6 +32,65 @@ static bool span(uint32_t offset, uint32_t size, size_t byte_count)
     return offset <= byte_count && size <= byte_count - offset;
 }
 
+static bool add_u32(uint32_t a, uint32_t b, uint32_t *out)
+{
+    if (out == NULL || b > UINT32_MAX - a) return false;
+    *out = a + b;
+    return true;
+}
+
+static bool multiply_u32(uint32_t a, uint32_t b, uint32_t *out)
+{
+    if (out == NULL || (a != 0U && b > UINT32_MAX / a)) return false;
+    *out = a * b;
+    return true;
+}
+
+static bool align_u32(uint32_t value, uint32_t alignment, uint32_t *out)
+{
+    uint32_t biased;
+    if (alignment == 0U || (alignment & (alignment - 1U)) != 0U ||
+        !add_u32(value, alignment - 1U, &biased) || out == NULL)
+        return false;
+    *out = biased & ~(alignment - 1U);
+    return true;
+}
+
+static bool zero_span(const uint8_t *bytes, uint32_t begin, uint32_t end)
+{
+    uint32_t index;
+    if (bytes == NULL || begin > end) return false;
+    for (index = begin; index < end; index++)
+        if (bytes[index] != 0U) return false;
+    return true;
+}
+
+static bool v2_material_valid(uint16_t recipe, uint8_t layer, uint8_t alpha,
+                              uint8_t selector, uint8_t flags,
+                              uint16_t reserved)
+{
+    if (selector != 0U || flags != 0U || reserved != 0U) return false;
+    switch (recipe) {
+    case SM64_SATURN_ACTOR_RECIPE_FLAT_GOURAUD:
+        return layer == SM64_SATURN_ACTOR_LAYER_OPAQUE &&
+               alpha == SM64_SATURN_ACTOR_ALPHA_OPAQUE;
+    case SM64_SATURN_ACTOR_RECIPE_CLUT16_REPLACE:
+    case SM64_SATURN_ACTOR_RECIPE_CLUT16_GOURAUD:
+    case SM64_SATURN_ACTOR_RECIPE_RGB1555_REPLACE:
+    case SM64_SATURN_ACTOR_RECIPE_RGB1555_GOURAUD:
+        return (layer == SM64_SATURN_ACTOR_LAYER_OPAQUE &&
+                alpha == SM64_SATURN_ACTOR_ALPHA_OPAQUE) ||
+               (layer == SM64_SATURN_ACTOR_LAYER_CUTOUT &&
+                alpha == SM64_SATURN_ACTOR_ALPHA_BINARY_ZERO_TRANSPARENT);
+    case SM64_SATURN_ACTOR_RECIPE_CLUT16_HALF_TRANSPARENT:
+    case SM64_SATURN_ACTOR_RECIPE_RGB1555_HALF_TRANSPARENT:
+        return layer == SM64_SATURN_ACTOR_LAYER_TRANSLUCENT &&
+               alpha == SM64_SATURN_ACTOR_ALPHA_HALF_TRANSPARENT;
+    default:
+        return false;
+    }
+}
+
 static bool workspace_add(uint32_t *cursor, uint32_t size)
 {
     if (cursor == NULL || size > UINT32_MAX - *cursor) return false;
@@ -153,13 +212,265 @@ bool sm64_saturn_actor_bank_animation(
     return true;
 }
 
+bool sm64_saturn_actor_bank_render_binding(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t primitive,
+    sm64_saturn_actor_render_binding_t *out)
+{
+    const uint8_t *record;
+    uint32_t relative, absolute;
+    if (out != NULL) memset(out, 0, sizeof(*out));
+    if (view == NULL || out == NULL || view->bytes == NULL ||
+        view->bank.version != SM64_SATURN_ACTOR_BANK_VERSION_V2 ||
+        primitive >= view->bank.primitive_count ||
+        !multiply_u32(primitive, SM64_SATURN_ACTOR_RENDER_BINDING_RECORD_SIZE,
+                      &relative) ||
+        relative > view->render_bindings_size ||
+        SM64_SATURN_ACTOR_RENDER_BINDING_RECORD_SIZE >
+            view->render_bindings_size - relative ||
+        !add_u32(view->render_bindings_offset, relative, &absolute) ||
+        !span(absolute,
+              SM64_SATURN_ACTOR_RENDER_BINDING_RECORD_SIZE, view->byte_count))
+        return false;
+    record = view->bytes + absolute;
+    out->material_id = read_be16(record);
+    out->tile_id = read_be16(record + 2U);
+    out->flags = read_be16(record + 4U);
+    out->reserved = read_be16(record + 6U);
+    return true;
+}
+
+bool sm64_saturn_actor_bank_target_material(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t material,
+    sm64_saturn_actor_target_material_t *out)
+{
+    const uint8_t *record;
+    uint32_t relative, absolute;
+    if (out != NULL) memset(out, 0, sizeof(*out));
+    if (view == NULL || out == NULL || view->bytes == NULL ||
+        view->bank.version != SM64_SATURN_ACTOR_BANK_VERSION_V2 ||
+        material >= view->material_count ||
+        !multiply_u32(material, SM64_SATURN_ACTOR_TARGET_MATERIAL_RECORD_SIZE,
+                      &relative) ||
+        relative > view->target_materials_size ||
+        SM64_SATURN_ACTOR_TARGET_MATERIAL_RECORD_SIZE >
+            view->target_materials_size - relative ||
+        !add_u32(view->target_materials_offset, relative, &absolute) ||
+        !span(absolute,
+              SM64_SATURN_ACTOR_TARGET_MATERIAL_RECORD_SIZE, view->byte_count))
+        return false;
+    record = view->bytes + absolute;
+    out->recipe = read_be16(record);
+    out->layer = record[2];
+    out->alpha_mode = record[3];
+    out->selector_kind = record[4];
+    out->flags = record[5];
+    out->reserved = read_be16(record + 6U);
+    return true;
+}
+
+bool sm64_saturn_actor_bank_texture_tile(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t tile,
+    sm64_saturn_actor_texture_tile_t *out)
+{
+    const uint8_t *record;
+    uint32_t relative, absolute;
+    if (out != NULL) memset(out, 0, sizeof(*out));
+    if (view == NULL || out == NULL || view->bytes == NULL ||
+        view->bank.version != SM64_SATURN_ACTOR_BANK_VERSION_V2 ||
+        tile >= view->tile_count ||
+        !multiply_u32(tile, SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE,
+                      &relative) ||
+        relative > view->texture_tiles_size ||
+        SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE >
+            view->texture_tiles_size - relative ||
+        !add_u32(view->texture_tiles_offset, relative, &absolute) ||
+        !span(absolute,
+              SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE, view->byte_count))
+        return false;
+    record = view->bytes + absolute;
+    out->payload_offset = read_be32(record);
+    out->payload_size = read_be32(record + 4U);
+    out->width = read_be16(record + 8U);
+    out->height = read_be16(record + 10U);
+    out->clut_id = read_be16(record + 12U);
+    out->format = record[14];
+    out->flags = record[15];
+    return true;
+}
+
+static bool validate_v2_tail(const uint8_t *bytes, uint32_t byte_count,
+                             uint32_t geometry_primitive_offset,
+                             sm64_saturn_actor_bank_view_t *parsed)
+{
+    uint32_t binding_end, material_end, tile_end, texture_end, clut_end;
+    uint32_t expected, texture_cursor = 0U, texture_used_end;
+    uint32_t counted_textures = 0U, counted_gouraud = 0U;
+    uint16_t next_clut = 0U, next_tile = 0U;
+    uint16_t index;
+    if (bytes == NULL || parsed == NULL || byte_count < SM64_SATURN_ACTOR_BANK_V2_HEADER_SIZE)
+        return false;
+    if (read_be16(bytes + 104U) != SM64_SATURN_ACTOR_RENDER_BINDING_RECORD_SIZE ||
+        read_be16(bytes + 106U) != SM64_SATURN_ACTOR_TARGET_MATERIAL_RECORD_SIZE ||
+        read_be16(bytes + 108U) != SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE ||
+        read_be16(bytes + 110U) != 0U || !zero_span(bytes, 180U, 192U))
+        return false;
+    parsed->render_bindings_offset = read_be32(bytes + 112U);
+    parsed->render_bindings_size = read_be32(bytes + 116U);
+    parsed->target_materials_offset = read_be32(bytes + 120U);
+    parsed->target_materials_size = read_be32(bytes + 124U);
+    parsed->texture_tiles_offset = read_be32(bytes + 128U);
+    parsed->texture_tiles_size = read_be32(bytes + 132U);
+    parsed->texture_payload_offset = read_be32(bytes + 136U);
+    parsed->texture_payload_size = read_be32(bytes + 140U);
+    parsed->clut_payload_offset = read_be32(bytes + 144U);
+    parsed->clut_payload_size = read_be32(bytes + 148U);
+    parsed->texture_resident_bytes = read_be32(bytes + 152U);
+    parsed->clut_resident_bytes = read_be32(bytes + 156U);
+    parsed->draw_records_per_instance = read_be32(bytes + 160U);
+    parsed->texture_commands_per_instance = read_be32(bytes + 164U);
+    parsed->gouraud_tables_per_instance = read_be32(bytes + 168U);
+    if (read_be32(bytes + 172U) != byte_count) return false;
+    parsed->bake_policy_id = read_be32(bytes + 176U);
+    parsed->hot_end = parsed->texture_payload_offset;
+    if (parsed->bake_policy_id == 0U || parsed->bank.meshlet_count == 0U ||
+        parsed->bank.primitive_count == 0U ||
+        !multiply_u32(parsed->bank.primitive_count,
+                      SM64_SATURN_ACTOR_RENDER_BINDING_RECORD_SIZE, &expected) ||
+        parsed->render_bindings_size != expected ||
+        !multiply_u32(parsed->material_count,
+                      SM64_SATURN_ACTOR_TARGET_MATERIAL_RECORD_SIZE, &expected) ||
+        parsed->target_materials_size != expected ||
+        (parsed->texture_tiles_size % SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE) != 0U ||
+        parsed->texture_tiles_size / SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE > UINT16_MAX ||
+        !add_u32(parsed->render_bindings_offset, parsed->render_bindings_size, &binding_end) ||
+        parsed->target_materials_offset != binding_end ||
+        !add_u32(parsed->target_materials_offset, parsed->target_materials_size, &material_end) ||
+        parsed->texture_tiles_offset != material_end ||
+        !add_u32(parsed->texture_tiles_offset, parsed->texture_tiles_size, &tile_end) ||
+        !align_u32(tile_end, 8U, &expected) || parsed->texture_payload_offset != expected ||
+        (parsed->texture_payload_offset & 7U) != 0U ||
+        (parsed->texture_payload_size & 7U) != 0U ||
+        !add_u32(parsed->texture_payload_offset, parsed->texture_payload_size, &texture_end) ||
+        !align_u32(texture_end, 8U, &expected) || parsed->clut_payload_offset != expected ||
+        (parsed->clut_payload_offset & 7U) != 0U ||
+        (parsed->clut_payload_size % 32U) != 0U ||
+        !add_u32(parsed->clut_payload_offset, parsed->clut_payload_size, &clut_end) ||
+        clut_end != byte_count ||
+        parsed->texture_resident_bytes != parsed->texture_payload_size ||
+        parsed->clut_resident_bytes != parsed->clut_payload_size ||
+        parsed->draw_records_per_instance != parsed->bank.primitive_count ||
+        !zero_span(bytes, tile_end, parsed->texture_payload_offset))
+        return false;
+    parsed->tile_count = (uint16_t)(parsed->texture_tiles_size /
+                                    SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE);
+    for (index = 0U; index < parsed->material_count; index++) {
+        sm64_saturn_actor_target_material_t material;
+        if (!sm64_saturn_actor_bank_target_material(parsed, index, &material) ||
+            !v2_material_valid(material.recipe, material.layer,
+                               material.alpha_mode, material.selector_kind,
+                               material.flags, material.reserved))
+            return false;
+    }
+    for (index = 0U; index < parsed->tile_count; index++) {
+        sm64_saturn_actor_texture_tile_t tile;
+        uint32_t relative, pixels, payload_start, payload_end;
+        if (!sm64_saturn_actor_bank_texture_tile(parsed, index, &tile) ||
+            tile.flags != 0U || tile.width < 8U || tile.width > 504U ||
+            (tile.width & 7U) != 0U || tile.height == 0U || tile.height > 255U ||
+            !align_u32(texture_cursor, 8U, &relative) ||
+            tile.payload_offset != relative ||
+            relative > parsed->texture_payload_size ||
+            !add_u32(parsed->texture_payload_offset, texture_cursor, &payload_start) ||
+            !add_u32(parsed->texture_payload_offset, relative, &payload_end) ||
+            !zero_span(bytes, payload_start, payload_end) ||
+            !multiply_u32(tile.width, tile.height, &pixels) ||
+            !span(tile.payload_offset, tile.payload_size,
+                  parsed->texture_payload_size))
+            return false;
+        if (tile.format == SM64_SATURN_ACTOR_TILE_FORMAT_CLUT16) {
+            if (tile.payload_size != pixels / 2U || tile.clut_id == UINT16_MAX ||
+                tile.clut_id > next_clut)
+                return false;
+            if (tile.clut_id == next_clut) next_clut++;
+        } else if (tile.format == SM64_SATURN_ACTOR_TILE_FORMAT_RGB1555) {
+            uint32_t word_offset;
+            if (!multiply_u32(pixels, 2U, &pixels) || tile.payload_size != pixels ||
+                tile.clut_id != UINT16_MAX ||
+                !add_u32(parsed->texture_payload_offset, tile.payload_offset,
+                         &payload_start))
+                return false;
+            for (word_offset = 0U; word_offset < tile.payload_size; word_offset += 2U) {
+                uint16_t word = read_be16(bytes + payload_start + word_offset);
+                if (word != 0U && (word & 0x8000U) == 0U) return false;
+            }
+        } else {
+            return false;
+        }
+        if (!add_u32(tile.payload_offset, tile.payload_size, &texture_cursor))
+            return false;
+    }
+    if (!align_u32(texture_cursor, 8U, &expected) ||
+        expected != parsed->texture_payload_size ||
+        !add_u32(parsed->texture_payload_offset, texture_cursor, &texture_used_end) ||
+        !zero_span(bytes, texture_used_end, texture_end) ||
+        next_clut != parsed->clut_payload_size / 32U)
+        return false;
+    for (index = 0U; index < next_clut; index++) {
+        uint32_t entry;
+        const uint8_t *palette = bytes + parsed->clut_payload_offset + (uint32_t)index * 32U;
+        if (read_be16(palette) != 0U) return false;
+        for (entry = 1U; entry < 16U; entry++) {
+            uint16_t word = read_be16(palette + entry * 2U);
+            if (word != 0U && (word & 0x8000U) == 0U) return false;
+        }
+    }
+    for (index = 0U; index < parsed->bank.primitive_count; index++) {
+        sm64_saturn_actor_render_binding_t binding;
+        sm64_saturn_actor_target_material_t material;
+        sm64_saturn_actor_texture_tile_t tile;
+        uint16_t primitive_material = read_be16(
+            bytes + parsed->meshlets_offset + geometry_primitive_offset +
+            (uint32_t)index * PRIMITIVE_RECORD_SIZE);
+        bool wants_clut;
+        if (!sm64_saturn_actor_bank_render_binding(parsed, index, &binding) ||
+            binding.material_id != primitive_material ||
+            binding.material_id >= parsed->material_count ||
+            binding.flags != 0U || binding.reserved != 0U ||
+            !sm64_saturn_actor_bank_target_material(parsed, binding.material_id,
+                                                     &material))
+            return false;
+        if (material.recipe == SM64_SATURN_ACTOR_RECIPE_FLAT_GOURAUD) {
+            if (binding.tile_id != UINT16_MAX) return false;
+        } else {
+            if (binding.tile_id >= parsed->tile_count || binding.tile_id > next_tile ||
+                !sm64_saturn_actor_bank_texture_tile(parsed, binding.tile_id, &tile))
+                return false;
+            if (binding.tile_id == next_tile) next_tile++;
+            counted_textures++;
+            wants_clut = material.recipe == SM64_SATURN_ACTOR_RECIPE_CLUT16_REPLACE ||
+                         material.recipe == SM64_SATURN_ACTOR_RECIPE_CLUT16_GOURAUD ||
+                         material.recipe == SM64_SATURN_ACTOR_RECIPE_CLUT16_HALF_TRANSPARENT;
+            if ((wants_clut && tile.format != SM64_SATURN_ACTOR_TILE_FORMAT_CLUT16) ||
+                (!wants_clut && tile.format != SM64_SATURN_ACTOR_TILE_FORMAT_RGB1555))
+                return false;
+        }
+        if (material.recipe == SM64_SATURN_ACTOR_RECIPE_FLAT_GOURAUD ||
+            material.recipe == SM64_SATURN_ACTOR_RECIPE_CLUT16_GOURAUD ||
+            material.recipe == SM64_SATURN_ACTOR_RECIPE_RGB1555_GOURAUD)
+            counted_gouraud++;
+    }
+    return next_tile == parsed->tile_count &&
+           counted_textures == parsed->texture_commands_per_instance &&
+           counted_gouraud == parsed->gouraud_tables_per_instance;
+}
+
 bool sm64_saturn_actor_bank_validate_expected(
     const void *data, size_t byte_count, const uint32_t expected_source_hash[8],
     sm64_saturn_actor_bank_view_t *view)
 {
     const uint8_t *bytes = data;
     sm64_saturn_actor_bank_view_t parsed;
-    uint32_t header_size, record_size;
+    uint32_t header_size, expected_header_size, record_size;
     uint32_t records_size;
     uint16_t geometry_part_count, geometry_joint_count;
     uint16_t geometry_material_count, geometry_meshlet_count;
@@ -170,9 +481,13 @@ bool sm64_saturn_actor_bank_validate_expected(
     uint32_t primitive_cursor = 0U, vertex_cursor = 0U;
     uint32_t source_primitive_cursor = 0U;
     uint32_t lane_scratch, usable_scratch, minimum_scratch;
+    uint32_t records_end, indices_end, values_end, vertices_end, geometry_end;
+    uint32_t aligned;
     int16_t previous_node = -1;
     bool hash_nonzero = false;
-    if (bytes == NULL || view == NULL || byte_count < SM64_SATURN_ACTOR_BANK_HEADER_SIZE)
+    bool is_v2;
+    if (bytes == NULL || view == NULL ||
+        byte_count < SM64_SATURN_ACTOR_BANK_HEADER_SIZE || byte_count > UINT32_MAX)
         return false;
     memset(&parsed, 0, sizeof(parsed));
     parsed.bytes = bytes;
@@ -207,35 +522,71 @@ bool sm64_saturn_actor_bank_validate_expected(
     parsed.meshlets_offset = read_be32(bytes + 90U);
     parsed.meshlets_size = read_be32(bytes + 94U);
     parsed.max_scratch = read_be32(bytes + 98U);
+    is_v2 = false;
+    switch (parsed.bank.version) {
+    case SM64_SATURN_ACTOR_BANK_VERSION_V1:
+        expected_header_size = SM64_SATURN_ACTOR_BANK_HEADER_SIZE;
+        break;
+    case SM64_SATURN_ACTOR_BANK_VERSION_V2:
+        expected_header_size = SM64_SATURN_ACTOR_BANK_V2_HEADER_SIZE;
+        is_v2 = true;
+        break;
+    default:
+        return false;
+    }
     if (parsed.bank.magic != SM64_SATURN_ACTOR_BANK_MAGIC ||
-        parsed.bank.version != SM64_SATURN_ACTOR_BANK_VERSION ||
-        header_size != SM64_SATURN_ACTOR_BANK_HEADER_SIZE ||
+        header_size != expected_header_size ||
+        (is_v2 && byte_count < SM64_SATURN_ACTOR_BANK_V2_HEADER_SIZE) ||
         record_size != SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE || !hash_nonzero ||
+        bytes[102] != 0U || bytes[103] != 0U ||
+        parsed.bank.family_id == 0U || parsed.bank.model_id == 0U ||
         parsed.bank.joint_count == 0U || parsed.bank.animation_count == 0U ||
         parsed.bank.vertex_count == 0U || parsed.bank.max_instances == 0U ||
-        parsed.max_scratch == 0U)
+        parsed.max_scratch == 0U ||
+        (is_v2 && (parsed.bank.meshlet_count == 0U ||
+                   parsed.bank.primitive_count == 0U)))
         return false;
     if (!sm64_saturn_actor_bank_workspace_requirements(
             parsed.bank.vertex_count, parsed.bank.joint_count, &lane_scratch,
             &usable_scratch, &minimum_scratch) ||
-        parsed.max_scratch < minimum_scratch)
+        (is_v2 ? parsed.max_scratch != minimum_scratch :
+                 parsed.max_scratch < minimum_scratch))
         return false;
-    records_size = (uint32_t)parsed.bank.animation_count * record_size;
+    if (!multiply_u32(parsed.bank.animation_count, record_size, &records_size) ||
+        !add_u32(parsed.records_offset, records_size, &records_end) ||
+        !add_u32(parsed.indices_offset, parsed.indices_size, &indices_end) ||
+        !add_u32(parsed.values_offset, parsed.values_size, &values_end) ||
+        !add_u32(parsed.vertices_offset, parsed.vertices_size, &vertices_end) ||
+        !add_u32(parsed.meshlets_offset, parsed.meshlets_size, &geometry_end))
+        return false;
     if (!span(parsed.records_offset, records_size, byte_count) ||
         !span(parsed.indices_offset, parsed.indices_size, byte_count) ||
         !span(parsed.values_offset, parsed.values_size, byte_count) ||
         !span(parsed.vertices_offset, parsed.vertices_size, byte_count) ||
         !span(parsed.meshlets_offset, parsed.meshlets_size, byte_count) ||
         parsed.vertices_size != (uint32_t)parsed.bank.vertex_count * 10U ||
-        parsed.records_offset < header_size ||
-        parsed.indices_offset < parsed.records_offset + records_size ||
-        parsed.values_offset < parsed.indices_offset + parsed.indices_size ||
-        parsed.vertices_offset < parsed.values_offset + parsed.values_size ||
-        parsed.meshlets_offset < parsed.vertices_offset + parsed.vertices_size ||
-        parsed.meshlets_offset + parsed.meshlets_size != byte_count ||
         parsed.meshlets_size < GEOMETRY_HEADER_SIZE ||
         read_be32(bytes + parsed.meshlets_offset) != 0x47454F31UL)
         return false;
+    if (is_v2) {
+        if (parsed.records_offset != SM64_SATURN_ACTOR_BANK_V2_HEADER_SIZE ||
+            parsed.indices_offset != records_end ||
+            !align_u32(indices_end, 4U, &aligned) || parsed.values_offset != aligned ||
+            !zero_span(bytes, indices_end, parsed.values_offset) ||
+            !align_u32(values_end, 4U, &aligned) || parsed.vertices_offset != aligned ||
+            !zero_span(bytes, values_end, parsed.vertices_offset) ||
+            !align_u32(vertices_end, 4U, &aligned) || parsed.meshlets_offset != aligned ||
+            !zero_span(bytes, vertices_end, parsed.meshlets_offset) ||
+            read_be32(bytes + 112U) != geometry_end)
+            return false;
+    } else if (parsed.records_offset < header_size ||
+               parsed.indices_offset < records_end ||
+               parsed.values_offset < indices_end ||
+               parsed.vertices_offset < values_end ||
+               parsed.meshlets_offset < vertices_end ||
+               geometry_end != byte_count) {
+        return false;
+    }
     geometry_part_count = read_be16(bytes + parsed.meshlets_offset + 4U);
     geometry_joint_count = read_be16(bytes + parsed.meshlets_offset + 6U);
     geometry_material_count = read_be16(bytes + parsed.meshlets_offset + 8U);
@@ -250,6 +601,7 @@ bool sm64_saturn_actor_bank_validate_expected(
     geometry_primitive_offset = read_be32(bytes + parsed.meshlets_offset + 34U);
     geometry_primitive_ref_offset = read_be32(bytes + parsed.meshlets_offset + 38U);
     geometry_vertex_ref_offset = read_be32(bytes + parsed.meshlets_offset + 42U);
+    parsed.material_count = geometry_material_count;
     if (geometry_part_count == 0U || geometry_material_count == 0U ||
         geometry_joint_count != parsed.bank.joint_count ||
         geometry_meshlet_count != parsed.bank.meshlet_count ||
@@ -417,22 +769,23 @@ bool sm64_saturn_actor_bank_validate_expected(
         return false;
     for (uint16_t animation = 0U; animation < parsed.bank.animation_count; animation++) {
         sm64_saturn_actor_animation_record_t record;
-        uint32_t index_words, value_words;
+        uint32_t index_words, value_words, index_bytes, value_bytes;
         if (!sm64_saturn_actor_bank_animation(&parsed, animation, &record) ||
             record.frame_count == 0U || record.joint_count != parsed.bank.joint_count ||
+            parsed.indices_size < 4U || parsed.values_size < 4U ||
             record.indices_offset < parsed.indices_offset + 4U ||
             record.values_offset < parsed.values_offset + 4U ||
-            record.indices_offset > parsed.indices_offset + parsed.indices_size ||
-            record.values_offset > parsed.values_offset + parsed.values_size ||
+            record.indices_offset > indices_end ||
+            record.values_offset > values_end ||
             (record.indices_offset & 1U) != 0U || (record.values_offset & 1U) != 0U)
             return false;
         index_words = read_be32(bytes + record.indices_offset - 4U);
         value_words = read_be32(bytes + record.values_offset - 4U);
         if (index_words != ((uint32_t)record.joint_count + 1U) * 6U ||
-            !span(record.indices_offset, index_words * 2U,
-                  parsed.indices_offset + parsed.indices_size) ||
-            !span(record.values_offset, value_words * 2U,
-                  parsed.values_offset + parsed.values_size))
+            !multiply_u32(index_words, 2U, &index_bytes) ||
+            !multiply_u32(value_words, 2U, &value_bytes) ||
+            !span(record.indices_offset, index_bytes, indices_end) ||
+            !span(record.values_offset, value_bytes, values_end))
             return false;
         for (uint32_t channel = 0U; channel < index_words; channel += 2U) {
             uint32_t count = read_be16(bytes + record.indices_offset + channel * 2U);
@@ -449,6 +802,13 @@ bool sm64_saturn_actor_bank_validate_expected(
             read_be16(bytes + parsed.meshlets_offset + geometry_part_offset +
                       (uint32_t)branch * PART_RECORD_SIZE) != joint)
             return false;
+    }
+    if (is_v2) {
+        if (!validate_v2_tail(bytes, (uint32_t)byte_count,
+                              geometry_primitive_offset, &parsed))
+            return false;
+    } else {
+        parsed.hot_end = (uint32_t)byte_count;
     }
     *view = parsed;
     return true;

@@ -342,9 +342,8 @@ bool sm64_saturn_actor_bundle_resolve(const sm64_saturn_actor_bundle_view_t *vie
 {
     sm64_saturn_actor_bundle_variant_t variant;
     sm64_saturn_actor_bank_view_t parsed;
-    const uint8_t *bytes;
     uint16_t word;
-    uint32_t record_size, lane, usable, reserved;
+    uint32_t lane, usable, reserved, bank_absolute;
     if (out != NULL) memset(out, 0, sizeof(*out));
     if (view == NULL || out == NULL || source_hash_words == NULL ||
         actor_bank_id == 0U ||
@@ -355,58 +354,18 @@ bool sm64_saturn_actor_bundle_resolve(const sm64_saturn_actor_bundle_view_t *vie
         if (source_hash_words[word] != variant.source_hash_words[word]) return false;
     if (!span_u32(variant.bank_offset, variant.bank_size, view->bank_payloads_size) ||
         !span_u32(view->bank_payloads_offset, view->bank_payloads_size, view->byte_count) ||
-        variant.bank_size < SM64_SATURN_ACTOR_BANK_HEADER_SIZE)
-        return false;
-    bytes = view->bytes + view->bank_payloads_offset + variant.bank_offset;
-    memset(&parsed, 0, sizeof(parsed));
-    parsed.bytes = bytes;
-    parsed.byte_count = variant.bank_size;
-    parsed.bank.magic = read_be32(bytes);
-    parsed.bank.version = read_be16(bytes + 4U);
-    parsed.bank.family_id = read_be16(bytes + 6U);
-    parsed.bank.model_id = read_be16(bytes + 8U);
-    parsed.bank.joint_count = read_be16(bytes + 10U);
-    parsed.bank.animation_count = read_be16(bytes + 12U);
-    parsed.bank.meshlet_count = read_be16(bytes + 14U);
-    parsed.bank.primitive_count = read_be16(bytes + 16U);
-    parsed.bank.vertex_count = read_be16(bytes + 18U);
-    parsed.bank.max_instances = read_be16(bytes + 20U);
-    parsed.bank.feature_mask = read_be32(bytes + 22U);
-    for (word = 0U; word < 8U; word++)
-        parsed.bank.source_hash_words[word] = read_be32(
-            bytes + SM64_SATURN_ACTOR_BANK_SOURCE_SHA256_OFFSET +
-            (uint32_t)word * 4U);
-    record_size = read_be16(bytes + 60U);
-    parsed.records_offset = read_be32(bytes + 62U);
-    parsed.indices_offset = read_be32(bytes + 66U);
-    parsed.indices_size = read_be32(bytes + 70U);
-    parsed.values_offset = read_be32(bytes + 74U);
-    parsed.values_size = read_be32(bytes + 78U);
-    parsed.vertices_offset = read_be32(bytes + 82U);
-    parsed.vertices_size = read_be32(bytes + 86U);
-    parsed.meshlets_offset = read_be32(bytes + 90U);
-    parsed.meshlets_size = read_be32(bytes + 94U);
-    parsed.max_scratch = read_be32(
-        bytes + SM64_SATURN_ACTOR_BANK_MAXIMUM_SCRATCH_OFFSET);
-    if (parsed.bank.magic != SM64_SATURN_ACTOR_BANK_MAGIC ||
-        parsed.bank.version != SM64_SATURN_ACTOR_BANK_VERSION ||
+        !add_u32(view->bank_payloads_offset, variant.bank_offset, &bank_absolute) ||
+        !span_u32(bank_absolute, variant.bank_size, view->byte_count) ||
+        variant.bank_size < SM64_SATURN_ACTOR_BANK_HEADER_SIZE ||
+        !sm64_saturn_actor_bank_validate_expected(
+            view->bytes + bank_absolute,
+            variant.bank_size, source_hash_words, &parsed) ||
         parsed.bank.family_id != family_ordinal || parsed.bank.model_id != model_id ||
-        read_be16(bytes + 58U) != SM64_SATURN_ACTOR_BANK_HEADER_SIZE ||
-        record_size != SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE ||
-        !multiply_u32(parsed.bank.animation_count, record_size, &record_size) ||
-        !span_u32(parsed.records_offset, record_size, variant.bank_size) ||
-        !span_u32(parsed.indices_offset, parsed.indices_size, variant.bank_size) ||
-        !span_u32(parsed.values_offset, parsed.values_size, variant.bank_size) ||
-        !span_u32(parsed.vertices_offset, parsed.vertices_size, variant.bank_size) ||
-        !span_u32(parsed.meshlets_offset, parsed.meshlets_size, variant.bank_size) ||
-        parsed.meshlets_offset + parsed.meshlets_size != variant.bank_size ||
         !sm64_saturn_actor_bank_workspace_requirements(
-            parsed.bank.vertex_count, parsed.bank.joint_count, &lane, &usable, &reserved) ||
-        lane != variant.bank_lane_bytes || reserved != variant.bank_maximum_scratch ||
-        parsed.max_scratch != reserved)
+            parsed.bank.vertex_count, parsed.bank.joint_count, &lane, &usable,
+            &reserved) || lane != variant.bank_lane_bytes ||
+        reserved != variant.bank_maximum_scratch || parsed.max_scratch != reserved)
         return false;
-    for (word = 0U; word < 8U; word++)
-        if (parsed.bank.source_hash_words[word] != source_hash_words[word]) return false;
     *out = parsed;
     return true;
 }

@@ -60,6 +60,65 @@ def textured_resources() -> ActorBankResourcesV2:
     )
 
 
+def rgb1555_resources() -> ActorBankResourcesV2:
+    pixels = struct.pack(">8H", 0, *([0x8001] * 7))
+    return ActorBankResourcesV2(
+        bindings=tuple(RenderBindingV2(0, 0) for _ in range(3)),
+        materials=(TargetMaterialV2(4, 0, 0),),
+        tiles=(TextureTileV2(pixels, 8, 1, 2, None),),
+        bake_policy_id=9,
+    )
+
+
+def padded_clut16_resources() -> ActorBankResourcesV2:
+    return ActorBankResourcesV2(
+        bindings=tuple(RenderBindingV2(0, 0) for _ in range(3)),
+        materials=(TargetMaterialV2(2, 1, 1),),
+        tiles=(TextureTileV2(b"\x12\x34\x56\x78", 8, 1, 1, palette()),),
+        bake_policy_id=11,
+    )
+
+
+def write_target_fixtures(directory: Path) -> None:
+    """Write deterministic v1/v2 banks and a mixed opaque S64F-v3 fixture."""
+    from actor_family_bundle import (  # noqa: PLC0415
+        BundleDocument,
+        VariantKey,
+        pack_bundle,
+    )
+    from test_actor_family_bundle import family  # noqa: PLC0415
+
+    directory.mkdir(parents=True, exist_ok=True)
+    v1_source = hashlib.sha256(b"target v1 source").digest()
+    v1 = tiny_bank(1, 7, v1_source)
+    v2_source = hashlib.sha256(b"target v2 source and policy").digest()
+    core = tiny_bank(2, 3, hashlib.sha256(b"target v2 core").digest())
+    untextured, _ = pack_actor_bank_v2(core, v2_source, untextured_resources())
+    textured, _ = pack_actor_bank_v2(core, v2_source, textured_resources())
+    rgb1555, _ = pack_actor_bank_v2(core, v2_source, rgb1555_resources())
+    padded, _ = pack_actor_bank_v2(core, v2_source, padded_clut16_resources())
+    mixed = pack_bundle(
+        BundleDocument(
+            package_generation=0x12345678,
+            families=(family(0x1001, models=(7,)),
+                      family(0x2002, models=(3,))),
+        ),
+        {
+            VariantKey(1, 7): v1,
+            VariantKey(2, 3): textured,
+        },
+    )
+    for name, payload in (
+        ("actor-bank-v1.bin", v1),
+        ("actor-bank-v2-untextured.bin", untextured),
+        ("actor-bank-v2-textured.bin", textured),
+        ("actor-bank-v2-rgb1555.bin", rgb1555),
+        ("actor-bank-v2-padded.bin", padded),
+        ("actor-family-bundle-mixed-v3.bin", mixed),
+    ):
+        (directory / name).write_bytes(payload)
+
+
 def zero_draw_core(source_hash: bytes) -> bytes:
     """Build a hand-derived v1 bank whose required draw counts are zero."""
     header = struct.Struct(">4s9HI32sHH10IH")

@@ -15,8 +15,9 @@
   Mario and v2 generic actors; S64P alignment stays 4; texture/CLUT upload
   regions are separate; global lane stride and active texture generation are
   explicit.
-- Current: Task 1 complete and independently approved; Task 2 ready for RED.
-  Tasks 2-13 and all target, demo, release, reseal, smoke, visual, desktop,
+- Current: Tasks 1 and 2 complete and independently approved; Task 3 is
+  source-complete pending independent parser/ABI review. Tasks 4-13 and all
+  material, real-BOB, runtime, demo, release, reseal, smoke, visual, desktop,
   manual, retail, and total-game gates remain open.
 
 ## Task 1 review loop
@@ -89,3 +90,39 @@
   `671ad31d`. No target evidence is claimed; Task 3
   and every runtime/demo/release/manual gate remain blocked on independent
   Task 2 approval.
+
+## Task 3 implementation
+
+- Starting HEAD reconciled at `efd70710`; unrelated dirt was preserved and no
+  reset, clean, stash, or broad staging was used.
+- RED: the new C fixture failed on the missing v2 constants, view fields,
+  stable record types, and three accessors. Mixed S64F remained unable to
+  resolve its v2 variant. The first sandboxed Make attempt only hit the known
+  MSYS `\\d\\...` path rewrite; the approved explicit-root rerun is the
+  recorded feature RED.
+- GREEN: one target version dispatch validates the shared S64B prefix/GEO1 and
+  exact v2 tail. V1 exposes zero v2-only fields. V2 exposes bounded binding,
+  material, tile, hot/cold payload, resident, command, Gouraud, draw, and bake
+  fields only after canonical validation. S64F validate/resolve delegates the
+  exact opaque bank span to `sm64_saturn_actor_bank_validate_expected`.
+- TDD regression: `verify-actor-pose-bank` caught an attempted change to the
+  historical no-write-on-failure bank-view contract; that behavior was
+  restored and the gate passed. A focused `0x80000000` animation value-word
+  mutation then proved unchecked byte-count multiplication wrapped to zero;
+  checked multiplication produced the required RED-to-GREEN repair. Final
+  pointer review also moved the aligned tile-padding bound ahead of its byte
+  scan so malformed multi-tile spans cannot be inspected before rejection.
+- Verification: S64B-v2 C gate PASS (86 mutations), S64F-v3 gate PASS (54
+  mutations, including a resealed malformed v2 extension), actor pose PASS,
+  meshlets PASS plus invalid-span mutation, feature-off wrapper 6 tests PASS,
+  63 broader Python actor/bundle tests PASS, and
+  `sh-elf-gcc -ffreestanding -fsyntax-only` PASS for `saturn_actor_bank.c`.
+- Historical identity remains exact: Mario S64B 596,896 bytes / SHA-256
+  `242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539`,
+  source identity
+  `60f942e6f30d4a153393a47ac53626ee53d90ebeb750ee5d244d5ef2a16925c1`,
+  and historical S64F-v3 1,688 bytes / SHA-256
+  `4b3334a61f8ce7c8b2c4548a112b0c7354c444b42659ec7943941de5529e4dbc`.
+- Status: source-complete-pending-review; behavior commit pending. Task 4 and
+  every material, real-BOB, runtime, Ymir, release, smoke, visual, desktop,
+  manual, retail, and total-game gate remain closed.

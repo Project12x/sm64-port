@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import struct
 import sys
+import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -127,6 +128,27 @@ class ActorFamilyBundleTest(unittest.TestCase):
         """Fails if bundle validation regains an independent S64B parser."""
         self.assertFalse(hasattr(actor_family_bundle_module, "_S64B_HEADER"))
         self.assertFalse(hasattr(actor_family_bundle_module, "_validate_s64b"))
+        self.assertFalse(hasattr(actor_family_bundle_module, "_S64B_V2_EXTENSION"))
+
+    def test_target_fixture_mixes_opaque_v1_and_v2_banks_in_s64f_v3(self) -> None:
+        """Catches outer S64F layout changes or filtering by embedded S64B version."""
+        from actor_bank_format import validate_actor_bank
+        from test_actor_bank_v2 import write_target_fixtures
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_target_fixtures(root)
+            payload = (root / "actor-family-bundle-mixed-v3.bin").read_bytes()
+            view = validate_bundle(payload)
+            self.assertEqual(S64F_V3_HEADER.unpack_from(payload)[:7],
+                             (b"S64F", 3, 96, 2, 2, 64, 88))
+            self.assertEqual(
+                [validate_actor_bank(payload[
+                    view.bank_payloads_offset + variant.bank_offset:
+                    view.bank_payloads_offset + variant.bank_offset + variant.bank_size
+                ]).version for variant in view.variants],
+                [1, 2],
+            )
 
     def test_exact_record_sizes_and_canonical_source_identity(self) -> None:
         self.assertEqual(S64F_V3_HEADER.size, 96)

@@ -6,11 +6,17 @@
 #include <stdint.h>
 
 #define SM64_SATURN_ACTOR_BANK_MAGIC 0x53363442UL
-#define SM64_SATURN_ACTOR_BANK_VERSION 1U
+#define SM64_SATURN_ACTOR_BANK_VERSION_V1 1U
+#define SM64_SATURN_ACTOR_BANK_VERSION_V2 2U
+#define SM64_SATURN_ACTOR_BANK_VERSION SM64_SATURN_ACTOR_BANK_VERSION_V1
 #define SM64_SATURN_ACTOR_BANK_HEADER_SIZE 104U
+#define SM64_SATURN_ACTOR_BANK_V2_HEADER_SIZE 192U
 #define SM64_SATURN_ACTOR_BANK_SOURCE_SHA256_OFFSET 26U
 #define SM64_SATURN_ACTOR_BANK_MAXIMUM_SCRATCH_OFFSET 98U
 #define SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE 16U
+#define SM64_SATURN_ACTOR_RENDER_BINDING_RECORD_SIZE 8U
+#define SM64_SATURN_ACTOR_TARGET_MATERIAL_RECORD_SIZE 8U
+#define SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE 16U
 #define SM64_SATURN_ACTOR_BANK_WORK_LANE_COUNT 2U
 #define SM64_SATURN_ACTOR_BANK_WORK_ALIGNMENT 4U
 #define SM64_SATURN_ACTOR_FAMILY_BANK_MAGIC 0x53363446UL
@@ -79,7 +85,62 @@ typedef struct sm64_saturn_actor_bank_view {
     uint32_t vertices_offset, vertices_size;
     uint32_t meshlets_offset, meshlets_size;
     uint32_t max_scratch;
+    uint16_t material_count, tile_count;
+    uint32_t hot_end;
+    uint32_t render_bindings_offset, render_bindings_size;
+    uint32_t target_materials_offset, target_materials_size;
+    uint32_t texture_tiles_offset, texture_tiles_size;
+    uint32_t texture_payload_offset, texture_payload_size;
+    uint32_t clut_payload_offset, clut_payload_size;
+    uint32_t texture_resident_bytes, clut_resident_bytes;
+    uint32_t draw_records_per_instance;
+    uint32_t texture_commands_per_instance;
+    uint32_t gouraud_tables_per_instance;
+    uint32_t bake_policy_id;
 } sm64_saturn_actor_bank_view_t;
+
+typedef enum sm64_saturn_actor_material_recipe {
+    SM64_SATURN_ACTOR_RECIPE_FLAT_GOURAUD = 1,
+    SM64_SATURN_ACTOR_RECIPE_CLUT16_REPLACE = 2,
+    SM64_SATURN_ACTOR_RECIPE_CLUT16_GOURAUD = 3,
+    SM64_SATURN_ACTOR_RECIPE_RGB1555_REPLACE = 4,
+    SM64_SATURN_ACTOR_RECIPE_RGB1555_GOURAUD = 5,
+    SM64_SATURN_ACTOR_RECIPE_CLUT16_HALF_TRANSPARENT = 6,
+    SM64_SATURN_ACTOR_RECIPE_RGB1555_HALF_TRANSPARENT = 7
+} sm64_saturn_actor_material_recipe_t;
+
+typedef enum sm64_saturn_actor_target_layer {
+    SM64_SATURN_ACTOR_LAYER_OPAQUE = 0,
+    SM64_SATURN_ACTOR_LAYER_CUTOUT = 1,
+    SM64_SATURN_ACTOR_LAYER_TRANSLUCENT = 2
+} sm64_saturn_actor_target_layer_t;
+
+typedef enum sm64_saturn_actor_alpha_mode {
+    SM64_SATURN_ACTOR_ALPHA_OPAQUE = 0,
+    SM64_SATURN_ACTOR_ALPHA_BINARY_ZERO_TRANSPARENT = 1,
+    SM64_SATURN_ACTOR_ALPHA_HALF_TRANSPARENT = 2
+} sm64_saturn_actor_alpha_mode_t;
+
+typedef enum sm64_saturn_actor_tile_format {
+    SM64_SATURN_ACTOR_TILE_FORMAT_CLUT16 = 1,
+    SM64_SATURN_ACTOR_TILE_FORMAT_RGB1555 = 2
+} sm64_saturn_actor_tile_format_t;
+
+typedef struct sm64_saturn_actor_render_binding {
+    uint16_t material_id, tile_id, flags, reserved;
+} sm64_saturn_actor_render_binding_t;
+
+typedef struct sm64_saturn_actor_target_material {
+    uint16_t recipe;
+    uint8_t layer, alpha_mode, selector_kind, flags;
+    uint16_t reserved;
+} sm64_saturn_actor_target_material_t;
+
+typedef struct sm64_saturn_actor_texture_tile {
+    uint32_t payload_offset, payload_size;
+    uint16_t width, height, clut_id;
+    uint8_t format, flags;
+} sm64_saturn_actor_texture_tile_t;
 
 typedef struct sm64_saturn_actor_joint {
     int16_t parent_ordinal;
@@ -147,6 +208,15 @@ bool sm64_saturn_actor_bank_joint(
 bool sm64_saturn_actor_bank_vertex(
     const sm64_saturn_actor_bank_view_t *view, uint16_t vertex,
     sm64_saturn_actor_vertex_t *out);
+bool sm64_saturn_actor_bank_render_binding(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t primitive,
+    sm64_saturn_actor_render_binding_t *out);
+bool sm64_saturn_actor_bank_target_material(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t material,
+    sm64_saturn_actor_target_material_t *out);
+bool sm64_saturn_actor_bank_texture_tile(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t tile,
+    sm64_saturn_actor_texture_tile_t *out);
 
 bool sm64_saturn_actor_family_bank_validate(
     const void *data, size_t byte_count,

@@ -47,7 +47,7 @@ int main(int argc, char **argv)
     sm64_saturn_actor_bundle_view_t view;
     sm64_saturn_actor_bundle_variant_t variant;
     sm64_saturn_actor_bank_view_t bank;
-    assert(argc == 2);
+    assert(argc == 2 || argc == 3);
     file = fopen(argv[1], "rb"); assert(file != NULL);
     assert(fseek(file, 0, SEEK_END) == 0); length = ftell(file); assert(length > 0);
     rewind(file); valid = malloc((size_t)length); copy = malloc((size_t)length);
@@ -137,7 +137,38 @@ int main(int argc, char **argv)
     memset(&variant, 0xA5, sizeof(variant)); assert(!sm64_saturn_actor_bundle_variant(&view, 0U, 1U, &variant)); assert_zero(&variant,sizeof(variant));
     memset(&variant, 0xA5, sizeof(variant)); assert(!sm64_saturn_actor_bundle_variant(&view, 2U, 99U, &variant)); assert_zero(&variant,sizeof(variant));
     free(copy); free(valid);
-    assert(mutation_count == 53U);
+    if (argc == 3) {
+        uint32_t mixed_size;
+        uint8_t *mixed = NULL;
+        file = fopen(argv[2], "rb"); assert(file != NULL);
+        assert(fseek(file, 0, SEEK_END) == 0); length = ftell(file); assert(length > 0);
+        rewind(file); mixed = malloc((size_t)length); assert(mixed != NULL);
+        assert(fread(mixed, 1, (size_t)length, file) == (size_t)length);
+        fclose(file); mixed_size = (uint32_t)length;
+        assert(sm64_saturn_actor_bundle_validate(mixed, mixed_size, &view));
+        assert(sm64_saturn_actor_bundle_variant(&view, 2U, 3U, &variant));
+        assert(sm64_saturn_actor_bundle_resolve(&view, 2U, 3U,
+            variant.source_hash_words[0], variant.source_hash_words, &bank));
+        assert(bank.bank.version == SM64_SATURN_ACTOR_BANK_VERSION_V2);
+        assert(bank.texture_payload_size == 16U && bank.clut_payload_size == 32U);
+        {
+            uint8_t digest[32];
+            uint32_t bank_at = view.bank_payloads_offset + variant.bank_offset;
+            uint32_t variant_at = view.variant_records_offset + 88U;
+            uint8_t *mixed_copy = malloc(mixed_size);
+            assert(mixed_copy != NULL);
+            memcpy(mixed_copy, mixed, mixed_size);
+            mixed_copy[bank_at + 180U] = 1U;
+            assert(sm64_saturn_sha256_digest(mixed_copy + bank_at,
+                                              variant.bank_size, digest));
+            memcpy(mixed_copy + variant_at + 24U, digest, 32U);
+            reseal(mixed_copy, mixed_size);
+            reject(mixed_copy, mixed_size);
+            free(mixed_copy);
+        }
+        free(mixed);
+    }
+    assert(mutation_count == (argc == 3 ? 54U : 53U));
     printf("actor family bundle: PASS (%u mutations)\n", mutation_count);
     return 0;
 }

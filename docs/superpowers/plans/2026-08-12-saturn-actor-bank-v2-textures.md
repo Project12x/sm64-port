@@ -19,7 +19,11 @@ Task 2 behavior `83cfc1ad` plus repair `95de6457` owns the exact
 192-byte S64B-v2 extension, deterministic v1-core rebasing, target-resource
 deduplication, and fail-closed validation while historical Mario/S64F bytes
 remain exact; scoped rereview passed C0/I0/M0 through `d5914059`. Task 3 is
-ready for RED. Tasks 3-13 and every target, demo,
+source-complete pending independent parser/ABI review: the target owns v1/v2
+dispatch, linear v2 validation/accessors, and opaque mixed-S64F delegation;
+86 direct S64B mutations, 54 S64F mutations, 63 broader Python tests, the
+historical actor gates, and the freestanding SH-2 syntax check pass. Tasks
+4-13 and every material, real-BOB, runtime, demo,
 release, reseal, smoke, visual, desktop, manual, retail, and total-game gate
 remain open.
 
@@ -266,13 +270,19 @@ view = validate_actor_bank(bytes(payload))
 
 Run both suites, full actor-bank/family-bundle Python suites, `verify-actor-family-bundle verify-actor-pose-bank verify-actor-meshlets`, and compare a fresh Mario output byte-for-byte with the pre-task fixture. Expected: v2 green; v1 unchanged.
 
-- [ ] **Step 5: Commit and independent review**
+- [x] **Step 5: Commit and independent review**
 
 Commit `feat(saturn): define canonical actor bank v2 bytes`. Review arithmetic, canonicalization, deduplication complexity, and absence of host paths before Task 3.
 
 ---
 
 ### Task 3: Add target S64B v2 and mixed S64F validation
+
+**Execution status:** source-complete pending independent review. The target
+dispatches once between v1 and v2, retains the historical no-write-on-failure
+v1 view contract, validates every v2 extension/resource before access, and
+S64F validation/resolve delegates opaque embedded bytes to the S64B owner.
+No material compiler, residency, renderer, or Task 4+ work is open.
 
 **Files:**
 - Create: `tools/saturn/actor_bank_v2_test.c`
@@ -305,15 +315,15 @@ bool sm64_saturn_actor_bank_texture_tile(
     sm64_saturn_actor_texture_tile_t *out);
 ```
 
-- [ ] **Step 1: Write failing C fixtures**
+- [x] **Step 1: Write failing C fixtures**
 
 Generate v1-only, v2-only, and mixed S64F-v3 fixtures from Python. The C test must match every host-view field, reject every mutated v2 field/payload, and prove S64F validation/resolve never reads v2 offsets itself.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `verify-actor-bank-v2 verify-actor-family-bundle`. Expected: missing constants/accessors and mixed bundle rejection.
 
-- [ ] **Step 3: Implement one version dispatch and linear v2 validation**
+- [x] **Step 3: Implement one version dispatch and linear v2 validation**
 
 Split common prefix/GEO1 checks from version tails. Populate v1 v2-only view fields with zero; populate v2 fields after exact linear span/record/payload checks. Replace S64F manual v1 assumptions with `sm64_saturn_actor_bank_validate_expected`.
 
@@ -328,7 +338,7 @@ default:
 }
 ```
 
-- [ ] **Step 4: Run GREEN and freestanding compile**
+- [x] **Step 4: Run GREEN and freestanding compile**
 
 Run `verify-actor-bank-v2 verify-actor-family-bundle verify-actor-pose-bank verify-actor-meshlets verify-actor-feature-off-wrapper`, plus the target compiler dry-run for `saturn_actor_bank.c`. Expected: host/target agreement and unchanged v1 callers.
 

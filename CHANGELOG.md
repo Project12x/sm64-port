@@ -4,6 +4,17 @@
 
 ### Changed
 
+- Added the freestanding Saturn S64B-v2 parser and opaque mixed-bank S64F-v3
+  delegation boundary. The target now dispatches once on v1/v2, validates the
+  exact 192-byte v2 header, canonical hot/cold spans, stable material/tile
+  records, transparency data, dense first-use ordinals, and exact draw/
+  texture/Gouraud/residency aggregates before exposing bounded accessors.
+  S64F resolve no longer reconstructs v1 header fields itself, so later bank
+  versions cannot bypass their owning parser. This keeps workers and bundles
+  pointer-free and preserves historical v1 callers/bytes while malformed v2
+  content fails before publication; material compilation and VDP1 residency
+  remain deliberately closed for later tasks.
+
 - Added the canonical pointer-free host S64B-v2 contract needed for Saturn
   actor textures. A validated v1 core is promoted from its 104-byte header to
   the additive 192-byte layout with every bank-absolute pose/span offset
@@ -23,6 +34,13 @@
   byte-accounting overflow explicitly.
 
 ### Fixed
+
+- Checked target animation stream word-count multiplication before any span
+  or pointer use. A hostile `0x80000000` value-count previously wrapped its
+  byte length to zero in freestanding C even though the host parser rejected
+  it; the target now fails closed with host-equivalent uint32 arithmetic. The
+  v2 tile walk also proves each aligned padding endpoint remains inside the
+  declared texture payload before inspecting those bytes.
 
 - Hardened the new S64B-v2 host boundary after independent review. V2 now
   rejects structurally valid v1 cores whose required meshlet or primitive
