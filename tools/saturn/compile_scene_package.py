@@ -15,7 +15,7 @@ import tempfile
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Sequence
 
 MAGIC = b"S64P"
 VERSION = 1
@@ -350,37 +350,81 @@ def _input_within_root(path: Path, root: Path, label: str) -> Path:
     return resolved
 
 
-def publish_or_verify(path: Path, raw: bytes) -> None:
-    """Exclusively publish new bytes or verify an identical prior result.
+def _published_bytes_match(path: Path, raw: bytes) -> bool:
+    return (os.path.lexists(path) and not path.is_symlink() and
+            path.is_file() and path.read_bytes() == raw)
 
-    This is the same-project no-clobber/report-last pattern used by
-    compile_actor_family_bundle. The private hard link makes a concurrent
-    winner visible without replacing it; an existing divergent byte is a
-    same-generation publication failure.
+
+def publish_or_verify_set(
+        files: Sequence[tuple[Path, bytes]] | Iterable[tuple[Path, bytes]]) -> None:
+    """Publish one generation set atomically or verify identical prior bytes.
+
+    All existing targets are checked before the first link. Private files are
+    then hard-linked in caller order (the ready/report marker belongs last).
+    A late conflict rolls back only links whose file identity still matches
+    this transaction; identical concurrent winners are accepted.
     """
-    path = path.absolute()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        if not path.is_file() or path.read_bytes() != raw:
+    normalized = tuple((Path(path).absolute(), bytes(raw))
+                       for path, raw in files)
+    keys = tuple(os.path.normcase(str(path)) for path, _ in normalized)
+    if len(keys) != len(set(keys)):
+        raise ValueError("duplicate publication target")
+    for path, raw in normalized:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if os.path.lexists(path) and not _published_bytes_match(path, raw):
             raise ValueError(f"publication target exists: {path}")
-        return
-    descriptor, private_name = tempfile.mkstemp(
-        prefix=f".{path.name}.private-", dir=path.parent)
-    private = Path(private_name)
+
+    private_paths: list[Path] = []
+    private_files: list[tuple[Path, Path, bytes, tuple[int, int]]] = []
+    published: list[tuple[Path, bytes, tuple[int, int]]] = []
     try:
-        with os.fdopen(descriptor, "wb") as stream:
-            written = stream.write(raw)
-            if written != len(raw):
-                raise OSError(f"short private write: {written}/{len(raw)}")
-            stream.flush()
-            os.fsync(stream.fileno())
-        try:
-            os.link(private, path)
-        except FileExistsError:
-            if not path.is_file() or path.read_bytes() != raw:
-                raise ValueError(f"publication target exists: {path}")
+        for path, raw in normalized:
+            descriptor, private_name = tempfile.mkstemp(
+                prefix=f".{path.name}.private-", dir=path.parent)
+            private = Path(private_name)
+            private_paths.append(private)
+            with os.fdopen(descriptor, "wb") as stream:
+                written = stream.write(raw)
+                if written != len(raw):
+                    raise OSError(
+                        f"short private write: {written}/{len(raw)}")
+                stream.flush()
+                os.fsync(stream.fileno())
+            private_stat = private.stat()
+            identity = (private_stat.st_dev, private_stat.st_ino)
+            private_files.append((private, path, raw, identity))
+        for private, path, raw, identity in private_files:
+            if os.path.lexists(path):
+                if not _published_bytes_match(path, raw):
+                    raise ValueError(f"publication target exists: {path}")
+                continue
+            try:
+                os.link(private, path)
+            except FileExistsError as exc:
+                if not _published_bytes_match(path, raw):
+                    raise ValueError(
+                        f"publication target exists: {path}") from exc
+            else:
+                published.append((path, raw, identity))
+    except Exception:
+        for path, raw, identity in reversed(published):
+            try:
+                target_stat = path.lstat()
+                target_identity = (target_stat.st_dev, target_stat.st_ino)
+                if (target_identity == identity and
+                        _published_bytes_match(path, raw)):
+                    path.unlink()
+            except FileNotFoundError:
+                pass
+        raise
     finally:
-        private.unlink(missing_ok=True)
+        for private in private_paths:
+            private.unlink(missing_ok=True)
+
+
+def publish_or_verify(path: Path, raw: bytes) -> None:
+    """Publish or verify one file through the generation-set primitive."""
+    publish_or_verify_set(((path, raw),))
 
 
 def _assembly_bytes(root_package: Path, actor_bundle: Path,
@@ -434,6 +478,10 @@ def main() -> None:
     parser.add_argument("--payload-manifest-output", type=Path)
     parser.add_argument("--assembly-output", type=Path)
     parser.add_argument("--assembly-base", type=Path)
+    parser.add_argument("--validation-output", type=Path)
+    parser.add_argument("--header-output", type=Path)
+    parser.add_argument("--abi-output", type=Path)
+    parser.add_argument("--symbol-prefix", default="sm64_saturn_scene_package")
     args = parser.parse_args()
     if len(args.dependency_manifest) != len(args.dependency_payload):
         parser.error("each dependency manifest requires one dependency payload")
@@ -479,13 +527,38 @@ def main() -> None:
         assembly_raw = _assembly_bytes(
             args.output, dependency_payloads[0], args.assembly_base)
 
-    publish_or_verify(args.output, package)
+    validation_raw = None
+    if args.validation_output is not None:
+        from validate_scene_package import validate_scene_package
+        payloads = {dependency.stable_id: (
+            bytes(dependency.data), dependency.generation)
+            for dependency in dependencies}
+        validation = validate_scene_package(package, payloads)
+        validation_raw = (json.dumps(
+            validation, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    header_raw = None
+    abi_raw = None
+    if args.header_output is not None or args.abi_output is not None:
+        from emit_scene_package_header import emit_abi_header, emit_header
+        if args.header_output is not None:
+            header_raw = emit_header(package, args.symbol_prefix).encode("utf-8")
+        if args.abi_output is not None:
+            abi_raw = emit_abi_header().encode("utf-8")
+
+    publications: list[tuple[Path, bytes]] = [(args.output, package)]
     if payload_manifest_raw is not None:
-        publish_or_verify(args.payload_manifest_output, payload_manifest_raw)
+        publications.append((args.payload_manifest_output, payload_manifest_raw))
     if assembly_raw is not None:
-        publish_or_verify(args.assembly_output, assembly_raw)
-    if metadata_raw is not None:  # Human-readable report publishes last.
-        publish_or_verify(args.metadata_output, metadata_raw)
+        publications.append((args.assembly_output, assembly_raw))
+    if validation_raw is not None:
+        publications.append((args.validation_output, validation_raw))
+    if header_raw is not None:
+        publications.append((args.header_output, header_raw))
+    if abi_raw is not None:
+        publications.append((args.abi_output, abi_raw))
+    if metadata_raw is not None:  # Consumer-ready marker publishes last.
+        publications.append((args.metadata_output, metadata_raw))
+    publish_or_verify_set(publications)
 
 
 if __name__ == "__main__":

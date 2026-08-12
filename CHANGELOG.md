@@ -4,6 +4,19 @@
 
 ### Changed
 
+- Made the seven-file S64P generation publication a single ownership-aware
+  transaction after rereview showed that per-file no-clobber could still leave
+  a partial generation when a later sidecar conflicted. The compiler now
+  computes root, payload manifest, assembly, validation, generated header, ABI,
+  and report bytes before the first link; preflights every target; stages every
+  byte privately; and rolls back only links whose filesystem identity still
+  belongs to the failing transaction. The metadata report is linked last as
+  the consumer-ready marker. Identical concurrent producers converge, while
+  divergent producers fail without mixing generations. Standalone header/ABI
+  emission uses the same pair transaction. This preserves the fixed Saturn
+  artifacts while making interruption, contention, and late conflicts
+  fail-closed.
+
 - Repaired the canonical actor scene-bundle owner after independent review
   found three fail-closed gaps. Sourceboot now initializes both VDP1 command
   prefixes only after the boot-only 2,560-byte cold-upload borrow has retired,

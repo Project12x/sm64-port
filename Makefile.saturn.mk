@@ -1653,19 +1653,11 @@ compile-actor-scene-package: verify-scene-package-schema
 	  --metadata-output "$(SCENE_PACKAGE_FINAL_REPORT)" \
 	  --payload-manifest-output "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)" \
 	  --assembly-output "$(SCENE_PACKAGE_FINAL_ASM)" \
-	  --assembly-base "$(SATURN_REPO_ROOT)/src/port/saturn/sourceboot"
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/validate_scene_package.py" \
-	  --input "$(SCENE_PACKAGE_FINAL_ROOT)" \
-	  --payload-manifest "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)" \
-	  --payload-root "$(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)" \
-	  --report "$(SCENE_PACKAGE_FINAL_VALIDATION)"
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/emit_scene_package_header.py" \
-	  --input "$(SCENE_PACKAGE_FINAL_ROOT)" \
-	  --payload-manifest "$(SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST)" \
-	  --payload-root "$(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)" \
+	  --assembly-base "$(SATURN_REPO_ROOT)/src/port/saturn/sourceboot" \
+	  --validation-output "$(SCENE_PACKAGE_FINAL_VALIDATION)" \
+	  --header-output "$(SCENE_PACKAGE_FINAL_HEADER)" \
 	  --abi-output "$(SCENE_PACKAGE_ABI_HEADER)" \
-	  --symbol-prefix "$(SCENE_LEVEL)_area$(SCENE_AREA)_actors_v3" \
-	  --output "$(SCENE_PACKAGE_FINAL_HEADER)"
+	  --symbol-prefix "$(SCENE_LEVEL)_area$(SCENE_AREA)_actors_v3"
 
 # Z-Treme-style LWRAM -> HWRAM promotion contract: alignment, bounded
 # capacity, copied bytes, and source immutability are all host-verifiable.

@@ -1025,6 +1025,29 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   Step 5, Task 9, linked target, Ymir, release, visual, and manual gates stay
   unchecked until rereview passes.
 
+#### Task 8 repair round 2/5 (2026-08-12)
+
+- Rereview of `0a180e39..c8a2fdf8` returned Spec FAIL / Quality needs fixes,
+  C0/I1/M2. Both Saturn runtime findings were closed. The remaining Important
+  issue was generation-set atomicity: a divergent late payload manifest or ABI
+  could fail after an earlier root/header had been linked. Minor evidence
+  corrections are source `init_from` stack 96 B, not 92, and that the tested
+  repository-wrapper route is DLL-healthy without claiming every direct/manual
+  MSYS invocation or the unrun full link.
+- RED covers a divergent target at every one of seven final-output positions,
+  the header-before-divergent-ABI case, ownership rollback at every link
+  position, and mixed concurrent producers. GREEN computes the full set first,
+  preflights every target, privately stages all bytes, publishes report/ready
+  last, and rolls back only links whose exact file identity still belongs to
+  the failed transaction. Identical concurrent producers converge; divergent
+  contenders cannot leave a mixed generation.
+- Package schema is 22/22; determinism remains 3/3. The full focused
+  actor/package/scene Make wave passes through the exact repository MSYS
+  wrapper, and its generation-set inventory remains hash-and-mtime identical
+  7/7. Exact GCC 14.3 evidence is init 220 B, init-from 96 B, resolve 44 B and
+  an ELF32 big-endian SuperH object. Repair commit and rereview remain open;
+  Step 5 and Task 9 stay unchecked.
+
 ---
 
 ### Task 9: Cut the production generic actor queue and emitter over to v2

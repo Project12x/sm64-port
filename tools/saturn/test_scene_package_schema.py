@@ -9,7 +9,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest import mock
 
 from compile_scene_package import (
     HEADER_SIZE,
@@ -408,7 +410,12 @@ class ScenePackageSchemaTest(unittest.TestCase):
         self.assertIn("$(ACTOR_FAMILY_BUNDLE_PAYLOAD)", recipe)
         self.assertIn("--assembly-output", recipe)
         self.assertIn("--assembly-base", recipe)
+        self.assertIn("--validation-output", recipe)
+        self.assertIn("--header-output", recipe)
+        self.assertIn("--abi-output", recipe)
         self.assertNotIn('> "$(SCENE_PACKAGE_FINAL_ASM)"', recipe)
+        self.assertNotIn("validate_scene_package.py", recipe)
+        self.assertNotIn("emit_scene_package_header.py", recipe)
         self.assertNotIn("--provisional", recipe)
         self.assertNotIn("--section", recipe)
         repo_root = Path(__file__).resolve().parents[2]
@@ -427,6 +434,9 @@ class ScenePackageSchemaTest(unittest.TestCase):
             report_path = root / "scene.json"
             payload_manifest_path = root / "payloads.json"
             assembly_path = root / "actor_scene_bundle.sx"
+            validation_path = root / "validation.json"
+            header_path = root / "scene.h"
+            abi_path = root / "abi.h"
             payload_path.write_bytes(payload)
             manifest_path.write_text(json.dumps({
                 "alignment": 4,
@@ -451,6 +461,10 @@ class ScenePackageSchemaTest(unittest.TestCase):
                 "--payload-manifest-output", str(payload_manifest_path),
                 "--assembly-output", str(assembly_path),
                 "--assembly-base", str(root),
+                "--validation-output", str(validation_path),
+                "--header-output", str(header_path),
+                "--abi-output", str(abi_path),
+                "--symbol-prefix", "fixture",
             ]
             first = subprocess.run(
                 command, text=True, capture_output=True, check=False)
@@ -458,7 +472,7 @@ class ScenePackageSchemaTest(unittest.TestCase):
             published = {
                 path: path.read_bytes() for path in (
                     output_path, report_path, payload_manifest_path,
-                    assembly_path)
+                    assembly_path, validation_path, header_path, abi_path)
             }
             repeat = subprocess.run(
                 command, text=True, capture_output=True, check=False)
@@ -479,6 +493,130 @@ class ScenePackageSchemaTest(unittest.TestCase):
             self.assertEqual(before_failed_repeat, {
                 path: path.read_bytes() for path in published
             })
+
+    def test_final_publication_rolls_back_every_late_conflict(self) -> None:
+        payload = b"S64F-v3-actor-bundle"
+        output_names = (
+            "scene.s64p", "payloads.json", "actor_scene_bundle.sx",
+            "validation.json", "scene.h", "abi.h", "scene.json")
+        with tempfile.TemporaryDirectory(prefix="s64p-set-rollback-") as temporary:
+            base = Path(temporary)
+            for conflict_name in output_names:
+                root = base / conflict_name.replace(".", "-")
+                root.mkdir()
+                payload_path = root / "actors.s64f"
+                manifest_path = root / "actors-dependency.json"
+                payload_path.write_bytes(payload)
+                manifest_path.write_text(json.dumps({
+                    "alignment": 4,
+                    "byte_count": len(payload),
+                    "destination_class": "CART",
+                    "generation": 14,
+                    "kind": "ACTOR_DEPENDENCIES",
+                    "lifetime": "SCENE",
+                    "max_scratch": 0,
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "stable_id": "bob-area1-actors-v3",
+                }, sort_keys=True), encoding="utf-8")
+                outputs = {name: root / name for name in output_names}
+                outputs[conflict_name].write_bytes(b"foreign\n")
+                command = [
+                    sys.executable,
+                    str(Path(__file__).with_name("compile_scene_package.py")),
+                    "--level-id", "9", "--area-id", "1",
+                    "--dependency-manifest", str(manifest_path),
+                    "--dependency-payload", str(payload_path),
+                    "--payload-root", str(root),
+                    "--output", str(outputs["scene.s64p"]),
+                    "--payload-manifest-output", str(outputs["payloads.json"]),
+                    "--assembly-output", str(outputs["actor_scene_bundle.sx"]),
+                    "--assembly-base", str(root),
+                    "--validation-output", str(outputs["validation.json"]),
+                    "--header-output", str(outputs["scene.h"]),
+                    "--abi-output", str(outputs["abi.h"]),
+                    "--metadata-output", str(outputs["scene.json"]),
+                    "--symbol-prefix", "fixture",
+                ]
+                failed = subprocess.run(
+                    command, text=True, capture_output=True, check=False)
+                self.assertNotEqual(failed.returncode, 0, conflict_name)
+                self.assertIn("publication target exists", failed.stderr)
+                for name, path in outputs.items():
+                    if name == conflict_name:
+                        self.assertEqual(path.read_bytes(), b"foreign\n")
+                    else:
+                        self.assertFalse(path.exists(),
+                                         f"partial publication at {name}")
+
+    def test_publication_set_concurrent_producers_never_mix(self) -> None:
+        from compile_scene_package import publish_or_verify_set
+
+        with tempfile.TemporaryDirectory(prefix="s64p-set-concurrent-") as temporary:
+            root = Path(temporary)
+            paths = tuple(root / f"output-{index}.bin" for index in range(4))
+            first = tuple((path, f"first-{index}".encode())
+                          for index, path in enumerate(paths))
+            second = tuple((path, f"second-{index}".encode())
+                           for index, path in enumerate(paths))
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                identical = [pool.submit(publish_or_verify_set, first)
+                             for _ in range(8)]
+                for future in identical:
+                    future.result()
+            self.assertEqual(tuple(path.read_bytes() for path in paths),
+                             tuple(raw for _, raw in first))
+            for path in paths:
+                path.unlink()
+            errors = []
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                contenders = [pool.submit(
+                    publish_or_verify_set, first if index % 2 == 0 else second)
+                    for index in range(8)]
+                for future in contenders:
+                    try:
+                        future.result()
+                    except ValueError as exc:
+                        errors.append(str(exc))
+            final = tuple(path.read_bytes() for path in paths)
+            self.assertIn(final, (tuple(raw for _, raw in first),
+                                  tuple(raw for _, raw in second)))
+            self.assertGreater(len(errors), 0)
+
+    def test_publication_set_rolls_back_owned_links_at_every_position(self) -> None:
+        from compile_scene_package import publish_or_verify_set
+        import compile_scene_package
+
+        with tempfile.TemporaryDirectory(prefix="s64p-set-link-fault-") as temporary:
+            base = Path(temporary)
+            real_link = compile_scene_package.os.link
+            for fail_at in range(4):
+                root = base / str(fail_at)
+                files = tuple((root / f"output-{index}.bin",
+                               f"bytes-{index}".encode())
+                              for index in range(4))
+                calls = 0
+
+                def conflicting_link(source, target):
+                    nonlocal calls
+                    position = calls
+                    calls += 1
+                    if position == fail_at:
+                        Path(target).write_bytes(b"foreign\n")
+                        raise FileExistsError("injected late conflict")
+                    return real_link(source, target)
+
+                with mock.patch.object(
+                        compile_scene_package.os, "link",
+                        side_effect=conflicting_link):
+                    with self.assertRaisesRegex(
+                            ValueError, "publication target exists"):
+                        publish_or_verify_set(files)
+                for index, (path, _) in enumerate(files):
+                    if index == fail_at:
+                        self.assertEqual(path.read_bytes(), b"foreign\n")
+                    else:
+                        self.assertFalse(
+                            path.exists(), f"owned link {index} was not rolled back")
 
     def test_validator_and_header_reports_never_clobber_drift(self) -> None:
         package = compile_package(9, 1, [], [])
@@ -507,17 +645,19 @@ class ScenePackageSchemaTest(unittest.TestCase):
                 header, text=True, capture_output=True,
                 check=False).returncode, 0)
             validation_path.write_bytes(b"foreign validation\n")
-            header_path.write_bytes(b"foreign header\n")
+            result = subprocess.run(
+                validator, text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("publication target exists", result.stderr)
+            self.assertEqual(validation_path.read_bytes(), b"foreign validation\n")
+            header_path.unlink()
             abi_path.write_bytes(b"foreign abi\n")
-            for command, expected in (
-                    (validator, b"foreign validation\n"),
-                    (header, b"foreign header\n")):
-                result = subprocess.run(
-                    command, text=True, capture_output=True, check=False)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("publication target exists", result.stderr)
-                target = validation_path if command is validator else header_path
-                self.assertEqual(target.read_bytes(), expected)
+            result = subprocess.run(
+                header, text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("publication target exists", result.stderr)
+            self.assertFalse(header_path.exists(),
+                             "late ABI conflict left a partial header")
             self.assertEqual(abi_path.read_bytes(), b"foreign abi\n")
 
     def test_sourceboot_restores_command_prefix_after_cold_stage(self) -> None:
