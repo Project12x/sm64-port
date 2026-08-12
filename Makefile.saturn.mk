@@ -55,10 +55,21 @@ ACTOR_FAMILY_BUNDLE_TOOL_INPUTS := \
 	$(SATURN_REPO_ROOT)/tools/saturn/actor_family_bundle.py \
 	$(SATURN_REPO_ROOT)/tools/saturn/actor_variant_bank.py \
 	$(SATURN_REPO_ROOT)/tools/saturn/actor_bank_format.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/actor_bank_v2.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/actor_source.py \
 	$(SATURN_REPO_ROOT)/tools/saturn/actor_material_v2.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/bake_castle_uv.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/compile_castle_bsp.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/dl_rigid_groups.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/extract_mario_actor.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/extract_mario_textures.py \
 	$(SATURN_REPO_ROOT)/tools/saturn/gen_actor_identity_registry.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/quad_pairing.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/saturn_mesh_ir.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/static_bsp.py \
 	$(SATURN_REPO_ROOT)/tools/saturn/target_profile.py \
-	$(SATURN_REPO_ROOT)/tools/saturn/hermetic_manifest.py
+	$(SATURN_REPO_ROOT)/tools/saturn/hermetic_manifest.py \
+	$(SATURN_REPO_ROOT)/tools/saturn/vdp1_texture.py
 ACTOR_FAMILY_BUNDLE_PROFILE_INPUTS := $(shell cd "$(SATURN_REPO_ROOT)" && \
 	"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; import sys; sys.path.insert(0, 'tools/saturn'); from target_profile import target_profile_source_paths; root=Path('.').resolve(); print(' '.join((root / item).as_posix() for item in target_profile_source_paths(root, Path('tools/saturn/profiles/sourceboot-bob-demo-v1.json'))))")
 ACTOR_FAMILY_BUNDLE_CLOSURE_INPUTS = $(shell cd "$(SATURN_REPO_ROOT)" && \

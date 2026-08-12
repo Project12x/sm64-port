@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -32,7 +34,60 @@ GENERATION = json.loads(FAMILY_REPORT.read_text(encoding="utf-8"))[
     "scene_package_generation"]
 
 
+def _local_import_closure(entry: Path) -> set[Path]:
+    """Return the deterministic repository-local import closure for one tool."""
+    tools_dir = ROOT / "tools/saturn"
+    pending = [entry.resolve()]
+    closure: set[Path] = set()
+    while pending:
+        source = pending.pop()
+        if source in closure:
+            continue
+        closure.add(source)
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        module_names: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                module_names.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                module_names.add(node.module)
+        for module_name in sorted(module_names):
+            candidate = tools_dir.joinpath(*module_name.split(".")).with_suffix(".py")
+            if candidate.is_file() and candidate.resolve() not in closure:
+                pending.append(candidate.resolve())
+    return closure
+
+
+def _make_tool_inputs() -> set[Path]:
+    makefile = (ROOT / "Makefile.saturn.mk").read_text(encoding="utf-8")
+    match = re.search(
+        r"^ACTOR_FAMILY_BUNDLE_TOOL_INPUTS := \\\n(?P<body>(?:\t.*(?:\\\n|\n))*)",
+        makefile,
+        flags=re.MULTILINE,
+    )
+    if match is None:
+        raise AssertionError("ACTOR_FAMILY_BUNDLE_TOOL_INPUTS assignment is missing")
+    return {
+        ROOT / line.strip().removesuffix("\\").strip().removeprefix(
+            "$(SATURN_REPO_ROOT)/")
+        for line in match.group("body").splitlines()
+        if line.strip()
+    }
+
+
 class CompileActorFamilyBundleTest(unittest.TestCase):
+    def test_make_tool_inputs_cover_repository_local_import_closure(self) -> None:
+        entry = ROOT / "tools/saturn/compile_actor_family_bundle.py"
+        closure = _local_import_closure(entry)
+        declared_inputs = _make_tool_inputs()
+        nonexistent = sorted(path.relative_to(ROOT).as_posix()
+                             for path in declared_inputs if not path.is_file())
+        self.assertEqual(nonexistent, [])
+        declared = {path.resolve() for path in declared_inputs}
+        missing = sorted(path.relative_to(ROOT).as_posix()
+                         for path in closure - declared)
+        self.assertEqual(missing, [])
+
     def test_make_verifier_runs_c_parser_against_real_bob_bundle(self) -> None:
         makefile = (ROOT / "Makefile.saturn.mk").read_text(encoding="utf-8")
         self.assertIn(

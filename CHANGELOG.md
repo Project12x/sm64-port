@@ -31,6 +31,9 @@
   invokes no-clobber publication and fails closed instead of silently reusing
   stale bytes. Every verification pass checks all four sidecars and compares
   them byte-for-byte with a private deterministic rebuild from current inputs.
+  The publisher's Make prerequisites now cover its complete repository-local
+  Python import closure, with a recursive AST regression preventing transitive
+  compiler changes from bypassing the publisher/no-clobber freshness path.
 
 - Added host-only, closure-attested Fast3D material capture and S64B-v2
   lowering for the exact 14 measured direct-textured BOB keys. The existing
