@@ -60,15 +60,23 @@ _Static_assert(sizeof(sm64_saturn_actor_texture_publication_t) == 2064U &&
                             committed) == 2062U,
                "actor publication must remain a fixed 2064-byte HWRAM owner");
 
+/* Complete scalar consistency check. This has no bundle dependency and must
+ * gate both replacement prestate and every lookup. */
+bool sm64_saturn_actor_texture_publication_validate(
+    const sm64_saturn_actor_texture_publication_t *publication);
+
 /* Master-only, all-resident activation. The checked DMA queue must already be
- * initialized and exclusively owned by the scene transition. The complete
- * bundle and layout are validated before the first transfer; a later failure
- * may leave dirty VRAM bytes, but committed remains zero so they are
- * unreachable. */
+ * initialized and exclusively owned by the scene transition. Staging is a
+ * caller-owned, 4-byte-aligned HWRAM span; it must not overlap the bundle,
+ * publication, or either VDP1 destination region. The complete bundle, memory
+ * ownership, and transfer plan are validated before the first transfer; a
+ * later failure may leave dirty VRAM bytes, but committed remains zero so they
+ * are unreachable. */
 bool sm64_saturn_actor_texture_residency_activate(
     sm64_saturn_actor_texture_publication_t *publication,
     const sm64_saturn_actor_bundle_view_t *bundle,
     const vdp1_vram_partitions_t *partitions,
+    void *staging, uint32_t staging_capacity,
     uint32_t generation, bool gameplay_suspended, bool vdp1_idle);
 
 /* Copies one scalar mapping only when publication and mapping both match the

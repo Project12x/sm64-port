@@ -42,6 +42,16 @@ static bool align_u32(uint32_t value, uint32_t alignment, uint32_t *out)
     return true;
 }
 
+/* RFC-1982-style serial ordering over the nonzero 32-bit generation space.
+ * The exact half-range is intentionally unordered, avoiding any dependency on
+ * implementation-defined unsigned-to-signed conversion. */
+static bool generation_is_newer(uint32_t candidate, uint32_t current)
+{
+    const uint32_t distance = candidate - current;
+    return candidate != 0U && current != 0U && distance != 0U &&
+           distance < UINT32_C(0x80000000);
+}
+
 static bool address_span_last(uintptr_t base, uint32_t bytes,
                               uintptr_t *last)
 {
@@ -53,6 +63,52 @@ static bool address_span_last(uintptr_t base, uint32_t bytes,
     if ((uintptr_t)(bytes - 1U) > UINTPTR_MAX - base) return false;
     *last = base + (uintptr_t)(bytes - 1U);
     return true;
+}
+
+#define SH2_PHYSICAL_ADDRESS_MASK UINT32_C(0x1FFFFFFF)
+#define SH2_HWRAM_PHYSICAL_START UINT32_C(0x06000000)
+#define SH2_HWRAM_PHYSICAL_END UINT32_C(0x06100000)
+
+static bool normalized_span(const void *base, uint32_t bytes,
+                            uintptr_t *start, uintptr_t *last)
+{
+    uintptr_t address;
+    if (base == NULL || bytes == 0U || start == NULL || last == NULL)
+        return false;
+    address = (uintptr_t)base;
+#if defined(SM64_SATURN_ACTOR_TEXTURE_RESIDENCY_HOST_TEST)
+    /* Native fixtures live outside the 32-bit SH-2 address space. Keep their
+     * real addresses so overlap tests retain ordinary host pointer semantics. */
+    if (address > UINT32_MAX) {
+        *start = address;
+        return address_span_last(address, bytes, last);
+    }
+#else
+    if (address > UINT32_MAX) return false;
+#endif
+    address &= (uintptr_t)SH2_PHYSICAL_ADDRESS_MASK;
+    *start = address;
+    return address_span_last(address, bytes, last);
+}
+
+static bool stage_span_is_hwram(const void *staging,
+                                uint32_t staging_capacity)
+{
+    uintptr_t address = (uintptr_t)staging;
+    uint32_t physical;
+#if defined(SM64_SATURN_ACTOR_TEXTURE_RESIDENCY_HOST_TEST)
+    uintptr_t ignored_last;
+    if (address > UINT32_MAX)
+        return address_span_last(address, staging_capacity, &ignored_last) &&
+               staging_capacity != 0U;
+#else
+    if (address > UINT32_MAX) return false;
+#endif
+    if (staging == NULL || staging_capacity == 0U) return false;
+    physical = (uint32_t)address & SH2_PHYSICAL_ADDRESS_MASK;
+    return physical >= SH2_HWRAM_PHYSICAL_START &&
+           physical < SH2_HWRAM_PHYSICAL_END &&
+           staging_capacity <= SH2_HWRAM_PHYSICAL_END - physical;
 }
 
 static bool checked_span_address(const void *base, uint32_t offset,
@@ -79,6 +135,17 @@ static bool ranges_overlap(uintptr_t a, uintptr_t a_last,
     return a <= b_last && b <= a_last;
 }
 
+static bool memory_spans_overlap(const void *a, uint32_t a_bytes,
+                                 const void *b, uint32_t b_bytes)
+{
+    uintptr_t a_start, a_last, b_start, b_last;
+    if (a_bytes == 0U || b_bytes == 0U) return false;
+    if (!normalized_span(a, a_bytes, &a_start, &a_last) ||
+        !normalized_span(b, b_bytes, &b_start, &b_last))
+        return true;
+    return ranges_overlap(a_start, a_last, b_start, b_last);
+}
+
 static void invalidate_publication(
     sm64_saturn_actor_texture_publication_t *publication)
 {
@@ -94,26 +161,83 @@ static void invalidate_publication(
     publication_fence();
 }
 
-static bool current_publication_valid(
+static bool mapping_is_zero(
+    const sm64_saturn_actor_texture_mapping_t *mapping)
+{
+    const sm64_saturn_actor_texture_mapping_t zero = {0};
+    return memcmp(mapping, &zero, sizeof(zero)) == 0;
+}
+
+static bool publication_entries_valid(
+    const sm64_saturn_actor_texture_publication_t *publication,
+    uint32_t generation)
+{
+    uint16_t index, prior;
+    uint32_t prior_texture = 0U;
+    uint16_t prior_clut = 0U;
+    if (publication == NULL || generation == 0U ||
+        publication->mapping_count > SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY ||
+        (publication->texture_bytes & 7U) != 0U ||
+        publication->texture_bytes > ((uint32_t)UINT16_MAX + 1U) * 8U ||
+        (publication->clut_bytes & 31U) != 0U ||
+        publication->clut_bytes > ((uint32_t)UINT16_MAX + 1U) * 32U)
+        return false;
+    if (publication->mapping_count == 0U &&
+        (publication->texture_bytes != 0U || publication->clut_bytes != 0U))
+        return false;
+    for (index = 0U; index < publication->mapping_count; index++) {
+        const sm64_saturn_actor_texture_mapping_t *mapping =
+            &publication->mappings[index];
+        if (mapping->bank_id == 0U || mapping->tile_count == 0U ||
+            mapping->generation != generation ||
+            (mapping->texture_base_offset & 7U) != 0U ||
+            mapping->texture_base_offset >= publication->texture_bytes ||
+            (uint32_t)mapping->clut_base_index * 32U >=
+                publication->clut_bytes ||
+            (index != 0U &&
+             (mapping->texture_base_offset < prior_texture ||
+              mapping->clut_base_index < prior_clut)))
+            return false;
+        for (prior = 0U; prior < index; prior++)
+            if (publication->mappings[prior].bank_id == mapping->bank_id)
+                return false;
+        prior_texture = mapping->texture_base_offset;
+        prior_clut = mapping->clut_base_index;
+    }
+    for (; index < SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY; index++)
+        if (!mapping_is_zero(&publication->mappings[index])) return false;
+    return true;
+}
+
+bool sm64_saturn_actor_texture_publication_validate(
     const sm64_saturn_actor_texture_publication_t *publication)
 {
     uint16_t index;
-    if (publication->reserved != 0U || publication->mapping_count >
+    if (publication == NULL || publication->committed > 1U ||
+        publication->reserved != 0U || publication->mapping_count >
             SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY)
         return false;
-    if (publication->committed == 0U)
-        return publication->generation == 0U &&
-               publication->mapping_count == 0U &&
-               publication->texture_bytes == 0U &&
-               publication->clut_bytes == 0U;
-    if (publication->committed != 1U || publication->generation == 0U)
-        return false;
-    for (index = 0U; index < publication->mapping_count; index++) {
-        if (publication->mappings[index].bank_id == 0U ||
-            publication->mappings[index].generation != publication->generation)
+    if (publication->committed == 0U) {
+        if (publication->generation != 0U ||
+            publication->mapping_count != 0U ||
+            publication->texture_bytes != 0U ||
+            publication->clut_bytes != 0U)
             return false;
+        for (index = 0U;
+             index < SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY; index++)
+            if (!mapping_is_zero(&publication->mappings[index])) return false;
+        return true;
     }
-    return true;
+    return publication_entries_valid(publication, publication->generation);
+}
+
+static bool current_publication_valid(
+    const sm64_saturn_actor_texture_publication_t *publication)
+{
+    if (publication == NULL) return false;
+    /* Activation may begin from the exact empty state or a complete committed
+     * generation. Partial/uncommitted data is never reusable. */
+    return sm64_saturn_actor_texture_publication_validate(publication);
 }
 
 static bool bundle_views_equal(const sm64_saturn_actor_bundle_view_t *a,
@@ -231,19 +355,66 @@ static bool regions_fit(const sm64_saturn_texture_residency_t *texture_region,
 }
 
 static bool transfer_span(void *destination, const void *source,
-                          uint32_t bytes)
+                          void *staging, uint32_t bytes)
 {
     saturn_dma_queue_sequence_t sequence;
     if (bytes == 0U) return true;
-    sequence = saturn_dma_queue_submit(destination, source, bytes,
+    memcpy(staging, source, bytes);
+    sequence = saturn_dma_queue_submit(destination, staging, bytes,
                                        SATURN_DMA_QUEUE_SCU);
     return sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID &&
            saturn_dma_queue_wait(sequence) != 0;
 }
 
+static bool preflight_span(const sm64_saturn_texture_residency_t *region,
+                           uint32_t offset, uint32_t bytes,
+                           void *staging, uint32_t staging_capacity)
+{
+    uintptr_t destination, stage_source;
+    if (bytes == 0U) return true;
+    return bytes <= staging_capacity &&
+           checked_span_address(region->base, offset, bytes, &destination) &&
+           checked_span_address(staging, 0U, bytes, &stage_source) &&
+           saturn_dma_queue_request_valid(
+               (void *)destination, (const void *)stage_source, bytes,
+               SATURN_DMA_QUEUE_SCU) != 0;
+}
+
+static bool preflight_bundle(
+    const sm64_saturn_actor_bundle_view_t *bundle,
+    const sm64_saturn_texture_residency_t *texture_region,
+    const sm64_saturn_texture_residency_t *clut_region,
+    void *staging, uint32_t staging_capacity)
+{
+    uint32_t texture_cursor = 0U, clut_cursor = 0U;
+    uint16_t index;
+    if (staging == NULL || ((uintptr_t)staging & 3U) != 0U) return false;
+    for (index = 0U; index < bundle->variant_count; index++) {
+        sm64_saturn_actor_bundle_variant_t variant;
+        sm64_saturn_actor_bank_view_t bank;
+        if (!resolve_variant_index(bundle, index, &variant, &bank)) return false;
+        (void)variant;
+        if (bank.bank.version != SM64_SATURN_ACTOR_BANK_VERSION_V2) continue;
+        if (!align_u32(texture_cursor, 8U, &texture_cursor) ||
+            !align_u32(clut_cursor, 32U, &clut_cursor) ||
+            !preflight_span(texture_region, texture_cursor,
+                            bank.texture_resident_bytes,
+                            staging, staging_capacity) ||
+            !preflight_span(clut_region, clut_cursor,
+                            bank.clut_resident_bytes,
+                            staging, staging_capacity) ||
+            !add_u32(texture_cursor, bank.texture_resident_bytes,
+                     &texture_cursor) ||
+            !add_u32(clut_cursor, bank.clut_resident_bytes, &clut_cursor))
+            return false;
+    }
+    return true;
+}
+
 static bool upload_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
                           const sm64_saturn_texture_residency_t *texture_region,
-                          const sm64_saturn_texture_residency_t *clut_region)
+                          const sm64_saturn_texture_residency_t *clut_region,
+                          void *staging)
 {
     uint32_t texture_cursor = 0U, clut_cursor = 0U;
     uint16_t index;
@@ -270,9 +441,11 @@ static bool upload_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
                                   bank.clut_resident_bytes, &clut_source) ||
             !transfer_span((void *)texture_destination,
                            (const void *)texture_source,
+                           staging,
                            bank.texture_resident_bytes) ||
             !transfer_span((void *)clut_destination,
                            (const void *)clut_source,
+                           staging,
                            bank.clut_resident_bytes) ||
             !add_u32(texture_cursor, bank.texture_resident_bytes,
                      &texture_cursor) ||
@@ -321,6 +494,7 @@ bool sm64_saturn_actor_texture_residency_activate(
     sm64_saturn_actor_texture_publication_t *publication,
     const sm64_saturn_actor_bundle_view_t *bundle,
     const vdp1_vram_partitions_t *partitions,
+    void *staging, uint32_t staging_capacity,
     uint32_t generation, bool gameplay_suspended, bool vdp1_idle)
 {
     sm64_saturn_actor_bundle_view_t validated;
@@ -345,19 +519,31 @@ bool sm64_saturn_actor_texture_residency_activate(
     if (!prior_valid || bundle == NULL || partitions == NULL ||
         !gameplay_suspended || !vdp1_idle || generation == 0U ||
         (prior_committed &&
-         (int32_t)(generation - prior_generation) <= 0) ||
+         !generation_is_newer(generation, prior_generation)) ||
         !sm64_saturn_actor_bundle_validate(bundle->bytes, bundle->byte_count,
                                             &validated) ||
         !bundle_views_equal(bundle, &validated) ||
+        !stage_span_is_hwram(staging, staging_capacity) ||
+        memory_spans_overlap(staging, staging_capacity,
+                             publication, (uint32_t)sizeof(*publication)) ||
+        memory_spans_overlap(staging, staging_capacity,
+                             validated.bytes, validated.byte_count) ||
+        memory_spans_overlap(staging, staging_capacity,
+                             texture_region.base, texture_region.capacity) ||
+        memory_spans_overlap(staging, staging_capacity,
+                             clut_region.base, clut_region.capacity) ||
         !plan_bundle(&validated, &texture_bytes, &clut_bytes, &mapping_count) ||
         mapping_count > SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY ||
         !regions_fit(&texture_region, &clut_region,
                      texture_bytes, clut_bytes) ||
-        !upload_bundle(&validated, &texture_region, &clut_region) ||
+        !preflight_bundle(&validated, &texture_region, &clut_region,
+                          staging, staging_capacity) ||
+        !upload_bundle(&validated, &texture_region, &clut_region, staging) ||
         !build_mappings(publication, &validated, generation) ||
         publication->texture_bytes != texture_bytes ||
         publication->clut_bytes != clut_bytes ||
-        publication->mapping_count != mapping_count) {
+        publication->mapping_count != mapping_count ||
+        !publication_entries_valid(publication, generation)) {
         invalidate_publication(publication);
         return false;
     }
@@ -376,7 +562,9 @@ bool sm64_saturn_actor_texture_residency_lookup(
     uint16_t index;
     if (out != NULL) memset(out, 0, sizeof(*out));
     if (publication == NULL || out == NULL || generation == 0U ||
-        bank_id == 0U || publication->committed != 1U)
+        bank_id == 0U ||
+        !sm64_saturn_actor_texture_publication_validate(publication) ||
+        publication->committed != 1U)
         return false;
     publication_fence();
     if (publication->generation != generation ||

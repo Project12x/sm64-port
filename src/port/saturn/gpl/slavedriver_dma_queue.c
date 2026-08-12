@@ -106,6 +106,13 @@ _request_valid(void *dst, const void *src, size_t len,
             !_scu_range_intersects_lwram(src, len);
 }
 
+int
+saturn_dma_queue_request_valid(void *dst, const void *src, size_t len,
+    saturn_dma_queue_mode_t mode)
+{
+        return _request_valid(dst, src, len, mode) ? 1 : 0;
+}
+
 static saturn_dma_completion_status_t
 _completion_status(saturn_dma_queue_sequence_t sequence)
 {

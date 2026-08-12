@@ -95,6 +95,39 @@ The current `castleviewer` target is therefore a bring-up harness. Its manual
 position, jump, camera, animation-frame, scene traversal, and frame-loop state
 are temporary diagnostics, not production interfaces.
 
+## Vertical-slice and memory-debt contract
+
+**Owner correction — 2026-08-12.** A host format, validator, bundle, or sealed
+binary is not port progress by itself. The governing progress unit is the
+smallest normal game path that consumes it on Saturn. Reviews must not be the
+first place that CART/HWRAM/LWRAM/VDP1 ownership is designed.
+
+Before code begins on a cross-memory feature, the active plan must bind:
+
+| Required fact | Minimum evidence |
+| --- | --- |
+| Physical regions | source and destination address spaces, including cached/P2 alias policy |
+| Capacity | fixed maximum bytes, alignment, worst-case span, and remaining target margin |
+| Lifetime | initialization, scene transition, generation publication, rollback, and unload owner |
+| Transport | CPU copy versus SCU/CPU DMA, queue/channel owner, preflight, and fence |
+| Consumers | producer plus first normal package/runtime/render consumer |
+| Failure | exact no-partial-publication and stale-generation behavior |
+| Live gate | earliest identity-bound build/emulator observation of the real consumer |
+
+The first target-equivalent consumer compiles in the same vertical task as its
+host producer. The first viable Ymir smoke runs immediately after minimum
+package/runtime/render wiring; capacity campaigns, release reproduction,
+sealing, and multi-level generalization follow that smoke rather than precede
+it.
+
+A BOB acceptance uses the normal level script, source object registry, scene
+package, generic actor queue, generic bank/material lookup, and production
+renderer. Object injection, forced first records, synthetic substitutes, and
+actor-specific renderer branches are diagnostics only. Saturn-shaped fidelity
+reductions are allowed when they are common, deterministic, source-attested,
+and telemetry-visible; they must not become level-specific code or stall the
+whole scene.
+
 ## Proven internal boundary
 
 This contract follows the inherited port's existing target split rather than

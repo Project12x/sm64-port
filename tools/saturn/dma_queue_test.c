@@ -436,6 +436,43 @@ test_submit_rejects_illegal_requests_without_fifo_mutation(void)
     assert(saturn_dma_queue_idle());
 }
 
+static void test_request_preflight_is_read_only_and_authoritative(void)
+{
+    void * const vdp1 = (void *)(uintptr_t)0x25C00000U;
+    const void * const hwram = (const void *)(uintptr_t)0x06000000U;
+    const void * const lwram = (const void *)(uintptr_t)0x00200000U;
+    const void * const lwram_alias = (const void *)(uintptr_t)0x20200000U;
+    const void * const lwram_straddle =
+        (const void *)(uintptr_t)0x001FFFFCU;
+    uint8_t source = 0x91U, destination = 0U;
+
+    reset_mock();
+    assert(saturn_dma_queue_request_valid(
+        vdp1, hwram, 2560U, SATURN_DMA_QUEUE_SCU));
+    assert(!saturn_dma_queue_request_valid(
+        vdp1, lwram, 1U, SATURN_DMA_QUEUE_SCU));
+    assert(!saturn_dma_queue_request_valid(
+        vdp1, lwram_alias, 1U, SATURN_DMA_QUEUE_SCU));
+    assert(!saturn_dma_queue_request_valid(
+        vdp1, lwram_straddle, 8U, SATURN_DMA_QUEUE_SCU));
+    assert(!saturn_dma_queue_request_valid(
+        NULL, hwram, 1U, SATURN_DMA_QUEUE_SCU));
+    assert(!saturn_dma_queue_request_valid(
+        vdp1, NULL, 1U, SATURN_DMA_QUEUE_SCU));
+    assert(!saturn_dma_queue_request_valid(
+        vdp1, hwram, 0U, SATURN_DMA_QUEUE_SCU));
+    assert(!saturn_dma_queue_request_valid(
+        vdp1, hwram, 1U, (saturn_dma_queue_mode_t)99));
+#if SIZE_MAX > UINT32_MAX
+    assert(!saturn_dma_queue_request_valid(
+        vdp1, hwram, (size_t)UINT32_MAX + 1U, SATURN_DMA_QUEUE_SCU));
+#endif
+    /* Preflight does not consume a slot or sequence. */
+    assert(saturn_dma_queue_submit(&destination, &source, 1U,
+                                   SATURN_DMA_QUEUE_CPU) ==
+           UINT32_MAX - 1U);
+}
+
 int
 main(void)
 {
@@ -444,6 +481,7 @@ main(void)
     test_bounded_wrap_and_wait_drain();
     test_wait_accepts_retired_and_rejects_non_outstanding();
     test_submit_rejects_illegal_requests_without_fifo_mutation();
+    test_request_preflight_is_read_only_and_authoritative();
     test_cpu_dmac_submit_is_wait_free_and_poll_driven();
     test_cpu_dmac_false_idle_status_cannot_retire_early();
     test_scu_kick_does_not_enter_yaul_while_level_busy();

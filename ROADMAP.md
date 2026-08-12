@@ -1,5 +1,20 @@
 # Roadmap
 
+## Now — converge on a working generic BOB by 2026-08-14
+
+Freeze new Saturn architecture sprints. Finish only the Task 7 residency safety
+repair, bind Task 8's canonical package and fixed HWRAM upload stage, cut the
+normal Task 9 actor path over to the generic queue/bank/material renderer, and
+run a short identity-bound Ymir smoke immediately. Cannon is one regression,
+not the milestone. The live gate requires all 34 drawable BOB selections to be
+admitted through the common path and representative normally spawned actors to
+render without simulation stall, quarantine, exception, or allocation failure.
+
+Capacity campaigns, A/B release reproduction, audit reseal, staging, and final
+manual evidence follow this first live gate. Memory/ownership facts must be
+bound before code under the project `AGENTS.md` and
+`docs/saturn/ENGINE_PORT_ARCHITECTURE.md` vertical-slice rule.
+
 ## Now — verify and play the hermetic integrated BOB candidate
 
 Task 9 of the hermetic full-game release-identity plan is complete after both

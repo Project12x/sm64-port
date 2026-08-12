@@ -1136,7 +1136,7 @@ verify-actor-bank-v2: check-host-tools
 
 .PHONY: verify-ir-texture verify-actor-material verify-actor-texture-residency
 
-verify-actor-texture-residency: check-host-tools
+verify-actor-texture-residency: verify-actor-family-bundle-build
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; path=Path('build/saturn/packages/$(SCENE_LEVEL)/$(SCENE_AREA)/actors-v3-g$(SCENE_PACKAGE_GENERATION)/bob-area1-actors-v3.s64f'); assert path.is_file(), f'missing real Task 5 bundle: {path}'"
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; from tools.saturn.test_actor_bank_v2 import write_target_fixtures; write_target_fixtures(Path('build/saturn/host-tests'))"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \

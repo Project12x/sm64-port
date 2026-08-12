@@ -1,5 +1,25 @@
 # State
 
+## Current owner gate: working generic BOB by 2026-08-14
+
+The active milestone is no longer a Cannon-only textured witness. It is a
+normal BOB scene using the canonical level script, object registry, S64P/S64F
+package, generic actor queue, generic bank/material lookup, and production
+renderer. All 34 drawable BOB selections must be admitted through that path;
+common telemetry-visible Saturn fidelity reductions are allowed, but injected
+models, object-specific renderer branches, and whole-scene stalls are not.
+
+Task 7 is in its safety repair after C0/I4/M1 review. Its clean-output gate now
+rebuilds and validates the real bundle, stages CART cold spans through bounded
+HWRAM before SCU DMA, validates publication state centrally, and uses explicit
+unsigned serial ordering. After Task 7 review, the critical path is Task 8
+canonical package/HWRAM ownership, Task 9 generic cutover plus minimum build
+wiring, then an immediate short identity-bound Ymir smoke. Exhaustive capacity,
+release reproduction/reseal, and final manual evidence follow live feedback.
+
+The persistent memory-debt rule is authoritative in project `AGENTS.md` and
+`docs/saturn/ENGINE_PORT_ARCHITECTURE.md`.
+
 Active prerequisite plan:
 `docs/superpowers/plans/2026-08-07-task16-completion.md`.
 The parent acceptance/release plan remains

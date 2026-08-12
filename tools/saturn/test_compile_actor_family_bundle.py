@@ -7,6 +7,7 @@ import ast
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -76,6 +77,34 @@ def _make_tool_inputs() -> set[Path]:
 
 
 class CompileActorFamilyBundleTest(unittest.TestCase):
+    def test_residency_gate_builds_and_verifies_real_bundle_from_absent_output(
+            self) -> None:
+        make = shutil.which("make")
+        self.assertIsNotNone(make, "GNU Make is required by Makefile.saturn.mk")
+        with tempfile.TemporaryDirectory(
+                prefix="actor-residency-make-", dir=ROOT / "build") as temporary:
+            output_dir = Path(temporary) / "actors-v3"
+            report = output_dir / "actor-family-bundle.json"
+            completed = subprocess.run(
+                [
+                    make,
+                    "-f",
+                    "Makefile.saturn.mk",
+                    "-n",
+                    "verify-actor-texture-residency",
+                    f"ACTOR_FAMILY_BUNDLE_DIR={output_dir.as_posix()}",
+                    f"ACTOR_FAMILY_BUNDLE_REPORT={report.as_posix()}",
+                ],
+                cwd=ROOT,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        self.assertIn("compile_actor_family_bundle.py", completed.stdout)
+        self.assertIn("--verify-publication", completed.stdout)
+        self.assertIn("--validate-only", completed.stdout)
+
     def test_make_tool_inputs_cover_repository_local_import_closure(self) -> None:
         entry = ROOT / "tools/saturn/compile_actor_family_bundle.py"
         closure = _local_import_closure(entry)

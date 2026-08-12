@@ -38,10 +38,31 @@ void sm64_saturn_texture_residency_init_region(
 }
 
 static const void *g_observed_publication;
+static _Alignas(32) uint8_t g_staging[4096];
 static uint32_t g_submit_count;
 static uint32_t g_wait_count;
+static uint32_t g_preflight_count;
+static uint32_t g_fail_preflight;
 static uint32_t g_fail_submit;
 static uint32_t g_fail_wait;
+static uint32_t g_max_submit_bytes;
+
+#define SM64_SATURN_ACTOR_TEXTURE_RESIDENCY_HOST_TEST 1
+
+int saturn_dma_queue_request_valid(
+    void *destination, const void *source, size_t bytes,
+    saturn_dma_queue_mode_t mode)
+{
+    const uint64_t physical =
+        (uintptr_t)source & UINT32_C(0x0FFFFFFF);
+    const uint64_t end = physical + bytes;
+    g_preflight_count++;
+    if (g_preflight_count == g_fail_preflight) return 0;
+    return destination != NULL && source != NULL && bytes != 0U &&
+        bytes <= UINT32_MAX && mode == SATURN_DMA_QUEUE_SCU &&
+        !(physical < UINT32_C(0x00300000) &&
+          end > UINT32_C(0x00200000));
+}
 
 /* These checked queue doubles copy real fixture bytes and observe the real
  * publication during every transfer boundary. They replace only Saturn DMA
@@ -57,7 +78,9 @@ saturn_dma_queue_sequence_t saturn_dma_queue_submit(
     g_submit_count++;
     assert(mode == SATURN_DMA_QUEUE_SCU);
     assert(destination != NULL && source != NULL && bytes != 0U);
+    assert(source == g_staging);
     assert(committed == NULL || (*committed == 0U && *generation == 0U));
+    if (bytes > g_max_submit_bytes) g_max_submit_bytes = (uint32_t)bytes;
     if (g_submit_count == g_fail_submit)
         return SATURN_DMA_QUEUE_SEQUENCE_INVALID;
     memcpy(destination, source, bytes);
@@ -77,6 +100,15 @@ int saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence)
 }
 
 #include "../../src/port/saturn/gfx/saturn_actor_texture_residency.c"
+
+/* Keep existing call sites compact while exercising the repaired public API
+ * with one caller-owned fixed HWRAM-shaped stage. Boundary tests below call
+ * the parenthesized function directly with hostile stage addresses. */
+#define sm64_saturn_actor_texture_residency_activate(                       \
+    publication, bundle, partitions, generation, suspended, idle)          \
+    (sm64_saturn_actor_texture_residency_activate)(                         \
+        publication, bundle, partitions, g_staging, sizeof(g_staging),      \
+        generation, suspended, idle)
 
 _Static_assert(SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY ==
                SM64_SATURN_ACTOR_BUNDLE_MAX_VARIANTS,
@@ -155,8 +187,12 @@ static void reset_dma(sm64_saturn_actor_texture_publication_t *publication,
     g_observed_publication = publication;
     g_submit_count = 0U;
     g_wait_count = 0U;
+    g_preflight_count = 0U;
+    g_fail_preflight = 0U;
     g_fail_submit = fail_submit;
     g_fail_wait = fail_wait;
+    g_max_submit_bytes = 0U;
+    memset(g_staging, 0xA5, sizeof(g_staging));
 }
 
 static vdp1_vram_partitions_t partitions_for(aligned_vram_t *vram,
@@ -186,6 +222,150 @@ static void assert_invalid(
         publication, generation, bank_id, &output));
     assert(memcmp(&output, &(sm64_saturn_actor_texture_mapping_t){0},
                   sizeof(output)) == 0);
+}
+
+static sm64_saturn_actor_texture_publication_t valid_publication(void)
+{
+    sm64_saturn_actor_texture_publication_t publication = {0};
+    publication.mappings[0].bank_id = 0x11111111U;
+    publication.mappings[0].texture_base_offset = 0U;
+    publication.mappings[0].clut_base_index = 0U;
+    publication.mappings[0].tile_count = 1U;
+    publication.mappings[0].generation = 7U;
+    publication.texture_bytes = 8U;
+    publication.clut_bytes = 32U;
+    publication.generation = 7U;
+    publication.mapping_count = 1U;
+    publication.committed = 1U;
+    return publication;
+}
+
+static sm64_saturn_actor_texture_publication_t publication_for_generation(
+    uint32_t generation)
+{
+    sm64_saturn_actor_texture_publication_t publication = valid_publication();
+    publication.generation = generation;
+    publication.mappings[0].generation = generation;
+    return publication;
+}
+
+static void test_generation_serial_order(void)
+{
+    assert(generation_is_newer(1U, UINT32_MAX));
+    assert(!generation_is_newer(UINT32_MAX, 1U));
+    assert(!generation_is_newer(1U, 1U));
+    assert(!generation_is_newer(UINT32_C(0x80000001), 1U));
+    assert(!generation_is_newer(1U, UINT32_C(0x80000001)));
+}
+
+static void test_stage_memory_policy(void)
+{
+    assert(stage_span_is_hwram(
+        (void *)(uintptr_t)UINT32_C(0x060FF600), 2560U));
+    assert(stage_span_is_hwram(
+        (void *)(uintptr_t)UINT32_C(0x260FF600), 2560U));
+    assert(!stage_span_is_hwram(
+        (void *)(uintptr_t)UINT32_C(0x060FF601), 2560U));
+    assert(!stage_span_is_hwram(
+        (void *)(uintptr_t)UINT32_C(0x22400000), 2560U));
+    assert(!stage_span_is_hwram(
+        (void *)(uintptr_t)UINT32_C(0x00200000), 2560U));
+}
+
+static void expect_publication_invalid(
+    const sm64_saturn_actor_texture_publication_t *publication)
+{
+    sm64_saturn_actor_texture_mapping_t output;
+    memset(&output, 0xA5, sizeof(output));
+    assert(!sm64_saturn_actor_texture_publication_validate(publication));
+    assert(!sm64_saturn_actor_texture_residency_lookup(
+        publication, 7U, 0x11111111U, &output));
+    assert(memcmp(&output, &(sm64_saturn_actor_texture_mapping_t){0},
+                  sizeof(output)) == 0);
+}
+
+static void test_publication_self_consistency(void)
+{
+    sm64_saturn_actor_texture_publication_t publication;
+    sm64_saturn_actor_texture_mapping_t output;
+
+    memset(&publication, 0, sizeof(publication));
+    assert(sm64_saturn_actor_texture_publication_validate(&publication));
+    publication = valid_publication();
+    assert(sm64_saturn_actor_texture_publication_validate(&publication));
+    assert(sm64_saturn_actor_texture_residency_lookup(
+        &publication, 7U, 0x11111111U, &output));
+
+    publication = valid_publication(); publication.committed = 2U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.reserved = 1U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.mapping_count = 129U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.generation = 0U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.mappings[0].bank_id = 0U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication();
+    publication.mapping_count = 2U;
+    publication.texture_bytes = 16U;
+    publication.clut_bytes = 64U;
+    publication.mappings[1] = publication.mappings[0];
+    publication.mappings[1].texture_base_offset = 8U;
+    publication.mappings[1].clut_base_index = 1U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.mappings[0].generation = 6U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.mappings[0].tile_count = 0U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication();
+    publication.mappings[0].texture_base_offset = 1U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication();
+    publication.mappings[0].texture_base_offset = 16U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication();
+    publication.mappings[0].clut_base_index = 2U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication();
+    publication.mapping_count = 2U;
+    publication.texture_bytes = 16U;
+    publication.clut_bytes = 64U;
+    publication.mappings[0].texture_base_offset = 8U;
+    publication.mappings[0].clut_base_index = 1U;
+    publication.mappings[1] = publication.mappings[0];
+    publication.mappings[1].bank_id = 0x22222222U;
+    publication.mappings[1].texture_base_offset = 0U;
+    publication.mappings[1].clut_base_index = 2U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication();
+    publication.mapping_count = 2U;
+    publication.texture_bytes = 16U;
+    publication.clut_bytes = 64U;
+    publication.mappings[0].clut_base_index = 1U;
+    publication.mappings[1] = publication.mappings[0];
+    publication.mappings[1].bank_id = 0x22222222U;
+    publication.mappings[1].texture_base_offset = 8U;
+    publication.mappings[1].clut_base_index = 0U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.texture_bytes = 9U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.texture_bytes = 524296U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.clut_bytes = 33U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.clut_bytes = 2097184U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.mappings[1].tile_count = 1U;
+    expect_publication_invalid(&publication);
+    publication = valid_publication(); publication.committed = 0U;
+    expect_publication_invalid(&publication);
+    memset(&publication, 0, sizeof(publication));
+    publication.committed = 1U;
+    publication.generation = 7U;
+    publication.texture_bytes = 8U;
+    expect_publication_invalid(&publication);
+    assert(!sm64_saturn_actor_texture_publication_validate(NULL));
 }
 
 static bool resolve_variant(const sm64_saturn_actor_bundle_view_t *view,
@@ -300,6 +480,7 @@ static void test_mixed_and_real_success(const fixture_t *mixed,
         real_generation, true, true));
     assert_canonical_publication(real, &vram, &publication, real_generation,
                                  14U, 16640U, 2816U, true);
+    assert(g_max_submit_bytes == 2560U);
 }
 
 static void test_lifecycle_and_prior_state_fail_closed(const fixture_t *fixture)
@@ -350,17 +531,13 @@ static void test_lifecycle_and_prior_state_fail_closed(const fixture_t *fixture)
     assert(publication.committed == 1U &&
            publication.generation == generation + 1U);
 
-    memset(&publication, 0, sizeof(publication));
-    publication.committed = 1U;
-    publication.generation = generation + 1U;
+    publication = publication_for_generation(generation + 1U);
     reset_dma(&publication, 0U, 0U);
     assert(!sm64_saturn_actor_texture_residency_activate(
         &publication, &fixture->view, &partitions, generation, true, true));
     assert_invalid(&publication, generation + 1U, bank_id);
 
-    memset(&publication, 0, sizeof(publication));
-    publication.committed = 1U;
-    publication.generation = generation - 1U;
+    publication = publication_for_generation(generation - 1U);
     reset_dma(&publication, 0U, 0U);
     assert(sm64_saturn_actor_texture_residency_activate(
         &publication, &fixture->view, &partitions, generation, true, true));
@@ -459,6 +636,57 @@ static void test_partitions_and_dma_fail_closed(const fixture_t *fixture)
         &publication, &fixture->view, &partitions, generation, true, true));
     assert(g_submit_count == 1U && g_wait_count == 1U);
     assert_invalid(&publication, generation, bank_id);
+
+    reset_dma(&publication, 0U, 0U);
+    g_fail_preflight = 2U;
+    assert(!(sm64_saturn_actor_texture_residency_activate)(
+        &publication, &fixture->view, &partitions,
+        g_staging, sizeof(g_staging), generation, true, true));
+    assert(g_preflight_count == 2U && g_submit_count == 0U);
+
+    reset_dma(&publication, 0U, 0U);
+    assert(!(sm64_saturn_actor_texture_residency_activate)(
+        &publication, &fixture->view, &partitions,
+        g_staging, 15U, generation, true, true));
+    assert(g_submit_count == 0U);
+
+    reset_dma(&publication, 0U, 0U);
+    assert(!(sm64_saturn_actor_texture_residency_activate)(
+        &publication, &fixture->view, &partitions,
+        g_staging + 1U, sizeof(g_staging) - 1U, generation, true, true));
+    assert(g_submit_count == 0U);
+
+    reset_dma(&publication, 0U, 0U);
+    assert(!(sm64_saturn_actor_texture_residency_activate)(
+        &publication, &fixture->view, &partitions,
+        (void *)(uintptr_t)0x00200000U, sizeof(g_staging), generation,
+        true, true));
+    assert(g_submit_count == 0U);
+
+    reset_dma(&publication, 0U, 0U);
+    assert(!(sm64_saturn_actor_texture_residency_activate)(
+        &publication, &fixture->view, &partitions,
+        (void *)(uintptr_t)0x001FFFFCU, sizeof(g_staging), generation,
+        true, true));
+    assert(g_submit_count == 0U);
+
+    reset_dma(&publication, 0U, 0U);
+    assert(!(sm64_saturn_actor_texture_residency_activate)(
+        &publication, &fixture->view, &partitions,
+        &publication, sizeof(publication), generation, true, true));
+    assert(g_submit_count == 0U);
+
+    reset_dma(&publication, 0U, 0U);
+    assert(!(sm64_saturn_actor_texture_residency_activate)(
+        &publication, &fixture->view, &partitions,
+        fixture->bytes, fixture->size, generation, true, true));
+    assert(g_submit_count == 0U);
+
+    reset_dma(&publication, 0U, 0U);
+    assert(!(sm64_saturn_actor_texture_residency_activate)(
+        &publication, &fixture->view, &partitions,
+        vram.texture + 256U, sizeof(g_staging), generation, true, true));
+    assert(g_submit_count == 0U);
 }
 
 static void test_address_boundaries(void)
@@ -588,6 +816,9 @@ int main(int argc, char **argv)
     assert(mixed.view.variant_count == 2U);
     assert(real.view.family_count == 47U && real.view.variant_count == 14U);
     test_mixed_and_real_success(&mixed, &real);
+    test_generation_serial_order();
+    test_stage_memory_policy();
+    test_publication_self_consistency();
     test_lifecycle_and_prior_state_fail_closed(&mixed);
     test_partitions_and_dma_fail_closed(&mixed);
     test_address_boundaries();

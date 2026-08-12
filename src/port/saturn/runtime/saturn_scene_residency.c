@@ -23,6 +23,13 @@ static void actor_texture_publication_invalidate(
     actor_texture_publication_fence();
 }
 
+static bool actor_texture_publication_empty(
+    const sm64_saturn_actor_texture_publication_t *publication)
+{
+    const sm64_saturn_actor_texture_publication_t empty = {0};
+    return memcmp(publication, &empty, sizeof(empty)) == 0;
+}
+
 static bool bytes_equal(const uint8_t a[32], const uint8_t b[32])
 {
     return memcmp(a, b, 32U) == 0;
@@ -719,6 +726,9 @@ sm64_saturn_scene_residency_actor_texture_staging(
 {
     if (state == NULL || generation == 0U ||
         state->staging_generation != generation)
+        return NULL;
+    if (!actor_texture_publication_empty(&state->actor_texture_publication) &&
+        state->actor_texture_publication.generation != generation)
         return NULL;
     return &state->actor_texture_publication;
 }

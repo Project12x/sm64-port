@@ -17,10 +17,27 @@ static void test_actor_texture_publication_ownership(void)
     sm64_saturn_scene_residency_reset(&state, 0U, capacity);
     assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 1U) == NULL);
     assert(sm64_saturn_scene_residency_actor_texture_active(&state, 1U) == NULL);
-    state.staging_generation = 7U;
-    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 7U) ==
+    state.active_generation = 40U;
+    state.staging_generation = 41U;
+    state.actor_texture_publication.generation = 40U;
+    state.actor_texture_publication.committed = 1U;
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 41U) ==
+           NULL);
+    assert(sm64_saturn_scene_residency_actor_texture_active(&state, 40U) ==
            &state.actor_texture_publication);
-    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 6U) == NULL);
+    memset(&state.actor_texture_publication, 0,
+           sizeof(state.actor_texture_publication));
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 41U) ==
+           &state.actor_texture_publication);
+    state.actor_texture_publication.generation = 41U;
+    state.actor_texture_publication.committed = 1U;
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 41U) ==
+           &state.actor_texture_publication);
+    state.actor_texture_publication.generation = 42U;
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 41U) ==
+           NULL);
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 40U) ==
+           NULL);
     state.staging_generation = 0U;
     state.active_generation = 7U;
     state.actor_texture_publication.generation = 7U;

@@ -8,11 +8,21 @@
   BOB S64F-v3 dependency. Scene activation now prevalidates every selected
   S64B-v2 bank, hash, source/destination span, independent texture/CLUT bound,
   VDP1 offset/index limit, and the complete canonical 128-entry plan before it
-  submits any transfer through the existing checked SCU-DMA queue. Successful
+  submits any transfer through the existing checked SCU-DMA queue. The CART-
+  resident bundle is never submitted directly to SCU DMA: the caller supplies
+  one bounded, aligned HWRAM stage, whose physical range and nonoverlap with
+  bundle, publication, and VDP1 ownership are proved before the first copy.
+  Every queue request is read-only-preflighted, then one cold span is CPU-
+  copied and retired before the stage is reused. Successful
   activation publishes only a 2,064-byte pointer-free scalar table, writing
   the nonzero residency generation and committed flag last; every lifecycle,
   malformed-input, stale-generation, submit, or wait failure invalidates both
-  old and partial publication, so dirty VRAM can never become reachable. The
+  old and partial publication, so dirty VRAM can never become reachable. One
+  complete publication validator now gates replacement and lookup, including
+  duplicate IDs, ordering, totals, unused rows, and scalar corruption, while
+  generation replacement uses explicit unsigned half-range serial ordering.
+  The residency verification target also rebuilds and C-validates an absent-
+  output real BOB bundle instead of accepting a fixture-only contract. The
   real BOB subset is measured at 14 mappings, 16,640 texture bytes, and 2,816
   CLUT bytes, including Cannon, while opaque v1 banks remain unmapped. Scene
   residency owns and clears this state on failed staging, mismatched commit,

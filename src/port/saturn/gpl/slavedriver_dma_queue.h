@@ -25,6 +25,10 @@ typedef enum saturn_dma_queue_mode {
 /* Called after all boot DMA has retired. From this handoff until shutdown the
  * queue exclusively owns master-CPU DMAC channel 0 and SCU-DMA level 0. */
 void saturn_dma_queue_init(void);
+/* Read-only request validation. This is the single address/mode authority used
+ * by submit and by callers that must prove a complete plan before mutation. */
+int saturn_dma_queue_request_valid(
+    void *dst, const void *src, size_t len, saturn_dma_queue_mode_t mode);
 saturn_dma_queue_sequence_t saturn_dma_queue_submit(
     void *dst, const void *src, size_t len, saturn_dma_queue_mode_t mode);
 int saturn_dma_queue_submit_pair(

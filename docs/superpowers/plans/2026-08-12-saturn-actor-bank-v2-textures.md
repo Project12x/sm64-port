@@ -41,6 +41,50 @@ release, reseal, smoke, visual, desktop,
 manual, retail, and total-game gate remain open. No target runtime, residency,
 renderer, or Ymir state changed.
 
+## Owner convergence reset: working generic BOB by 2026-08-14
+
+The prior Cannon-only witness is no longer the milestone. Cannon remains one
+required regression, but the end-of-week target is a working normal BOB scene
+through the generic path:
+
+- the source level script, ordinary spawn/object registry, canonical S64P/S64F,
+  generic actor queue, generic bank/material lookup, and production renderer are
+  the only accepted path;
+- no injected model, forced record, synthetic actor, object-specific renderer
+  branch, or Cannon-only package may satisfy the gate;
+- all 34 drawable BOB selections must be admitted by the generic compiler and
+  runtime. Saturn-shaped common reductions for shadow/scale/effect semantics
+  may be telemetry-visible, but no unsupported drawable may quarantine or stall
+  the complete scene;
+- Ymir must show advancing simulation and presentation, successful ACTOR jobs,
+  zero exception/allocation failure, no stale generation, Mario/terrain/HUD,
+  and normally spawned representative BOB actors including a coin, enemy,
+  sign/cannon, and moving actor;
+- the first short identity-bound Ymir smoke runs immediately after minimum
+  Task 8 package and Task 9 cutover/build wiring. Task 10's exhaustive capacity
+  proof and Tasks 12-13 release/reseal/manual sequence remain after that live
+  feedback.
+
+No new Saturn plan or wire-format generation may open before this generic BOB
+gate without explicit owner approval. Newly exposed prerequisites are folded
+into Tasks 8-9 and replace lower-priority proof work; they do not create another
+parallel infrastructure sprint.
+
+### Bound memory/ownership record for the convergence chain
+
+| Object | Region / maximum | Owner and lifetime | Transport / first consumer |
+| --- | --- | --- | --- |
+| S64P + S64F + embedded S64B | immutable 32-Mbit DRAM CART; current BOB S64F 160,928 B | Task 8 scene residency; load through commit/unload generation | CDFS/cart load; generic bundle resolver |
+| Actor cold upload stage | fixed HWRAM, 32-byte aligned, capacity-driven; current measured largest span 2,560 B | Task 8 scene-transition owner; reused serially, never worker-visible | CPU CART→HWRAM copy, checked SCU DMA HWRAM→VDP1 |
+| Actor VDP1 texture/CLUT bytes | current aggregate 16,640 B texture + 2,816 B CLUT in separate partition regions | master scene activation; publication generation commits last | Task 6 generic material binder / production emitter |
+| Actor texture publication | 2,064 B HWRAM scalar table, 128 mappings | scene residency reset/rollback/commit/unload | master lookup; no pointer enters worker records |
+| Actor queue/output arena | fixed 65,536 B LWRAM, 2,718 eight-byte records | Task 9 queue/handoff generation | master snapshot→dual-SH-2 jobs→master merge |
+| Frame command/Gouraud credits | 1,351 post-Mario commands, 892 post-Mario Gouraud; exact frame dry-sum | Task 9 master frame policy | generic actor set before optional terrain |
+
+Every changed bound must update this table before implementation. Task 10 must
+replace host/measured values with linked-ELF and live telemetry margins, but it
+does not delay the first short Ymir smoke.
+
 ## Global Constraints
 
 - S64B v1 remains version 1 with a 104-byte header; historical Mario JSON/S64B bytes and SHA-256 remain exact.
@@ -741,6 +785,7 @@ bool sm64_saturn_actor_texture_residency_activate(
     sm64_saturn_actor_texture_publication_t *publication,
     const sm64_saturn_actor_bundle_view_t *bundle,
     const vdp1_vram_partitions_t *partitions,
+    void *staging, uint32_t staging_capacity,
     uint32_t generation, bool gameplay_suspended, bool vdp1_idle);
 bool sm64_saturn_actor_texture_residency_lookup(
     const sm64_saturn_actor_texture_publication_t *publication,
@@ -854,6 +899,11 @@ void sm64_saturn_source_scene_bundle_release(uint8_t lane,
                                              uint32_t generation);
 ```
 
+Task 8 owns one fixed, 32-byte-aligned actor upload stage sized from the
+generated maximum cold span (currently 2,560 bytes). It passes that stage and
+its capacity to Task 7 activation; the bundle remains in CART and the stage is
+reused only after each checked SCU-DMA wait retires.
+
 - [ ] **Step 1: Write RED package/runtime/stream fixtures**
 
 Require a non-provisional S64P with exactly one actor dependency in CART,
@@ -875,6 +925,7 @@ Load S64P/S64F from generated ISO names into the fixed root/cart spans, validate
 ```c
 if (!sm64_saturn_actor_texture_residency_activate(
         &owner->textures, &owner->bundle, partitions,
+        owner->actor_upload_stage, sizeof(owner->actor_upload_stage),
         next_generation, gameplay_suspended, vdp1_idle))
     return fail(owner, SM64_SATURN_SCENE_BUNDLE_TEXTURE_FAILURE);
 owner->active_generation = next_generation;
@@ -896,6 +947,8 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
 - Modify: `src/port/saturn/sourceboot/main.c`
 - Modify: `src/port/saturn/gfx/saturn_demo_render.c`
 - Modify: `src/port/saturn/gfx/saturn_actor_instance.c`
+- Modify: `tools/saturn/actor_variant_bank.py`, `actor_material_v2.py`, and
+  their exact BOB source/closure tests
 - Modify: existing actor handoff/render host fixtures
 - Modify: `src/port/saturn/sourceboot/Makefile`
 - Modify: `Makefile.saturn.mk`, `CHANGELOG.md`, Task 16 plan/ledger, this plan/ledger
@@ -904,17 +957,32 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
 - Consumes: `sm64_saturn_source_scene_bundle_resolve`, Task 16 generalized meshlet workspace, queue/batch ABI, Task 6 material binder, Task 7 current texture mapping.
 - Produces feature-on ACTOR_ADMIT/ACTOR_LOWER work that drains real descriptors; master merge resolves each output record to its validated bank primitive/material/tile and emits painter-ordered commands.
 
-- [ ] **Step 1: Write RED production-shaped host tests**
+- [ ] **Step 1: Write RED complete-BOB and production-shaped host tests**
+
+Replay all 34 drawable BOB selections and require a valid generic bank/result for
+each. `GEO_SHADOW` is one common telemetry-visible shadow-omission policy while
+its child geometry still compiles; static `GEO_SCALE` is baked into the common
+bank transform; the exact `geo_update_layer_transparency` `GEO_ASM` consumes the
+already-captured source opacity rather than adding an object-specific path.
+Every newly exposed texture/material signature remains closure-attested and
+uses the same v2 lowering. No new wire format or per-object renderer branch is
+allowed.
 
 Exercise observer/registry capture through handoff population, either-SH-2 lane claim, pose/meshlet admission, descriptor-owned output, terminal publication, master merge/material bind, acknowledge, and queue-owned retirement. Before descriptor publication, require checked atomic reservation for the complete observed set against 64 live, the post-reservation actor output share, texture-command share, and Gouraud share. Exact fit succeeds; every one-credit overflow quarantines the whole actor generation with zero descriptor/output/VDP1 mutation. Require zero actors to retain the two-world-job graph and a stale texture/package generation to quarantine before command mutation. Assert feature-on wrappers no longer contain unconditional `return false`.
 
 - [ ] **Step 2: Run RED**
 
-Run the actor runtime handoff, instance queue, batches, render overlap, demo render, material, and feature-off wrapper gates. Expected: current feature-on ACTOR jobs fail closed at the compat wrappers.
+Run the 34-key compiler replay plus actor runtime handoff, instance queue,
+batches, render overlap, demo render, material, and feature-off wrapper gates.
+Expected: the 20 current unsupported rows fail the complete-BOB gate and the
+feature-on ACTOR jobs still fail closed at the compat wrappers.
 
 - [ ] **Step 3: Replace only the auditable feature-on seam**
 
-After computing the actual Mario obligations, dry-sum all selected variants' validated S64B credit fields in canonical snapshot order, then populate the real queue only if the complete essential actor set fits the command/Gouraud frame-bank remainder and dedicated actor output arena. Terrain remains optional and receives only the credits left after Mario plus generic actors. Replace the feature-on compat bodies with queue drain calls; leave the four-job graph/dependencies unchanged; master merge uses current bundle/residency generations and material binder; all retirement flows through the handoff. No partial actor subset is published on overflow. Feature-off retains the exact Mario path.
+First close the three common Geo envelopes and the exact newly exposed material
+signatures so the canonical BOB report has 34 supported drawable rows and zero
+unsupported drawable rows. Then, after computing the actual Mario obligations,
+dry-sum all selected variants' validated S64B credit fields in canonical snapshot order, then populate the real queue only if the complete essential actor set fits the command/Gouraud frame-bank remainder and dedicated actor output arena. Terrain remains optional and receives only the credits left after Mario plus generic actors. Replace the feature-on compat bodies with queue drain calls; leave the four-job graph/dependencies unchanged; master merge uses current bundle/residency generations and material binder; all retirement flows through the handoff. No partial actor subset is published on overflow. Feature-off retains the exact Mario path.
 
 - [ ] **Step 4: Run GREEN, capacity, and rollback proof**
 
@@ -926,7 +994,7 @@ Commit `feat(saturn): render textured generic actors in production`. Require two
 
 ---
 
-### Task 10: Wire deterministic build closure and prove target capacity
+### Task 10: Wire the minimum deterministic target and run the first live smoke
 
 **Files:**
 - Modify: `Makefile.saturn.mk`
@@ -946,9 +1014,11 @@ Require the feature-on graph to generate/verify all v2 inputs before compile, ha
 
 Run hermetic Make and feature-identity tests; expect missing targets/inputs. Add bounded list-file transport where argv scale requires it and preserve release-mode fail-closed ordering.
 
-- [ ] **Step 3: Run the complete host gate wave**
+- [ ] **Step 3: Run the affected host/target gate wave**
 
-Run all new suites plus existing actor family/variant/pose/meshlet/queue/batch/handoff/render, scene package/residency/stream, texture/VDP1 transfer, hermetic Make, and feature-off gates. Run Python `compileall` and scoped `git diff --check`.
+Run all affected actor family/variant/pose/meshlet/queue/batch/handoff/render,
+scene package/residency/stream, texture/VDP1 transfer, Make, and feature-off
+gates. Defer unrelated exhaustive proof waves until the first live smoke.
 
 - [ ] **Step 4: Build and inspect the development target**
 
@@ -958,37 +1028,49 @@ Run:
 python tools/saturn/build_sourceboot_variant.py --label actor-bank-v2-bob --animation 1 --actors 1 --audio 0 --pipeline 4 --diagnostic-mode none --jobs 1 --output build/saturn/variants/actor-bank-v2-bob
 ```
 
-Require positive HWRAM/LWRAM/cart/VDP1 texture/CLUT/command/Gouraud margins, exact 65,536-byte actor arena and 2,718 records, one two-lane workspace, no duplicate S64B/S64F, direct `sh-elf-ar`/`sh-elf-nm` attestation, and correct package/bank/residency generation telemetry.
+Require link-time safety only: positive HWRAM/LWRAM/cart bounds, exact 65,536-byte actor arena and 2,718 records, one two-lane workspace, no duplicate S64B/S64F, and correct package/bank/residency generation telemetry. Immediately run a short identity-bound Ymir smoke. It must advance beyond the historical two-tick stall with successful ACTOR jobs, zero exception/allocation failure, and no stale package/texture generation. Stop and diagnose before any exhaustive capacity or release work if it fails.
 
 - [ ] **Step 5: Commit and independent review**
 
-Commit `build(saturn): wire textured actor bank closure`. Review exact map and generated inventory before emulator acceptance.
+Commit `build(saturn): wire generic BOB actor path`. Review the exact map,
+generated inventory, and short-smoke evidence before the full visual gate.
 
 ---
 
-### Task 11: Prove the real textured Cannon demo in Ymir
+### Task 11: Prove the normal generic BOB scene in Ymir
 
 **Files:**
 - Modify only if a diagnosed harness defect exists: existing Ymir capture/probe tests and helper
-- Create: `docs/saturn/evidence/reports/bob-textured-cannon-s64b-v2-2026-08-12.json`
-- Create: `docs/saturn/evidence/screenshots/bob-textured-cannon-s64b-v2-2026-08-12.png`
+- Create: `docs/saturn/evidence/reports/bob-generic-actors-2026-08-14.json`
+- Create: `docs/saturn/evidence/screenshots/bob-generic-actors-2026-08-14.png`
 - Modify: `STATE.md`, `ROADMAP.md`, plans/ledgers/reports
 
 **Interfaces:**
 - Consumes the exact Task 10 development ELF/ISO/CUE and established canonical Ymir BIOS/profile.
-- Produces identity-bound telemetry and visual evidence for family 29/model `0x0080`/`bhvCannon` through normal BOB spawning.
+- Produces identity-bound telemetry and visual evidence for the normal BOB actor
+  set through one generic package/queue/material/render path.
 
 - [ ] **Step 1: Verify the candidate before launch**
 
-Rehash ELF/ISO/CUE/S64P/S64F, validate package/bundle/banks, confirm Cannon's registry/bank/material/tile identities, and record exact BIOS/profile hashes. Stop if any binding differs.
+Rehash ELF/ISO/CUE/S64P/S64F, validate package/bundle/all 34 drawable banks,
+confirm zero unsupported drawable rows and representative registry/bank/material
+identities, and record exact BIOS/profile hashes. Stop if any binding differs.
 
 - [ ] **Step 2: Run the exact headless smoke/capture route**
 
-Launch the established BOB route with dynamic actor closure on and enough frames to reach a normally spawned Cannon. Require advancing source/presentation cadence, cart copy complete, package/bank/texture generation exact, exception zero, allocation failures zero, actor quarantine zero, ACTOR_ADMIT/LOWER terminal success, Cannon draw/texture command counts nonzero, and positive live margins.
+Launch the established normal BOB route with dynamic actor closure on. Require
+advancing source/presentation cadence, cart copy complete, package/bank/texture
+generation exact, exception zero, allocation failures zero, actor quarantine
+zero, ACTOR_ADMIT/LOWER terminal success, and positive live margins. Telemetry
+must prove normally spawned coin, enemy, sign/cannon, and moving-actor identities
+use the same generic resolver and emitter.
 
 - [ ] **Step 3: Capture and visually inspect the actor**
 
-Save JSON plus PNG/video. The Cannon must be recognizable and textured in its normal BOB location; a forced camera may frame it, but object spawning/model selection may not be injected. Inspect the image directly and record known VDP1-vs-N64 fidelity differences.
+Save JSON plus PNG/video. Mario, terrain, HUD, and representative normally
+spawned BOB actors must be recognizable; a forced camera may frame them, but
+object spawning/model selection may not be injected. Inspect the image directly
+and record telemetry-visible generic Saturn fidelity reductions.
 
 - [ ] **Step 4: Run transition/stale-generation mutations**
 
@@ -996,7 +1078,9 @@ Repeat the host transition fixture and one emulator reload/scene-transition rout
 
 - [ ] **Step 5: Commit evidence status and obtain review**
 
-Commit `docs(saturn): prove textured Cannon actor demo`. Independent evidence review must verify artifact hashes, telemetry, visual identity, and normal-spawn claim before release rebuilding.
+Commit `docs(saturn): prove working generic BOB`. Independent evidence review
+must verify artifact hashes, telemetry, visual identities, common-path use, and
+normal-spawn claims before release rebuilding.
 
 ---
 
@@ -1143,3 +1227,28 @@ Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` res
   independent spec/quality review passes. Task 8/runtime activation/renderer,
   target link/run, Ymir, release, visual/manual, and total-game gates remain
   closed.
+
+## Task 7 review and fix round 1/5 active (2026-08-12)
+
+- Review of frozen `97dae9b2` returned C0/I4/M1. Task 7 is
+  source-complete-pending-fix-and-rereview; Task 8 remains closed.
+- Approved repair corrections: staging access may expose only canonical empty
+  state or the exact staging generation; one central bounded publication
+  validator gates both activation prestate and lookup; activation accepts a
+  caller-owned HWRAM staging span and preflights every queue request before the
+  first DMA; the full S64F remains in CART and each cold span is CPU-copied to
+  stage then sent to VDP1 sequentially. The checked queue exposes only its
+  existing private request validation as a read-only API and retains all
+  scheduling semantics.
+- Real BOB requires at most 2,560 staged bytes. This is measured evidence, not
+  a hardcoded universal capacity or a target HWRAM-margin claim. Task 8 owns
+  the fixed staging buffer and must carry it through the planned activation
+  call; later link/budget gates prove its placement.
+- The repair also makes `verify-actor-texture-residency` build/verify the real
+  Task 5 artifact and replaces signed-cast generation comparison with explicit
+  nonzero unsigned half-range serial arithmetic. Focused RED/GREEN is complete:
+  exact/P2 HWRAM top fits, one-byte overflow/CART/LWRAM and overlap with bundle,
+  publication, or VDP1 ownership reject before DMA; the fresh real gate rebuilt
+  and C-validated 47 families / 14 variants and passed all 13 publication and
+  inventory tests in 209.3 seconds. The isolated output was safely removed.
+  Repair commit and same-reviewer rereview are pending; Task 8 remains closed.

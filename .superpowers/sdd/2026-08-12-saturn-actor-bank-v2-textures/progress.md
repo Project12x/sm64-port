@@ -603,3 +603,64 @@
   It is not Task 7 evidence and sourceboot is not edited. Independent Task 7
   spec/quality review, target link/run, runtime, Task 8+, renderer, Ymir,
   release, visual/manual, and total-game gates stay unchecked.
+
+## Task 7 review and fix round 1/5 active (2026-08-12)
+
+- Frozen reviewed head is `97dae9b2`. Independent review returned C0/I4/M1;
+  all findings are accepted for serial TDD repair. Task 7 is
+  source-complete-pending-fix-and-rereview, and Task 8 remains closed.
+- Repair scope adds only the existing DMA queue header/source/test, the active
+  design spec, and the existing Task 7 files/docs. No raw Yaul, queue scheduling,
+  sourceboot, runtime bundle, renderer, or Ymir edit is authorized.
+- RED order: isolate scene staging access from an older active publication;
+  centralize complete publication self-consistency for activation and lookup;
+  introduce one bounded caller-owned HWRAM cold-span stage plus a read-only
+  checked-queue preflight; make the residency verifier build/verify its real
+  Task 5 dependency; replace implementation-defined signed generation ordering
+  with explicit nonzero half-range unsigned serial arithmetic.
+- The approved architecture correction keeps the complete S64F in CART, CPU-
+  copies one validated cold span at a time into caller-owned HWRAM, and submits
+  only `(VDP1 destination, HWRAM stage)` to SCU DMA. Real BOB's measured maximum
+  staged span is 2,560 bytes, but the API remains capacity-driven; final HWRAM
+  budget/link evidence belongs to later target gates.
+
+## Owner convergence correction (2026-08-12)
+
+- The milestone is now a working normal BOB scene through the canonical package,
+  registry, generic queue, generic bank/material lookup, and production renderer
+  by 2026-08-14. Cannon remains a regression witness, not the acceptance slice.
+- All 34 drawable BOB selections must be generically admitted. Common,
+  telemetry-visible Saturn reductions are allowed; injected models, forced
+  records, object-specific renderer branches, and whole-scene quarantine for a
+  drawable are not.
+- The persistent memory-debt rule is recorded in project `AGENTS.md` and
+  `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`. The active plan now binds CART,
+  HWRAM staging, VDP1, publication, LWRAM actor arena, frame-credit ownership,
+  transport, lifetime, and first consumer before Task 8 begins.
+- The first short identity-bound Ymir smoke moves directly after the minimum
+  Task 8 package plus Task 9 cutover/build path. Exhaustive capacity, release
+  reproduction, reseal, and final manual evidence remain later gates.
+- The Task 7 clean-output integration gate rebuilt and C-validated a fresh real
+  47-family/14-variant bundle, then passed actor residency. The canonical stale
+  generation correctly refused overwrite. The temporary generated output was
+  removed after the passing run.
+
+## Task 7 fix-round memory-owner gate (2026-08-12)
+
+- Focused RED isolated the absent physical-stage authority: exact/P2 HWRAM,
+  CART/LWRAM, one-byte HWRAM overflow, and stage overlap were not centrally
+  decidable. A separate Make RED proved the actor residency target did not own
+  the real Task 5 producer/validator chain.
+- GREEN now permits only a nonempty caller-owned HWRAM span ending at or before
+  `0x06100000`, normalizes P1/P2 aliases, and rejects overlap with the S64F
+  bundle, scalar publication, or either complete VDP1 destination region before
+  any queue preflight, CPU copy, or DMA. Generation replacement uses explicit
+  unsigned half-range serial arithmetic; the half-range ambiguity rejects.
+- Fresh absent-output integration passed in 209.3 seconds: real BOB bundle C
+  validation 47 families / 14 variants, actor texture residency PASS, and 13/13
+  publisher/inventory tests. Exact SH-2 `-m2 -mb -ffreestanding -Werror`
+  syntax compilation passes. The task-created four-file output directory was
+  verified beneath `build/saturn` and removed; no canonical artifact changed.
+- Status remains source-complete-pending-repair-commit-and-rereview. Task 8,
+  runtime activation, renderer, Ymir, release, visual/manual, and total-game
+  gates remain open and are not replaced by these host/module results.

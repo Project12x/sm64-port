@@ -117,3 +117,54 @@ runtime evidence. Task 8/runtime/renderer/Ymir/release gates remain closed.
 - Independent Task 7 spec/quality review is mandatory before Task 8 opens.
 - Target link/run, runtime activation, renderer, Ymir, release, smoke, visual,
   desktop, manual, retail, total-game, and Task 8+ gates remain unchecked.
+
+## Independent review and fix round 1/5
+
+Review of `ce28a7d9..97dae9b2` returned C0/I4/M1. The repair is active and no
+finding is waived:
+
+1. Staging access must never expose an older active/other-generation
+   publication; only canonical empty state or the exact staging generation is
+   writable.
+2. Activation prestate and lookup must share complete bounded publication
+   validation, including unused entries, ordering, duplicates, totals, and
+   every mapping invariant.
+3. SCU DMA must never consume a CART bundle pointer directly. Activation gains
+   a caller-owned bounded HWRAM span stage and uses the queue's single public
+   read-only request preflight before any copy/submit; one span is CPU-copied
+   then submitted/waited at a time.
+4. The residency Make gate must build/verify the Task 5 real bundle on a fresh
+   checkout while preserving its no-clobber/stale-generation semantics.
+5. Generation ordering uses explicit unsigned half-range serial arithmetic,
+   not an implementation-defined unsigned-to-signed cast.
+
+Focused repair RED/GREEN is complete; repair commit, same-reviewer rereview,
+and every Task 8+ gate remain pending.
+
+## Owner convergence correction
+
+The owner replaced the bespoke Cannon-demo milestone with a working generic BOB
+gate targeted for 2026-08-14. Task 7 remains only the safety-critical residency
+prerequisite. Task 8 must own the fixed HWRAM stage and canonical scene package;
+Task 9 must admit the normal BOB actor set through the generic queue and
+renderer. The first short Ymir smoke now precedes exhaustive target-capacity,
+release reproduction, reseal, and final manual evidence.
+
+The repaired Make dependency was exercised against an absent isolated output:
+it rebuilt and validated the real 47-family/14-variant Task 5 bundle, ran 13
+Python publication/inventory tests, and passed the actor residency C gate. The
+same canonical generation remained fail-closed because its stale destination
+already exists. The isolated generated output was removed after the pass.
+
+Final memory-debt RED/GREEN adds the missing transport-owner proof. Activation
+now accepts only a nonempty HWRAM stage (including the P2 alias), proves the
+full reserved stage ends at or before `0x06100000`, and rejects CART, LWRAM,
+one-byte HWRAM overflow, or overlap with the bundle, 2,064-byte publication,
+texture partition, or CLUT partition before queue preflight or DMA. Native host
+fixtures preserve ordinary pointer-overlap semantics behind a test-only define;
+the freestanding SH-2 build uses only the physical Saturn address rule. The
+focused C test and exact SH-2 `-m2 -mb -ffreestanding -Werror` syntax compile
+pass. A fresh absent-output generation-1 build then passed in 209.3 seconds:
+real bundle C validation was 47 families / 14 variants, the actor residency
+fixture passed, and all 13 publication/inventory tests passed. Only the
+task-created four-file temporary output directory was removed afterward.
