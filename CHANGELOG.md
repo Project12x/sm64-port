@@ -21,6 +21,9 @@
   complete publication validator now gates replacement and lookup, including
   duplicate IDs, ordering, totals, unused rows, and scalar corruption, while
   generation replacement uses explicit unsigned half-range serial ordering.
+  Scene staging checks scan the owned scalar fields in place instead of
+  materializing a 2,064-byte zero publication on the SH-2 stack; exact
+  `-fstack-usage` evidence removed the former 2,076-byte helper frame.
   The residency verification target also rebuilds and C-validates an absent-
   output real BOB bundle instead of accepting a fixture-only contract. The
   real BOB subset is measured at 14 mappings, 16,640 texture bytes, and 2,816

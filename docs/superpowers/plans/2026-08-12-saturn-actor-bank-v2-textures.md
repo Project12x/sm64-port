@@ -1251,5 +1251,8 @@ Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` res
   publication, or VDP1 ownership reject before DMA; the fresh real gate rebuilt
   and C-validated 47 families / 14 variants and passed all 13 publication and
   inventory tests in 209.3 seconds. The isolated output was safely removed.
-  Repair behavior is committed as `4c4c24a9`; same-reviewer rereview is
-  pending, so Step 5 remains unchecked and Task 8 remains closed.
+  Repair behavior is committed as `4c4c24a9`. Rereview then found one hidden
+  2,076-byte SH-2 stack frame in the scene empty-publication check; focused
+  RED `-fstack-usage` captured it and the follow-up scans the owned fields in
+  place. Same-reviewer rereview is pending, so Step 5 remains unchecked and
+  Task 8 remains closed.

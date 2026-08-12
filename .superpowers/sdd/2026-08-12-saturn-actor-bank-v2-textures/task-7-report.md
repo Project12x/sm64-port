@@ -168,3 +168,10 @@ pass. A fresh absent-output generation-1 build then passed in 209.3 seconds:
 real bundle C validation was 47 families / 14 variants, the actor residency
 fixture passed, and all 13 publication/inventory tests passed. Only the
 task-created four-file temporary output directory was removed afterward.
+
+Rereview found one additional Important boundary: the scene empty-publication
+helper created a 2,064-byte zero object on the target stack. Installed SH-2 GCC
+14.3 `-m2 -mb -Os -fstack-usage` measured the helper at 2,076 bytes. The
+follow-up removes that local entirely and scans the fixed scalar table in
+place; a last-unused-row mutation proves the whole publication is checked.
+Fresh host and stack-usage evidence are required before final approval.

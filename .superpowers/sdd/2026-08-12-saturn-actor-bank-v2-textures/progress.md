@@ -671,3 +671,8 @@
   memory ownership`). Status is source-complete-pending-rereview. Task 8,
   runtime activation, renderer, Ymir, release, visual/manual, and total-game
   gates remain open and are not replaced by these host/module results.
+- Rereview found one new Important memory debt: the empty-publication helper
+  placed a 2,064-byte zero object on the SH-2 stack (`2076` bytes exact stack
+  usage). RED was captured with installed GCC 14.3 `-fstack-usage`. The
+  follow-up scans scalar fields/128 mappings in place, including a last-unused-
+  row mutation regression; no publication-sized local object remains.

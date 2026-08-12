@@ -27,6 +27,14 @@ static void test_actor_texture_publication_ownership(void)
            &state.actor_texture_publication);
     memset(&state.actor_texture_publication, 0,
            sizeof(state.actor_texture_publication));
+    state.actor_texture_publication
+        .mappings[SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY - 1U]
+        .generation = 1U;
+    assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 41U) ==
+           NULL);
+    state.actor_texture_publication
+        .mappings[SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY - 1U]
+        .generation = 0U;
     assert(sm64_saturn_scene_residency_actor_texture_staging(&state, 41U) ==
            &state.actor_texture_publication);
     state.actor_texture_publication.generation = 41U;

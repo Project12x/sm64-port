@@ -26,8 +26,22 @@ static void actor_texture_publication_invalidate(
 static bool actor_texture_publication_empty(
     const sm64_saturn_actor_texture_publication_t *publication)
 {
-    const sm64_saturn_actor_texture_publication_t empty = {0};
-    return memcmp(publication, &empty, sizeof(empty)) == 0;
+    uint16_t index;
+    if (publication == NULL || publication->texture_bytes != 0U ||
+        publication->clut_bytes != 0U || publication->generation != 0U ||
+        publication->mapping_count != 0U || publication->committed != 0U ||
+        publication->reserved != 0U)
+        return false;
+    for (index = 0U;
+         index < SM64_SATURN_ACTOR_TEXTURE_MAPPING_CAPACITY; index++) {
+        const sm64_saturn_actor_texture_mapping_t *mapping =
+            &publication->mappings[index];
+        if (mapping->bank_id != 0U || mapping->texture_base_offset != 0U ||
+            mapping->clut_base_index != 0U || mapping->tile_count != 0U ||
+            mapping->generation != 0U)
+            return false;
+    }
+    return true;
 }
 
 static bool bytes_equal(const uint8_t a[32], const uint8_t b[32])
