@@ -1045,7 +1045,8 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
   actor/package/scene Make wave passes through the exact repository MSYS
   wrapper, and its generation-set inventory remains hash-and-mtime identical
   7/7. Exact GCC 14.3 evidence is init 220 B, init-from 96 B, resolve 44 B and
-  an ELF32 big-endian SuperH object. Repair commit and rereview remain open;
+  an ELF32 big-endian SuperH object. Repair commit is `3b81456b`; evidence
+  status and rereview remain open;
   Step 5 and Task 9 stay unchecked.
 
 ---

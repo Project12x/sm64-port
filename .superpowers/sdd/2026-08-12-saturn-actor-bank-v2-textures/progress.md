@@ -790,3 +790,24 @@
   publication. No MSYS DLL loader failure occurred. Status is
   `source-complete-pending-rereview`; evidence commit and same-reviewer verdict
   remain open, and Task 9/link/Ymir/release/visual/manual remain unchecked.
+
+## Task 8 repair round 2/5 (2026-08-12)
+
+- Same-reviewer rereview of `0a180e39..c8a2fdf8` returned Spec FAIL / Quality
+  needs fixes C0/I1/M2. Runtime prefix restoration and dependency identity
+  passed. Remaining Important: individually exclusive links could leave a
+  partial generation after a late conflict. Minors corrected source init-from
+  stack 92→96 B and narrowed DLL evidence to the tested wrapper route.
+- RED: divergent static target at every seven-file position; injected late
+  conflict at each link position; header published before a divergent ABI;
+  identical and mixed divergent concurrent publishers. GREEN behavior
+  `3b81456b` precomputes/preflights/stages the whole set, publishes report/ready
+  last, and ownership-rolls back only links still matching the transaction's
+  exact file identity. Concurrent identical publishers converge and divergent
+  producers cannot mix a generation.
+- Fresh: schema 22/22; determinism 3/3; full focused actor/package/scene Make
+  wave PASS through the repository MSYS wrapper; generation-set hash+mtime
+  inventory unchanged 7/7; Python compileall PASS; installed GCC 14.3 emits
+  ELF32 big-endian SuperH with exact source stack init/init-from/resolve
+  220/96/44 B. Evidence/status commit and same-reviewer round-2 verdict remain
+  open. Task 9 and all linked/Ymir/release/visual/manual gates remain closed.

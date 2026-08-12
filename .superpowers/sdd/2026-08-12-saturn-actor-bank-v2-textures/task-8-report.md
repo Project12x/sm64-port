@@ -3,9 +3,9 @@
 ## Status
 
 `source-complete-pending-rereview` from approved Task 7 base `dfa8b286` after
-initial behavior `b84103cd`, evidence `0a180e39`, and review-repair behavior
-`dc81808b`. Initial review returned Spec FAIL / Quality needs fixes C0/I3/M0;
-the same-reviewer repair verdict is open. This report claims
+initial behavior `b84103cd`, evidence `0a180e39`, repair `dc81808b`, and
+generation-transaction repair `3b81456b`. Reviews returned C0/I3/M0 then
+C0/I1/M2; the same-reviewer round-2 verdict is open. This report claims
 package/source ownership plus host and freestanding SH-2 module evidence only;
 Task 9 production cutover, linked target, Ymir, release, and manual gates remain
 unchecked.
@@ -55,7 +55,7 @@ unchecked.
   and returns it before the first frame. Actor texture/CLUT regions leave
   33,216 bytes of Yaul remaining capacity.
 - Exact GCC 14.3 `-m2 -mb -Os -ffreestanding -fstack-usage`: source init 220 B,
-  source init-from 92 B, resolve 44 B; scene begin 92 B, commit 88 B, and load
+  source init-from 96 B, resolve 44 B; scene begin 92 B, commit 88 B, and load
   section 112 B. All transition frames meet the 256-byte ceiling.
 
 ## Generic-path proof
@@ -125,3 +125,25 @@ unchecked.
   content was identical but whose 160/137 line endings were CRLF. They were
   moved recoverably to `.superseded-crlf-*`, canonical LF copies were
   published, and subsequent runs were verify-only. This was not a DLL error.
+
+## Repair round 2 — generation transaction
+
+- Rereview of `0a180e39..c8a2fdf8` passed the two runtime repairs but returned
+  C0/I1/M2 because per-file links were not one generation transaction. A late
+  divergent payload manifest or ABI left an earlier root/header behind. It
+  also corrected init-from stack evidence to 96 B and narrowed the MSYS claim
+  to the tested repository-wrapper route.
+- Repair `3b81456b` computes all seven bytes first, preflights the complete
+  target set, stages private files, and links report/ready last. On any late
+  error it removes only outputs whose exact device/inode still belongs to that
+  transaction. Identical concurrent publishers converge; divergent contenders
+  fail without mixing. Standalone header+ABI uses the same pair transaction.
+- RED/GREEN covers static conflicts at all seven positions, injected late-link
+  conflicts and ownership rollback at every position, header-before-ABI, eight
+  identical concurrent publishers, and mixed divergent contenders. Schema is
+  22/22, determinism 3/3, the full focused Make wave passes, output hash+mtime
+  inventory remains unchanged 7/7, Python compileall passes, and exact SH-2
+  object/stack evidence remains 220/96/44 B.
+- The exact repository wrapper validated required DLL presence and ran MSYS
+  GNU Make, host compiler/Python, and installed SH-2 tools without a loader
+  failure. Direct/manual MSYS routes and the full hermetic link are not claimed.
