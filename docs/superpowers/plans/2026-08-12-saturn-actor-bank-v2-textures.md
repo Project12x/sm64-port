@@ -358,7 +358,7 @@ Commit `feat(saturn): validate mixed actor bank versions`. Require parser/ABI re
 
 **Execution status:** fix round 1 source-complete-pending-rereview after
 independent review found C0/I2/M1 at behavior commit `52c9c1af` (2026-08-12).
-The repair commit is recorded after final verification. The real
+Repair commit `86de51cc` passed the full host/historical gate set. The real
 34-drawable/47-family replay is frozen; all 14 measured direct-textured keys
 compile as S64B v2, the 18 `GEO_SHADOW`, one `GEO_SCALE`, one `GEO_ASM`, 13
 capability-unsupported families, and two `MODEL_NONE` variants retain named

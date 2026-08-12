@@ -196,8 +196,8 @@
 
 ## Task 4 fix round 1 implementer evidence (2026-08-12)
 
-- Status: source-complete-pending-rereview. Repair commit is recorded after
-  final verification; Task 5 remains closed. Scope is still host-only Task 4:
+- Status: source-complete-pending-rereview at repair commit `86de51cc`; Task 5
+  remains closed. Scope is still host-only Task 4:
   no target runtime, residency, renderer, bundle orchestration, Makefile,
   Ymir, or later-task production file changed.
 - RED/GREEN finding 1: a real Cannon mutation inserted
