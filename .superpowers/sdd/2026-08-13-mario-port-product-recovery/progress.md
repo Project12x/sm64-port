@@ -111,6 +111,12 @@ comparison remains unresolved**
 - A visible Ymir session was launched with that exact CUE and the desktop
   profile. Owner review is now the next acceptance boundary. Tasks 3–6 remain
   closed; do not repair the actor stack or Make graph before that result.
+- Read-only donor preflight establishes that `source_audio_stub.c` is linked by
+  this CUE and intentionally implements `play_sound`, `play_music`, and
+  `audio_init` as no-ops. Silence is therefore expected by source, not an
+  emulator configuration failure. This Mario recovery artifact is not an audio
+  candidate; real audio remains a later causal live change after owner Mario
+  acceptance.
 
 ## Non-negotiable stop rules
 

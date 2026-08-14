@@ -254,6 +254,11 @@ start earlier.
   This is evidence of rendering after input on the exact CUE; it does not
   establish full controls/camera, animation, audio, cadence, or owner
   acceptance.
+- The donor links `source_audio_stub.c`: its `play_sound`, `play_music`, and
+  `audio_init` are explicit no-ops. This CUE is therefore expected to be silent
+  by source, rather than failing a profile or Ymir audio setting. Its manual
+  window is a Mario/control/rendering gate only; Task 4 must add real source
+  audio after Mario owner acceptance.
 - Keep the bounded source-policy regression and emitter hunk uncommitted in the
   existing dirty renderer file. Do not treat it as an accepted transplant,
   expand into an actor/package repair, or open Tasks 3–6. A new CUE requires an

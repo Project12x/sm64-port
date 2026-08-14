@@ -47,6 +47,16 @@ The visible desktop Ymir session uses this exact CUE for owner review. The
 detailed donor log is
 `sm64-port/.worktrees/task2-a9a-donor-20260814/build/saturn/task2-a9a-donor-feasibility-20260814.md`.
 
+## Audio scope fact
+
+This historical renderer donor intentionally links
+`src/port/saturn/sourceboot/source_audio_stub.c`. Its `play_sound`,
+`play_music`, and `audio_init` implementations are no-ops, so this exact CUE
+cannot produce music or SFX. Silence during this manual session is expected
+source behavior, not a BIOS/profile/Ymir diagnosis. Mario acceptance remains
+the narrow purpose of this candidate; real audio is the next dedicated product
+change only after that gate.
+
 ## Remaining boundary
 
 The next action is owner visual/audio review of the exact launched CUE. If Mario
