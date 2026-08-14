@@ -533,11 +533,14 @@ git commit -m "perf(render): return demo-path hot working set to HWRAM (reverts 
 
 ---
 
-### Task 9: Wire the memory-map margin gate into the build loop
+### Task 9: Wire the memory-map margin gate into the build loop + parameterize the audio probe
 
 **Files:**
 - Modify: `REC/tools/saturn/verify_sourceboot_memory_map.py`
 - Modify: `REC/Makefile.saturn.mk`
+- Modify: `REC/tools/saturn/probe_audio_mailbox.py`
+
+**Added scope (Task 2 quality-review finding):** `probe_audio_mailbox.py` was promoted from donor scratch (`.tmp-audio-probe-current.py`) byte-for-byte and is not yet a real tool: it hardcodes absolute paths to `ymir-headless.exe`, the BIOS, and one stale artifact directory (`e2-bob-identity-id-7deb747eb230b595`); it runs everything as import-time side effects with no `main()` guard; and it carries a stale `sys.path.insert`. Before Task 11 depends on it: add argparse (`--ymir`, `--ipl`, `--cue` or `--artifact-dir`, `--output`), wrap execution in `main()` under `if __name__ == "__main__":`, delete the stale path insert, and mirror the CLI conventions of `capture_sourceboot_throughput.py`. Behavior of the mailbox/SCSP peek logic itself must not change.
 
 - [ ] **Step 1: Add a plain `verify` mode.** The tool already contains `inspect_elf()` and `validate_layout()` (welded to a closed sprint's phase-chain CLI). Add an argparse subcommand:
 
