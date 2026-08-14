@@ -1,5 +1,12 @@
 # Saturn engine-port architecture contract
 
+> **Authority notice (2026-08-13):** The current product and architecture
+> authority is [`PRODUCT_GOAL.md`](PRODUCT_GOAL.md) plus the repository
+> [`ARCHITECTURE.md`](../../ARCHITECTURE.md). This document preserves detailed
+> source-ownership history and remains useful reference material, but its older
+> pipeline status statements do not authorize work or establish a current live
+> gate.
+
 > **Current render-pipeline architecture:** The approved one-frame-overlapped
 > dual-SH2/VDP design and its live decision/status ledger are maintained in
 > [`../superpowers/specs/2026-08-03-saturn-overlapped-render-pipeline-design.md`](../superpowers/specs/2026-08-03-saturn-overlapped-render-pipeline-design.md).

@@ -1,5 +1,7 @@
 # Saturn Actor Bank v2 Texture Design
 
+> **Historical design record (superseded 2026-08-13).** It may explain existing code, but it does not authorize new work or define product progress. Current authority is `docs/saturn/PRODUCT_GOAL.md` and the active recovery plan.
+
 **Status:** Owner-approved architecture and written specification. The spec was
 self-reviewed and committed at `62f16de8`; owner written-spec approval was
 received 2026-08-12. The implementation plan is

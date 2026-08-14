@@ -1,189 +1,165 @@
 # Architecture
 
-See `docs/saturn/` for the Saturn architecture and contracts.
+The architecture serves the playable SM64 Saturn port defined in
+[`docs/saturn/PRODUCT_GOAL.md`](docs/saturn/PRODUCT_GOAL.md). This document
+distinguishes live-proven behavior from candidate machinery. Historical queue,
+package, release, and overlap designs remain in Git and under
+`docs/superpowers/`; they are not automatically active architecture.
 
-The active full-game completeness architecture packages source content rather
-than creating level-specific runtime paths. A deterministic closure compiler
-follows LevelScript objects, macro/special presets, behavior-spawned children,
-models/GeoLayouts, animation/material/effect features, sequences, and sound
-banks. One versioned S64P root atomically binds inline world/collision/sky/BSP
-data to content-addressed actor, animation, and audio payload descriptors.
-Root and payload hashes, lifetimes, generations, and explicit WRAM/cart/
-sound-RAM budgets validate together; the root and complete feature-active
-payload set commit atomically or fail closed. BOB is the first complete
-manifest; Whomp's Fortress is the second-level load/transition fixture.
+## Product boundary
 
-Mario and ordinary actors share compact joint-local family banks and one pose
-evaluator. Source animation IDs/frames and resolved geo switch/visibility
-state—including typed render-range/distance, billboard, shadow, held/parent,
-effect lifetime/parameters, and exact actor-bank identity—is captured after
-the authoritative source tick. A dedicated bounded
-actor-instance queue gives each admitted live instance descriptor-owned work
-and disjoint claimant output without widening the proven eight-entry world
-phase graph or its eight-bit dependency mask. Either SH-2 may claim actor or
-world work; the master retains package residency, final painter order, VDP1
-lowering, DMA publication, and presentation.
+The inherited SM64 engine owns:
 
-Audio preserves the public source API and source-owned queue/priority/fade/
-interruption policy. Pointer-free big-endian semantic control and SFX rings
-feed a timer-driven MC68000 sequence VM and SCSP voice allocator. The complete
-content catalog lives in a CD package; only closure-selected scene bundles are
-resident below sound RAM's fixed mailbox/driver regions. Audio faults mute and
-report without blocking simulation/rendering, and audio never borrows render
-queues, SH-2 worker ownership, VDP DMA queues, or frame fences.
+- the game loop and level scripts;
+- Mario and object state/actions;
+- collision, camera, animation, and progression;
+- source display-list and audio semantics; and
+- transitions between title, menus, courses, and rewards.
 
-Mario/actor ordering is a generated-bank boundary: tight material/opacity
-meshlets retain source ordinals and compact tier references. Admission projects
-live yawed pose vertices (including walking banks), then passes the generated
-compact position union to transforms. The master keeps
-the final opaque order, stable translucent depth bins, Gouraud/texture state,
-terrain-relative insertion, VDP1 ownership, and presentation.
+The Saturn port owns:
 
-The active A5 queue uses one P2-visible descriptor-keyed release record per
-terrain phase. WORLD_ADMIT publishes transformed-position completion after its
-payload writes; WORLD_LOWER publishes the resulting record count, sequence,
-claimant state, and writer lane before graph runtime can expose DONE. A merge
-therefore reads its exact descriptor metadata and output lane rather than a
-fixed CPU split or caller-provided count. Terrain and Mario now use this route
-in the accepted atomic-cutover renderer.
+- controller, CD, cartridge, timing, and memory services;
+- deterministic conversion of source assets into Saturn-ready data;
+- bounded SH-2 transform, clipping, lighting, sorting, and command lowering;
+- VDP1/VDP2 composition and transfer;
+- MC68000/SCSP playback beneath the source audio API; and
+- telemetry required to verify the assembled game.
 
-WORLD_LOWER also independently revalidates its graph edge before consuming
-that transform payload: it accepts exactly one completed WORLD_ADMIT
-predecessor, rejects an unready or wrong-type descriptor, and then checks the
-predecessor's P2 metadata against output-bank ownership. Scheduler eligibility
-alone is not treated as permission to consume a payload.
+Saturn code may reduce fidelity in a documented, common, telemetry-visible way.
+It may not replace source gameplay with a demo-specific game loop, injected
+actors, or level-specific runtime behavior.
 
-Mario follows the same active producer/consumer law. A master snapshot first
-copies the source-owned fully posed vertex bank, per-vertex lighting, animation
-frame/bank metadata, actor transform, and compact meshlet vertex references.
-ACTOR_ADMIT transforms that immutable snapshot into a descriptor-owned dense
-`{vertex id, projected result}` payload. ACTOR_LOWER accepts exactly one DONE
-ACTOR_ADMIT predecessor, uses the copied vertex-id-to-slot map for bounded
-lookup, and publishes descriptor-owned primitive classification records. The
-master consumes every DONE lower descriptor in descriptor/local order,
-validates complete primitive coverage and all payload identities before any
-renderer mutation, then copies results into the existing master-owned banks.
-Thus the scheduler cutover changes SH-2 work ownership without changing the
-Castle-proven animation or final VDP1 emission path.
+## Target shape
 
-Queue output offsets are local to four existing physical payload kinds:
-WORLD_ADMIT transformed positions, WORLD_LOWER records/commands, ACTOR_ADMIT
-projected vertices, and ACTOR_LOWER primitive references. Queue publication
-derives the kind from the immutable type/callback pair, rejects an unknown or
-mismatched pair, and requires spans to be disjoint only among descriptors that
-write the same kind. This matches the bounded physical arrays without wasting
-memory on a synthetic global arena and preserves the pointer-free 16-byte
-descriptor ABI. The single atomic CPU-DUAL cutover is live, target-link green,
-and live-observed. One coherent retired frame assigns WORLD phases 0--1 to the
-master and ACTOR phases 2--3 to the slave (`QM=[1,1,0,0]`,
-`QS=[0,0,1,1]`) with zero wait, failures, or quarantine. Thus A5.9 closes the
-idle-slave and queue-wait hypotheses for the observed frame; it does not prove
-that the coarse jobs have equal cycle cost or that final master-only merge and
-VDP1 submission are cheap.
-The host-side observation boundary resolves the three target records from the
-exact supplied ELF (including local/leading-underscore symbols), validates one
-immutable executable byte window in target memory before accepting telemetry,
-then reads the shared records through P2 once per emulated VBlank. A queue
-sample is evidence only when its queue generation is retired and its notify,
-retire, and HUD publication sequences agree; each retired sequence can attach
-to at most one VDP2 presentation edge. This diagnosis changes no target
-scheduler behavior. The exact matching live CUE capture now passes with three
-presentation edges and one coherent retired queue record; future scheduler
-changes must preserve this identity/coherence boundary.
+The target is constrained deliberately by Saturn and dual-SH-2 ownership:
 
-Callback contexts use a separate pointer-free P2 release record. The record
-binds one immutable queue descriptor generation/index/phase to a nonzero
-sequence, a bounded byte count, and the producing CPU lane; it never carries a
-source-state or function pointer. A callback must prove the exact current
-claim before opening its statically allocated terrain or Mario snapshot, and a
-peer claimant receives only the cache-through alias. Likewise, the master-only
-terrain order stream retains the exact descriptor-local command image beside
-each result during sorting, so final VDP1 lowering never guesses a command
-bank from a logical work range. Both contracts are live after cutover.
+- immutable bulk content resides in the 4 MiB DRAM cartridge;
+- HWRAM holds the master game state and small hot control structures;
+- LWRAM holds explicitly bounded worker/output arenas;
+- VDP1 VRAM holds command, texture, CLUT, and Gouraud partitions with one master
+  publisher;
+- the master SH-2 owns game state, final painter order, VDP publication, scene
+  transitions, and audio command production;
+- the slave SH-2 consumes immutable generation-bound work and publishes bounded
+  scalar results; and
+- the MC68000 owns sequence/voice cadence so audio does not inherit the slow
+  presentation rate.
 
-The payload behind that release must also be self-contained. Mario therefore
-copies the frame-varying compact vertex-reference list into its snapshot and
-resolves generated immutable banks by local symbols. Terrain copies the exact
-transform job and bounded work-order stream; queue callbacks reconstruct a
-caller-local classify view and do not retain the legacy stack classify/spans
-pointers. One preparation boundary snapshots and publishes all four phases
-before the active scheduler permits either SH-2 to claim work. The master
-retains final deterministic assembly and VDP1 lowering after retirement.
+Every cross-region path records source/destination, maximum bytes, alignment,
+lifetime, owner, transport, first consumer, failure behavior, and earliest live
+observation. Those records prevent memory debt; they do not delay that live
+observation.
 
-VDP1 command and Gouraud staging now cross an explicit A7 source-bank lifetime
-boundary. Each of two banks advances only through
-`FREE -> BUILDING -> READY -> TRANSFERRING -> PUBLISHED`; failed construction
-enters `QUARANTINED`. A bank cannot publish until its worker ticket and both
-transfer obligations are satisfied, with a zero-length Gouraud transfer
-represented as an explicit satisfied `NOOP`. Publication installs the new
-complete bank before the prior published fallback may retire, and retirement
-refuses the current fallback. Renderer failure quarantines only the incomplete
-building bank and retains the last complete publication.
-Publication also requires the candidate generation to follow the current bank
-under the same signed-delta wrap rule used for build admission. A late completed
-bank is quarantined rather than allowed to regress `published`. Manager setup
-normalizes Saturn aliases and rejects physical command/Gouraud overlap,
-misalignment, or duplicate bank objects.
+## Shared game-path data flow
 
-Build/snapshot, published/submitted, and displayed generations are distinct.
-The A8 transport makes both emitters construction-only. The master waits for
-the single command/Gouraud VDP1 destination ranges to become overwrite-safe,
-atomically queues CPU-DMAC command and SCU-DMA Gouraud descriptors, starts the
-serial lane, and returns without a transport wait. Later fields poll exact
-per-ticket completion; only both retired obligations can consume the one-shot
-resident-list arm, call Yaul's `vdp1_sync_force_put()`, publish, and present.
-While either VRAM range is partial, sourceboot presents neither the old nor new
-list. A failed ticket keeps its sibling draining before permanent quarantine,
-then poisons presentation because the single destination may be partially
-overwritten. The prior published bank's source metadata remains available for
-a future explicit restore path, but it is not a drawable fallback until such a
-restore succeeds.
+The intended shared path is:
 
-The frame queue exclusively owns master CPU-DMAC channel 0 and SCU-DMA level 0
-after all boot uploads retire. It deliberately avoids pinned Yaul's internally
-waiting `cpu_dmac_transfer()` helper: master-mainline code configures and starts
-channel 0 through Yaul's public channel API, and a queue-owned completion IHR
-is the sole successful-retirement signal. Request publication, FIFO mutation,
-SCU busy guarding, and polling remain master-mainline-owned; only the volatile
-CPU-DMAC completion flag crosses the interrupt boundary. The transports remain
-one serial lane, not a parallel scheduler. A9 retains true destination-banked
-frame overlap.
+```text
+source level script and game tick
+        ↓
+authoritative Mario/object/geo/audio state
+        ↓
+scene-selected immutable source assets
+        ↓
+Saturn-ready resident world/actor/audio data
+        ↓
+bounded SH-2 work and master painter/audio policy
+        ↓
+VDP1/VDP2 frame + MC68000/SCSP output
+```
 
-Task 9A adds the missing CPU lifetime overlap without changing those owners.
-After independent review remediation, the renderer owns an exact-generation
-LOD lifetime with a small control record in the target's linker-owned P2
-`.uncached` partition and one bulk tier/cluster object in `.lwram_bss`. Both
-SH-2s reach that LWRAM object through the same cache-through P2 accessor, so
-neither side leaves or consumes a cached P1 alias. An N+1 source scene
-transition updates only pending master state while N is active, and
-tier/cluster reset is applied only after N's terminal lifecycle.
-Runtime notify and positive-retirement release sites stamp one scene-neutral
-phase controller. The controller record is published before slave wake or
-retirement release, so the peer cannot observe a half-published phase edge;
-construction includes first-service preparation plus terminal lowering and
-master finalization remains its explicit subset.
-Terminal queue telemetry is refreshed before retirement reset. The repaired
-boundary is focused-host/source-green, including generation, late-marker,
-deferred-reset, quarantine, HWRAM-upper-bound, and route-0 LWRAM-margin
-mutations. Link-time assertions check physical WRAM tops before margin
-subtraction. The repair remains a source candidate pending fresh two-stage
-review, with rebuilt placement, boot, and target timing deliberately
-unmeasured.
-For generation `N`, renderer start may publish only immutable descriptor
-contexts and notify the slave, then must return before master drain, queue
-retirement, Gouraud reservation, VDP1 begin/lowering, or transfer. Sourceboot
-retains the exact render snapshot, descriptor payloads, and BUILDING command/
-Gouraud source bank while the master may execute the one queued authoritative
-source tick for `N+1`. That queued snapshot is not an active render and cannot
-be acquired for rendering until `N` completes, passes A8 transfer/publication,
-and retires.
+BOB and Whomp’s Fortress must use this path in one executable. If selecting WF
+requires a `wf` renderer, frame loop, Mario path, or audio backend, the boundary
+is not generic and must be simplified rather than hidden behind another schema.
 
-Poll/finalize for `N` remains PENDING until positive slave retirement. The
-master then drains only remaining READY work, validates terminal descriptor
-identity, performs the stable merge and VDP1 lowering exactly once, and retires
-the queue generation. Failure quarantines `N` and preserves the previous
-complete frame; it never replays a full terrain/actor frame. There is exactly
-one active render generation, and generic scheduler state remains scene-
-neutral. The existing nonzero wrap policy, 30 Hz fractional cadence, per-field
-service/poll epochs, bounded normal-plus-recovery budget, exact publish
-acknowledgement, VDP2 generation tuple, and A8 transfer owner remain unchanged.
+## Failure domains
+
+Corrupt, out-of-bounds, stale-generation, or physically unsafe data fails
+closed before mutation.
+
+Incomplete source-feature coverage fails at the smallest safe unit:
+
+- an unsupported actor omits that actor;
+- an unsupported material omits that draw or uses an explicitly approved common
+  reduction;
+- an unavailable SFX mutes/rejects that event; and
+- a failed new frame retains the last complete frame when physically safe.
+
+Feature incompleteness must not stall simulation, blank the level, disable
+input, or silence unrelated audio. Whole-scene rejection is reserved for a
+package whose integrity or memory safety cannot be established.
+
+## Live-proven foundation
+
+The following have useful target evidence and may be retained:
+
+- source SM64 gameplay ownership and direct BOB execution;
+- the accepted A9A BOB visual/control artifact;
+- SH-2 native-math and cadence repairs;
+- fixed memory-region/linker checks and selected DMA/address primitives;
+- source Mario animation/render donors from the accepted slice; and
+- the standalone owner-accepted MC68000/SCSP sound implementation.
+
+“Live-proven” applies only to the behavior and artifact actually observed. It
+does not automatically validate later integrations of the same module.
+
+## Candidate architecture on probation
+
+Recent work produced deterministic scene/actor/audio packages, mixed actor-bank
+versions, family/variant compilers, generic actor queues, meshlet workspaces,
+texture residency, generation publication, and render-overlap machinery.
+
+These are candidate donors because the current assembled CUE has not preserved
+Mario fidelity, normal Bob-omb rendering, audible output, or accepted
+performance. Their tests prove useful local properties but not composition.
+
+A candidate component is adopted only after it enables the next live product
+gate within two causal attempts or two hours. Otherwise retain its research and
+tests, bypass its integration, and use the smallest proven path.
+
+## Renderer contract
+
+- Mario keeps the accepted source animation and texture path until a replacement
+  demonstrates byte/content equivalence and equal live fidelity.
+- Terrain, Mario, and actors share one master-owned painter order because VDP1
+  has no depth buffer. Producer-local ordering is insufficient.
+- Fixed bounded Gouraud tables are acceptable; flat replacement is not an
+  accepted substitute where the source result requires lighting.
+- Actors enter through the normal object registry and source behavior/model
+  identity. Forced records and injected witnesses are diagnostics only.
+- Each behavior change is captured after the level has visibly rendered.
+
+## Audio contract
+
+- Preserve the source-facing music/SFX API and game-triggered events.
+- Reuse the existing MC68000/SCSP implementation before designing a replacement.
+- Validate sound RAM bounds and package identity before enabling the sound CPU.
+- Prove audible or captured waveform output; mailbox consumption, heartbeat,
+  and `SNDON` alone are insufficient.
+- Audio faults mute/report without blocking the game.
+
+## Portability contract
+
+Genericity is demonstrated by real reuse, not by schemas:
+
+1. BOB proves the first shared gameplay path.
+2. Whomp’s Fortress proves the second level in the same executable.
+3. The retail title/menu and star-return loop prove source transitions.
+
+No component is called full-game-capable until at least two materially different
+source consumers use it without a level/object-specific runtime branch.
+
+## Verification order
+
+For a product change:
+
+1. focused regression for the observed defect;
+2. target compile/link and memory bounds;
+3. uniquely identified development CUE;
+4. Ymir visual/audio/input/failure/FPS observation;
+5. keep or revert;
+6. focused safety/code review; and
+7. broad/release verification only after a playable milestone.
+
+This order is architectural. Reversing it produced locally rigorous components
+that regressed the assembled port.

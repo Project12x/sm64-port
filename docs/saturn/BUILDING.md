@@ -1,5 +1,11 @@
 # Building the Saturn Bring-up Target
 
+> **Current authority:** Read [`PRODUCT_GOAL.md`](PRODUCT_GOAL.md), the
+> repository [`STATE.md`](../../STATE.md), and [`HOWTO.md`](../../HOWTO.md)
+> before building or launching. Sections below preserve detailed toolchain and
+> historical release instructions; they do not identify the current accepted
+> product artifact. No current development CUE is owner-accepted.
+
 The Saturn build is intentionally separate from the existing N64 and PC
 Makefile. Its sourceboot profile compiles integrated SM64 game code and can
 produce a release-bound BOB demo candidate; the historical VDP2 hello target

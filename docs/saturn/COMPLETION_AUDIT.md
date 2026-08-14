@@ -1,5 +1,10 @@
 # Saturn-port objective evidence matrix
 
+> **Historical audit scope:** This matrix covers early bootstrap/hardware work.
+> It is not the current product-completion checklist. Current acceptance lives
+> in [`PRODUCT_GOAL.md`](PRODUCT_GOAL.md) and the repository
+> [`STATE.md`](../../STATE.md).
+
 This is the current requirement-by-requirement audit for the Saturn bootstrap,
 hardware test, measurement disc, and host classifier work. Emulator evidence is
 development evidence; a physical Saturn with the specified 4 MiB cartridge is

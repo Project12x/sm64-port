@@ -1,5 +1,7 @@
 # Saturn Generic Actor Bundle Design
 
+> **Historical design record (superseded 2026-08-13).** It may explain existing code, but it does not authorize new work or define product progress. Current authority is `docs/saturn/PRODUCT_GOAL.md` and the active recovery plan.
+
 **Status:** Approved architecture; implementation plan and source changes remain
 open.
 

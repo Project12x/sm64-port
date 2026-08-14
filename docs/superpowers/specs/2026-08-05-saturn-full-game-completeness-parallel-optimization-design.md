@@ -1,5 +1,7 @@
 # Saturn Full-Game Completeness and Parallel Optimization Design
 
+> **Historical design record (superseded 2026-08-13).** It may explain existing code, but it does not authorize new work or define product progress. Current authority is `docs/saturn/PRODUCT_GOAL.md` and the active recovery plan.
+
 **Date:** 2026-08-05  
 **Status:** Approved; detailed implementation plan published
 **Supersedes:** Task 10/A10 of the overlapped-render-pipeline plan as the active

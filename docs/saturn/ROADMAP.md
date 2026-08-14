@@ -1,5 +1,10 @@
 # SM64 Saturn development roadmap
 
+> **Historical roadmap:** Superseded for execution on 2026-08-13 by
+> [`PRODUCT_GOAL.md`](PRODUCT_GOAL.md) and the repository
+> [`ROADMAP.md`](../../ROADMAP.md). Preserve this document for the visual and
+> feasibility history; do not use its milestone statuses to start work.
+
 Last updated 2026-07-19.
 
 This is the visual-first execution roadmap for porting Super Mario 64 to the

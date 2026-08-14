@@ -1,5 +1,11 @@
 # Super Mario 64 on Sega Saturn + 4 MiB DRAM Cartridge
 
+> **Historical feasibility plan:** Superseded for current execution by
+> [`PRODUCT_GOAL.md`](PRODUCT_GOAL.md), the repository
+> [`ARCHITECTURE.md`](../../ARCHITECTURE.md), and the single active recovery
+> plan. Its hardware analysis remains reference material; its task ordering is
+> not current authority.
+
 ## Feasibility thesis and gated port plan
 
 Prepared 2026-07-16. This document is the working technical plan for the
