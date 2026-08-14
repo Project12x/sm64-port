@@ -86,7 +86,8 @@
       "path": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/Ymir.toml",
       "sha256": "33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566",
       "historical_pinned_sha256": "33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566",
-      "match": true
+      "match": true,
+      "role": "historical desktop-profile comparator only; neither Task 1 headless invocation read this TOML"
     },
     "bios": {
       "path": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/roms/ipl/Sega Saturn BIOS (USA).bin",
@@ -96,23 +97,30 @@
       "path": "D:/Code/RetroDev/sm64-saturn-port/ymir-agent/build-agent2/apps/ymir-headless/Release/ymir-headless.exe",
       "sha256": "fcc88d82b2ea7afdf400bcf67d45139d02354379388f7f9dba731b63a38d3943"
     },
-    "headless_cli": ["--ipl", "<exact BIOS>", "--game", "<exact CUE>", "--dram-cart"],
+    "headless_cli": {
+      "ymir_arguments_injected_by_YmirClient": ["--ipl", "<exact BIOS>", "--game", "<exact CUE>", "--dram-cart"],
+      "profile_toml_consumed": false
+    },
     "task_1_capture_commands": {
       "a9a_original_same_hash_boot_trace": [
         "C:/Users/estee/AppData/Local/Programs/Python/Python312/python.exe",
-        "tools/saturn/capture_sourceboot_boot_trace.py",
-        "--ymir", "<ymir_headless.path>", "--ipl", "<bios.path>",
-        "--game", "build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/sm64-saturn-sourceboot-e2.cue",
-        "--elf", "build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/obj/sm64-saturn-sourceboot-e2.elf",
+        "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/tools/saturn/capture_sourceboot_boot_trace.py",
+        "--ymir", "D:/Code/RetroDev/sm64-saturn-port/ymir-agent/build-agent2/apps/ymir-headless/Release/ymir-headless.exe",
+        "--ipl", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/roms/ipl/Sega Saturn BIOS (USA).bin",
+        "--game", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/sm64-saturn-sourceboot-e2.cue",
+        "--elf", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/obj/sm64-saturn-sourceboot-e2.elf",
+        "--output", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/docs/saturn/evidence/reports/task1-a9a-baseline-headless-2026-08-13.json",
         "--post-bios-frames", "180", "--timeout", "180"
       ],
       "current_candidate_throughput": [
         "C:/Users/estee/AppData/Local/Programs/Python/Python312/python.exe",
-        "tools/saturn/capture_sourceboot_throughput.py",
-        "--ymir", "<ymir_headless.path>", "--ipl", "<bios.path>",
-        "--game", "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/sm64-saturn-sourceboot-e2.cue",
-        "--elf", "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/obj/sm64-saturn-sourceboot-e2.elf",
-        "--release-manifest", "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/saturn-release-manifest-v1.json",
+        "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/tools/saturn/capture_sourceboot_throughput.py",
+        "--ymir", "D:/Code/RetroDev/sm64-saturn-port/ymir-agent/build-agent2/apps/ymir-headless/Release/ymir-headless.exe",
+        "--ipl", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/roms/ipl/Sega Saturn BIOS (USA).bin",
+        "--game", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/sm64-saturn-sourceboot-e2.cue",
+        "--elf", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/obj/sm64-saturn-sourceboot-e2.elf",
+        "--release-manifest", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/saturn-release-manifest-v1.json",
+        "--output", "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge/docs/saturn/evidence/reports/task1-current-candidate-throughput-2026-08-13.json",
         "--startup-vblanks", "4096", "--max-vblanks", "600",
         "--presentation-events", "2", "--timeout", "180"
       ]

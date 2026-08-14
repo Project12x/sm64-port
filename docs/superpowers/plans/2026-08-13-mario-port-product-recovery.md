@@ -109,32 +109,33 @@ Completed: recorded HEAD `10a2c507fa3503656c3a61930a87acae070d24d8`,
 the 384-line dirty-status digest, newest artifact tuple, and parent profile,
 USA BIOS, and headless Ymir identities in `current-product-gate.json`.
 
-- [x] **Step 3: Launch and capture the baseline**
+- [ ] **Step 3: Visible baseline capture remains open**
 
 Use the profile-backed Ymir path documented by the A9A evidence. Wait through
 the recorded startup window and capture only after BOB and Mario are visible.
 Record Mario appearance, controls/camera, and presentation cadence. Do not call
 the baseline complete SM64; it is only the rollback oracle.
 
-Attempt recorded: the immutable archive layout failed the diagnostic preflight
-because it intentionally lacks `obj/<cue>.elf`; the exact same-hash original
-sibling-layout tuple then ran 1,680 emulated frames with the pinned parent
-profile BIOS/headless Ymir context. Its boot trace failed decode (`magic
-0x08a20417`) and the diagnostic has no video capture. No visual/control/cadence
-claim is made.
+Attempted diagnostic only: the immutable archive layout failed the diagnostic
+preflight because it intentionally lacks `obj/<cue>.elf`; the exact same-hash
+original sibling-layout tuple then ran 1,680 emulated frames using explicit USA
+BIOS and headless-Ymir arguments. The parent `Ymir.toml` hash is historical
+comparator evidence, not a headless launch input. Its boot trace failed decode
+(`magic 0x08a20417`) and the diagnostic has no video capture. No
+visual/control/cadence claim is made; the visible capture remains open.
 
-- [x] **Step 4: Capture the current donor candidate**
+- [ ] **Step 4: Visible current-candidate capture remains open**
 
 Launch the exact newest candidate through the same Ymir/BIOS conditions. Record
 the owner-observed visual/audio/FPS failures already named in `STATE.md`. If no
 candidate can be bound unambiguously, rebuild once before making any behavior
 change and use that artifact as the donor record.
 
-Attempt recorded: the selected candidate's linked-code and embedded
+Attempted diagnostic only: the selected candidate's linked-code and embedded
 build-identity probes matched after 683 startup VBlanks, then its cadence
 capture failed with wrong magic after 600 observation VBlanks and zero
-presentation events. This is a failed live observation, not visual/audio/FPS
-evidence or acceptance.
+presentation events. This is a failed headless diagnostic, not visual/audio/FPS
+evidence or acceptance; the visible capture remains open.
 
 - [x] **Step 5: Select the integration base**
 

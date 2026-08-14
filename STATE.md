@@ -110,15 +110,17 @@ parent Ymir profile configuration is historically pinned and currently matches
 SHA-256 `33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566`.
 The worktree-local profile was not used.
 
-Task 1 launched bounded, identity-bound headless observations using that parent
-profile's USA BIOS, the build-agent2 headless Ymir, and `--dram-cart`. The A9A
-archive layout cannot satisfy the diagnostic tool's required `obj/<cue>.elf`
-layout, so the same-hash original sibling-layout tuple was used without changing
-the archive; its boot-trace diagnostic failed after 1,680 emulated frames. The
-newest generated tuple reached exact linked-code and embedded build-identity
-matches, then failed cadence decode before any presentation event. Neither
-headless diagnostic captured video, so neither establishes a Mario/BOB visual
-gate or advances acceptance. Exact reports and hashes are in
+Task 1 launched bounded, identity-bound headless observations using explicit
+USA-BIOS, game-CUE, and `--dram-cart` arguments with build-agent2 headless
+Ymir. The historically pinned parent `Ymir.toml` is comparator evidence only;
+the headless client did not consume it. The A9A archive layout cannot satisfy
+the diagnostic tool's required `obj/<cue>.elf` layout, so the same-hash original
+sibling-layout tuple was used without changing the archive; its boot-trace
+diagnostic failed after 1,680 emulated frames. The newest generated tuple
+reached exact linked-code and embedded build-identity matches, then failed
+cadence decode before any presentation event. Neither headless diagnostic
+captured video, so neither establishes a Mario/BOB visual gate or advances
+acceptance. Exact reports and hashes are in
 `docs/saturn/evidence/reports/current-product-gate.json`.
 
 ## Documentation authority

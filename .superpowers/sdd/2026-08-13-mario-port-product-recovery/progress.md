@@ -38,11 +38,26 @@ no current candidate accepted and visual comparison remains unresolved**
   record, image-file identity, and newest current artifact tuple in
   `docs/saturn/evidence/reports/current-product-gate.json`.
 - [ ] Baseline/current visual observation: the parent profile config is pinned
-  and hash-matched, and bounded headless observations ran with its exact BIOS
-  and `--dram-cart`; neither included video capture. The same-hash A9A sibling
-  tuple failed its boot-trace diagnostic after 1,680 frames. The selected current
+  and hash-matched as historical desktop comparator evidence only. Bounded
+  headless observations used explicit BIOS/CUE/`--dram-cart` arguments; neither
+  consumed `Ymir.toml` or included video capture. The same-hash A9A sibling tuple
+  failed its boot-trace diagnostic after 1,680 frames. The selected current
   candidate matched linked/build identity, then failed cadence decode before a
   presentation event. No result advances the product gate.
+
+## 2026-08-14 — Task 1 evidence review correction
+
+- Independent read-only review of `10a2c507..2fc1f72c` initially returned
+  **NEEDS FIXES**: the headless client never reads `Ymir.toml`, Steps 3–4 were
+  checked despite lacking video, and the record used placeholder commands.
+- Verified correction: `YmirClient` injects explicit `--ipl`, `--game`, and
+  `--dram-cart`; the pinned parent TOML remains historical desktop-comparator
+  evidence only. The record now contains resolved capture commands and output
+  paths, and the plan leaves both visible-capture steps unchecked.
+- Verification after the correction: `current-product-gate.json` parses and the
+  scoped diff passes `git diff --check`. The failed A9A boot-trace and current
+  zero-presentation diagnostics are retained unchanged. Task 2 is still the
+  next live behavior task; no product acceptance is claimed.
 
 ## Non-negotiable stop rules
 
