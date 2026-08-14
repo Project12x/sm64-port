@@ -81,6 +81,43 @@
       "binding_to_candidate": "not recorded by the candidate artifact directory"
     }
   },
+  "diagnostic_donor_candidate": {
+    "status": "live-observed diagnostic only; not owner-accepted and not a presentation candidate",
+    "source": {
+      "historical_commit": "d7b04d61",
+      "donor_only_extractor_compatibility_commit": "5808cdbf"
+    },
+    "artifacts": {
+      "cue": {
+        "path": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/task2-a9a-donor-20260814/build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/sm64-saturn-sourceboot-e2.cue",
+        "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7"
+      },
+      "elf_sha256": "60c978973e682f8a1cdb3c060d58b8038ce021f7718d8f9c5a430b5cfbaff8d5",
+      "iso_sha256": "0e6eb40e868016df8b321187a27cd35738edcbe34d81938b01ef09a2484b3270"
+    },
+    "scene_ready_observation": {
+      "emulated_vblanks": 3420,
+      "input": "normal Up pulse",
+      "screenshot_sha256": "f9dd7a3f133438aed8ab9d6950385b12b04e5690ee0a06ebeb4892d36be002b5",
+      "bank_0": {
+        "address": "0x00200000",
+        "nonzero_commands": 894,
+        "raw_sha256": "aa46f9e2d26940c448003b4a50a38ed3f5d4991a6358a3b5df61662c82760a1d"
+      },
+      "bank_1": {
+        "address": "0x00210000",
+        "nonzero_commands": 920,
+        "raw_sha256": "7624d479aa7083429fdf8dc4792c0e94a6ec3683876a07089cc01b4ca609b0d3"
+      },
+      "finding": "Mario-span commands use RGB1555 Gouraud solids with nonzero CMDGRDA and RGB1555 detail with CC_REPLACE; this closes only the duplicate lowerer-mode hypothesis. It proves neither visual acceptance nor normal Bob-omb/audio/cadence."
+    },
+    "manual_desktop_launch": {
+      "evidence": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/task2-a9a-donor-20260814/build/saturn/task2-a9a-donor-vdp1-manual-launch-20260814.json",
+      "profile": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile",
+      "profile_toml_sha256": "33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566",
+      "result": "desktop launch was requested; the report observed a live interactive process after 10 seconds. No owner verdict is recorded here."
+    }
+  },
   "launch_environment": {
     "parent_profile_config": {
       "path": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/Ymir.toml",

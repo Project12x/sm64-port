@@ -3,8 +3,9 @@
 **Authoritative goal:** [`docs/saturn/PRODUCT_GOAL.md`](docs/saturn/PRODUCT_GOAL.md)
 **Active plan:**
 [`docs/superpowers/plans/2026-08-13-mario-port-product-recovery.md`](docs/superpowers/plans/2026-08-13-mario-port-product-recovery.md)
-**Status:** recovery design approved; documentation convergence active; no
-current development CUE is accepted.
+**Status:** recovery diagnostic active; no current development CUE is
+accepted. One isolated historical donor has booted to a BOB frame, but is a
+diagnostic only—not the presentation artifact.
 
 ## Product truth
 
@@ -123,16 +124,36 @@ captured video, so neither establishes a Mario/BOB visual gate or advances
 acceptance. Exact reports and hashes are in
 `docs/saturn/evidence/reports/current-product-gate.json`.
 
-## Task 2 status — blocked before a new CUE
+## Task 2 status — scene-ready donor observed; no acceptance
 
-The current sourcebuild graph rejects its actor-family package before SH-2
-compilation even when dynamic actors are disabled. The isolated A9A-source donor
-also cannot yet make a fresh CUE: its documented top-level extractor reaches a
-missing Windows `./tools/mio0` invocation. The focused Mario emitter comparison
-is source-only evidence and remains uncommitted in an already dirty renderer
-file. No Bob-omb, audio, performance, or Whomp's Fortress work is authorized
-until an explicit build-boundary decision is made. The archived A9A CUE remains
-the only visual/control rollback artifact.
+The current sourcebuild graph still rejects its actor-family package before
+SH-2 compilation even when dynamic actors are disabled. That failure blocks a
+new current-tree CUE.
+
+An isolated historical donor at `d7b04d61` plus donor-only extractor
+compatibility commit `5808cdbf` did build and boot a separate CUE. At 3,420
+emulated VBlanks it produced BOB terrain and a Mario draw; the exact CUE/ELF/ISO
+and VDP1 command evidence are recorded in
+`docs/saturn/evidence/reports/2026-08-13-bob-convergence-handoff.md` and
+`docs/saturn/evidence/reports/current-product-gate.json`. The current manual
+desktop launch uses that named donor CUE under the parent Ymir profile whose TOML
+still hashes to the pinned `33a155e7…931566`.
+
+This is **diagnostic evidence only**. The observed donor frame does not prove
+correct Mario scale, animation, face order, occlusion, controls/camera,
+normally spawned Bob-omb rendering, audible game audio, or cadence. A source
+comparison and target command probe closed the proposed duplicate Mario
+color-mode patch: both donor and current lowerers already emit the accepted
+per-material Gouraud plus RGB1555 `CC_REPLACE` contract. Do not build a duplicate
+renderer-only CUE. The next behavior change must follow either a manual verdict
+on the named donor or a distinct target-observed discrepancy.
+
+The four direct sourceboot-audio CUE variants are terminal negative evidence;
+their rebuilt sound-active guard remained zero after target observation. The
+next audio task is target telemetry for the game-entry-to-driver activation
+boundary—not a fifth sourceboot audio variant. Normal Bob-omb, audio,
+performance, and Whomp's Fortress remain closed until a current generic BOB
+artifact is observed and accepted.
 
 ## Documentation authority
 
