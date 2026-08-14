@@ -5,11 +5,15 @@
 This is the durable Saturn product-gate constitution for the SM64 Saturn
 port. It was referenced by
 `docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md` (as "repository-root
-`AGENTS.md` — durable Saturn product-gate constitution and two-attempt/
-two-hour stop rule") but was missing from every tree. Restored 2026-08-14
-from `HOWTO.md` and the handoff's "Operating contract for the next
-maintainer" section. It binds all agents and maintainers working in this
-repository.
+`AGENTS.md` — durable Saturn product-gate constitution and
+two-attempt/two-hour stop rule") but was missing from every tree. Restored
+2026-08-14 from `HOWTO.md` and the handoff's "Operating contract for the
+next maintainer" section. It binds all agents and maintainers working in
+this repository.
+
+Terms used throughout: Ymir is the Saturn emulator used for all
+observations; a CUE is the disc-image descriptor Ymir boots; A9A is the
+accepted 2026-08-05 baseline slice these gates are measured against.
 
 ## The product gate
 
@@ -50,6 +54,13 @@ result. At that stop, the only allowed decisions are:
 
 A new plan, abstraction, repair round, audit, or generalized format is
 **not** an allowed response.
+
+## Build invocation
+
+Builds must go through `tools/saturn/with-msys-toolchain.ps1` with `-j1`
+and the full 27-variable set documented in `docs/saturn/BUILDING.md`; the
+profile JSON is not read back into Make. Do not invoke a different Make,
+Python, or profile implicitly.
 
 ## Artifact identity
 
