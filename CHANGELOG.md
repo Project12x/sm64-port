@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- Recovery branch `saturn/recovery` (forked from `sh2/native-math-purge` @
+  `b2447f67`) now carries the donor worktree's complete unlanded state,
+  transplanted 2026-08-14 as five curated cluster commits (audio, memory
+  relief, render/actor/HUD, build wiring, catch-all). This preserved 117
+  tracked modifications byte-identically plus 53 files with no prior git
+  history — including the SCSP write-only-latch readback fix, the SFXB
+  bundle packager, the `source_audio_live` bridge, the cart-cold memory
+  refactor, and `docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md`
+  itself. Generated scratch (~105 MB of `.tmp-*`, capture dumps, stale
+  package generations) was deliberately excluded. Rationale: 14+ of these
+  files were unrecoverable outside the forensic donor worktree, and the
+  committed tree did not link without them. See the Sprint 1 plan
+  (`docs/superpowers/plans/2026-08-14-sprint1-recovery-baseline-audio.md`)
+  for the curation and verification record.
+
 ### Changed
 
 - Packed the unchanged, 32-byte-aligned sourceboot VDP1 command double-buffer
