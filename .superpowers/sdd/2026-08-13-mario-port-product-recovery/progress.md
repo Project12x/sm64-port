@@ -4,7 +4,8 @@ Authority: `docs/saturn/PRODUCT_GOAL.md`
 
 Active plan: `docs/superpowers/plans/2026-08-13-mario-port-product-recovery.md`
 
-Status: **active — Task 1 baseline/donor inventory; no current candidate accepted**
+Status: **active — Task 1 evidence recorded; baseline-first hybrid selected;
+no current candidate accepted and visual comparison remains unresolved**
 
 ## 2026-08-13 — owner correction and durable reset
 
@@ -24,10 +25,24 @@ Status: **active — Task 1 baseline/donor inventory; no current candidate accep
 
 ## Current execution boundary
 
-- [ ] Record the current HEAD, dirty-worktree ownership, exact build/profile command, and current artifact hashes.
-- [ ] Inventory the accepted A9A donor at file/symbol/config granularity before changing runtime behavior.
-- [ ] Create `docs/saturn/evidence/reports/current-product-gate.json` from measured facts; do not predeclare pass fields.
+- [x] Record the current HEAD, dirty-worktree ownership, profile/BIOS/Ymir identity, and current artifact hashes.
+- [x] Inventory the accepted A9A donor at file/config granularity before changing runtime behavior.
+- [x] Create `docs/saturn/evidence/reports/current-product-gate.json` from measured facts; do not predeclare pass fields.
 - [ ] Begin Task 2 with one causal Mario restoration change and an immediate identity-bound Ymir observation.
+
+## Task 1 — baseline and donor evidence
+
+- [x] Archived A9A ELF/ISO/CUE hashes were recomputed exact against
+  `PRODUCT_GOAL.md`; no rebuild or archive mutation occurred.
+- [x] Recorded source HEAD, dirty-worktree status digest, historical A9A launch
+  record, image-file identity, and newest current artifact tuple in
+  `docs/saturn/evidence/reports/current-product-gate.json`.
+- [ ] Baseline/current visual observation: the parent profile config is pinned
+  and hash-matched, and bounded headless observations ran with its exact BIOS
+  and `--dram-cart`; neither included video capture. The same-hash A9A sibling
+  tuple failed its boot-trace diagnostic after 1,680 frames. The selected current
+  candidate matched linked/build identity, then failed cadence decode before a
+  presentation event. No result advances the product gate.
 
 ## Non-negotiable stop rules
 

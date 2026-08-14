@@ -1,6 +1,7 @@
 # Mario Port Product Recovery Implementation Plan
 
-**Status:** active — Task 1 baseline/donor inventory; no current candidate accepted
+**Status:** active — Task 1 evidence recorded; baseline-first hybrid selected;
+no current candidate accepted and the visual gate remains unresolved
 
 **Activation commit:** `1f07485a` (`docs(saturn): make playable port the product gate`)
 
@@ -89,40 +90,67 @@ current, and that no later launch can silently use the wrong CUE/profile.
 - Consumes the immutable A9A hashes in `PRODUCT_GOAL.md`.
 - Produces one current candidate identity record used by every later task.
 
-- [ ] **Step 1: Hash-check the baseline without rebuilding**
+- [x] **Step 1: Hash-check the baseline without rebuilding**
 
 Run `Get-FileHash -Algorithm SHA256` on the archived ELF, ISO, and CUE. Require
 the exact three hashes recorded in `PRODUCT_GOAL.md`. A mismatch stops the plan;
 recover from the existing archive/evidence rather than regenerating it.
 
-- [ ] **Step 2: Record the donor state**
+Completed: archived ELF/ISO/CUE hashes exactly match `PRODUCT_GOAL.md`; the
+archive was not rebuilt or changed.
+
+- [x] **Step 2: Record the donor state**
 
 Capture `git rev-parse HEAD`, `git status --short`, and a SHA-256 of that status
 text. List current generated CUE/ELF/profile candidates with timestamps and
 hashes. Do not modify or stage production files.
 
-- [ ] **Step 3: Launch and capture the baseline**
+Completed: recorded HEAD `10a2c507fa3503656c3a61930a87acae070d24d8`,
+the 384-line dirty-status digest, newest artifact tuple, and parent profile,
+USA BIOS, and headless Ymir identities in `current-product-gate.json`.
+
+- [x] **Step 3: Launch and capture the baseline**
 
 Use the profile-backed Ymir path documented by the A9A evidence. Wait through
 the recorded startup window and capture only after BOB and Mario are visible.
 Record Mario appearance, controls/camera, and presentation cadence. Do not call
 the baseline complete SM64; it is only the rollback oracle.
 
-- [ ] **Step 4: Capture the current donor candidate**
+Attempt recorded: the immutable archive layout failed the diagnostic preflight
+because it intentionally lacks `obj/<cue>.elf`; the exact same-hash original
+sibling-layout tuple then ran 1,680 emulated frames with the pinned parent
+profile BIOS/headless Ymir context. Its boot trace failed decode (`magic
+0x08a20417`) and the diagnostic has no video capture. No visual/control/cadence
+claim is made.
+
+- [x] **Step 4: Capture the current donor candidate**
 
 Launch the exact newest candidate through the same Ymir/BIOS conditions. Record
 the owner-observed visual/audio/FPS failures already named in `STATE.md`. If no
 candidate can be bound unambiguously, rebuild once before making any behavior
 change and use that artifact as the donor record.
 
-- [ ] **Step 5: Select the integration base**
+Attempt recorded: the selected candidate's linked-code and embedded
+build-identity probes matched after 683 startup VBlanks, then its cadence
+capture failed with wrong magic after 600 observation VBlanks and zero
+presentation events. This is a failed live observation, not visual/audio/FPS
+evidence or acceptance.
+
+- [x] **Step 5: Select the integration base**
 
 Choose baseline-first hybrid unless the current candidate already preserves all
 baseline Mario/control/camera/FPS gates. The current candidate’s actor/audio
 code remains available as donor patches either way. Record the decision; do not
 debate or redesign architecture.
 
-**Gate:** baseline and donor are both exact, launchable, and visibly distinct.
+Decision: **baseline-first hybrid.** The current candidate did not preserve the
+baseline visual/control/camera/FPS gates: it produced zero measured presentation
+events in the bounded capture and no video evidence. The immutable A9A path is
+the integration base; current actor/audio code remains donor-only.
+
+**Gate:** baseline and donor are exact; diagnostic attempts ran but did not
+establish visible gameplay. The visible baseline/current comparison remains
+unmet and blocks any acceptance claim.
 
 ---
 

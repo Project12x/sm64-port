@@ -1,0 +1,162 @@
+{
+  "schema": "sm64-saturn-current-product-gate-v1",
+  "status": "live-observations-recorded; no-current-cue-accepted",
+  "authority": "docs/saturn/PRODUCT_GOAL.md",
+  "collection_scope": "Task 1 read-only baseline and donor inventory",
+  "accepted_baseline": {
+    "status": "hash-verified; historical visual/control/performance rollback oracle",
+    "path": "build/saturn/baselines/a9a-2026-08-05",
+    "artifacts": {
+      "cue": {
+        "path": "build/saturn/baselines/a9a-2026-08-05/sm64-saturn-sourceboot-e2.cue",
+        "bytes": 88,
+        "mtime_utc": "2026-08-05T11:09:01.7536573Z",
+        "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7"
+      },
+      "elf": {
+        "path": "build/saturn/baselines/a9a-2026-08-05/sm64-saturn-sourceboot-e2.elf",
+        "bytes": 8721516,
+        "mtime_utc": "2026-08-05T11:08:54.7939406Z",
+        "sha256": "1905ec8d42ea00ea2c000b5f53dd88f2079ffda8ceb67bcd5879e8e96acfc2e2"
+      },
+      "iso": {
+        "path": "build/saturn/baselines/a9a-2026-08-05/sm64-saturn-sourceboot-e2.iso",
+        "bytes": 4653056,
+        "mtime_utc": "2026-08-05T11:09:00.5774381Z",
+        "sha256": "1ccaef4f2a2d379d82879d3e823d84db135fdee1045d69aa8e0a60d150cfaf96"
+      }
+    },
+    "historical_desktop_launch": {
+      "evidence": "docs/saturn/evidence/reports/a9-step5-desktop-launch-2026-08-05.json",
+      "launcher": "desktop-ymir-profile",
+      "profile_path": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile",
+      "historical_cue_sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+      "profile_config_path": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/Ymir.toml",
+      "profile_config_sha256": "33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566",
+      "note": "The A9A archival validator and completeness-sprint manifest pin this parent-profile configuration hash."
+    }
+  },
+  "baseline_capture_file": {
+    "path": "tools/saturn/baseline-a9a.png",
+    "bytes": 9826,
+    "mtime_utc": "2026-08-09T04:40:40.6235187Z",
+    "sha256": "61f5f8c42a658952dacd52c1be2b30959cc42c1029ea37363144e822d64b981a",
+    "dimensions": [320, 224],
+    "classification": "historical file; not a new Task 1 gameplay capture"
+  },
+  "donor_source_state": {
+    "head": "10a2c507fa3503656c3a61930a87acae070d24d8",
+    "base_ancestor": "10a2c507fa3503656c3a61930a87acae070d24d8",
+    "git_status_short_line_count": 384,
+    "git_status_short_sha256_utf8": "ac6c89f9e9dad7cf74a81dae91a2b3b2188e9b1d36c97be22415bf37ebde20e7"
+  },
+  "current_candidate": {
+    "selection": "newest build/saturn CUE by filesystem LastWriteTimeUtc at inventory time",
+    "status": "candidate; not live-observed or owner-accepted",
+    "artifacts": {
+      "cue": {
+        "path": "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/sm64-saturn-sourceboot-e2.cue",
+        "bytes": 88,
+        "mtime_utc": "2026-08-14T02:03:25.6474469Z",
+        "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7"
+      },
+      "elf": {
+        "path": "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/obj/sm64-saturn-sourceboot-e2.elf",
+        "bytes": 10156576,
+        "mtime_utc": "2026-08-14T02:02:04.4703727Z",
+        "sha256": "b5084d048738bd034b9275784665a1cfa57aaef5efa890745bf561f5b64a5c55"
+      },
+      "iso": {
+        "path": "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/sm64-saturn-sourceboot-e2.iso",
+        "bytes": 5408768,
+        "mtime_utc": "2026-08-14T02:03:24.2288445Z",
+        "sha256": "94cda1353725d36da5437b439ab11b699a6b9136e3d0b14604d9022a54c429ed"
+      }
+    },
+    "source_build_profile": {
+      "path": "tools/saturn/profiles/sourceboot-bob-demo-v1.json",
+      "bytes": 1778,
+      "mtime_utc": "2026-08-13T16:54:49.6027446Z",
+      "sha256": "646d1dd6a578ad071a81702aa6342dedca4909fdfc47976f1e4dd8e920907b08",
+      "binding_to_candidate": "not recorded by the candidate artifact directory"
+    }
+  },
+  "launch_environment": {
+    "parent_profile_config": {
+      "path": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/Ymir.toml",
+      "sha256": "33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566",
+      "historical_pinned_sha256": "33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566",
+      "match": true
+    },
+    "bios": {
+      "path": "D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/roms/ipl/Sega Saturn BIOS (USA).bin",
+      "sha256": "96e106f740ab448cf89f0dd49dfbac7fe5391cb6bd6e14ad5e3061c13330266f"
+    },
+    "ymir_headless": {
+      "path": "D:/Code/RetroDev/sm64-saturn-port/ymir-agent/build-agent2/apps/ymir-headless/Release/ymir-headless.exe",
+      "sha256": "fcc88d82b2ea7afdf400bcf67d45139d02354379388f7f9dba731b63a38d3943"
+    },
+    "headless_cli": ["--ipl", "<exact BIOS>", "--game", "<exact CUE>", "--dram-cart"],
+    "task_1_capture_commands": {
+      "a9a_original_same_hash_boot_trace": [
+        "C:/Users/estee/AppData/Local/Programs/Python/Python312/python.exe",
+        "tools/saturn/capture_sourceboot_boot_trace.py",
+        "--ymir", "<ymir_headless.path>", "--ipl", "<bios.path>",
+        "--game", "build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/sm64-saturn-sourceboot-e2.cue",
+        "--elf", "build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/obj/sm64-saturn-sourceboot-e2.elf",
+        "--post-bios-frames", "180", "--timeout", "180"
+      ],
+      "current_candidate_throughput": [
+        "C:/Users/estee/AppData/Local/Programs/Python/Python312/python.exe",
+        "tools/saturn/capture_sourceboot_throughput.py",
+        "--ymir", "<ymir_headless.path>", "--ipl", "<bios.path>",
+        "--game", "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/sm64-saturn-sourceboot-e2.cue",
+        "--elf", "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/obj/sm64-saturn-sourceboot-e2.elf",
+        "--release-manifest", "build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/saturn-release-manifest-v1.json",
+        "--startup-vblanks", "4096", "--max-vblanks", "600",
+        "--presentation-events", "2", "--timeout", "180"
+      ]
+    },
+    "ancillary_state_note": "The worktree-local .ymir-profile is distinct from the pinned parent profile and was not used. Ancillary state is not treated as the parent config identity."
+  },
+  "artifact_inventory_counts": {
+    "cue": 81,
+    "elf": 83,
+    "iso": 81
+  },
+  "live_observations": {
+    "a9a_baseline": {
+      "archive_tool_preflight": "The immutable archive layout is rejected by capture_sourceboot_boot_trace.py before Ymir because the tool requires obj/<cue>.elf while the archive keeps its ELF beside the CUE.",
+      "launched_tuple": "The original sibling-layout tuple was used only after its ELF/ISO/CUE hashes were recomputed equal to the immutable archive.",
+      "report_path": "docs/saturn/evidence/reports/task1-a9a-baseline-headless-2026-08-13.json",
+      "report_sha256": "13b5956cecd0cf8ce0d03bbf1492f1d9431b2edd50415df30eb2af846b689088",
+      "result": "failed",
+      "emulated_frames": 1680,
+      "failure": "boot trace magic is 0x08a20417",
+      "visual_claim": "none; this headless diagnostic has no video capture"
+    },
+    "current_candidate": {
+      "report_path": "docs/saturn/evidence/reports/task1-current-candidate-throughput-2026-08-13.json",
+      "report_sha256": "b3d06a363d79a660413111e08bca1819e3472a0fcfcbee3f9077bbf42e00ba7b",
+      "result": "failed",
+      "identity_result": "linked code and embedded build identity matched the exact candidate ELF",
+      "startup_vblanks_waited": 683,
+      "observation_vblanks_advanced": 600,
+      "failure": "cadence trace decode failed: cadence trace has wrong magic",
+      "presentation_events_observed": 0,
+      "visual_claim": "none; this headless capture has no video capture"
+    }
+  },
+  "product_gate": {
+    "accepted_current_cue": null,
+    "historical_owner_findings": [
+      "incorrect Mario color/material association",
+      "flat or incorrect Gouraud shading",
+      "incorrect painter/occlusion order",
+      "wrong Bob-omb textures/placement",
+      "no audible game audio",
+      "approximately 1 FPS in at least one current run"
+    ],
+    "conclusion": "No current development CUE is accepted. The current candidate's exact code/build identity reached Ymir, but its cadence observation failed and no video capture establishes presentation; no Task 1 fact advances the product gate."
+  }
+}
