@@ -225,14 +225,19 @@ start earlier.
   closure-derived semantics`. `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=0` does not
   bypass its unconditional package-generation/sealing dependencies.
 - Isolated donor `d7b04d61` was prepared from only the bound ROM, `build/us_pc`,
-  and tool environment. Its historical build reached the source-asset route but
-  top-level extraction then failed because `extract_assets.py` invokes a missing
-  `./tools/mio0` on Windows. No current generated Saturn output or PNG was
-  borrowed; no donor CUE or Ymir observation exists.
+  and tool environment. The apparent missing `./tools/mio0` failure was a
+  diagnostic-command error: top-level `make -n` propagated its dry-run flag to
+  the extractor's child `make -C tools`, printing tool commands without creating
+  helpers. A real extraction regenerated the donor BOB PNG and host helpers,
+  then reached the sound branch. It now stops because that branch hard-codes
+  `python3`, which resolves to the unavailable Windows App Execution Alias rather
+  than the approved interpreter. No current generated Saturn output was borrowed;
+  no donor CUE or Ymir observation exists.
 - Keep the bounded source-policy regression and emitter hunk uncommitted in the
   existing dirty renderer file. Do not treat it as an accepted transplant,
   expand into an actor/package repair, or open Tasks 3–6. A new CUE requires an
-  explicit decision to repair the historical Windows tool path or to authorize a
+  explicit decision to make the one-line donor-only interpreter compatibility
+  repair (`sys.executable` instead of literal `python3`) or to authorize a
   different build boundary.
 
 ---
