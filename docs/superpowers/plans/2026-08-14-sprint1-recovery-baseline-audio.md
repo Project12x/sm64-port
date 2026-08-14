@@ -10,7 +10,7 @@
 
 **Governing docs:** program charter `2026-08-14-saturn-shaped-port-program.md`; constitution rules in `docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md` §"Operating contract". **Stop rule: two implementation attempts or two hours without a new live result → revert, bypass, or smaller transplant. Never a new abstraction.**
 
-**Owner inputs required before Task 6:** a WAV render of the BOB theme (SM64 seq 3, "SEQ_LEVEL_GRASS"), any sample rate, from the owner's own ROM-derived audio (emulator recording is fine). Place at `<recovery-worktree>/bob_theme.us.wav`. It is gitignored like `baserom.us.z64` and never committed. Target: a loopable section ≤28 seconds (fits sound RAM at 8 kHz).
+**Owner inputs required before Task 10 (Tasks 1–9 do not need it):** a WAV render of the BOB theme (SM64 seq 3, "SEQ_LEVEL_GRASS"), any sample rate, from the owner's own ROM-derived audio (emulator recording is fine). Place at `<recovery-worktree>/bob_theme.us.wav`. It is gitignored like `baserom.us.z64` and never committed. Target: a loopable section ≤28 seconds (fits sound RAM at 8 kHz).
 
 **Paths used throughout:**
 - `DONOR` = `D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge`
