@@ -354,6 +354,40 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertIn("seal-release", makefile)
         self.assertIn("verify-release", makefile)
 
+    def test_release_seal_rebases_every_input_at_a_canonical_manifest_root(self) -> None:
+        """A short build junction must not become the manifest namespace."""
+        makefile = self.sourceboot_makefile()
+        self.assertIn("SOURCEBOOT_MANIFEST_ROOT ?= $(ROOT)", makefile)
+        self.assertIn(
+            "sourceboot-manifest-path = $(SOURCEBOOT_MANIFEST_ROOT)/"
+            "$(patsubst $(ROOT)/%,%,$(1))",
+            makefile,
+        )
+        seal = makefile.split("seal-release: verify-sealed-inputs", 1)[1].split(
+            "verify-release: seal-release", 1
+        )[0]
+        self.assertIn('--root "$(SOURCEBOOT_MANIFEST_ROOT)"', seal)
+        for input_path in (
+            "$(SOURCEBOOT_RESOLVED_PROFILE)",
+            "$(SOURCEBOOT_SOURCE_CLOSURE)",
+            "$(SOURCEBOOT_PACKAGE_SET)",
+            "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)",
+            "$(SOURCEBOOT_BUILD_IDENTITY_JSON)",
+            "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf",
+            "$(SOURCEBOOT_CART_IMAGE)",
+            "$(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso",
+            "$(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue",
+            "$(SOURCEBOOT_RELEASE_MANIFEST)",
+        ):
+            self.assertIn(
+                f'$(call sourceboot-manifest-path,{input_path})', seal
+            )
+
+        outer = (ROOT / "Makefile.saturn.mk").read_text(encoding="utf-8")
+        self.assertIn(
+            'SOURCEBOOT_MANIFEST_ROOT="$(SOURCEBOOT_MANIFEST_ROOT)"', outer
+        )
+
     def test_identity_generator_resolves_repository_relative_spec_paths(self) -> None:
         makefile = self.sourceboot_makefile()
         self.assertIn(
@@ -603,6 +637,41 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
                 for line in incbin_lines),
             incbin_lines,
         )
+
+    def test_semantic_audio_build_uses_the_selected_bob_closure(self) -> None:
+        makefile = self.sourceboot_makefile()
+        audio_recipe = makefile.split(
+            "sourceboot-audio-sfx-inputs:", 1
+        )[1].split("$(SOURCEBOOT_SFX_METADATA)", 1)[0]
+
+        self.assertIn("compile-saturn-audio", audio_recipe)
+        self.assertIn(
+            'SATURN_AUDIO_SCENE_CLOSURE="$(SOURCEBOOT_ACTOR_CLOSURE)"',
+            audio_recipe,
+        )
+
+    def test_actor_family_bundle_regenerates_the_selected_generation(self) -> None:
+        """A report from another package generation is not a usable input."""
+        makefile = self.sourceboot_makefile()
+        recipe = makefile.split(
+            "source-actor-family-bundle:", 1
+        )[1].split(".PHONY: source-actor-identity-registry-force", 1)[0]
+
+        self.assertIn("source-actor-families", recipe)
+        self.assertIn("--verify-publication", recipe)
+        self.assertNotIn('test -f "$(SOURCEBOOT_ACTOR_FAMILY_REPORT)"', recipe)
+        self.assertNotIn('test -f "$(SOURCEBOOT_ACTOR_BUNDLE_REPORT)"', recipe)
+
+    def test_command_tables_are_packed_first_in_hwram_bss(self) -> None:
+        """The 32-byte VDP1 banks must not pay avoidable late-BSS padding."""
+        source = (SOURCEBOOT / "main.c").read_text(encoding="utf-8")
+        linker = (SOURCEBOOT / "sourceboot-cart.x").read_text(encoding="utf-8")
+
+        self.assertIn('section(".sourceboot_vdp1_cmdts")', source)
+        special = linker.index("*(.sourceboot_vdp1_cmdts)")
+        generic = linker.index("*(.bss.*)")
+        self.assertLess(special, generic)
+        self.assertIn(". = ALIGN (32);", linker[:special])
 
     def test_second_discovery_rescans_cached_depfile_after_flag_drift(self) -> None:
         dep_root = Path(self.temporary.name) / "discovery-deps"

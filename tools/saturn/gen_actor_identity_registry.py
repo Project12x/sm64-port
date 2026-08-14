@@ -185,16 +185,36 @@ def _validated_inputs(
 
 def build_registry_rows(
     report: dict,
+    bundle_report: dict,
     closure: dict,
     model_ids: dict[str, int],
     scene_package_generation: int,
 ) -> list[RegistryRow]:
     if not 0 < scene_package_generation <= 0xFFFFFFFF:
         raise ValueError("scene generation must be a nonzero uint32")
-    hash_words = sha256_words(str(report["payload_sha256"]))
-    actor_bank_id = hash_words[0]
-    if actor_bank_id == 0:
-        raise ValueError("family bank digest produces reserved zero actor bank ID")
+    if bundle_report.get("schema") != "sm64-saturn-actor-family-bundle-build-v1":
+        raise ValueError("actor bundle report schema is invalid")
+    if bundle_report.get("package_generation") != scene_package_generation:
+        raise ValueError("actor bundle report package generation is stale")
+    if bundle_report.get("family_count") != len(report["families"]):
+        raise ValueError("actor bundle report family count is stale")
+    banks = bundle_report.get("banks")
+    if not isinstance(banks, list) or not banks:
+        raise ValueError("actor bundle report has no compiled actor variants")
+    if bundle_report.get("supported_variant_count") != len(banks):
+        raise ValueError("actor bundle supported variant count is stale")
+    compiled: dict[tuple[int, int], tuple[int, ...]] = {}
+    for bank in banks:
+        family_ordinal = int(bank.get("family_ordinal", 0))
+        model_id = int(bank.get("model_id", 0))
+        hash_words = sha256_words(str(bank.get("source_sha256", "")))
+        if (family_ordinal == 0 or family_ordinal > len(report["families"]) or
+                model_id == 0 or hash_words[0] == 0):
+            raise ValueError("actor bundle variant identity is invalid")
+        key = family_ordinal, model_id
+        if key in compiled:
+            raise ValueError("actor bundle contains duplicate compiled variant")
+        compiled[key] = hash_words
 
     families_by_key: dict[str, tuple[int, dict]] = {}
     for ordinal, family in enumerate(report["families"], start=1):
@@ -236,6 +256,9 @@ def build_registry_rows(
             model_id = model_ids[model_name]
             if not 0 < model_id <= 0xFFFF:
                 raise ValueError(f"model ID for {model_name!r} is reserved or out of range")
+            hash_words = compiled.get((family_ordinal, model_id))
+            if hash_words is None:
+                continue
             binding = model_provenance.get(model_name)
             if (
                 not isinstance(binding, dict) or
@@ -251,7 +274,7 @@ def build_registry_rows(
                 geo_symbol=geo_symbol,
                 behavior_symbol=behavior,
                 family_id=family_ordinal,
-                actor_bank_id=actor_bank_id,
+                actor_bank_id=hash_words[0],
                 actor_bank_hash_words=hash_words,
                 scene_package_generation=scene_package_generation,
             )
@@ -365,11 +388,13 @@ def build_header(rows: Iterable[RegistryRow]) -> str:
 
 def generate(
     family_report_path: Path,
+    bundle_report_path: Path,
     closure_path: Path,
     model_ids_path: Path,
     scene_package_generation: int,
 ) -> str:
     report = json.loads(family_report_path.read_text(encoding="utf-8"))
+    bundle_report = json.loads(bundle_report_path.read_text(encoding="utf-8"))
     closure = json.loads(closure_path.read_text(encoding="utf-8"))
     payload_path = Path(str(report.get("payload", "")))
     if not payload_path.is_absolute():
@@ -377,13 +402,16 @@ def generate(
     payload = payload_path.read_bytes()
     _validated_inputs(report, closure, payload, scene_package_generation)
     model_ids = parse_model_ids(model_ids_path.read_text(encoding="utf-8"))
-    rows = build_registry_rows(report, closure, model_ids, scene_package_generation)
+    rows = build_registry_rows(
+        report, bundle_report, closure, model_ids, scene_package_generation,
+    )
     return build_header(rows)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--family-report", type=Path, required=True)
+    parser.add_argument("--bundle-report", type=Path, required=True)
     parser.add_argument("--closure", type=Path, required=True)
     parser.add_argument("--model-ids", type=Path, required=True)
     parser.add_argument("--scene-generation", type=int, required=True)
@@ -391,6 +419,7 @@ def main() -> None:
     args = parser.parse_args()
     header = generate(
         args.family_report,
+        args.bundle_report,
         args.closure,
         args.model_ids,
         args.scene_generation,

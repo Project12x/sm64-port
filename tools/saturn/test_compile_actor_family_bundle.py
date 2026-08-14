@@ -176,7 +176,7 @@ class CompileActorFamilyBundleTest(unittest.TestCase):
             payload = (Path(temporary) / report["outputs"]["bundle"]).read_bytes()
             view = validate_bundle(payload)
             self.assertEqual(view.family_count, 47)
-            self.assertEqual(view.variant_count, 14)
+            self.assertEqual(view.variant_count, 15)
             self.assertEqual(
                 [(row.family_ordinal, row.model_id) for row in view.variants],
                 list(BOB_DIRECT_TEXTURED_KEYS),
@@ -185,30 +185,30 @@ class CompileActorFamilyBundleTest(unittest.TestCase):
             for row in view.variants:
                 start = view.bank_payloads_offset + row.bank_offset
                 versions.append(validate_actor_bank(payload[start:start + row.bank_size]).version)
-            self.assertEqual(versions, [2] * 14)
+            self.assertEqual(versions, [2] * 15)
             self.assertIn((29, 0x0080), BOB_DIRECT_TEXTURED_KEYS)
-            self.assertEqual(report["supported_variant_count"], 14)
-            self.assertEqual(report["unsupported_drawable_count"], 20)
+            self.assertEqual(report["supported_variant_count"], 15)
+            self.assertEqual(report["unsupported_drawable_count"], 19)
             self.assertEqual(report["model_none_count"], 2)
-            self.assertEqual(report["bundle_totals"]["embedded_s64b_bytes"], 40920)
-            self.assertEqual(report["bundle_totals"]["texture_bytes"], 16640)
-            self.assertEqual(report["bundle_totals"]["clut_bytes"], 2816)
-            self.assertEqual(report["bundle_totals"]["workspace_bytes"], 1091)
+            self.assertEqual(report["bundle_totals"]["embedded_s64b_bytes"], 47208)
+            self.assertEqual(report["bundle_totals"]["texture_bytes"], 18048)
+            self.assertEqual(report["bundle_totals"]["clut_bytes"], 2976)
+            self.assertEqual(report["bundle_totals"]["workspace_bytes"], 2915)
             self.assertEqual(
                 report["resource_inventory"]["workspace"],
-                {"used_bytes": 1091, "capacity_bytes": 1280, "margin_bytes": 189},
+                {"used_bytes": 2915, "capacity_bytes": 3072, "margin_bytes": 157},
             )
             self.assertIn(
-                b"#define SM64_SATURN_ACTOR_BUNDLE_WORKSPACE_BYTES 1280U",
+                b"#define SM64_SATURN_ACTOR_BUNDLE_WORKSPACE_BYTES 3072U",
                 (Path(temporary) / "actor_bundle_capacity.h").read_bytes(),
             )
             inventory = report["resource_inventory"]
-            self.assertEqual(inventory["guaranteed_any_mix_count"], 19)
-            self.assertEqual(inventory["vdp1_residency"]["future_repartition_margin_bytes"], 33216)
+            self.assertEqual(inventory["guaranteed_any_mix_count"], 15)
+            self.assertEqual(inventory["vdp1_residency"]["future_repartition_margin_bytes"], 31648)
             self.assertFalse(inventory["vdp1_residency"]["current_binders_own_remaining"])
-            self.assertEqual(inventory["source_ceiling_diagnostic"]["output_records"], 85512)
+            self.assertEqual(inventory["source_ceiling_diagnostic"]["output_records"], 101832)
             reasons = [row["reason"] for row in report["unsupported_drawable"]]
-            self.assertEqual(sum("GEO_SHADOW" in reason for reason in reasons), 18)
+            self.assertEqual(sum("GEO_SHADOW" in reason for reason in reasons), 17)
             self.assertEqual(sum("GEO_SCALE" in reason for reason in reasons), 1)
             self.assertEqual(sum("GEO_ASM" in reason for reason in reasons), 1)
             cannon = next(row for row in report["banks"]

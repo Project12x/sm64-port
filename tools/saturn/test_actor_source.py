@@ -30,19 +30,42 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class ActorSourceTest(unittest.TestCase):
     def test_generic_animation_table_and_header_reject_empty_fields(self) -> None:
-        for label, table in {
-            "double": (
+        table = (
+            "const struct Animation *const test_anims[] = "
+            "{ &walk_anim,, NULL };"
+        )
+        with self.assertRaisesRegex(ValueError, "empty animation table field"):
+            parse_animation_table_text("table.inc.c", table, "test_anims")
+        self.assertEqual(
+            parse_animation_table_text(
+                "table.inc.c",
                 "const struct Animation *const test_anims[] = "
-                "{ &walk_anim,, NULL };"
-            ),
-            "trailing": (
+                "{ &walk_anim, NULL, };",
+                "test_anims"),
+            ("walk_anim",),
+        )
+        self.assertEqual(
+            parse_animation_table_text(
+                "table.inc.c",
                 "const struct Animation *const test_anims[] = "
-                "{ &walk_anim, NULL, };"
-            ),
-        }.items():
-            with self.subTest(boundary="table", label=label), \
-                    self.assertRaisesRegex(ValueError, "empty animation table field"):
-                parse_animation_table_text("table.inc.c", table, "test_anims")
+                "{ &walk_anim, NULL, NULL, };",
+                "test_anims"),
+            ("walk_anim",),
+        )
+        self.assertEqual(
+            parse_animation_table_text(
+                "table.inc.c",
+                "const struct Animation *const test_anims[] = "
+                "{ &walk_anim, };",
+                "test_anims"),
+            ("walk_anim",),
+        )
+        with self.assertRaisesRegex(ValueError, "entry follows NULL sentinel"):
+            parse_animation_table_text(
+                "table.inc.c",
+                "const struct Animation *const test_anims[] = "
+                "{ &walk_anim, NULL, &idle_anim, NULL };",
+                "test_anims")
 
         template = """
 static const s16 idle_values[] = { 0, 1, 2, 3, 4, 5 };
@@ -53,21 +76,23 @@ static const struct Animation idle_anim[] = {
     %s
 };
 """
-        for label, header in {
-            "double": (
-                "1,, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(idle_indices), "
-                "idle_values, idle_indices, 0"
-            ),
-            "trailing": (
+        with self.assertRaisesRegex(ValueError, "empty Animation header field"):
+            parse_generic_animation_file_text(
+                "anim.inc.c", template % (
+                    "1,, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(idle_indices), "
+                    "idle_values, idle_indices, 0"), {"idle_anim": 1})
+        parsed = parse_generic_animation_file_text(
+            "anim.inc.c", template % (
                 "1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(idle_indices), "
-                "idle_values, idle_indices, 0,"
-            ),
-        }.items():
-            with self.subTest(boundary="header", label=label), \
-                    self.assertRaisesRegex(ValueError, "empty Animation header field"):
-                parse_generic_animation_file_text(
-                    "anim.inc.c", template % header, {"idle_anim": 1}
-                )
+                "idle_values, idle_indices, 0,"), {"idle_anim": 1})
+        self.assertEqual(len(parsed), 1)
+        scalar = (template % (
+            "1, 1, 0, 0, 1, ANIMINDEX_NUMPARTS(idle_indices), "
+            "idle_values, idle_indices, 0,")).replace(
+                "struct Animation idle_anim[]",
+                "struct Animation idle_anim")
+        self.assertEqual(len(parse_generic_animation_file_text(
+            "anim.inc.c", scalar, {"idle_anim": 1})), 1)
 
     def test_generic_animation_table_and_source_preserve_selected_order(self) -> None:
         table = """

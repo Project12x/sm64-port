@@ -19,6 +19,7 @@ from compile_scene_package import (
     HEADER_SIZE,
     DependencyInput,
     SectionInput,
+    _canonical_relative_path,
     canonical_dependency_masks,
     compile_package,
     parse_package,
@@ -568,6 +569,25 @@ class ScenePackageSchemaTest(unittest.TestCase):
             self.assertEqual(before_failed_repeat, {
                 path: path.read_bytes() for path in published
             })
+
+    def test_publication_paths_resolve_directory_aliases_before_relativizing(self) -> None:
+        """A junction spelling must not change immutable package sidecars."""
+        with tempfile.TemporaryDirectory(prefix="s64p-relpath-alias-") as temporary:
+            root = Path(temporary)
+            canonical = root / "canonical"
+            payload = canonical / "actors.s64f"
+            output = canonical / "scene" / "scene.s64p"
+            output.parent.mkdir(parents=True)
+            payload.parent.mkdir(parents=True, exist_ok=True)
+            payload.write_bytes(b"payload")
+            alias = root / "alias"
+            try:
+                alias.symlink_to(canonical, target_is_directory=True)
+            except OSError:
+                self.skipTest("directory symlink creation is unavailable")
+            self.assertEqual(
+                _canonical_relative_path(alias / payload.name, output.parent),
+                "../actors.s64f")
 
     def test_final_publication_rolls_back_every_late_conflict(self) -> None:
         payload = b"S64F-v3-actor-bundle"

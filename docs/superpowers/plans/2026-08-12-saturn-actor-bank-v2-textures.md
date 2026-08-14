@@ -1,5 +1,13 @@
 # Saturn Actor Bank v2 Textures Implementation Plan
 
+> **SUPERSEDED FOR EXECUTION — 2026-08-13.** This plan remains the technical
+> ledger for candidate actor-bank work, but its task sequence, review rounds,
+> and `source-complete` states cannot advance the product. The actor stack is
+> probationary under [`../../saturn/PRODUCT_GOAL.md`](../../saturn/PRODUCT_GOAL.md).
+> Only the live product steps in
+> [`2026-08-13-mario-port-product-recovery.md`](2026-08-13-mario-port-product-recovery.md)
+> may authorize further Saturn behavior work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build an additive texture/material-capable S64B v2, package the exact
@@ -1108,6 +1116,30 @@ Commit `feat(saturn): retain textured actor scene bundles`. Review lifecycle, ca
 - Consumes: `sm64_saturn_source_scene_bundle_resolve`, Task 16 generalized meshlet workspace, queue/batch ABI, Task 6 material binder, Task 7 current texture mapping.
 - Produces feature-on ACTOR_ADMIT/ACTOR_LOWER work that drains real descriptors; master merge resolves each output record to its validated bank primitive/material/tile and emits painter-ordered commands.
 
+#### Immediate live-consumer painter-order memory record (2026-08-13)
+
+The first normal `bhvBobomb` replay reaches the generic actor route and emits
+real VDP1 material commands, but its image exposes a shared-list defect:
+terrain, Mario, and generic actor entries are currently appended as separate
+producer streams even though all three already carry the same 64-bin,
+view-space painter key. VDP1 has no depth buffer, so producer ordering is not
+an acceptable substitute for one cross-type painter order.
+
+This correction consumes the existing two `2048 * 32`-byte HWRAM command banks
+(`0x20000` bytes total), transferring the selected 64-KiB bank to the existing
+VDP1 command-table region through the established CPU-DMAC frame-bank route.
+It adds zero persistent bytes and does not change S64B/S64F/package bytes,
+worker descriptors, queue records, VDP1 VRAM partitioning, or the 2,048-command
+limit. After master-side terrain/Mario/generic lowering and END encoding, the
+master validates every existing draw-bin tag, then atomically rewires the
+existing VDP1 command links far-to-near by bin with stable producer ties. The
+local-coordinate prefix is reset to ordinary sequential linking at the next
+frame begin; an invalid tag leaves the just-built bank unpublished/quarantined,
+and no stale chain is reused. The producer is the existing master lowerer; the
+first real consumer is the existing VDP1 list execution after frame-bank
+publication. A focused host link-chain test and an immediate identity-bound
+Ymir Bob-omb capture are the earliest observations.
+
 - [ ] **Step 1: Write RED live-consumer and first normal-enemy tests**
 
 First require the existing canonical package plus the common
@@ -1478,3 +1510,91 @@ Task 4 of `docs/superpowers/plans/2026-08-11-saturn-generic-actor-bundle.md` res
   streamer. The source-complete transition above records the resulting
   phase-borrowed command-bank stage. Runtime cutover, renderer, target link/run,
   and Ymir remain open.
+
+## Normal BoB visual repair memory record (2026-08-13, active)
+
+- The normal BOB cue reaches the generic actor queue: stock `bhvBobomb` rows
+  publish actor outputs and material commands.  It is not a forced actor or a
+  demo-only renderer branch.  Visual failures are being repaired on that same
+  normal scene-package, registry, residency, queue, and VDP1 emitter route.
+- The material route consumes four actor-owned VDP1 partition fields only:
+  texture base/size and CLUT base/size.  They are captured after the one-time
+  CART-to-HWRAM-to-VDP1 upload, owned by the source-scene committed generation,
+  read by the master during generic command emission, and rejected if the
+  texture generation is stale or uncommitted.  They must never fall back to
+  the terrain/Mario partition.
+- The new generic material snapshot increased the last linked image from
+  `___end=0x060fe0d8` (7,976-B margin) to `0x060fe200`, leaving 7,680 B
+  against the fixed 7,936-B HWRAM safety floor: a 256-B honest link failure.
+  The attempted LWRAM relocation was rejected by the target linker because
+  that apparent prefix is the reserved slave stack; it is not capacity.  The
+  correction instead removes the 200-B persistent master-only HUD dirty-cell
+  cache and performs a bounded 20x14 VDP2 PND clear plus at most 24 current
+  glyph writes each presentation.  The 8-B workspace binding and 32-B probe
+  remain HWRAM, and the actor VDP1 snapshot preserves its existing four
+  base/size fields and contract.  No DMA input, slave-owned state, VDP1
+  command/Gouraud storage, package format, or render path changes.  The
+  2,560-B command-bank upload stage, 65,536-B actor LWRAM arena, and VDP1
+  command and Gouraud HWRAM arrays remain fixed.  A target link must prove
+  the restored HWRAM margin before any emulator claim.
+- Earliest consumer proof is an identity-bound normal BOB cue rebuild followed
+  by an emulator capture after the stage has rendered: Mario must have bounded
+  fixed-table Gouraud, the stock Bob-omb must reference the actor VDP1
+  partition, and opaque actor primitives must be far-to-near within the actor
+  pass.  Any failed link, stale generation, invalid partition, or visual
+  mismatch stops the chain; no release/capacity/new-architecture work opens.
+- **2026-08-13 live result (active; not visual acceptance):** candidate
+  `id-d236c3da23f7144a` linked at `___end=0x060fe0e8`, leaving 7,960 B against
+  the fixed 7,936-B TLSF floor (24 B surplus).  Its verified development
+  manifest digest is
+  `13ae0f0f0df03eb0ace66051820aca02be0f8329e34926efba78deb94a26375a`.
+  The identity-bound normal route reached frame 14,220 with presentation
+  generation 278, five ordinary actor instances, one observed stock
+  `bhvBobomb` / `MODEL_BLACK_BOBOMB` marked `render_active`, 69 generic actor
+  output records, 27 actor Gouraud tables, and zero failed render generation.
+  This validates the existing generic package/registry/queue/residency/master
+  emitter route, not an injected Cannon.  The resulting image remains an
+  unaccepted visual capture: it requires owner inspection for Mario scale,
+  Gouraud, VDP1 painter order, and recognisable Bob-omb material before actor
+  expansion.  The profile still selects `audio-stub-v1` with semantic audio
+  disabled, so it makes no music or SFX claim.
+
+### Task 9 live-coverage correction (2026-08-13)
+
+- The current normal BOB package has 15 validated v2 variants of 34 drawable
+  selections: the original 14 direct-material banks plus the normally spawned
+  `bhvBobomb` / `MODEL_BLACK_BOBOMB` bank.  The normal BOB route has reached
+  the generic observer, queue, bundle resolver, residency lookup, material
+  binder, and master emitter; this is not an injected-Cannon path.  It is
+  nevertheless a development candidate, not a released or visually accepted
+  demo.
+- A read-only all-key probe with the existing shadow/scale reductions enabled
+  proved that those reductions alone do not admit the other 19.  Thirteen next
+  reject at the closure-attested textured rigid-group boundary; the remaining
+  named boundaries are one transparent-star Fast3D state, three `GEO_ASM`
+  opacity paths, one multi-root skeleton, and one non-unit scale.  Therefore
+  the earlier Step 5 wording claiming that two common Geo reductions alone
+  complete all 34 is superseded.
+- The only allowed continuation is a bounded, closure-attested expansion of
+  the existing S64B-v2/material compiler for these exact BOB states, on the
+  same scene package and queue/residency/emitter path.  It may not introduce a
+  new format, renderer branch, injected actor, generic-level framework, or
+  unmeasured VDP1/HWRAM allocation.  Before admitting each additional class,
+  remeasure the resident texture/CLUT bytes and the existing actor output,
+  command, Gouraud, LWRAM-workspace, and HWRAM link margins; reject the class
+  if any fixed bound fails.
+
+### Task 9 narrow textured-detail repair (active, 2026-08-13)
+
+- The identity-bound normal BOB replay reached its ordinary `bhvBobomb` /
+  `MODEL_BLACK_BOBOMB` witness but remains visually unaccepted. Its complete
+  VDP1 chain traversed once and its actor textures used the separate committed
+  actor partition; neither is the current repair target.
+- Focused RED: `tools/saturn/test_render_snapshot_source.py` proved that
+  Mario's visible RGB1555 texture-detail command used `CC_REPLACE` despite the
+  existing fixed Gouraud table. GREEN changes only that detail command: when
+  the already-reserved table exists it uses `CC_GOURAUD` and binds its existing
+  `CMDGRDA`; allocation failure retains the established replace fallback.
+- The next gate is an immediate development target rebuild of the same normal
+  profile and Ymir replay. No release seal, package format, actor expansion,
+  or audio claim is implied by this repair.

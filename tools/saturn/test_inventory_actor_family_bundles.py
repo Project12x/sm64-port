@@ -20,6 +20,7 @@ from inventory_actor_family_bundles import (  # noqa: E402
 SUPPORTED_COSTS = (
     (4, 0x00CD, 240, 18, 18, 0),
     (6, 0x00DB, 240, 20, 20, 0),
+    (7, 0x00BC, 240, 68, 12, 56),
     (8, 0x008F, 240, 18, 18, 0),
     (13, 0x00A3, 240, 16, 16, 0),
     (18, 0x00A4, 720, 2, 2, 0),
@@ -38,34 +39,34 @@ SUPPORTED_COSTS = (
 class InventoryActorFamilyBundlesTest(unittest.TestCase):
     def test_exact_profile_shares_diagnostic_and_guaranteed_floor(self) -> None:
         report = prove_resource_inventory(
-            SUPPORTED_COSTS, texture_bytes=16640, clut_bytes=2816,
-            bundle_bytes=50000, workspace_bytes=1091,
+            SUPPORTED_COSTS, texture_bytes=18048, clut_bytes=2976,
+            bundle_bytes=50000, workspace_bytes=2915,
             package_class_bytes={name: 1 for name in AUTHORITATIVE_LIMITS.package_classes},
         )
         self.assertEqual(report["source_ceiling_diagnostic"], {
             "acceptance": False,
             "name": "unconstrained_source_ceiling_envelope",
-            "live_instances": 5288,
-            "output_records": 85512,
-            "texture_commands": 65788,
-            "gouraud_tables": 29352,
+            "live_instances": 5528,
+            "output_records": 101832,
+            "texture_commands": 68668,
+            "gouraud_tables": 42792,
         })
         shares = report["actor_shares"]
         self.assertEqual(shares["output_records"], 2718)
         self.assertEqual(shares["texture_commands"], 1351)
         self.assertEqual(shares["gouraud_tables"], 892)
         self.assertEqual(report["witness_maxima"], {
-            "output_records": {"cost": 46, "family_ordinal": 24, "model_id": 0x007F},
+            "output_records": {"cost": 68, "family_ordinal": 7, "model_id": 0x00BC},
             "texture_commands": {"cost": 24, "family_ordinal": 40, "model_id": 0x0095},
-            "gouraud_tables": {"cost": 46, "family_ordinal": 24, "model_id": 0x007F},
+            "gouraud_tables": {"cost": 56, "family_ordinal": 7, "model_id": 0x00BC},
         })
         self.assertEqual(report["service_floors"], {
             "live_instances": 64,
-            "output_records": 59,
+            "output_records": 39,
             "texture_commands": 56,
-            "gouraud_tables": 19,
+            "gouraud_tables": 15,
         })
-        self.assertEqual(report["guaranteed_any_mix_count"], 19)
+        self.assertEqual(report["guaranteed_any_mix_count"], 15)
         self.assertTrue(all(all(value > 0 for value in row["margins"].values())
                             for row in report["individual_bank_margins"]))
         self.assertEqual(report["vdp1_residency"], {
@@ -77,15 +78,15 @@ class InventoryActorFamilyBundlesTest(unittest.TestCase):
             },
             "current_binders_own_remaining": False,
             "existing_yaul_remaining_bytes": 52672,
-            "actor_texture_bytes": 16640,
-            "actor_clut_bytes": 2816,
-            "future_repartition_bytes": 19456,
-            "future_repartition_margin_bytes": 33216,
+            "actor_texture_bytes": 18048,
+            "actor_clut_bytes": 2976,
+            "future_repartition_bytes": 21024,
+            "future_repartition_margin_bytes": 31648,
         })
         self.assertEqual(report["workspace"], {
-            "used_bytes": 1091,
-            "capacity_bytes": 1280,
-            "margin_bytes": 189,
+            "used_bytes": 2915,
+            "capacity_bytes": 3072,
+            "margin_bytes": 157,
         })
 
     def test_zero_cost_floor_is_explicit_and_all_one_unit_overflows_are_named(self) -> None:
@@ -98,16 +99,16 @@ class InventoryActorFamilyBundlesTest(unittest.TestCase):
         self.assertEqual(zero["service_floors"]["gouraud_tables"], 64)
 
         baseline = dict(
-            costs=SUPPORTED_COSTS, texture_bytes=16640, clut_bytes=2816,
-            bundle_bytes=50000, workspace_bytes=1091,
+            costs=SUPPORTED_COSTS, texture_bytes=18048, clut_bytes=2976,
+            bundle_bytes=50000, workspace_bytes=2915,
             package_class_bytes={name: 1 for name in AUTHORITATIVE_LIMITS.package_classes},
         )
         injections = {
-            "texture budget exceeded": replace(AUTHORITATIVE_LIMITS, actor_texture_bytes=16639),
-            "CLUT budget exceeded": replace(AUTHORITATIVE_LIMITS, actor_clut_bytes=2815),
+            "texture budget exceeded": replace(AUTHORITATIVE_LIMITS, actor_texture_bytes=18047),
+            "CLUT budget exceeded": replace(AUTHORITATIVE_LIMITS, actor_clut_bytes=2975),
             "cart budget exceeded": replace(AUTHORITATIVE_LIMITS, cart_bytes=50009),
             "workspace budget exceeded": replace(
-                AUTHORITATIVE_LIMITS, workspace_capacity_bytes=1090),
+                AUTHORITATIVE_LIMITS, workspace_capacity_bytes=2914),
             "output credit exceeded": replace(AUTHORITATIVE_LIMITS, output_share=45),
             "command credit exceeded": replace(AUTHORITATIVE_LIMITS, command_share=23),
             "Gouraud credit exceeded": replace(AUTHORITATIVE_LIMITS, gouraud_share=45),

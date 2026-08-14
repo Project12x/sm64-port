@@ -40,19 +40,6 @@ typedef struct vdp1_cmdt {
 typedef struct vdp1_gouraud_table { rgb1555_t colors[4]; }
     vdp1_gouraud_table_t;
 typedef struct vdp1_clut { rgb1555_t colors[16]; } vdp1_clut_t;
-typedef struct vdp1_vram_partitions {
-    vdp1_cmdt_t *cmdt_base;
-    uint32_t cmdt_size;
-    void *texture_base;
-    uint32_t texture_size;
-    vdp1_gouraud_table_t *gouraud_base;
-    uint32_t gouraud_size;
-    vdp1_clut_t *clut_base;
-    uint32_t clut_size;
-    vdp1_vram_t *remaining_base;
-    uint32_t remaining_size;
-} vdp1_vram_partitions_t;
-
 static void vdp1_cmdt_command_set(vdp1_cmdt_t *cmdt,
                                   vdp1_cmdt_command_t command)
 { cmdt->cmd_ctrl = (uint16_t)((cmdt->cmd_ctrl & 0x7FF0U) | command); }

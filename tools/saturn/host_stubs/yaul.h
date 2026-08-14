@@ -12,6 +12,22 @@ typedef uint32_t cpu_dmac_stride_t;
 typedef uint32_t cpu_dmac_bus_mode_t;
 typedef void (*cpu_dmac_ihr_t)(void *);
 
+/* Mirrors the scalar layout used by the pinned VDP1 partition ABI.  Host
+ * source-scene tests need this complete type to retain the actor-only region
+ * that target code receives from Yaul. */
+typedef struct vdp1_vram_partitions {
+    void *cmdt_base;
+    uint32_t cmdt_size;
+    void *texture_base;
+    uint32_t texture_size;
+    void *gouraud_base;
+    uint32_t gouraud_size;
+    void *clut_base;
+    uint32_t clut_size;
+    void *remaining_base;
+    uint32_t remaining_size;
+} vdp1_vram_partitions_t;
+
 #define CPU_DMAC_SOURCE_INCREMENT 1U
 #define CPU_DMAC_DESTINATION_INCREMENT 1U
 #define CPU_DMAC_STRIDE_4_BYTES 2U

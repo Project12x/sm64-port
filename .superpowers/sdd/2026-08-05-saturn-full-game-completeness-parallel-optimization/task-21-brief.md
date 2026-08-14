@@ -91,7 +91,8 @@ ABI/transport slice only.
   and package prepare/commit cannot use generic ACCEPTED.
 - [x] The six focused DLL/MSYS-preflight host gates pass serially, including
   publication order and sound-CPU ownership 2/2.
-- [ ] Scoped rereview remains required. No production or audible gate changes.
+- [x] Scoped fix-round rereviews pass SPEC/QUALITY PASS, C0/I0/M0. No
+  production or audible gate changes.
 
 ### Wave 2 fix round 2
 
@@ -103,4 +104,5 @@ ABI/transport slice only.
   delayed old completion cannot later match a reused ring/cursor/opcode.
 - [x] Capability-absent legacy tests continue to prove the no-ack compatibility
   path; completion-aware tests advertise capability and use ticket APIs only.
-- [ ] Scoped rereview remains required; all production/audible gates stay open.
+- [x] Fix-round-2 primary and backup rereviews pass SPEC/QUALITY PASS, C0/I0/M0;
+  all production/audible gates stay open.

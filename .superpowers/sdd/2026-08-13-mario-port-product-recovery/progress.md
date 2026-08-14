@@ -4,9 +4,25 @@ Authority: `docs/saturn/PRODUCT_GOAL.md`
 
 Active plan: `docs/superpowers/plans/2026-08-13-mario-port-product-recovery.md`
 
-Status: **active — Task 2 donor-derived diagnostic CUE boots; baseline-first
-hybrid selected; no current candidate is accepted and owner visual/audio
-comparison remains unresolved**
+Status: **paused for handoff — no current candidate is accepted; implementation
+is frozen until the next maintainer follows the bounded live-product restart in
+`docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md`**
+
+## 2026-08-14 — candid product-recovery handoff
+
+- Work stopped without claiming Mario, Bob-omb, audio, cadence, WF, or release
+  acceptance.
+- Repository history now records 866 reachable commits since 2026-07-31, while
+  A9A remains the last owner-accepted product artifact.
+- The handoff documents proxy-goal substitution, late integration, sunk-cost
+  protection, review-driven scope expansion, artifact identity failures, and
+  the repeated substitution of host/review evidence for live game evidence.
+- The current 408-path dirty worktree is a donor snapshot with an empty index;
+  no reset, broad staging, or whole-range adoption is authorized.
+- The next product build must preserve a non-regressed BOB/Mario path and add
+  audible semantic music plus a game-triggered SFX through the proven SCSP
+  donor. New formats, release work, and generalized architecture remain
+  prohibited.
 
 ## 2026-08-13 — owner correction and durable reset
 
@@ -187,3 +203,32 @@ comparison remains unresolved**
 - A host test, source review, release seal, or `source-complete` status does not advance this ledger.
 - Do not open another architecture, wire-format, release, capacity, or generalized-level sprint before the two-level presentation gate.
 - A launched artifact must be named and hashed before Ymir starts; stale or wrong-profile launches are invalid evidence.
+
+## 2026-08-14 — fresh current normal-path CUE launched
+
+- The narrow HWRAM recovery moved only the 72-byte master-only camera
+  transition record to NOLOAD LWRAM and restores its BSS contract in
+  `reset_camera()`. LWRAM now reaches its protected stack boundary, so no more
+  LWRAM relocation is authorized.
+- The first link remained eight bytes below the HWRAM floor because the fixed
+  `0x20000` VDP1 command double-buffer paid extra late-BSS alignment. A
+  layout-only linker change packs that same HWRAM-only block first, before
+  generic BSS; its capacity and VDP1 ownership are unchanged. The focused
+  source regression is green.
+- Exact `-j1` current sourceboot build, with generic dynamic actors and
+  semantic audio both enabled, exited zero as `id-9a233e934e5ed93c`.
+  Map result: `___end=0x060fe0e8`; HWRAM remaining `0x1f18` versus required
+  `0x1f00`. CUE SHA-256 is
+  `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`; ISO
+  SHA-256 is
+  `e5eb59df8444330a593a1b66cafcfeea76152b7a2d8cb92994a98c330d9ccd40`.
+- A visible Ymir session was launched with this exact CUE and the worktree
+  profile. Manual acceptance is pending; do not infer Mario correctness,
+  normal Bob-omb visibility/textures, audible music/SFX, cadence, or FPS from
+  the successful link and launch.
+- A separate explicit-BIOS/DRAM-cart headless capture reached live BOB gameplay
+  at sequence 5,500, frame SHA-256
+  `0f68c9f4e4954b424467f9e62619495b1d2e0c8eae2330382fdc61a50c72ced8`, with
+  Mario and an ordinary scene object visible and no exception. The generic
+  hwtest cadence decoder reads a sourceboot trace magic as a serial, so its
+  zero-FPS field is invalid and is not evidence against the candidate.

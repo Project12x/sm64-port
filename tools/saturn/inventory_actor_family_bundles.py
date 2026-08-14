@@ -12,7 +12,7 @@ from typing import Mapping, Sequence
 
 
 UINT32_MAX = (1 << 32) - 1
-BOB_MAXIMUM_SCRATCH_BYTES = 1091
+BOB_MAXIMUM_SCRATCH_BYTES = 2915
 ACTOR_WORKSPACE_GRANULE_BYTES = 256
 BOB_WORKSPACE_CAPACITY_BYTES = (
     BOB_MAXIMUM_SCRATCH_BYTES + ACTOR_WORKSPACE_GRANULE_BYTES - 1
@@ -26,8 +26,8 @@ class ResourceLimits:
     output_share: int = 2718
     command_share: int = 1351
     gouraud_share: int = 892
-    actor_texture_bytes: int = 16640
-    actor_clut_bytes: int = 2816
+    actor_texture_bytes: int = 18048
+    actor_clut_bytes: int = 2976
     shared_post_command_gouraud_bytes: int = 446432
     terrain_texture_bytes: int = 333696
     mario_texture_bytes: int = 25600

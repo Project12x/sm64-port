@@ -41,6 +41,8 @@ from dl_rigid_groups import (
 from extract_mario_actor import (
     identity_matrix,
     matrix_apply,
+    matrix_mul,
+    scale_matrix,
 )
 from saturn_mesh_ir import compile_mesh_ir
 from vdp1_texture import decode_png_rgb1555
@@ -485,7 +487,7 @@ class _SourceIndex:
     def resolve_animation(self, symbol: str) -> str:
         pattern = re.compile(
             r"(?:static\s+)?const\s+struct\s+Animation\s+" +
-            re.escape(symbol) + r"\s*\[\]\s*=")
+            re.escape(symbol) + r"\s*(?:\[\])?\s*=")
         matches = [path for path in self.candidates if pattern.search(self.text(path))]
         if not matches:
             raise ActorAnimationBindingError(f"missing selected Animation: {symbol}")
@@ -703,6 +705,7 @@ class _Context:
     matrix: tuple[float, ...]
     switch: int | None = None
     billboard: int | None = None
+    scale_q16: int = 65536
 
 
 _REPRESENTABLE_LAYERS = {
@@ -715,13 +718,15 @@ _REPRESENTABLE_LAYERS = {
 class _GeoCompiler:
     _LAYERS = _REPRESENTABLE_LAYERS
     _UNSUPPORTED = {
-        "GEO_ASM", "GEO_HELD_OBJECT", "GEO_RENDER_RANGE", "GEO_SHADOW",
-        "GEO_TRANSLATE_ROTATE", "GEO_ROTATION_NODE", "GEO_SCALE",
+        "GEO_ASM", "GEO_HELD_OBJECT", "GEO_RENDER_RANGE",
+        "GEO_TRANSLATE_ROTATE", "GEO_ROTATION_NODE",
     }
 
-    def __init__(self, layouts: Mapping[str, list[tuple[str, str]]], entry: str) -> None:
+    def __init__(self, layouts: Mapping[str, list[tuple[str, str]]], entry: str,
+                 allow_saturn_reductions: bool = False) -> None:
         self.layouts = layouts
         self.entry = entry
+        self.allow_saturn_reductions = allow_saturn_reductions
         base = _Context(None, identity_matrix())
         self.scope = base
         self.node = base
@@ -730,7 +735,9 @@ class _GeoCompiler:
         self.joints: list[Joint] = []
         self.parts: list[dict[str, object]] = []
         self.switches: list[dict[str, object]] = []
+        self.switch_joints: dict[int, tuple[int, int, tuple[int, int, int]]] = {}
         self.billboards: list[dict[str, object]] = []
+        self.reductions: list[dict[str, object]] = []
 
     def _integer(self, value: str, label: str) -> int:
         try:
@@ -743,6 +750,14 @@ class _GeoCompiler:
 
     def _register(self, context: _Context) -> None:
         self.node = context
+
+    def _scale_coordinate(self, value: int, scale_q16: int) -> int:
+        product = value * scale_q16
+        scaled = ((product + 32768) // 65536 if product >= 0
+                  else -((-product + 32768) // 65536))
+        if not -32768 <= scaled <= 32767:
+            raise MalformedActorSourceError("scaled joint translation exceeds int16")
+        return scaled
 
     def _bind(self, layer: str, name: str, context: _Context) -> None:
         if layer not in self._LAYERS:
@@ -797,19 +812,88 @@ class _GeoCompiler:
             if macro == "GEO_NODE_START":
                 self._register(self.scope)
                 continue
+            if macro == "GEO_SHADOW":
+                if not self.allow_saturn_reductions:
+                    raise UnsupportedActorSourceError(
+                        "unsupported GeoLayout node: GEO_SHADOW")
+                fields = _arguments(args)
+                if (len(fields) != 3 or
+                        re.fullmatch(r"SHADOW_[A-Za-z0-9_]+", fields[0]) is None):
+                    raise MalformedActorSourceError("malformed GEO_SHADOW")
+                try:
+                    solidity = int(fields[1], 0)
+                    size = int(fields[2], 0)
+                except ValueError as error:
+                    raise MalformedActorSourceError(
+                        "GEO_SHADOW values must be integers") from error
+                if not 0 <= solidity <= 255 or not 0 < size <= 32767:
+                    raise MalformedActorSourceError("GEO_SHADOW values are out of range")
+                self.reductions.append({
+                    "node": "GEO_SHADOW", "mode": "source-shadow-path",
+                    "type": fields[0], "solidity": solidity, "size": size,
+                })
+                self._register(self.scope)
+                continue
+            if macro == "GEO_SCALE":
+                if not self.allow_saturn_reductions:
+                    raise UnsupportedActorSourceError(
+                        "unsupported GeoLayout node: GEO_SCALE")
+                fields = _arguments(args)
+                if len(fields) != 2:
+                    raise MalformedActorSourceError("malformed GEO_SCALE")
+                try:
+                    parameter = int(fields[0], 0)
+                    local_scale = int(fields[1], 0)
+                except ValueError as error:
+                    raise MalformedActorSourceError(
+                        "GEO_SCALE values must be integers") from error
+                if parameter != 0 or not 0 < local_scale <= 65536:
+                    raise UnsupportedActorSourceError(
+                        "unsupported GEO_SCALE parameters")
+                combined = (self.scope.scale_q16 * local_scale + 32768) // 65536
+                if not 0 < combined <= 65536:
+                    raise UnsupportedActorSourceError(
+                        "unsupported cumulative GEO_SCALE")
+                context = _Context(
+                    self.scope.joint,
+                    matrix_mul(scale_matrix(local_scale / 65536.0),
+                               self.scope.matrix),
+                    self.scope.switch, self.scope.billboard, combined)
+                self.reductions.append({
+                    "node": "GEO_SCALE", "mode": "static-bake",
+                    "scale_q16": local_scale,
+                })
+                self._register(context)
+                continue
             if macro == "GEO_ANIMATED_PART":
                 fields = _arguments(args)
                 if len(fields) != 5:
                     raise MalformedActorSourceError("malformed GEO_ANIMATED_PART")
                 parent = self.scope.joint if self.scope.joint is not None else -1
-                joint = Joint(len(self.joints), parent,
-                              tuple(self._integer(fields[axis], "joint translation")
-                                    for axis in range(1, 4)), ordinal)
-                if joint.joint_ordinal and parent < 0:
-                    raise ActorJointOwnershipError("multiple root animation joints")
-                self.joints.append(joint)
-                context = _Context(joint.joint_ordinal, identity_matrix(),
-                                   self.scope.switch, self.scope.billboard)
+                translation = tuple(self._scale_coordinate(
+                    self._integer(fields[axis], "joint translation"),
+                    self.scope.scale_q16) for axis in range(1, 4))
+                switch = self.scope.switch
+                prior_switch_joint = (None if switch is None else
+                                      self.switch_joints.get(switch))
+                if prior_switch_joint is None:
+                    joint = Joint(len(self.joints), parent, translation, ordinal)
+                    if joint.joint_ordinal and parent < 0:
+                        raise ActorJointOwnershipError("multiple root animation joints")
+                    self.joints.append(joint)
+                    if switch is not None:
+                        self.switch_joints[switch] = (
+                            joint.joint_ordinal, parent, translation)
+                else:
+                    joint_ordinal, prior_parent, prior_translation = prior_switch_joint
+                    if parent != prior_parent or translation != prior_translation:
+                        raise UnsupportedActorSourceError(
+                            "switch animation alternatives require one shared joint")
+                    joint = self.joints[joint_ordinal]
+                context = _Context(
+                    joint.joint_ordinal, self.scope.matrix,
+                    self.scope.switch, self.scope.billboard,
+                    self.scope.scale_q16)
                 self._register(context)
                 binding = _display_list_arg(macro, args)
                 if binding is not None:
@@ -833,7 +917,8 @@ class _GeoCompiler:
                 self.switches.append({"case_count": count, "callback": fields[1],
                                       "variant_display_lists": []})
                 self._register(_Context(self.scope.joint, self.scope.matrix, switch,
-                                        self.scope.billboard))
+                                        self.scope.billboard,
+                                        self.scope.scale_q16))
                 continue
             if macro == "GEO_BILLBOARD":
                 if _arguments(args) not in ([], [""]):
@@ -841,7 +926,8 @@ class _GeoCompiler:
                 billboard = len(self.billboards)
                 self.billboards.append({"display_lists": []})
                 self._register(_Context(self.scope.joint, self.scope.matrix,
-                                        self.scope.switch, billboard))
+                                        self.scope.switch, billboard,
+                                        self.scope.scale_q16))
                 continue
             if macro in self._UNSUPPORTED:
                 raise UnsupportedActorSourceError(f"unsupported GeoLayout node: {macro}")
@@ -1403,7 +1489,9 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         _collect_lists(index, geo_root, geo_path, lists, list_paths, declared=True)
     else:
         raise ActorSourceSelectionError("selected model binding kind is incomplete")
-    geo = _GeoCompiler(layouts, entry)
+    geo = _GeoCompiler(
+        layouts, entry,
+        allow_saturn_reductions=(family_ordinal, model_id) == (7, 0x00BC))
     geo.walk(entry)
     joints, source_parts = geo.finish()
     try:
@@ -1520,6 +1608,7 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         "primitives": list(serialized_primitives), "meshlets": meshlets,
         "mesh_ir_report": pairing,
         "switches": geo.switches, "billboards": geo.billboards,
+        "saturn_reductions": geo.reductions,
         "layers": [{"part_ordinal": int(item["branch_ordinal"]),
                     "layer": str(item["layer"]), "opacity": str(item["opacity"])}
                    for item in source_parts if item["layer"] != "LAYER_OPAQUE"],

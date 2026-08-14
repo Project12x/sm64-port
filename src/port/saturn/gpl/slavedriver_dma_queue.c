@@ -6,6 +6,7 @@
  * queue overflow is reported instead of relying on assert().
  */
 #include "slavedriver_dma_queue.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 #include <yaul.h>
 #include <stdbool.h>
 #include <string.h>
@@ -146,6 +147,7 @@ _sequence_outstanding(saturn_dma_queue_sequence_t sequence)
         return false;
 }
 
+SM64_SATURN_CART_COLD
 void
 saturn_dma_queue_init(void)
 {

@@ -181,20 +181,19 @@
   values now count whole discarded 30 Hz simulation-tick credits rather than
   raw fields; capture comparisons must use that documented unit change.
 
-- [x] **Step 6: Verify generation-coherent VDP2 composition — SOURCE COMPLETE**
+- [x] **Step 6: Verify generation-coherent VDP2 composition — SOURCE COMPLETE; FIX ROUND 2 RECONCILED**
 
-  Sky camera and HUD metrics now name the same displayed/rendered/simulation
-  generations. VDP2 remains geometry-free: its terminal input is only the
-  bank-owned immutable camera and a three-generation record. Displayed and
-  rendered must equal that camera's bank generation; simulation is copied from
-  the scheduler at the same terminal boundary, so a bounded recovery lead is
-  explicit rather than mixed. Mismatch is fail-closed before sky, HUD, layers,
-  or VBlank commit; a changed tuple bypasses rate-limited metric refresh so
-  the sky and HUD switch together. TDD RED was the missing metadata/interface contract;
-  focused VDP2, runtime-contract, and source-boundary mutation tests are
-  GREEN. This is an internal contract repair: no external adaptation fits or
-  is used. Independent rereview, target/manual, and native-math gates remain
-  unchecked.
+  Commit `2377bf8b` makes VDP2 consume only the immutable camera from the
+  displayed VDP1 bank plus one displayed/rendered/simulation tuple, label it
+  in HUD output, force its identity refresh with the sky, and reject invalid
+  or mismatched ownership before callbacks. Direct VDP2/runtime tests and
+  sourceboot boundary mutations passed. Fix Round 2 restores the ledger at a
+  paragraph boundary and makes the displayed-zero fixture otherwise coherent
+  (`snapshot == displayed == rendered == 0`), isolating the reserved-zero
+  guard; simulation-zero remains isolated. Scoped Fix Round 2 rereview is
+  **PASS / APPROVED** with every prior finding addressed, so Step 6 closes as
+  source-complete. Target capture, manual Ymir, and the broad native-math gate
+  remain explicitly unchecked.
 
 - [ ] **Step 7: Run frame-pipeline, snapshot, queue, recovery, transfer, VDP2, runtime, and replay-host gates — ACTIVE (TARGET BUILD FIRST)**
 
@@ -245,3 +244,282 @@
   20-second monitor. Launch report:
   `docs/saturn/evidence/reports/a9-step5-desktop-launch-2026-08-05.json`.
   Owner-visible speed/controls/geometry observations remain unchecked.
+
+### Task 9A: Implement true frame-lifetime overlap before hardening
+
+**Status:** active plan; no implementation, test, review, target build, or FPS
+evidence exists yet. Task 9A is the next measured CPU-lifetime experiment.
+Task 10 is hardening/publication and scene-neutral coverage, not the next
+expected FPS lever.
+
+**Files:**
+- Modify: `src/port/saturn/gfx/saturn_demo_render.h`
+- Modify: `src/port/saturn/gfx/saturn_demo_render.c`
+- Modify: `src/port/saturn/sourceboot/main.c`
+- Modify only if the existing action model cannot express pending service:
+  `src/port/saturn/runtime/saturn_frame_pipeline.h`
+- Modify only with matching model RED/GREEN evidence:
+  `src/port/saturn/runtime/saturn_frame_pipeline.c`
+- Create: `tools/saturn/demo_render_overlap_test.c`
+- Modify: `tools/saturn/frame_pipeline_test.c`
+- Modify: `tools/saturn/test_a9_frame_pipeline_integration_contract.py`
+- Modify: `tools/saturn/test_a9_sourceboot_cadence_trace_contract.py`
+- Modify: `tools/saturn/test_capture_sourceboot_throughput.py`
+- Modify: `tools/saturn/capture_sourceboot_throughput.py`
+- Modify the monolithic-symbol consumers:
+  `tools/saturn/render_job_live_cutover_source_test.c`,
+  `tools/saturn/render_job_terrain_route_source_test.c`,
+  `tools/saturn/test_render_job_live_cutover_source.py`,
+  `tools/saturn/test_render_cluster_generation.py`,
+  `tools/saturn/test_a8_deferred_transfer_runtime_contract.py`,
+  `tools/saturn/test_vdp1_transfer_pipeline_source.py`, and
+  `tools/saturn/dual_actor_worker_test.c`
+- Modify: `Makefile.saturn.mk`
+- Modify during the implementation transition: this plan, `STATE.md`,
+  `ROADMAP.md`, `ARCHITECTURE.md`, `CHANGELOG.md`,
+  `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`, and
+  `docs/saturn/evidence/reports/overlapped-render-pipeline-2026-08-03.md`
+- Append the task transition without staging unrelated history:
+  `.superpowers/sdd/2026-08-03-saturn-overlapped-render-pipeline/progress.md`
+
+**Interfaces:**
+- Replace sourceboot's accepted-path call to the monolithic
+  `sm64_saturn_demo_render_frame()` with exactly these generation-bound
+  operations:
+
+  ```c
+  typedef enum sm64_saturn_demo_render_status {
+      SM64_SATURN_DEMO_RENDER_PENDING = 0,
+      SM64_SATURN_DEMO_RENDER_COMPLETE,
+      SM64_SATURN_DEMO_RENDER_FAILED
+  } sm64_saturn_demo_render_status_t;
+
+  bool sm64_saturn_demo_render_start_frame(
+      sm64_saturn_vdp1_backend_t *backend,
+      sm64_saturn_gouraud_bank_t *gouraud_bank,
+      sm64_saturn_fast3d_profile_t *profile,
+      const sm64_saturn_mario_actor_snapshot_t *snapshot,
+      const sm64_saturn_mario_actor_pose_t *pose,
+      uint32_t generation);
+
+  sm64_saturn_demo_render_status_t sm64_saturn_demo_render_poll_frame(
+      sm64_saturn_fast3d_profile_t *profile,
+      uint32_t generation);
+  ```
+
+- `start_frame(N)` validates nonzero `N`, snapshots every descriptor payload,
+  publishes the immutable graph, notifies the slave, and returns. It must not
+  call `sm64_saturn_render_job_runtime_drain_master()`, spin or record a master
+  retirement wait, reset/retire the graph, begin/finish the VDP1 backend,
+  reserve/finalize Gouraud state, or lower a command.
+- `poll_frame(N)` returns `PENDING` until
+  `sm64_saturn_render_job_runtime_slave_retired()` positively retires `N`.
+  Only that successful poll drains remaining READY master work, validates all
+  terminal descriptor/result identities, performs the existing stable merge,
+  reserves Gouraud entries, calls VDP1 begin/lower/finish exactly once, resets
+  the retired queue generation exactly once, and returns `COMPLETE`.
+- `FAILED` quarantines generation `N`; it never calls the old monolithic entry
+  and never replays terrain, actor, or the full frame serially. A late result
+  from `N` cannot lower, transfer, publish, or reopen a bank.
+- Sourceboot retains one `sourceboot_active_render_snapshot`, one explicit
+  BUILDING `sm64_saturn_vdp1_frame_bank_t *sourceboot_active_build_bank`, the
+  Mario pose/snapshot, descriptor contexts/payload banks, and generation `N`
+  across `PENDING`. It calls
+  `sm64_saturn_frame_pipeline_render_complete(N)` only after `COMPLETE`, then
+  marks the bank READY and retires the snapshot. On `FAILED` it quarantines
+  both and clears the transaction without publishing.
+- There is exactly one active render generation. The scheduler may create the
+  single immutable queued snapshot `N+1` and run its authoritative source tick
+  while `N` is pending, but sourceboot cannot acquire that snapshot, begin its
+  BUILDING bank, or call `start_frame(N+1)` until `N` has completed, passed A8
+  transfer, received exact publish acknowledgement, and retired/promoted.
+- Do not change master ownership of source simulation, input, live game state,
+  allocation, final merge/order, Gouraud reservation, VDP1 lowering, VRAM,
+  VDP2 composition, or presentation. The slave consumes only existing
+  immutable integer snapshots, pointer-free descriptors, and published payload
+  contexts.
+- Preserve A9's shared nonzero successor (`UINT32_MAX -> 1`), two-field 30 Hz
+  remainder, one-normal-plus-one-recovery budget per presentation lifetime,
+  field-rate service/poll, per-observed-field service/poll epochs, exact-
+  generation publication acknowledgement, previous-complete-frame reuse, and
+  unchanged telemetry units. Preserve A8 as the sole command CPU-DMAC/Gouraud
+  SCU-DMA/resident-list owner; Task 9A ends at READY construction.
+- Generic scheduler/runtime state (`saturn_frame_pipeline.{h,c}` and any new
+  generic lifecycle record) may contain no `bob`, `mario`, `castle`, generated
+  BOB-bank, or demo-renderer symbol dependency.
+- Extend the cache-through cadence evidence as version 2 with four appended
+  cumulative words before `sequence_end`:
+  `slave_work_vblank_crossings`, `slave_work_count`,
+  `master_finalize_vblank_crossings`, and `master_finalize_count`. The new
+  target record is 76 bytes/19 words. The slave lifetime runs from successful
+  notify publication to positive retirement and may overlap source simulation,
+  so the host report must label it an overlap window rather than add it to the
+  exclusive attribution total. Master finalization is exclusive construction
+  work. The decoder retains explicit 60-byte/version-1 historical support.
+
+**Pinned reference-code record (no new source copying):**
+- SlaveDriver `a8986591557b6e680550d3c23970284d3b38ff8f`, GPL-3.0-or-later,
+  inspected `WALLS.C:1240-1408,1803-1950`, `DMA.C`, `DMA.H`, and
+  `V_BLANK.C:94-145`: existing attributed worker adapters remain close ports;
+  the Task 9A lifetime split is pattern-only project code.
+- Sonic Z-Treme `cff75451c1616aac1236fc2b44223902b55c706b`, GPL-3.0,
+  inspected `ZT_RENDERING.c:406-505,718-786`, `ZT_FRUSTUM.c:126-161`,
+  `ZT_LOADING.c:118-176,299-355`, and `workarea.c:12-25`: pattern-only for
+  early dispatch and fixed build/present ownership.
+- Yaul `6012f79f237773378c8014e70d8998ad95a38d98`, MIT, inspected public
+  CPU-DMAC/SCU-DMA/VDP1 APIs and `libmic3d/render.c`: retained dependency/API
+  use only; no implementation copied.
+- Jo Engine `556d081146211b6a1cfa6591d70f9487d406758b`, MIT plus file-level
+  BSD-style notices, inspected `jo_engine/vdp1_command_pipeline.c` and
+  `jo_engine/3d.c`: pattern-only; no allocator or command pipeline copied.
+- `malucard/sm64-psx` `3073845688ea273da78d539b20c45110d8a868c3`, no
+  repository-wide license found, inspected paths recorded in the upstream
+  ledger: behavior-study only; no PS1 source or packet format copied.
+
+- [ ] **Step 1: Write the renderer-lifecycle RED fixture**
+
+  Add `tools/saturn/demo_render_overlap_test.c` with controlled fake queue and
+  backend hooks. Its exact sequence is: start nonzero `N`; assert one graph
+  activation/notify and zero drain/wait/reset/VDP1/Gouraud/lower calls; poll
+  before retirement and expect `PENDING` with all zero finalization counts;
+  publish positive retirement; poll `N` and expect one drain, one terminal
+  validation/merge/reset, one VDP1 begin/finish pair, and `COMPLETE`; poll `N`
+  again and expect `FAILED` with no additional side effect. Add cases for a
+  second concurrent start, wrong-generation poll, failed descriptor, and late
+  retirement after quarantine. All reject without full-frame replay.
+
+- [ ] **Step 2: Add the source integration and scene-neutral RED contracts**
+
+  Update `test_a9_frame_pipeline_integration_contract.py` and
+  `test_a9_sourceboot_cadence_trace_contract.py` to require start-before-return,
+  later poll/finalize, retained snapshot/build-bank identity across `PENDING`,
+  render-complete only after `COMPLETE`, and quarantine-only `FAILED`. Reject
+  `sm64_saturn_demo_render_frame(` in sourceboot and reject drain, retirement
+  loops, VDP1 begin, or queue reset from the start phase. Add a generic-state
+  scan rejecting case-insensitive `bob|mario|castle|saturn_demo_render` in
+  `saturn_frame_pipeline.{h,c}`.
+
+- [ ] **Step 3: Run RED and record the intended failures**
+
+  Run:
+
+  ```powershell
+  python tools/saturn/test_a9_frame_pipeline_integration_contract.py
+  python tools/saturn/test_a9_sourceboot_cadence_trace_contract.py
+  make -f Makefile.saturn.mk verify-demo-render-overlap
+  ```
+
+  Expected: the Python contracts fail on the direct monolithic call and absent
+  pending retention; Make fails because `verify-demo-render-overlap` and the
+  start/poll symbols do not exist. Record commands and failure text in the
+  aggregate evidence report before implementation.
+
+- [ ] **Step 4: Split the renderer at the existing queue-retirement boundary**
+
+  Move only immutable preparation, graph activation/publication, and slave
+  notify into `sm64_saturn_demo_render_start_frame()`. Preserve current static
+  descriptor payload banks until retirement. Move the existing post-retirement
+  drain, telemetry snapshot, all-terminal validation, deterministic terrain/
+  actor merge, Gouraud reservation, VDP1 lowering, queue reset, and frame
+  accounting into `sm64_saturn_demo_render_poll_frame()`. Store exact active
+  generation and phase validity; reserve zero and fail closed on any mismatch.
+  Delete the accepted-path monolithic entry rather than wrapping it.
+
+- [ ] **Step 5: Run the renderer fixture GREEN and catch failure mutations**
+
+  Add `verify-demo-render-overlap` to `Makefile.saturn.mk` with C11
+  `-Wall -Wextra -Werror` normal and `expect_failure.py` variants that (1)
+  finalize before positive retirement, (2) lower twice, and (3) replay on
+  failure. Run that target. Expected: nominal PASS and all three mutations are
+  rejected.
+
+- [ ] **Step 6: Extend the scheduler model for a genuinely pending render**
+
+  In `frame_pipeline_test.c`, drive: start render `N`; observe a later field;
+  execute the allowed source tick and publish only the queued immutable
+  snapshot `N+1`; reject render-complete/transfer/publish for `N+1`; return to
+  service and keep `N` active; acknowledge `render_complete(N)`, transfer, and
+  exact publish `N`; only then promote `N+1`. Repeat for
+  `UINT32_MAX -> 1`, missed deadline/previous-frame reuse, publish failure, and
+  a pending render spanning repeated fields. Assert at most one normal plus one
+  recovery tick per lifetime and at most one service and one poll per field.
+  Change `saturn_frame_pipeline.{h,c}` only if this RED sequence proves the
+  current state model cannot express it.
+
+- [ ] **Step 7: Integrate sourceboot retention without changing A8 ownership**
+
+  Make the first `SERVICE_RENDER_JOBS(N)` acquire snapshot/build bank once,
+  bind the immutable camera/pose, and call `start_frame(N)`. A later service
+  calls `poll_frame(N)`. On `PENDING`, return immediately to the action loop
+  with `N`'s snapshot, descriptor payloads, and BUILDING bank intact. On
+  `COMPLETE`, mark that exact bank READY, acknowledge render completion, then
+  complete/retire the snapshot. Leave `POLL_TRANSFERS` and `PUBLISH_FRAME`
+  sequencing under the existing A8/A9 code. On `FAILED`, quarantine once,
+  retain the prior published frame, increment fault/reuse evidence, and never
+  invoke a serial fallback.
+
+- [ ] **Step 8: Repair every old monolithic-symbol contract and run GREEN**
+
+  Update the named live-cutover, terrain, cluster, A8, transfer, and dual-actor
+  contracts to inspect start/poll ownership rather than the deleted function.
+  Run serially:
+
+  ```powershell
+  make -f Makefile.saturn.mk verify-demo-render-overlap
+  make -f Makefile.saturn.mk verify-frame-pipeline
+  python tools/saturn/test_a9_frame_pipeline_integration_contract.py
+  python tools/saturn/test_a9_sourceboot_cadence_trace_contract.py
+  make -f Makefile.saturn.mk verify-render-job-runtime
+  make -f Makefile.saturn.mk verify-render-job-live-cutover
+  make -f Makefile.saturn.mk verify-vdp1-frame-bank
+  make -f Makefile.saturn.mk verify-vdp1-transfer-pipeline
+  ```
+
+  Expected: every focused gate passes; existing normal/mutation scheduler
+  outcomes, queue exact-once ownership, frame-bank quarantine, and A8 deferred
+  transfer ownership remain unchanged. Do not run target builds yet.
+
+- [ ] **Step 9: Add RED/GREEN versioned phase evidence**
+
+  First extend `test_capture_sourceboot_throughput.py` with a 76-byte/version-2
+  fixture and mutations for torn seqlock, wrong size/version, wrap, slave
+  lifetime shorter than its finalization boundary, and accidental additive
+  attribution of the overlapping slave window. Watch it fail against the
+  60-byte-only decoder. Then append the four target words, publish them through
+  the existing exact P2 seqlock, retain version-1 decoding, and report separate
+  `source_tick`, `slave_work_overlap_window`, and `master_finalization` deltas.
+  Run both capture-tool tests and the A9 cadence source contract GREEN.
+
+- [ ] **Step 10: Complete two-stage source review before any target build**
+
+  Request specification review against this Task 9A contract, then quality
+  review across the exact scoped diff. Required verdict is GO/PASS from both.
+  Any lifecycle, ownership, replay, generation, phase-evidence, or test gap is
+  repaired with watched RED/GREEN evidence and rereview. Record review commit/
+  range and verdict in the plan, aggregate report, and SDD ledger. A review
+  failure leaves the target build checkbox unchecked.
+
+- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture**
+
+  After both reviews pass, verify no `make`, SH compiler, or sibling target
+  build is running, then use the exact wrapper below with `make -B -j1`. Never
+  run target builds in parallel. Record exit, duration, ELF/ISO/CUE hashes,
+  sizes, map margins, and feature flags. Against that exact ELF/CUE, run one
+  bounded automatic cadence capture and record source-tick fields, slave work
+  overlap window, master-finalization fields, generations, queue claims/
+  retirement/failure/quarantine, transfer faults/waits, reuse, and FPS. The
+  capture is comparative emulator evidence, not a promised uplift or manual
+  acceptance.
+
+- [ ] **Step 12: Reconcile, commit, and review the completed transition**
+
+  Mark Task 9A `source-complete` only after focused tests and two-stage review;
+  mark target evidence complete only after Step 11. Update every active doc in
+  the Files list with actual commands/results/hashes and keep manual Ymir,
+  broad native-math, and any failed gate unchecked. Append the mixed progress
+  ledger without staging unrelated content. Commit the scoped implementation
+  and same-commit changelog/docs as
+  `perf(saturn): overlap render work with next source tick`, then request final
+  scoped rereview. Do not start Task 10 until plan, ledger, evidence, and Git
+  head agree.
+

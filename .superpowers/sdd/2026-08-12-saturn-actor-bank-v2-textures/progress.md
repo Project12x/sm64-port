@@ -1,5 +1,7 @@
 # SDD ledger — plan: docs/superpowers/plans/2026-08-12-saturn-actor-bank-v2-textures.md
 
+> **Historical evidence only (superseded 2026-08-13).** This ledger no longer authorizes work or defines progress. Current authority is `docs/saturn/PRODUCT_GOAL.md`; execution is tracked only in `.superpowers/sdd/2026-08-13-mario-port-product-recovery/progress.md`.
+
 ## Execution setup — 2026-08-12
 
 - Design: `62f16de8`; design status: `f1c5679a`.
@@ -880,3 +882,15 @@
   target/Ymir feedback. Remaining actors and existing game audio stay in the
   same convergence chain; architecture, new formats, generalized levels,
   release reproduction, and audit campaigns remain closed.
+
+## Task 9 narrow Mario texture-detail repair (2026-08-13, active)
+
+- Current normal BOB evidence is a real ordinary `bhvBobomb` /
+  `MODEL_BLACK_BOBOMB` consumer, but not a visual acceptance. The VDP1 list
+  chain is complete and actor residency uses its own committed partition.
+- TDD RED/GREEN: the source contract now requires Mario's RGB1555 detail pass
+  to use the already-reserved bounded Gouraud table (`CC_GOURAUD` plus
+  `CMDGRDA`) rather than unconditional replace; a missing table keeps the
+  existing flat fallback. The exact normal development build and Ymir replay
+  remain open and are the next evidence, with no release, full-actor, or audio
+  claim.

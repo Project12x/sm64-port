@@ -90,6 +90,7 @@ class GeneratorFixture:
         self.root = root
         self.payload = root / "families.s64f"
         self.report = root / "actor-families.json"
+        self.bundle_report = root / "actor-family-bundle.json"
         self.closure = root / "closure.json"
         self.model_ids = root / "model_ids.h"
         self.payload.write_bytes(PAYLOAD)
@@ -138,6 +139,24 @@ class GeneratorFixture:
             }),
             encoding="utf-8",
         )
+        source_sha256 = hashlib.sha256(b"shared-v2-bank").hexdigest()
+        self.bundle_report.write_text(
+            json.dumps({
+                "schema": "sm64-saturn-actor-family-bundle-build-v1",
+                "package_generation": 7,
+                "family_count": 2,
+                "supported_variant_count": 1,
+                "banks": [{
+                    "family_ordinal": 1,
+                    "model": "MODEL_SHARED",
+                    "model_id": 0x21,
+                    "source_sha256": source_sha256,
+                    "stable_id": "bhvSharedFirst",
+                    "version": 2,
+                }],
+            }),
+            encoding="utf-8",
+        )
 
     def run(self, output: Path, *, scene_generation: int = 7) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -145,6 +164,7 @@ class GeneratorFixture:
                 sys.executable,
                 str(GENERATOR),
                 "--family-report", str(self.report),
+                "--bundle-report", str(self.bundle_report),
                 "--closure", str(self.closure),
                 "--model-ids", str(self.model_ids),
                 "--scene-generation", str(scene_generation),
@@ -323,6 +343,7 @@ int main(void)
                 [
                     str(compiler), "-std=c11", "-Wall", "-Wextra", "-Werror",
                     f"-I{directory}",
+                    f"-I{ROOT / 'src'}",
                     f"-I{ROOT / 'src/port/saturn/gfx'}",
                     str(source),
                     str(ROOT / "src/port/saturn/gfx/saturn_actor_instance.c"),
@@ -367,6 +388,24 @@ int main(void)
             self.assertIn("const BehaviorScript *behavior", header)
             self.assertIn(".family_id = 1U", header)
             self.assertIn(".scene_package_generation = 7U", header)
+            source_words = [
+                int.from_bytes(hashlib.sha256(b"shared-v2-bank").digest()[i:i + 4], "big")
+                for i in range(0, 32, 4)
+            ]
+            self.assertIn(f".actor_bank_id = 0x{source_words[0]:08X}U", header)
+            self.assertNotIn(f".actor_bank_id = 0x{int(PAYLOAD_SHA256[:8], 16):08X}U", header)
+
+    def test_registry_contains_only_exact_compiled_bundle_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = GeneratorFixture(Path(directory))
+            output = Path(directory) / "registry.h"
+            bundle = json.loads(fixture.bundle_report.read_text(encoding="utf-8"))
+            bundle["banks"] = []
+            bundle["supported_variant_count"] = 0
+            fixture.bundle_report.write_text(json.dumps(bundle), encoding="utf-8")
+            result = fixture.run(output)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("no compiled actor variants", result.stderr.lower())
 
     def test_unsupported_family_is_absent_and_no_zero_identity_row_is_emitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -388,8 +427,9 @@ int main(void)
             result = fixture.run(output)
             self.assertEqual(result.returncode, 0, result.stderr)
             header = output.read_text(encoding="utf-8")
+            source_sha256 = hashlib.sha256(b"shared-v2-bank").hexdigest()
             expected = [
-                int.from_bytes(bytes.fromhex(PAYLOAD_SHA256)[offset:offset + 4], "big")
+                int.from_bytes(bytes.fromhex(source_sha256)[offset:offset + 4], "big")
                 for offset in range(0, 32, 4)
             ]
             for word in expected:
@@ -411,11 +451,28 @@ int main(void)
 
 
 class TestCurrentAuthoritativeInputs(unittest.TestCase):
+    def test_sourceboot_registry_does_not_force_rewrite_immutable_bundle_inputs(self) -> None:
+        makefile = (ROOT / "src/port/saturn/sourceboot/Makefile").read_text(
+            encoding="utf-8"
+        )
+        rule = makefile[makefile.index("$(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER):"):]
+        rule = rule[:rule.index("\n\n")]
+        self.assertIn("$(SOURCEBOOT_ACTOR_BUNDLE_REPORT)", rule)
+        self.assertNotIn("source-actor-families", rule)
+        self.assertNotIn("source-actor-family-bundle", rule)
+
     def test_current_bob_closure_maps_every_supported_drawable_variant(self) -> None:
         report = ROOT / "build/saturn/packages/bob/1/actors/actor-families.json"
         closure = ROOT / "build/saturn/packages/bob/1/closure.json"
         model_ids = ROOT / "include/model_ids.h"
         self.assertTrue(report.is_file(), "run compile-actor-banks first")
+        generation = int(json.loads(report.read_text(encoding="utf-8"))[
+            "scene_package_generation"
+        ])
+        bundle_report = (
+            ROOT / f"build/saturn/packages/bob/1/actors-v3-g{generation}/actor-family-bundle.json"
+        )
+        self.assertTrue(bundle_report.is_file(), "run compile-actor-family-bundle first")
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "registry.h"
             result = subprocess.run(
@@ -423,9 +480,10 @@ class TestCurrentAuthoritativeInputs(unittest.TestCase):
                     sys.executable,
                     str(GENERATOR),
                     "--family-report", str(report),
+                    "--bundle-report", str(bundle_report),
                     "--closure", str(closure),
                     "--model-ids", str(model_ids),
-                    "--scene-generation", "1",
+                    "--scene-generation", str(generation),
                     "--output", str(output),
                 ],
                 capture_output=True,
@@ -433,10 +491,12 @@ class TestCurrentAuthoritativeInputs(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             header = output.read_text(encoding="utf-8")
-            # Hand-counted from current Task 11 inputs: 72 supported records,
-            # 54 supported drawable (model, behavior) variants after the
-            # MODEL_NONE controller families are excluded.
-            self.assertIn("SATURN_ACTOR_IDENTITY_REGISTRY_COUNT 54U", header)
+            # Only exact variants compiled into the generation-15 S64F-v3
+            # bundle may enter the runtime observer. Unsupported family rows
+            # retain their normal SM64 geo path and are absent here.
+            self.assertNotIn("SATURN_ACTOR_IDENTITY_REGISTRY_COUNT 54U", header)
+            self.assertIn("bhvCannon", header)
+            self.assertNotIn("bhvGoomba", header)
             self.assertNotIn(".family_id = 0U", header)
             self.assertNotIn(".actor_bank_id = 0x00000000U", header)
 

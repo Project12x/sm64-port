@@ -4,6 +4,32 @@
 
 ### Changed
 
+- Packed the unchanged, 32-byte-aligned sourceboot VDP1 command double-buffer
+  first in HWRAM BSS after a master-only 72-byte camera transition record moved
+  to explicitly reset NOLOAD LWRAM. This removes alignment-only heap loss
+  without reducing VDP1, Gouraud, object, actor, or audio capacity; the fresh
+  normal BOB link retains 24 bytes above its enforced TLSF floor. The linked
+  CUE is available for manual validation, while visual and audible product
+  acceptance remain open.
+
+- Corrected the sourceboot PCM68K cold-boot handoff to keep the SCSP CPU
+  stopped through 512-KiB mode selection, the full SCSP-RAM clear, and the
+  validated driver/bundle copies, then start it once. The standalone warm
+  enable remains rejected because it can execute uncleared RAM, but the actual
+  black-screen cause was a false readback check on the write-only SCSP mode
+  latch: it aborted after `SNDOFF`, before `SNDON` or the game loop. The
+  issued write is now validated by the existing post-start READY/heartbeat
+  protocol instead. Sourceboot remains the sole cold-boot SCSP-RAM writer and
+  the MC68000 remains its consumer; audible success still requires a fresh
+  combined target/manual check.
+
+- Corrected the normal BOB Mario texture-detail lowerer so an RGB1555 detail
+  command consumes its already-reserved fixed Gouraud table instead of always
+  replacing it. This keeps the existing bounded fallback when no table is
+  available, but makes the visible textured surface obey the same shading
+  contract as its base polygon; the repair was exposed by the first live
+  normal Bob-omb replay rather than by a package or renderer redesign.
+
 - Made the seven-file S64P generation publication a single ownership-aware
   transaction after rereview showed that per-file no-clobber could still leave
   a partial generation when a later sidecar conflicted. The compiler now

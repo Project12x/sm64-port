@@ -50,6 +50,29 @@ class BobSceneClosureTest(unittest.TestCase):
         self.assertEqual(sources[path], digest)
         self.assertEqual(closure["source_hashes"][path], digest)
 
+    def test_real_bobomb_closure_attests_selected_animation_definitions(self) -> None:
+        closure = collect_scene_closure(
+            ROOT, "bob", 1, ROOT / "tools/saturn/behavior_spawn_rules.json")
+        record = next(record for record in closure["records"]
+                      if record["stable_id"] == "bhvBobomb")
+        sources = {source["path"]: source["sha256"]
+                   for source in record["sources"]}
+        reached = {
+            "actors/bobomb/anims/anim_080237FC.inc.c",
+            "actors/bobomb/anims/anim_08023954.inc.c",
+        }
+
+        self.assertEqual(
+            record["root_provenance"]["animation"],
+            {"bobomb_seg8_anims_0802396C":
+             "actors/bobomb/anims/table.inc.c"},
+        )
+        self.assertTrue(reached <= set(sources))
+        for path in reached:
+            digest = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+            self.assertEqual(sources[path], digest)
+            self.assertEqual(closure["source_hashes"][path], digest)
+
     def test_bob_closure_is_byte_stable_and_complete(self) -> None:
         with tempfile.TemporaryDirectory(prefix="bob-scene-closure-") as temp:
             first_path = Path(temp) / "first.json"

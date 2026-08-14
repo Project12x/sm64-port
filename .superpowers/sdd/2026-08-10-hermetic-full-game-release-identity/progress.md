@@ -1,5 +1,7 @@
 # SDD ledger — plan: docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md
 
+> **Historical evidence only (superseded 2026-08-13).** This ledger no longer authorizes work or defines progress. Current authority is `docs/saturn/PRODUCT_GOAL.md`; execution is tracked only in `.superpowers/sdd/2026-08-13-mario-port-product-recovery/progress.md`.
+
 # Hermetic Full-Game Release Identity — SDD Progress
 
 ## Reconciled starting point (2026-08-10)
@@ -385,6 +387,33 @@
 - Design correction: composition occurs entirely from a captured target-profile snapshot and staged generated outputs. Identity validation reads staged copies with the final relative descriptor hashes; originals and staged bytes are rechecked immediately before the transaction. Publication snapshots every prior target, writes spec last, and restores prior bytes/removes new files on any exception.
 - Repair commits: `ec546de2609708b2c39a343dfc57d4893a6fd87b` (`fix(saturn): publish identity inputs transactionally`) and `9d6a394a1a80cdfda68b1809acd1990349b23a25` (`docs(saturn): record identity publication repair`). Post-commit `git show --check` and full-range `git diff --check b0c7fa03..HEAD` passed; the range remains restricted to the changelog, active plan, bootstrap implementation, and focused bootstrap tests.
 - Independent rereview plus target build, reproducibility, audit v4, complete package inventory, release manifest, 20,100-frame smoke, visual, and manual-play gates remain open.
+
+## 2026-08-13 normal BOB combined audio/render recovery
+
+- Status: active; this is a narrow repair on the normal sourceboot BOB path,
+  not a new audio or renderer architecture. The audio-off current-code control
+  (`id-bfe900db836fb275`) rendered at the canonical 13,620-frame Ymir replay,
+  while semantic-audio `id-7394af7967effa37` was black.
+- First repair hypothesis, keeping the SCSP CPU stopped while clearing/copying
+  its RAM image, was correctly retained as a safety rule but did not cure the
+  presentation failure: `id-c2e8129e836b6ba7` remained black. Its target trace
+  stopped at `bootstrap-retired` and Ymir logged `SNDOFF` without a final
+  `SNDON`.
+- Root cause and correction: `sm64_saturn_sound_cpu_yaul_set_512k` rejected a
+  readback from the write-only SCSP mode latch at `0x25B00400`. The pinned
+  PoneSound reference writes that latch before clearing RAM and does not read
+  it back. Sourceboot now accepts the issued mode write and uses its existing
+  post-start READY/heartbeat protocol as the real validation.
+- Fresh normal semantic-audio CUE:
+  `build/saturn/sourceboot/e2-bob-identity-id-f676fdfed15d54c6/`
+  `sm64-saturn-sourceboot-e2.cue`. Headless Ymir trace reaches
+  `source-tick-after` (stage 6,859; VDP1/VDP2 generation 266) and logs final
+  `SNDON`; canonical 13,620-frame capture is visibly normal BOB at SHA-256
+  `609d88e6ea0289e33c403bcd7712aa4c`.
+- Manual gate remains open: the exact current CUE was launched with the
+  canonical `.ymir-profile`; rendering is target-observed, but a human must
+  still confirm an actual selected PCM SFX. Do not substitute an older CUE,
+  audio-off control, or sound-CPU enable log for audible acceptance.
 
 ## Task 10 execution ledger — repair round 1
 

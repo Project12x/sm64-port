@@ -5,19 +5,36 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <yaul.h>
+
 #include "../runtime/saturn_scene_package.h"
+#include "../platform/saturn_cart_code.h"
 
 #if !defined(SM64_SATURN_SOURCE_SCENE_BUNDLE_HOST_TEST)
-#include <yaul.h>
-#define SOURCE_SCENE_LWRAM __attribute__((section(".lwram_bss"), used))
+#define SOURCE_SCENE_UNCACHED \
+    __attribute__((section(".uncached"), used, aligned(4)))
+#define SOURCE_SCENE_CPU_STATE \
+    __attribute__((section(".lwram_bss"), used))
 #else
-#define SOURCE_SCENE_LWRAM
+#define SOURCE_SCENE_UNCACHED
+#define SOURCE_SCENE_CPU_STATE
 #endif
+
+/* Materials use only these four actor-owned fields.  Retaining a full global
+ * VDP1 partition here would both waste HWRAM and risk a terrain fallback at
+ * the generic actor consumer. */
+typedef struct source_scene_actor_texture_partitions {
+    void *texture_base;
+    uint32_t texture_size;
+    void *clut_base;
+    uint32_t clut_size;
+} source_scene_actor_texture_partitions_t;
 
 typedef struct source_scene_bundle_owner {
     sm64_saturn_actor_bundle_view_t bundle;
     sm64_saturn_actor_bundle_publication_t publication;
     sm64_saturn_actor_texture_publication_t textures;
+    source_scene_actor_texture_partitions_t texture_partitions;
 } source_scene_bundle_owner_t;
 
 typedef union source_scene_bundle_scratch {
@@ -31,19 +48,26 @@ _Static_assert(sizeof(sm64_saturn_scene_package_view_t) >=
                    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES,
                "boot view must fully cover the reused actor workspace");
 #if !defined(SM64_SATURN_SOURCE_SCENE_BUNDLE_HOST_TEST)
-_Static_assert(sizeof(source_scene_bundle_owner_t) == 2208U,
-               "generic actor source owner exceeds its LWRAM budget");
-_Static_assert(sizeof(source_scene_bundle_scratch_t) == 3348U,
-               "generic actor lifetime union exceeds its LWRAM budget");
-_Static_assert(sizeof(source_scene_bundle_owner_t) +
-                   sizeof(source_scene_bundle_scratch_t) == 5556U,
-               "generic actor persistent LWRAM budget changed");
+_Static_assert(sizeof(source_scene_bundle_scratch_t) ==
+                   SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES,
+               "source-scene lifetime workspace size changed");
+_Static_assert(sizeof(source_scene_bundle_owner_t) == 2224U,
+               "generic actor source owner exceeds its HWRAM budget");
 #endif
 
-static source_scene_bundle_owner_t source_scene_owner SOURCE_SCENE_LWRAM;
-static source_scene_bundle_scratch_t source_scene_scratch
-    SOURCE_SCENE_LWRAM __attribute__((aligned(4)));
+/* Claims are shared with the slave and therefore live in uncached HWRAM. The
+ * large boot/runtime scratch is caller-owned and phase-overlaid with Mario's
+ * completed transform context instead of consuming another LWRAM region. */
+static source_scene_bundle_owner_t source_scene_owner SOURCE_SCENE_UNCACHED;
+/* Bound by sourceboot before the source scene is initialized. These two
+ * master-only handles never cross the slave/VDP1 boundary, unlike owner. */
+static void *source_scene_workspace SOURCE_SCENE_CPU_STATE;
+static uint32_t source_scene_workspace_bytes SOURCE_SCENE_CPU_STATE;
+volatile sm64_saturn_source_scene_bundle_probe_t
+    g_sm64_saturn_source_scene_bundle_probe SOURCE_SCENE_CPU_STATE;
 #if defined(SM64_SATURN_SOURCE_SCENE_BUNDLE_HOST_TEST)
+static source_scene_bundle_scratch_t source_scene_host_workspace
+    __attribute__((aligned(4)));
 static uint8_t source_scene_upload_stage[
     SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES]
     __attribute__((aligned(32)));
@@ -61,8 +85,34 @@ static void *source_scene_upload_stage_get(void)
 }
 #endif
 
-volatile sm64_saturn_source_scene_bundle_probe_t
-    g_sm64_saturn_source_scene_bundle_probe;
+static source_scene_bundle_scratch_t *source_scene_workspace_get(void)
+{
+#if defined(SM64_SATURN_SOURCE_SCENE_BUNDLE_HOST_TEST)
+    if (source_scene_workspace == NULL) {
+        source_scene_workspace = &source_scene_host_workspace;
+        source_scene_workspace_bytes = sizeof(source_scene_host_workspace);
+    }
+#endif
+    if (source_scene_workspace == NULL ||
+        ((uintptr_t)source_scene_workspace & 3U) != 0U ||
+        source_scene_workspace_bytes < sizeof(source_scene_bundle_scratch_t))
+        return NULL;
+    return (source_scene_bundle_scratch_t *)source_scene_workspace;
+}
+
+bool sm64_saturn_source_scene_bundle_bind_workspace(void *workspace,
+                                                     uint32_t byte_count)
+{
+    if (workspace == NULL || ((uintptr_t)workspace & 3U) != 0U ||
+        byte_count < sizeof(source_scene_bundle_scratch_t) ||
+        g_sm64_saturn_source_scene_bundle_probe.status ==
+            SM64_SATURN_SOURCE_SCENE_BUNDLE_READY)
+        return false;
+    source_scene_workspace = workspace;
+    source_scene_workspace_bytes = byte_count;
+    memset(workspace, 0, sizeof(source_scene_bundle_scratch_t));
+    return true;
+}
 
 static const uint8_t source_scene_actor_dependency_id[32] =
     "bob-area1-actors-v3";
@@ -102,11 +152,15 @@ static bool dependency_matches(
         bytes_equal(digest, dependency->content_sha256, sizeof(digest));
 }
 
-static bool fail(sm64_saturn_source_scene_bundle_status_t status)
+static SM64_SATURN_CART_COLD
+bool fail(sm64_saturn_source_scene_bundle_status_t status)
 {
+    source_scene_bundle_scratch_t *const workspace =
+        source_scene_workspace_get();
     void *const upload_stage = source_scene_upload_stage_get();
     memset(&source_scene_owner, 0, sizeof(source_scene_owner));
-    memset(&source_scene_scratch, 0, sizeof(source_scene_scratch));
+    if (workspace != NULL)
+        memset(workspace, 0, sizeof(*workspace));
     if (upload_stage != NULL)
         memset(upload_stage, 0,
                SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES);
@@ -118,6 +172,7 @@ static bool fail(sm64_saturn_source_scene_bundle_status_t status)
     return false;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_source_scene_bundle_init_from(
     const void *root, uint32_t root_bytes,
     const void *bundle, uint32_t bundle_bytes,
@@ -125,17 +180,21 @@ bool sm64_saturn_source_scene_bundle_init_from(
     const vdp1_vram_partitions_t *partitions)
 {
     const sm64_saturn_scene_dependency_view_t *dependency;
+    source_scene_bundle_scratch_t *const workspace =
+        source_scene_workspace_get();
     sm64_saturn_scene_package_view_t *const root_view =
-        &source_scene_scratch.root;
+        workspace != NULL ? &workspace->root : NULL;
     void *const upload_stage = source_scene_upload_stage_get();
     const uint32_t residency_generation = 1U;
     if (g_sm64_saturn_source_scene_bundle_probe.status ==
         SM64_SATURN_SOURCE_SCENE_BUNDLE_READY)
         return false;
     memset(&source_scene_owner, 0, sizeof(source_scene_owner));
-    memset(&source_scene_scratch, 0, sizeof(source_scene_scratch));
+    if (workspace != NULL)
+        memset(workspace, 0, sizeof(*workspace));
     if (root == NULL || root_bytes == 0U || bundle == NULL ||
         bundle_bytes == 0U || partitions == NULL || upload_stage == NULL ||
+        workspace == NULL ||
         (cart_offset & 3U) != 0U ||
         cart_offset > UINT32_MAX - bundle_bytes ||
         !sm64_saturn_scene_package_validate_target(
@@ -152,7 +211,7 @@ bool sm64_saturn_source_scene_bundle_init_from(
         source_scene_owner.bundle.maximum_scratch >
             SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES)
         return fail(SM64_SATURN_SOURCE_SCENE_BUNDLE_INVALID_DEPENDENCY);
-    memset(&source_scene_scratch, 0, sizeof(source_scene_scratch));
+    memset(workspace, 0, sizeof(*workspace));
     if (!sm64_saturn_actor_texture_residency_activate(
             &source_scene_owner.textures, &source_scene_owner.bundle,
             partitions, upload_stage,
@@ -160,6 +219,12 @@ bool sm64_saturn_source_scene_bundle_init_from(
             residency_generation,
             true, true))
         return fail(SM64_SATURN_SOURCE_SCENE_BUNDLE_TEXTURE_FAILURE);
+    source_scene_owner.texture_partitions.texture_base =
+        partitions->texture_base;
+    source_scene_owner.texture_partitions.texture_size =
+        partitions->texture_size;
+    source_scene_owner.texture_partitions.clut_base = partitions->clut_base;
+    source_scene_owner.texture_partitions.clut_size = partitions->clut_size;
     if (!sm64_saturn_actor_bundle_runtime_publish(
             &source_scene_owner.publication, &source_scene_owner.bundle,
             residency_generation, cart_offset))
@@ -191,6 +256,7 @@ extern const uint32_t sm64_saturn_sourceboot_scene_package_root_size;
 extern const uint8_t sm64_saturn_sourceboot_actor_bundle[];
 extern const uint32_t sm64_saturn_sourceboot_actor_bundle_size;
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_source_scene_bundle_init(uint16_t level_id,
                                           uint16_t area_id)
 {
@@ -251,14 +317,17 @@ bool sm64_saturn_source_scene_bundle_resolve(
 {
     const uint32_t generation =
         g_sm64_saturn_source_scene_bundle_probe.residency_generation;
+    source_scene_bundle_scratch_t *const workspace =
+        source_scene_workspace_get();
     if (g_sm64_saturn_source_scene_bundle_probe.status !=
             SM64_SATURN_SOURCE_SCENE_BUNDLE_READY ||
+        workspace == NULL ||
         !sm64_saturn_actor_bundle_runtime_claim(
             &source_scene_owner.publication, generation, lane))
         return false;
     if (sm64_saturn_actor_bundle_runtime_resolve(
             &source_scene_owner.publication, &source_scene_owner.bundle,
-            source_scene_scratch.workspace,
+            workspace->workspace,
             SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES, snapshot,
             lane, records, draw_capacity, output))
         return true;
@@ -283,6 +352,29 @@ sm64_saturn_source_scene_bundle_textures(uint32_t generation)
         source_scene_owner.textures.generation != generation)
         return NULL;
     return &source_scene_owner.textures;
+}
+
+bool sm64_saturn_source_scene_bundle_texture_partitions(
+    uint32_t generation, vdp1_vram_partitions_t *out)
+{
+    if (out == NULL) return false;
+    memset(out, 0, sizeof(*out));
+    if (g_sm64_saturn_source_scene_bundle_probe.status !=
+            SM64_SATURN_SOURCE_SCENE_BUNDLE_READY ||
+        generation == 0U || source_scene_owner.textures.committed != 1U ||
+        source_scene_owner.textures.generation != generation ||
+        source_scene_owner.texture_partitions.texture_base == NULL ||
+        source_scene_owner.texture_partitions.clut_base == NULL ||
+        source_scene_owner.texture_partitions.texture_size <
+            source_scene_owner.textures.texture_bytes ||
+        source_scene_owner.texture_partitions.clut_size <
+            source_scene_owner.textures.clut_bytes)
+        return false;
+    out->texture_base = source_scene_owner.texture_partitions.texture_base;
+    out->texture_size = source_scene_owner.texture_partitions.texture_size;
+    out->clut_base = source_scene_owner.texture_partitions.clut_base;
+    out->clut_size = source_scene_owner.texture_partitions.clut_size;
+    return true;
 }
 
 const sm64_saturn_source_scene_bundle_probe_t *

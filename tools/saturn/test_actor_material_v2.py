@@ -35,7 +35,7 @@ DRAWABLE_KEYS = (
     (4, 0x00CD, "v2"),
     (5, 0x00D7, "GEO_SHADOW"),
     (6, 0x00DB, "v2"),
-    (7, 0x00BC, "GEO_SHADOW"),
+    (7, 0x00BC, "v2"),
     (8, 0x008F, "v2"),
     (9, 0x0076, "GEO_SHADOW"),
     (11, 0x0068, "GEO_SHADOW"),
@@ -132,7 +132,7 @@ class ActorMaterialV2Test(unittest.TestCase):
         """Catches admission drift, silent omission, or broad Geo-state relaxation."""
         self.assertEqual(tuple(sorted(BOB_DIRECT_TEXTURED_KEYS)), DIRECT_KEYS)
         self.assertEqual(len(DRAWABLE_KEYS), 34)
-        self.assertEqual(len(DIRECT_KEYS), 14)
+        self.assertEqual(len(DIRECT_KEYS), 15)
         for ordinal, model_id, expected in DRAWABLE_KEYS:
             with self.subTest(family=ordinal, model=f"0x{model_id:04x}"):
                 if expected == "v2":
@@ -184,6 +184,23 @@ class ActorMaterialV2Test(unittest.TestCase):
         self.assertEqual(sources[texture_path], hashlib.sha256(
             (ROOT / texture_path).read_bytes()).hexdigest())
         self.assertEqual(len(compiled.report["material_policy"]["category_sha256"]), 13)
+
+    def test_real_bobomb_is_the_first_normal_enemy_without_injected_identity(self) -> None:
+        compiled = compile_actor_variant(ROOT, 7, 0x00BC, self.families[7])
+        repeated = compile_actor_variant(ROOT, 7, 0x00BC, self.families[7])
+        view = validate_actor_bank(compiled.payload)
+        self.assertEqual((compiled.family_ordinal, compiled.model_id), (7, 0x00BC))
+        self.assertEqual(view.version, 2)
+        self.assertEqual(compiled.report["selection"]["model"],
+                         "MODEL_BLACK_BOBOMB")
+        self.assertEqual(self.family_docs[7]["stable_id"], "bhvBobomb")
+        self.assertEqual((compiled.source_sha256, compiled.payload_sha256,
+                          compiled.payload),
+                         (repeated.source_sha256, repeated.payload_sha256,
+                          repeated.payload))
+        self.assertGreater(view.primitive_count, 0)
+        self.assertGreater(compiled.report["material_policy"][
+            "textured_triangle_count"], 0)
 
     def _copied_cannon(self, directory: str) -> tuple[Path, list[dict[str, object]]]:
         root = Path(directory)

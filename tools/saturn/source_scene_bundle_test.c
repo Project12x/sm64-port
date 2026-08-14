@@ -3,18 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct vdp1_vram_partitions {
-    void *cmdt_base;
-    uint32_t cmdt_size;
-    void *texture_base;
-    uint32_t texture_size;
-    void *gouraud_base;
-    uint32_t gouraud_size;
-    void *clut_base;
-    uint32_t clut_size;
-    void *remaining_base;
-    uint32_t remaining_size;
-} vdp1_vram_partitions_t;
+#include <yaul.h>
 
 #include "../../src/port/saturn/sourceboot/source_scene_bundle.h"
 #include "../../src/port/saturn/gpl/slavedriver_dma_queue.h"
@@ -164,6 +153,7 @@ int main(int argc, char **argv)
     uint32_t root_bytes = 0U, bundle_bytes = 0U;
     const sm64_saturn_source_scene_bundle_probe_t *probe;
     const sm64_saturn_actor_texture_publication_t *textures;
+    vdp1_vram_partitions_t actor_partitions;
     sm64_saturn_actor_bundle_view_t bundle_view;
     sm64_saturn_actor_bundle_resolution_t resolution;
     sm64_saturn_actor_instance_snapshot_t snapshot;
@@ -222,24 +212,35 @@ int main(int argc, char **argv)
                 probe == NULL ? UINT32_MAX : probe->status);
     }
     CHECK(initialized);
+    CHECK(sm64_saturn_actor_bundle_validate(
+        bundle, bundle_bytes, &bundle_view));
     probe = sm64_saturn_source_scene_bundle_probe();
     CHECK(probe != NULL && probe->status ==
           SM64_SATURN_SOURCE_SCENE_BUNDLE_READY);
     CHECK(probe->residency_generation == 1U &&
           probe->package_generation == expected_package_generation);
     CHECK(probe->root_bytes == root_bytes &&
-          probe->bundle_bytes == bundle_bytes && probe->variant_count == 14U);
+          probe->bundle_bytes == bundle_bytes &&
+          probe->variant_count == bundle_view.variant_count);
     textures = sm64_saturn_source_scene_bundle_textures(1U);
     CHECK(textures != NULL && textures->committed == 1U &&
-          textures->generation == 1U && textures->mapping_count == 14U);
-    CHECK(sm64_saturn_actor_bundle_validate(
-        bundle, bundle_bytes, &bundle_view));
+          textures->generation == 1U &&
+          textures->mapping_count == bundle_view.variant_count);
+    memset(&actor_partitions, 0xA5, sizeof(actor_partitions));
+    CHECK(!sm64_saturn_source_scene_bundle_texture_partitions(
+        0U, &actor_partitions));
+    CHECK(sm64_saturn_source_scene_bundle_texture_partitions(
+        1U, &actor_partitions));
+    CHECK(actor_partitions.texture_base == partitions.texture_base &&
+          actor_partitions.texture_size == partitions.texture_size &&
+          actor_partitions.clut_base == partitions.clut_base &&
+          actor_partitions.clut_size == partitions.clut_size);
     {
         const uint8_t *variant =
             bundle_view.bytes + bundle_view.variant_records_offset;
         memset(&snapshot, 0, sizeof(snapshot));
         snapshot.generation = 1U;
-        snapshot.scene_package_generation = 1U;
+        snapshot.scene_package_generation = expected_package_generation;
         snapshot.family_id = fixture_read_be16(variant);
         snapshot.model_id = fixture_read_be16(variant + 2U);
         snapshot.actor_bank_id = fixture_read_be32(variant + 56U);
@@ -278,6 +279,60 @@ int main(int argc, char **argv)
           resolution.workspace.output.quarantine_reason ==
               SM64_SATURN_ACTOR_MESHLET_QUARANTINE_NONE);
     CHECK(sm64_saturn_source_scene_bundle_release(0U, 1U));
+
+    /* Exact first visible generic actor observed by the identity-bound BOB
+     * target.  This is the earliest live consumer, not a synthetic family-0
+     * fixture: if its package identity, pose, camera, or meshlet preparation
+     * drifts, the normal frame fails before any actor reaches VDP1. */
+    {
+        sm64_saturn_actor_bundle_variant_t cannon;
+        CHECK(sm64_saturn_actor_bundle_variant(
+            &bundle_view, 29U, 128U, &cannon));
+        memset(&snapshot, 0, sizeof(snapshot));
+        snapshot.generation = 1U;
+        snapshot.scene_package_generation = expected_package_generation;
+        snapshot.instance_key = 65560U;
+        snapshot.actor_bank_id = cannon.source_hash_words[0];
+        memcpy(snapshot.actor_bank_hash_words, cannon.source_hash_words,
+               sizeof(snapshot.actor_bank_hash_words));
+        snapshot.family_id = cannon.family_ordinal;
+        snapshot.model_id = cannon.model_id;
+        snapshot.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+        snapshot.parent_node_ordinal = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+        snapshot.position_q16[0] = 90963968;
+        snapshot.position_q16[1] = 191234048;
+        snapshot.position_q16[2] = -156172288;
+        snapshot.scale_q16[0] = 65536;
+        snapshot.scale_q16[1] = 65536;
+        snapshot.scale_q16[2] = 65536;
+        snapshot.angle[1] = -8192;
+        snapshot.animation_id = 0;
+        snapshot.animation_frame = 0;
+        snapshot.opacity = 255U;
+        snapshot.active = 1U;
+        snapshot.render_active = 1U;
+        CHECK(sm64_saturn_source_scene_bundle_resolve(
+            &snapshot, 0U, records, 128U, &resolution));
+        memset(&render_view, 0, sizeof(render_view));
+        memset(&stats, 0, sizeof(stats));
+        render_view.camera_position_q16[0] = -107413504;
+        render_view.camera_position_q16[1] = 100270080;
+        render_view.camera_position_q16[2] = 413925376;
+        render_view.camera_focus_q16[0] = 43515904;
+        render_view.camera_focus_q16[1] = 1966080;
+        render_view.camera_focus_q16[2] = -120586240;
+        render_view.view_forward_q16[0] = 17537;
+        render_view.view_forward_q16[1] = -11422;
+        render_view.view_forward_q16[2] = -62109;
+        render_view.generation = snapshot.generation;
+        CHECK(sm64_saturn_actor_meshlets_prepare_bank(
+            &resolution.bank, &snapshot, &render_view,
+            &resolution.workspace.pose_work, &resolution.workspace.output,
+            &stats));
+        CHECK((uint32_t)resolution.workspace.output.output.opaque_count +
+                  resolution.workspace.output.output.translucent_count != 0U);
+        CHECK(sm64_saturn_source_scene_bundle_release(0U, 1U));
+    }
     CHECK(sm64_saturn_source_scene_bundle_step(true));
     CHECK(!sm64_saturn_source_scene_bundle_init_from(
         root, root_bytes, bundle, bundle_bytes, 9U, 1U, 0x10000U,

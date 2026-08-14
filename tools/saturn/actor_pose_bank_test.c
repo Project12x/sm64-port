@@ -244,6 +244,27 @@ int main(int argc, char **argv)
                 return 1;
             }
         }
+        /* The live BOB route currently observes idle-head-right at frame 14.
+         * Its local Mario pose must stay in ordinary actor coordinates; a
+         * Q16.16 translation passed to the raw-coordinate constructor pins
+         * these components at INT16_MAX/MIN and makes Mario disappear.
+         *
+         * mario_geo applies its outer GEO_SCALE(16384), so the source-space
+         * 4x skeleton/vertex values must be reduced to the source world
+         * coordinate result before the renderer sees them.  These values are
+         * independently derived from the source GeoLayout at this frame. */
+        if (!sm64_saturn_actor_pose_evaluate(&view, 196, 14, &work, &pose) ||
+            vertices[0][1] == INT16_MAX || vertices[0][1] == INT16_MIN ||
+            vertices[0][2] == INT16_MAX || vertices[0][2] == INT16_MIN ||
+            vertices[0][0] != -9 || vertices[0][1] != 34 ||
+            vertices[0][2] != 19) {
+            fprintf(stderr,
+                    "idle-head-right pose did not preserve mario_geo scale "
+                    "(%d, %d, %d)\n",
+                    vertices[0][0], vertices[0][1], vertices[0][2]);
+            free(bytes);
+            return 1;
+        }
     }
     {
         uint8_t *extreme = malloc(size);
@@ -264,15 +285,15 @@ int main(int argc, char **argv)
             return 1;
         }
         memcpy(extreme, bytes, size);
-        /* A root translation at INT16_MAX plus the source root channel is a
-         * valid-width field but not representable in Q16.16 int32. The
-         * evaluator must reject it without signed-wrap UB. */
+        /* Raw source-space translations are intentionally composed in raw
+         * actor units.  An extreme but valid int16 joint offset must not take
+         * the obsolete Q16.16 overflow/reject route. */
         extreme[joint_table + 2U] = 0x7FU;
         extreme[joint_table + 3U] = 0xFFU;
         if (!sm64_saturn_actor_bank_validate(extreme, size, &extreme_view) ||
-            sm64_saturn_actor_pose_evaluate(
+            !sm64_saturn_actor_pose_evaluate(
                 &extreme_view, 0, 0, &extreme_work, &extreme_pose)) {
-            fprintf(stderr, "extreme Q16 translation was not rejected\n");
+            fprintf(stderr, "raw extreme translation took Q16 reject route\n");
             free(extreme);
             free(bytes);
             return 1;

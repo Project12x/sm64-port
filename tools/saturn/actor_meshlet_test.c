@@ -128,6 +128,17 @@ static int has_meshlet(const sm64_saturn_actor_draw_ref_t *refs,
     return 0;
 }
 
+static int opaque_refs_are_far_to_near(
+    const sm64_saturn_actor_meshlet_output_t *output)
+{
+    for (uint16_t i = 1U; i < output->opaque_count; i++) {
+        if ((output->opaque[i - 1U].sort_key >> 16) <
+            (output->opaque[i].sort_key >> 16))
+            return 0;
+    }
+    return 1;
+}
+
 static int output_records_are(const sm64_saturn_actor_draw_ref_t *records,
                               const uint16_t *positions,
                               uint16_t draw_capacity,
@@ -154,7 +165,7 @@ static int output_matches_declared_tier_zero(
     const uint8_t *geometry = bank->bytes + bank->meshlets_offset;
     const uint32_t meshlet_offset = read_be32(geometry + 30U);
     const uint32_t primitive_ref_offset = read_be32(geometry + 38U);
-    uint32_t cursor = 0U;
+    uint32_t expected_count = 0U;
     if (output->translucent_count != 0U || output->opaque == NULL)
         return 0;
     for (uint16_t meshlet = 0U; meshlet < bank->bank.meshlet_count; meshlet++) {
@@ -162,16 +173,21 @@ static int output_matches_declared_tier_zero(
             (uint32_t)meshlet * 66U;
         const uint32_t first = read_be32(record + 18U);
         const uint32_t count = read_be32(record + 22U);
-        for (uint32_t local = 0U; local < count; local++, cursor++) {
+        for (uint32_t local = 0U; local < count; local++) {
             const uint16_t primitive = read_be16(
                 geometry + primitive_ref_offset + (first + local) * 2U);
-            if (cursor >= output->opaque_count ||
-                output->opaque[cursor].meshlet_id != meshlet ||
-                output->opaque[cursor].primitive_id != primitive)
+            uint16_t matches = 0U;
+            for (uint16_t cursor = 0U; cursor < output->opaque_count; cursor++) {
+                if (output->opaque[cursor].meshlet_id == meshlet &&
+                    output->opaque[cursor].primitive_id == primitive)
+                    matches++;
+            }
+            if (matches != 1U)
                 return 0;
+            expected_count++;
         }
     }
-    return cursor == output->opaque_count;
+    return expected_count == output->opaque_count;
 }
 
 static int bank_driven_cases(const char *path)
@@ -402,6 +418,27 @@ static int bank_driven_cases(const char *path)
         goto cleanup;
     }
     {
+        sm64_saturn_render_view_t side_view = view;
+        side_view.view_forward_q16[0] = 1 << 16;
+        side_view.view_forward_q16[2] = 0;
+        instance.scale_q16[0] = 1 << 16;
+        instance.scale_q16[1] = 1 << 16;
+        instance.scale_q16[2] = 1 << 16;
+        if (!sm64_saturn_actor_meshlets_prepare_bank(
+                &bank, &instance, &side_view, &workspace[0].pose_work,
+                &workspace[0].output, &stats) ||
+            workspace[0].output.output.opaque_count < 2U ||
+            !opaque_refs_are_far_to_near(&workspace[0].output.output)) {
+            fprintf(stderr,
+                    "bank opaque meshlets are not far-to-near under side view\n");
+            result = 0;
+            goto cleanup;
+        }
+        instance.scale_q16[0] = 1;
+        instance.scale_q16[1] = 1;
+        instance.scale_q16[2] = 1;
+    }
+    {
         sm64_saturn_actor_output_record_t saved = records[1];
         uint16_t saved_count = workspace[0].output.output.opaque_count;
         records[1] = records[0];
@@ -562,14 +599,6 @@ int main(int argc, char **argv)
             SM64_MARIO_PRIMITIVE_COUNT) {
         fprintf(stderr, "fully admitted Mario meshlet output is incomplete\n");
         return 1;
-    }
-    for (uint16_t i = 1U; i < output.opaque_count; i++) {
-        if (output.opaque[i - 1U].meshlet_id > output.opaque[i].meshlet_id ||
-            (output.opaque[i - 1U].meshlet_id == output.opaque[i].meshlet_id &&
-             output.opaque[i - 1U].primitive_id >= output.opaque[i].primitive_id)) {
-            fprintf(stderr, "opaque meshlets do not preserve source order\n");
-            return 1;
-        }
     }
     for (uint16_t i = 1U; i < output.translucent_count; i++) {
         const uint32_t previous_bin = output.translucent[i - 1U].sort_key >> 16;

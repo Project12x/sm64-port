@@ -547,6 +547,31 @@ and 20,000-frame-floor review. Repair and rerun Step 5 before target use.
 
 ### Task 3: Reproduce, audit, and package the exact goal target
 
+**Execution ledger (2026-08-10): BLOCKED — exact target reproduction.**
+Preflight reconciled Task 1 (`373c2640`, independent review recorded by
+`7bdec261`) and Task 2 (`1f9dc83a`, review-cleared) with no uncommitted files
+owned by either task. The whole-worktree `git diff --check` has the pre-existing
+unrelated blank line at EOF in
+`.superpowers/sdd/2026-08-03-saturn-overlapped-render-pipeline/task-9-brief.md`.
+The prescribed wrapper command could not see `YAUL_INSTALL_ROOT`; the
+documented MSYS login-shell fallback then ran the same `verify-sourceboot`
+target and complete Step 2 flag tuple, with `.yaul.env` sourced,
+`OS=Windows_NT`, the prescribed Yaul root, and a workspace-local `TMPDIR`
+(the sandbox MSYS `/tmp` is not writable). It built ordinary sourceboot work
+but v3 rejected the fresh ELF before its audit: generated identity
+`id-176914bc91ea6537` / effective-config digest
+`176914bc91ea65373ce961f5ca2789f501ebb374aa1678bcfa9b6032d3cc39c1`, ELF
+SHA-256 `352a88bafb29208019833263d63cbf4be63c235b994fd34d163392187c490ad3`;
+expected sealed identity `id-735756402029c2f4`, digest
+`735756402029c2f43b4b9792077ca7f4393de9330a37ad12914c4c9ffb68ed59`, and
+ELF SHA-256 `562fd6e47dd489f55f3c9d131ea2bca1fa417b8b3ce2c2ed90369db7d145978a`.
+The pre-existing sealed ELF still hashes to the pinned value, but the freshly
+generated spec does not bind to it. No v3-700 result, low-RAM margin,
+SOURCE.DAT/ISO proof, CUE promotion, smoke, screenshot, manual acceptance, or
+Task 6 automation is claimed. Do not change the pin; a reviewed identity/design
+reconciliation is required before retrying this task. No Task 3 evidence commit
+was made.
+
 **Files:**
 - Verify/reproduce: `build/saturn/sourceboot/e2-bob-identity-id-735756402029c2f4/obj/sm64-saturn-sourceboot-e2.elf`
 - Verify/reproduce: `build/saturn/sourceboot/e2-bob-identity-id-735756402029c2f4/obj/sm64-saturn-sourceboot-e2.sym`

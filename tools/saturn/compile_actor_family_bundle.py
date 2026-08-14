@@ -403,7 +403,7 @@ def compile_scene_bundle(
     payload = pack_bundle(BundleDocument(package_generation, family_documents), banks)
     bundle = validate_bundle(payload)
     parsed_once = tuple(validate_actor_bank(raw) for raw in embedded_bank_payloads(bundle))
-    if len(parsed_once) != 14:
+    if len(parsed_once) != len(supported):
         raise ValueError("supported BOB bank count mismatch")
     texture_bytes = sum(row["texture_resident_bytes"] for row in bank_rows)
     clut_bytes = sum(row["clut_resident_bytes"] for row in bank_rows)

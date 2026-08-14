@@ -10,6 +10,7 @@ from collections import Counter, defaultdict, deque
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
+from actor_source import parse_animation_table_text
 from scene_package_schema import SCHEMA, validate_scene_closure
 
 
@@ -276,7 +277,8 @@ def _actor_asset_definition_index(root: Path) -> dict[tuple[str, str], tuple[str
             f"repository actor asset source index limit exceeded: {len(paths)} C sources")
     pattern = re.compile(
         r"^\s*(?:ALIGNED8\s+)?(?:static\s+)?(?:const\s+)?"
-        r"(GeoLayout|Gfx|Vtx|Lights1|Texture|u8|u16)\s+([A-Za-z_]\w*)\s*"
+        r"(?:struct\s+)?"
+        r"(GeoLayout|Gfx|Vtx|Lights1|Texture|u8|u16|Animation)\s+([A-Za-z_]\w*)\s*"
         r"(?:\[[^]]*\])?\s*=",
         re.MULTILINE,
     )
@@ -293,6 +295,32 @@ def _actor_asset_definition_index(root: Path) -> dict[tuple[str, str], tuple[str
             if count > 65536:
                 raise ClosureError("repository actor asset definition limit exceeded")
     return {key: tuple(values) for key, values in found.items()}
+
+
+def _reached_animation_sources(
+        root: Path,
+        table_symbol: str,
+        table_source: str,
+        index: dict[tuple[str, str], tuple[str, ...]] | None = None,
+) -> set[str]:
+    """Seal every uniquely selected Animation definition behind one table."""
+    if index is None:
+        index = _actor_asset_definition_index(root)
+    try:
+        symbols = parse_animation_table_text(
+            table_source, _read(root, table_source), table_symbol)
+    except ValueError as error:
+        raise ClosureError(str(error)) from error
+    sources: set[str] = set()
+    for symbol in symbols:
+        matches = index.get(("Animation", symbol), ())
+        if not matches:
+            raise ClosureError(f"missing reached Animation {symbol}")
+        if len(matches) != 1:
+            raise ClosureError(
+                f"ambiguous reached Animation {symbol}: {', '.join(matches)}")
+        sources.add(matches[0])
+    return sources
 
 
 def _actor_asset_initializer(root: Path, path: str, kind: str,
@@ -1369,6 +1397,8 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
                 raise ClosureError(f"unresolved animation root {animation}")
             animation_sources[animation] = animation_source
             sources.add(animation_source)
+            sources.update(_reached_animation_sources(
+                root, animation, animation_source, actor_asset_index))
         source_items = [_source(root, path) for path in sorted(sources)]
         maximum_live_instances = max(occurrence[behavior].values())
         if pool_cap is not None:
@@ -1398,7 +1428,8 @@ def write_closure(path: Path, document: dict) -> str:
     canonical = dict(document)
     canonical["source_root"] = "."
     payload = (json.dumps(canonical, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    path.write_bytes(payload)
+    if not path.is_file() or path.read_bytes() != payload:
+        path.write_bytes(payload)
     return hashlib.sha256(payload).hexdigest()
 
 

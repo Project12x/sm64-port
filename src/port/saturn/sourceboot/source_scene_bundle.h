@@ -33,10 +33,13 @@ enum {
     SM64_SATURN_SOURCE_SCENE_BUNDLE_PROBE_MAGIC = 0x5342554EU,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_LEVEL_ID = 9U,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_AREA_ID = 1U,
-    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES = 1280U,
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES = 3072U,
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES = 3348U,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES = 2560U,
 };
 
+bool sm64_saturn_source_scene_bundle_bind_workspace(void *workspace,
+                                                     uint32_t byte_count);
 bool sm64_saturn_source_scene_bundle_init(uint16_t level_id,
                                           uint16_t area_id);
 bool sm64_saturn_source_scene_bundle_init_from(
@@ -53,6 +56,10 @@ bool sm64_saturn_source_scene_bundle_release(uint8_t lane,
                                              uint32_t generation);
 const sm64_saturn_actor_texture_publication_t *
 sm64_saturn_source_scene_bundle_textures(uint32_t generation);
+/* Generic material offsets are relative to this actor-only partition, never
+ * to the terrain/Mario VDP1 partition. */
+bool sm64_saturn_source_scene_bundle_texture_partitions(
+    uint32_t generation, vdp1_vram_partitions_t *out);
 const sm64_saturn_source_scene_bundle_probe_t *
 sm64_saturn_source_scene_bundle_probe(void);
 

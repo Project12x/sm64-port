@@ -63,3 +63,32 @@ The next action is owner visual/audio review of the exact launched CUE. If Mario
 fails any material, depth-order, animation, scale, input/camera, or audio gate,
 the next causal change must be confined to that observed live defect. Do not
 open actor, audio, or Whomp's Fortress expansion first.
+
+## 2026-08-14 — current normal-path build, manual gate pending
+
+The current normal sourceboot path, not the historical donor, now links after
+one bounded memory-layout repair. `sModeInfo` (72 bytes, master-only camera
+transition state) moves to explicitly reset NOLOAD LWRAM. The fixed VDP1
+command double-buffer remains HWRAM-owned and unchanged in size; it is merely
+placed before generic BSS so its required 32-byte alignment does not waste the
+last eight bytes of the HWRAM floor.
+
+The exact `-j1` build bound generic dynamic actors and semantic audio and
+exited zero as `id-9a233e934e5ed93c`. Map evidence is
+`___end=0x060fe0e8`, leaving `0x1f18` HWRAM bytes against the required
+`0x1f00`. Fresh artifact hashes are CUE
+`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7` and ISO
+`e5eb59df8444330a593a1b66cafcfeea76152b7a2d8cb92994a98c330d9ccd40`.
+Ymir is visibly launched with that named CUE and the worktree profile.
+
+An independent explicit-BIOS/DRAM-cart headless run reached live BOB gameplay
+at sequence 5,500. Its 320x224 image SHA-256 is
+`0f68c9f4e4954b424467f9e62619495b1d2e0c8eae2330382fdc61a50c72ced8`; Mario
+and an ordinary scene object are visible and no exception was observed. The
+generic hwtest cadence decoder is not valid for this sourceboot trace layout,
+so its zero-FPS field is not used.
+
+This does not replace the manual product gate. The owner must still confirm
+correct Mario scale/material/Gouraud/depth/animation, a normally spawned BOB
+actor with correct texture/height, and audible semantic music/SFX before any
+claim of recovery.

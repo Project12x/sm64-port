@@ -375,6 +375,19 @@ static void test_drain_rejects_stale_identity_before_local_processing(void)
            SM64_SATURN_ACTOR_QUARANTINE_CLAIMANT_FAILURE);
 }
 
+static void test_in_place_descriptor_staging_publishes_without_copy(void)
+{
+    sm64_saturn_actor_instance_queue_t queue;
+    const sm64_saturn_actor_instance_snapshot_t instance =
+        snapshot(71U, 30U, 0x00010001U, 90U, 21U, 60U);
+    sm64_saturn_actor_instance_queue_init(&queue);
+    queue.descriptors[0] = descriptor(
+        &instance, 0U, 0U, 0U, SM64_SATURN_ACTOR_OUTPUT_OPAQUE, 0U, 2U);
+    assert(sm64_saturn_actor_instance_queue_publish(
+        &queue, 71U, 1U, 2U, queue.descriptors, 1U));
+    assert(sm64_saturn_actor_instance_queue_descriptor(&queue, 71U, 0U) != NULL);
+}
+
 int main(void)
 {
     test_zero_instances_publish_as_terminal_generation();
@@ -387,5 +400,6 @@ int main(void)
     test_output_storage_exact_fit_and_one_record_overflow();
     test_memory_report_accounts_for_the_complete_actor_arena();
     test_drain_rejects_stale_identity_before_local_processing();
+    test_in_place_descriptor_staging_publishes_without_copy();
     return 0;
 }

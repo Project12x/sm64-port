@@ -426,6 +426,55 @@ class ReleaseManifestTests(unittest.TestCase):
         sealed_rows = verifier.call_args.args[1]
         self.assertEqual(set(sealed_rows), {("src/main.c", "compiled-source")})
 
+    def test_development_provenance_batches_long_closure_status_paths(self) -> None:
+        """A canonical Windows root must not overflow CreateProcess argv."""
+        paths = [
+            f"src/{index:04d}-{'x' * 220}.c"
+            for index in range(128)
+        ]
+        closure = {
+            "inputs": [
+                {
+                    "path": path,
+                    "sha256": "1" * 64,
+                    "class": "compiled-source",
+                    "owners": ["compiler"],
+                }
+                for path in paths
+            ],
+        }
+        commands: list[list[str]] = []
+
+        def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            commands.append(command)
+            if "rev-parse" in command:
+                return subprocess.CompletedProcess(command, 0, "a" * 40 + "\n", "")
+            if "status" in command:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            self.fail(f"unexpected Git command: {command}")
+
+        with mock.patch.object(release_manifest.subprocess, "run", side_effect=fake_run):
+            provenance = release_manifest._git_provenance(
+                self.fixture.root, closure, "development"
+            )
+
+        status_commands = [command for command in commands if "status" in command]
+        self.assertEqual(
+            provenance, {"git_revision": "a" * 40, "closure_clean": True}
+        )
+        self.assertGreater(len(status_commands), 1)
+        self.assertTrue(all(
+            len(subprocess.list2cmdline(command)) <=
+            release_manifest._GIT_COMMAND_LINE_CHARACTER_LIMIT
+            for command in status_commands
+        ))
+        flattened = [
+            path
+            for command in status_commands
+            for path in command[command.index("--") + 1:]
+        ]
+        self.assertEqual(flattened, paths)
+
     def test_builder_binds_profile_output_names_to_artifact_basenames(self) -> None:
         profile = json.loads(self.fixture.profile.read_text(encoding="ascii"))
         profile["output_names"]["elf"] = "different.elf"

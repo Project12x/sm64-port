@@ -130,6 +130,8 @@ static void check_textured(const uint8_t *bytes, uint32_t size)
     sm64_saturn_actor_render_binding_t binding;
     sm64_saturn_actor_target_material_t material;
     sm64_saturn_actor_texture_tile_t tile;
+    sm64_saturn_actor_primitive_t primitive;
+    sm64_saturn_actor_material_color_t color;
     uint32_t extension_fields[] = {
         112U, 116U, 120U, 124U, 128U, 132U, 136U, 140U, 144U, 148U,
         152U, 156U, 160U, 164U, 168U, 172U, 176U
@@ -193,6 +195,17 @@ static void check_textured(const uint8_t *bytes, uint32_t size)
     assert(tile.payload_offset == 8U && tile.payload_size == 8U);
     assert(tile.width == 8U && tile.height == 2U && tile.clut_id == 0U);
     assert(tile.format == SM64_SATURN_ACTOR_TILE_FORMAT_CLUT16);
+    assert(sm64_saturn_actor_bank_primitive(&view, 0U, &primitive));
+    assert(primitive.material_id == be16(
+        bytes + view.meshlets_offset + be32(bytes + view.meshlets_offset + 34U)));
+    assert(sm64_saturn_actor_bank_material_color(
+        &view, primitive.material_id, &color));
+    assert(color.rgb555[0] <= 31U && color.rgb555[1] <= 31U &&
+           color.rgb555[2] <= 31U);
+    assert(!sm64_saturn_actor_bank_primitive(
+        &view, view.bank.primitive_count, &primitive));
+    assert(!sm64_saturn_actor_bank_material_color(
+        &view, view.material_count, &color));
     {
         uint32_t expected_source[8];
         uint8_t *copy = malloc(size);

@@ -1,9 +1,11 @@
 # Mario Port Product Recovery Implementation Plan
 
-**Status:** active — Task 1 evidence review passed; baseline-first hybrid
-selected. Task 2 has produced a donor-derived diagnostic CUE and a Ymir frame,
-but the owner visual/audio acceptance gate remains unresolved. No current
-candidate is accepted.
+**Status:** paused for handoff — no current candidate is accepted. The exact
+failure history, donor classification, dirty-tree warning, and constrained
+restart sequence are recorded in
+`docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md`. Implementation must not
+resume from a historical checked task; it resumes only from the next live
+product observation authorized by that handoff and `PRODUCT_GOAL.md`.
 
 **Activation commit:** `1f07485a` (`docs(saturn): make playable port the product gate`)
 
@@ -241,6 +243,63 @@ start earlier.
 
 **Blocker record (2026-08-14):**
 
+- The normal BOB recovery now proves the original package failure was a
+  generation handoff defect, not a Bob-omb semantic failure: generation 15's
+  immutable bundle is stale for the current closure, while the exact same
+  sealed feature tuple regenerates and verifies generation 24. The narrow
+  sourceboot handoff now regenerates the selected family report before it
+  verifies the corresponding immutable bundle. Its focused regression passes.
+  Normal asset and discovery stages then completed, but the first full SH-2
+  link stopped at the already-enforced TLSF HWRAM floor with
+  `___end=0x060fe148`: 7,864 bytes remain, 72 bytes short of the required
+  7,936 bytes. No CUE was emitted.
+- **Rejected HWRAM recovery trial:** moving the 180-byte
+  `complete_actor_bank` parsed view to `.lwram_bss` would have preserved all
+  functional capacities, but the target link proved that existing LWRAM work
+  arenas already reach the reserved slave stack. The trial was rolled back
+  before any CUE was emitted. Do not trade the 72-byte HWRAM deficit for an
+  LWRAM overflow; the next candidate must reclaim existing CPU-only capacity
+  without touching command, Gouraud, object-pool, actor, or audio budgets.
+- **Current bounded placement candidate (before code):** `sModeInfo` is a
+  72-byte master-CPU camera-transition record at HWRAM `0x060a5d04`; it is
+  neither an SCU/CPU-DMA payload nor shared with the slave or VDP1. Moving it
+  to linker-owned `.lwram_bss` changes the measured LWRAM end from
+  `0x002fbfb0` to the expected `0x002fbff0`, retaining the full reserved slave
+  stack at `0x002fc000` and 16 bytes of linker-enforced pre-stack slack. It
+  changes HWRAM `___end` from `0x060fe148` to the expected `0x060fe100`, exactly
+  restoring the `0x1f00` TLSF floor without reducing command, Gouraud, object,
+  actor, or audio capacity. `.lwram_bss` is NOLOAD, so `reset_camera()` must
+  explicitly zero the record before the normal level path's first
+  `init_camera()`/camera update; that is the reset/scene-transition owner and
+  preserves original BSS semantics. Producer and first consumer are the master
+  camera transition logic; no transport, DMA, generation publication, or
+  cross-CPU visibility is involved. The next observation is the exact normal
+  sourceboot link followed by identity-bound BOB CUE boot; linker assertions
+  remain the failure-atomic capacity gate.
+- **Fresh current normal-path build (2026-08-14):** the candidate is now
+  implemented. The first result ended at `0x060fe108`, eight bytes short of
+  the floor because the fixed 32-byte VDP1 command double-buffer incurred
+  eight bytes of late-BSS alignment padding. The layout-only correction packs
+  that unchanged `0x20000` HWRAM command block first before generic BSS; it
+  changes neither command capacity nor VDP1 ownership. The focused regression
+  passes. The exact serial sourceboot build with dynamic actors and semantic
+  audio enabled exits zero as `id-9a233e934e5ed93c`, with
+  `___end=0x060fe0e8`, `0x1f18` HWRAM remaining, and required floor `0x1f00`.
+  It produced CUE SHA-256
+  `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7` and ISO
+  SHA-256
+  `e5eb59df8444330a593a1b66cafcfeea76152b7a2d8cb92994a98c330d9ccd40`.
+  Ymir was explicitly launched with that CUE and the worktree profile. This is
+  target-build evidence only: Mario visuals, normal Bob-omb rendering,
+  music/SFX audibility, cadence, and owner acceptance remain open.
+- **Bounded current-CUE observation:** an explicit-BIOS/DRAM-cart headless run
+  reached live BOB gameplay at sequence 5,500 and wrote a 320x224 frame SHA-256
+  `0f68c9f4e4954b424467f9e62619495b1d2e0c8eae2330382fdc61a50c72ced8` from
+  the same CUE/ELF. Mario and an ordinary scene object are visible and no
+  exception was reported. The generic hwtest capture's cadence field is
+  invalid here: it decodes the first word of the sourceboot trace as a frame
+  serial. Do not use its zero-FPS result; a sourceboot-native cadence capture
+  or the owner’s live reading is required for the 4 FPS integration floor.
 - Current serial build stopped before SH-2 compilation at
   `compile_actor_family_bundle.py`: `family report does not match
   closure-derived semantics`. `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=0` does not

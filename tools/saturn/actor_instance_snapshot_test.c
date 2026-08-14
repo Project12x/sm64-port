@@ -326,6 +326,10 @@ static void test_capacity_and_two_bank_lifecycle(void)
     assert(!sm64_saturn_actor_instance_bank_begin_write(&bank, 3U, &index0));
     memcpy(bank.snapshots[first_index], output, sizeof(output));
     assert(sm64_saturn_actor_instance_bank_publish(&bank, first_index, 1U, 1U));
+    assert(sm64_saturn_actor_instance_bank_ready_view(
+               &bank, first_index, 1U, &count) != NULL);
+    assert(count == 1U && bank.state[first_index] ==
+           SM64_SATURN_ACTOR_INSTANCE_BANK_READY);
     assert(sm64_saturn_actor_instance_bank_acquire(&bank, first_index, 1U, &count) != NULL);
     assert(count == 1U);
     assert(sm64_saturn_actor_instance_bank_complete(&bank, first_index));

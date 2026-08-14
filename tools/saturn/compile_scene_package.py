@@ -479,14 +479,30 @@ def publish_or_verify(path: Path, raw: bytes) -> None:
     publish_or_verify_set(((path, raw),))
 
 
+def _canonical_relative_path(target: Path, base: Path) -> str:
+    """Return a relocation-stable path after resolving directory aliases.
+
+    Scene sidecars and sourceboot assembly are immutable generation bytes.  A
+    Windows junction may spell the same checkout differently to the producer
+    and its output directory; relativizing those raw spellings would make the
+    bytes differ even though both files are identical.  Resolve both ends
+    before computing the relative spelling, while allowing a not-yet-published
+    output leaf such as ``scene.s64p``.
+    """
+    try:
+        canonical_target = target.resolve(strict=False)
+        canonical_base = base.resolve(strict=False)
+        return Path(os.path.relpath(canonical_target, canonical_base)).as_posix()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError("package paths cannot be made canonical-relative") from exc
+
+
 def _assembly_bytes(root_package: Path, actor_bundle: Path,
                     assembly_base: Path) -> bytes:
     try:
         base = assembly_base.resolve(strict=True)
-        root_relative = Path(os.path.relpath(
-            root_package.absolute(), base)).as_posix()
-        bundle_relative = Path(os.path.relpath(
-            actor_bundle.resolve(strict=True), base)).as_posix()
+        root_relative = _canonical_relative_path(root_package, base)
+        bundle_relative = _canonical_relative_path(actor_bundle, base)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         raise ValueError("assembly inputs cannot be made relative") from exc
     lines = (
@@ -559,7 +575,7 @@ def main() -> None:
         output = args.payload_manifest_output
         payloads = [{
             "stable_id": dependency.stable_id,
-            "path": Path(os.path.relpath(payload_path, output.parent)).as_posix(),
+            "path": _canonical_relative_path(payload_path, output.parent),
             "generation": dependency.generation,
         } for dependency, payload_path in zip(
             dependencies, dependency_payloads)]

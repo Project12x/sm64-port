@@ -188,6 +188,25 @@ The 20,100-frame combined smoke, visual proof, desktop launch, and owner manual
 play remain open under hermetic Task 10. The prior 138-slot idle-boot peak is
 still a floor without pickup/hold/action-particle coverage.
 
+**Target-reproduction ledger (2026-08-10): BLOCKED, not source-complete.**
+The Task 3 exact-target reproduction ran the complete approved flags-on tuple
+through the documented MSYS login-shell fallback (the literal wrapper command
+first failed before compilation because it did not source `.yaul.env`; MSYS
+`/tmp` also required a workspace-local temporary directory). Its ordinary
+sourceboot work reached v3, which fail-closed on a newly generated
+`id-176914bc91ea6537` ELF (`352a88bafb29208019833263d63cbf4be63c235b994fd34d163392187c490ad3`)
+instead of the sealed `id-735756402029c2f4` ELF
+(`562fd6e47dd489f55f3c9d131ea2bca1fa417b8b3ce2c2ed90369db7d145978a`).
+The scalar tuple in the generated spec includes the approved capacity 208, but
+its effective-config digest is
+`176914bc91ea65373ce961f5ca2789f501ebb374aa1678bcfa9b6032d3cc39c1`, not the
+approved `735756402029c2f43b4b9792077ca7f4393de9330a37ad12914c4c9ffb68ed59`.
+The historical sealed ELF remains byte-identical to its pin, while the fresh
+spec fails its binding check against it. Thus no fresh package, map margin,
+cart/ISO, headless, visual, or owner-manual result exists. Leave Task 5 and
+Task 6 open; resolve the identity drift with a reviewed contract/design change
+rather than repinning v3 or promoting stale output.
+
 **Combined-smoke harness ledger (2026-08-10):** Task 2's capture extension is
 **complete for host scope; independent review cleared.** Its TDD RED
 observed the requested absent decoder/acceptance entry points, then the

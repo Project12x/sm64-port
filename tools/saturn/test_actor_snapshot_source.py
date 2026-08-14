@@ -410,10 +410,13 @@ def test_object_observer_resolves_the_behavior_geo_pair_and_fails_closed_on_miss
     rendering = RENDERING.read_text(encoding="utf-8")
     observe = object_observer_body()
     assert '#include "actor_identity_registry.h"' in rendering
-    assert (
+    registry_apply = (
         "saturn_actor_identity_registry_apply(\n"
-        "        model_id, node->behavior, &source)"
-        in observe
+        "            model_id, node->behavior, &source)"
+    )
+    assert f"if (!{registry_apply}) return false;" in observe
+    assert observe.index(registry_apply) < observe.index(
+        "sm64_saturn_geo_state_observer_begin_object"
     )
     assert "saturn_actor_identity_registry_lookup" not in observe
     assert "source.family_id =" not in observe

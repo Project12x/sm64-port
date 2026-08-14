@@ -26,7 +26,7 @@ from bake_castle_uv import pack_clut16, quantize_clut16, sample_triangle
 
 
 BOB_DIRECT_TEXTURED_KEYS = (
-    (4, 0x00CD), (6, 0x00DB), (8, 0x008F), (13, 0x00A3),
+    (4, 0x00CD), (6, 0x00DB), (7, 0x00BC), (8, 0x008F), (13, 0x00A3),
     (18, 0x00A4), (19, 0x00C9), (21, 0x00A8), (24, 0x007F),
     (28, 0x0084), (29, 0x0080), (32, 0x0096), (39, 0x00A5),
     (40, 0x0095), (46, 0x00A6),
@@ -85,6 +85,7 @@ _CATEGORY_LABELS = {
 _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
     (4, 0x00CD): "5effdad14956faaf30891aa37c1a749334b2eec6c86561a3521bc789456636de",
     (6, 0x00DB): "dec1090d31a6109f0103cc88ee950d35f6e186e726981a3a9a1829c3d414510f",
+    (7, 0x00BC): "623a659fb8bf030d8fa7ceb371c333809ebfef8f0e339261b13fdba679a22413",
     (8, 0x008F): "ab424ba6e19a80f0d0fcf86efbfb063ad750674a35f71c2ed54c47006eb9232c",
     (13, 0x00A3): "d8f2d5208b0e3df4c256e74138fb6c9160b5de9bea512001990d6938d66492d2",
     (18, 0x00A4): "c3561e3b23d73e251b09d617a0c3d4b21593b2c663f0094d6937a32ee0afaa77",
@@ -99,6 +100,21 @@ _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
     (46, 0x00A6): "a9a763a4ca33fac8c6dea8dbe4fd6f5dda773d462762b50d9d3e86ada407a45d",
 }
 _EXPECTED_CATEGORY_HASHES: dict[tuple[int, int], dict[str, str]] = {
+    (7, 0x00BC): {
+        "combine_mode": "91323b27a3bae7230a6ebfbad36db44319f80a9fbcf5a136e591cc2be5189e48",
+        "display_list_call": "37c60ae0d2920da6e65ec266d3f9a37ed7235d6da7a060ae1678844a1008099a",
+        "geometry_mode": "e5202db3112d967bfe7489f382639d582f8272b817bb2ea1625ccd5cd6bb89e5",
+        "layer": "c125737f993167abb80abf21f59a0b336cf2afc9181ad2dfc1231bbb56f29ef3",
+        "material_state_trace": "d79a6717a1235e34a3e1738f730ee2e17d0a64a921e9bbaa3ca0eea1a46c5a08",
+        "opacity": "6a53b11fe888e6e99e84e7bdaba3db0701e029d087b06cd3320625d59b673a22",
+        "tail_transfer": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "texture_image": "974ddc1c442dceabc0df582c71f2d2516b631214420c162181cade2f089636f2",
+        "texture_source": "4a51f3c48520fdc44419a73d21080b3dcafc91211fe59bca830ce0900d6c1924",
+        "tile_mask_shift": "74b46919ff887ad3194621d0aa4aaa259a13f8dc0cff44c032197e63f520f7cd",
+        "tile_size": "7eb30411c167d45a0b125345f3ee8be4bf5a6ac2662a27af7c0dfbaf7cd3aff5",
+        "tile_wrap_clamp": "d67aecf4e19f7c4b89c556eae580a610fb116264287d684e97aff2935c6923b5",
+        "uv": "b783185ee2bdc0f66500cb756d43a3e779052b88b3d8570368f8fa6fb1717df8",
+    },
     (29, 0x0080): {
         "combine_mode": "27f22ea024ac7ece386ac093628f365cb62d94d5ffad611b5845ba0af1154f7a",
         "display_list_call": "30ecff95429d777b351cafd63ad01ffccacf07e9033e2a86b4181151e00a3f1d",

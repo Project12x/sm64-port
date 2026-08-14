@@ -38,7 +38,10 @@ void osInvalDCache(UNUSED void *address, UNUSED size_t bytes) {}
 void osInvalICache(UNUSED void *address, UNUSED size_t bytes) {}
 
 OSTime osGetTime(void) {
-    static OSTime ticks;
+    /* Sourceboot's libultra clock is master-only synthetic state. Keep it
+     * with the other NOLOAD CPU-only sourceboot accounting rather than
+     * spending fixed HWRAM required by VDP1/libyaul. */
+    static OSTime ticks __attribute__((section(".lwram_bss"), used));
     return ++ticks;
 }
 u32 osGetCount(void) { return (u32)cpu_frt_count_get(); }

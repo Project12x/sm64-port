@@ -82,7 +82,12 @@ _GEO_TRANSFORM_NODES = {
 }
 
 # Geo-layout nodes that neither transform nor gate visibility.
-_GEO_NEUTRAL_NODES = {"GEO_NODE_START", "GEO_DISPLAY_LIST"}
+_GEO_NEUTRAL_NODES = {
+    "GEO_NODE_START", "GEO_DISPLAY_LIST",
+    # Shadows are emitted by the source scene's existing shadow/effect path;
+    # omitting that separate primitive does not alter child actor geometry.
+    "GEO_SHADOW",
+}
 
 # GEO_SWITCH_CASE selects exactly one of its direct children. Its cases are
 # not poisoned: each direct child instead becomes its own rigid group.

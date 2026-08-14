@@ -3,9 +3,11 @@
 **Authoritative goal:** [`docs/saturn/PRODUCT_GOAL.md`](docs/saturn/PRODUCT_GOAL.md)
 **Active plan:**
 [`docs/superpowers/plans/2026-08-13-mario-port-product-recovery.md`](docs/superpowers/plans/2026-08-13-mario-port-product-recovery.md)
-**Status:** recovery diagnostic active; no current development CUE is
-accepted. One isolated historical donor has booted to a BOB frame, but is a
-diagnostic only—not the presentation artifact.
+**Status:** implementation paused for handoff; no current development CUE is
+accepted. The candid failure history and constrained restart are in
+[`docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md`](docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md).
+One isolated historical donor has booted to a BOB frame, but is diagnostic
+only—not the presentation artifact.
 
 ## Product truth
 

@@ -52,13 +52,13 @@ static uint8_t *read_file(const char *path, uint32_t *byte_count)
 }
 
 static void first_snapshot(const sm64_saturn_actor_bundle_view_t *bundle,
-                           uint32_t residency_generation,
+                           uint32_t package_generation,
                            sm64_saturn_actor_instance_snapshot_t *snapshot)
 {
     const uint8_t *record = bundle->bytes + bundle->variant_records_offset;
     memset(snapshot, 0, sizeof(*snapshot));
     snapshot->generation = 91U;
-    snapshot->scene_package_generation = residency_generation;
+    snapshot->scene_package_generation = package_generation;
     snapshot->family_id = read_be16(record);
     snapshot->model_id = read_be16(record + 2U);
     snapshot->actor_bank_id = read_be32(record + 56U);
@@ -84,17 +84,18 @@ int main(int argc, char **argv)
     uint8_t *workspace_storage;
     uint32_t bundle_size = 0U;
     const uint32_t residency_generation = 17U;
+    const uint32_t workspace_capacity = 3072U;
 
     if (argc != 2) return 2;
     bundle_bytes = read_file(argv[1], &bundle_size);
     records = (sm64_saturn_actor_output_record_t *)calloc(
         256U, sizeof(*records));
-    workspace_storage = (uint8_t *)malloc(1280U + 4U);
+    workspace_storage = (uint8_t *)malloc(workspace_capacity + 4U);
     assert(bundle_bytes != NULL && records != NULL &&
            workspace_storage != NULL);
     assert(sm64_saturn_actor_bundle_validate(bundle_bytes, bundle_size,
                                               &bundle));
-    assert(bundle.maximum_scratch == 1091U);
+    assert(bundle.maximum_scratch == 2915U);
     assert(bundle.workspace_lane_stride != 0U);
 
     memset(&publication, 0xA5, sizeof(publication));
@@ -117,7 +118,8 @@ int main(int argc, char **argv)
         &publication, &bundle, residency_generation, 0x00100000U));
     assert(memcmp(&publication, &before, sizeof(publication)) == 0);
 
-    first_snapshot(&bundle, residency_generation, &snapshot);
+    first_snapshot(&bundle, bundle.package_generation, &snapshot);
+    assert(snapshot.scene_package_generation != residency_generation);
     assert(sm64_saturn_actor_bundle_runtime_claim(
         &publication, residency_generation, 0U));
     assert(sm64_saturn_actor_bundle_runtime_claim(
@@ -137,7 +139,8 @@ int main(int argc, char **argv)
     {
         uint32_t lane_bytes, usable_bytes, reserved_bytes;
         const uintptr_t scratch_start = (uintptr_t)workspace_storage;
-        const uintptr_t scratch_end = scratch_start + 1091U;
+        const uintptr_t scratch_end =
+            scratch_start + bundle.maximum_scratch;
         const uintptr_t records_start = (uintptr_t)records;
         const uintptr_t records_end = records_start + 128U * sizeof(*records);
         assert(sm64_saturn_actor_meshlets_workspace_query(
@@ -147,14 +150,15 @@ int main(int argc, char **argv)
                reserved_bytes == 851U);
         assert(bundle.workspace_lane_stride >= lane_bytes);
         assert((bundle.workspace_lane_stride & 3U) == 0U);
-        assert(1280U >= 2U * bundle.workspace_lane_stride + 3U);
+        assert(workspace_capacity >=
+               2U * bundle.workspace_lane_stride + 3U);
         assert(!(scratch_start < records_end && records_start < scratch_end));
         assert((uint32_t)resolution[0].bank.bank.vertex_count * 9U +
                    (uint32_t)resolution[0].bank.bank.joint_count * 64U <=
                bundle.workspace_lane_stride);
     }
     if (!sm64_saturn_actor_meshlets_bind_bundle_workspace(
-            &resolution[0].bank, workspace_storage, 1280U,
+            &resolution[0].bank, workspace_storage, workspace_capacity,
             bundle.workspace_lane_stride, 0U, records, 128U,
             &resolution[0].workspace)) {
         fprintf(stderr,
@@ -175,10 +179,10 @@ int main(int argc, char **argv)
         uint8_t *workspace = workspace_storage + residue;
         memset(resolution, 0xA5, sizeof(resolution));
         assert(sm64_saturn_actor_bundle_runtime_resolve(
-            &publication, &bundle, workspace, 1280U, &snapshot, 0U,
+            &publication, &bundle, workspace, workspace_capacity, &snapshot, 0U,
             records, 128U, &resolution[0]));
         assert(sm64_saturn_actor_bundle_runtime_resolve(
-            &publication, &bundle, workspace, 1280U, &snapshot, 1U,
+            &publication, &bundle, workspace, workspace_capacity, &snapshot, 1U,
             records + 128U, 128U, &resolution[1]));
         assert(resolution[0].residency_generation == residency_generation);
         assert(resolution[0].package_generation == bundle.package_generation);
@@ -187,7 +191,8 @@ int main(int argc, char **argv)
                    resolution[0].workspace.scratch_size <=
                resolution[1].workspace.scratch_offset);
         assert(resolution[1].workspace.scratch_offset +
-                   resolution[1].workspace.scratch_size <= 1280U);
+                   resolution[1].workspace.scratch_size <=
+               workspace_capacity);
         assert((((uintptr_t)workspace +
                      resolution[0].workspace.scratch_offset) & 3U) == 0U);
         assert((((uintptr_t)workspace +
@@ -196,14 +201,16 @@ int main(int argc, char **argv)
 
     memset(&resolution[0], 0xA5, sizeof(resolution[0]));
     assert(!sm64_saturn_actor_bundle_runtime_resolve(
-        &publication, &bundle, workspace_storage, 1090U, &snapshot, 0U,
+        &publication, &bundle, workspace_storage,
+        bundle.maximum_scratch - 1U, &snapshot, 0U,
         records, 128U, &resolution[0]));
     assert(memcmp(&resolution[0],
                   &(sm64_saturn_actor_bundle_resolution_t){0},
                   sizeof(resolution[0])) == 0);
     snapshot.scene_package_generation++;
     assert(!sm64_saturn_actor_bundle_runtime_resolve(
-        &publication, &bundle, workspace_storage, 1280U, &snapshot, 0U,
+        &publication, &bundle, workspace_storage, workspace_capacity,
+        &snapshot, 0U,
         records, 128U, &resolution[0]));
     snapshot.scene_package_generation--;
 
@@ -222,7 +229,8 @@ int main(int argc, char **argv)
     assert(sm64_saturn_actor_bundle_runtime_claim(
         &before, residency_generation, 0U));
     assert(!sm64_saturn_actor_bundle_runtime_resolve(
-        &before, &bundle, workspace_storage, 1280U, &snapshot, 0U,
+        &before, &bundle, workspace_storage, workspace_capacity,
+        &snapshot, 0U,
         records, 128U, &resolution[0]));
     assert(sm64_saturn_actor_bundle_runtime_release(
         &before, residency_generation, 0U));

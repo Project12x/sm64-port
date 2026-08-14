@@ -1,0 +1,24 @@
+{
+  "evidence_kind": "sourceboot-hud-automated-capture",
+  "expect_col": 1,
+  "expect_glyph_index": 12,
+  "expect_row": 0,
+  "expected_character_number": 2096,
+  "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-identity-id-33559c22bd4e5283\\sm64-saturn-sourceboot-e2.cue",
+  "ipl": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile\\roms\\ipl\\Sega Saturn BIOS (USA).bin",
+  "observed_character_number": 2096,
+  "observed_pnd_word": 2096,
+  "pass": true,
+  "pnd_address": 635731970,
+  "screenshot": {
+    "bytes": 24422,
+    "frame_hash": "6b0891049b2d7a734f2e1d86820e23b6",
+    "height": 224,
+    "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\docs\\saturn\\evidence\\reports\\saturn-hud-automated-capture-2026-08-06.png",
+    "sequence": 5100,
+    "sha256": "08faa2766ac370b21e8ff372baa0340b311c8fcbed0a224eac48f572621cdda4",
+    "width": 320
+  },
+  "startup_frames": 3600,
+  "ymir": "D:\\Code\\RetroDev\\sm64-saturn-port\\ymir-agent\\build-agent2\\apps\\ymir-headless\\Release\\ymir-headless.exe"
+}

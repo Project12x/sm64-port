@@ -1,5 +1,6 @@
 /* See ztreme_hot_promotion.h for the GPL source and change notice. */
 #include "ztreme_hot_promotion.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <string.h>
 
@@ -8,6 +9,7 @@ static size_t align_up(size_t value, size_t alignment) {
     return (value + mask) & ~mask;
 }
 
+SM64_SATURN_CART_COLD
 void saturn_hot_promotion_init(saturn_hot_promotion_t *promotion,
                                void *destination, size_t capacity) {
     promotion->destination = (uint8_t *)destination;

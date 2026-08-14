@@ -201,6 +201,33 @@ static void test_snapshot_swap_is_rejected(void)
            SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED);
 }
 
+static void test_culled_snapshots_can_be_omitted(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_runtime_handoff_t handoff;
+    sm64_saturn_actor_instance_descriptor_t descriptors[2];
+    sm64_saturn_actor_batch_t batches[2];
+    uint8_t bank_index;
+    publish_bank(&bank, 3U, &bank_index);
+    bank.snapshots[bank_index][1].render_active = 0U;
+    assert(sm64_saturn_actor_instance_descriptor_from_snapshot(
+        &bank.snapshots[bank_index][0], 0U, 0U, 3U,
+        SM64_SATURN_ACTOR_OUTPUT_OPAQUE, 0U, 2U, &descriptors[0]));
+    assert(sm64_saturn_actor_instance_descriptor_from_snapshot(
+        &bank.snapshots[bank_index][2], 2U, 2U, 5U,
+        SM64_SATURN_ACTOR_OUTPUT_OPAQUE, 2U, 2U, &descriptors[1]));
+    sm64_saturn_actor_instance_queue_init(&queue);
+    sm64_saturn_actor_runtime_handoff_init(&handoff);
+    assert(sm64_saturn_actor_runtime_handoff_begin(
+        &handoff, &bank, &queue, bank_index, generation, descriptors, 2U,
+        3U, 4U, batches, 2U));
+    assert(handoff.snapshot_count == 3U);
+    assert(queue.count == 2U);
+    assert(queue.descriptors[0].snapshot_index == 0U);
+    assert(queue.descriptors[1].snapshot_index == 2U);
+}
+
 static void test_caller_output_fields_are_preserved(void)
 {
     sm64_saturn_actor_instance_bank_t bank;
@@ -239,6 +266,7 @@ static void test_count_and_output_capacity_fail_after_acquire(void)
     uint8_t bank_index;
     publish_bank(&bank, 2U, &bank_index);
     descriptors_from_bank(&bank, bank_index, descriptors, 2U);
+    descriptors[0].snapshot_index = 2U;
     sm64_saturn_actor_instance_queue_init(&queue);
     sm64_saturn_actor_runtime_handoff_init(&handoff);
     assert(!sm64_saturn_actor_runtime_handoff_begin(
@@ -437,6 +465,7 @@ int main(void)
     test_exact_lifecycle_and_consumer_ack();
     test_identity_mutations_quarantine_after_acquire();
     test_snapshot_swap_is_rejected();
+    test_culled_snapshots_can_be_omitted();
     test_caller_output_fields_are_preserved();
     test_count_and_output_capacity_fail_after_acquire();
     test_preacquire_refusal_is_immutable();

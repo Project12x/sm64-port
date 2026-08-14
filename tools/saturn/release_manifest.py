@@ -31,6 +31,7 @@ SCHEMA = "sm64-saturn-release-manifest-v1"
 COMPARISON_SCHEMA = "sm64-saturn-release-comparison-v1"
 MANIFEST_NAME = "saturn-release-manifest-v1.json"
 OUTPUT_NAMES = ("elf", "source_dat", "iso", "cue")
+_GIT_COMMAND_LINE_CHARACTER_LIMIT = 16000
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _FILE_LINE = re.compile(
     r'^\s*FILE\s+"([^"]+)"\s+\S+\s*$', re.IGNORECASE | re.MULTILINE
@@ -913,17 +914,44 @@ def _git_provenance(
     )
     if revision.returncode != 0 or re.fullmatch(r"[0-9a-fA-F]{40}\s*", revision.stdout) is None:
         raise ValueError("repository Git revision is unavailable")
-    status = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *paths],
-        cwd=root, check=False, capture_output=True, text=True,
-    )
-    if status.returncode != 0:
-        raise ValueError("source closure cleanliness is unavailable")
-    clean = not bool(status.stdout)
+    clean = _development_closure_clean(root, paths)
     return {
         "git_revision": revision.stdout.strip().lower(),
         "closure_clean": clean,
     }
+
+
+def _development_closure_clean(root: Path, paths: Sequence[str]) -> bool:
+    """Return development cleanliness without exceeding Windows' argv limit."""
+    prefix = ["git", "status", "--porcelain=v1", "--untracked-files=all", "--"]
+    batch: list[str] = []
+    clean = True
+
+    def submit(paths_to_check: Sequence[str]) -> None:
+        nonlocal clean
+        status = subprocess.run(
+            [*prefix, *paths_to_check], cwd=root, check=False,
+            capture_output=True, text=True,
+        )
+        if status.returncode != 0:
+            raise ValueError("source closure cleanliness is unavailable")
+        if status.stdout:
+            clean = False
+
+    for path in paths:
+        candidate = [*prefix, *batch, path]
+        if len(subprocess.list2cmdline(candidate)) > _GIT_COMMAND_LINE_CHARACTER_LIMIT:
+            if not batch:
+                raise ValueError(
+                    f"source closure path exceeds Git command-line limit: {path}"
+                )
+            submit(batch)
+            batch = [path]
+        else:
+            batch.append(path)
+    if batch:
+        submit(batch)
+    return clean
 
 
 def build_release_manifest(

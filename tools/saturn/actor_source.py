@@ -308,10 +308,13 @@ def parse_animation_table_text(filename: str, source: str,
     )
     entries = _selected_comma_fields(
         filename, body, "animation table field")
-    if not entries or entries[-1] != "NULL":
-        raise ValueError(f"{filename}: animation table requires one trailing NULL")
+    if not entries:
+        raise ValueError(f"{filename}: animation table contains no entries")
+    first_null = entries.index("NULL") if "NULL" in entries else len(entries)
+    if any(entry != "NULL" for entry in entries[first_null:]):
+        raise ValueError(f"{filename}: animation table entry follows NULL sentinel")
     symbols: list[str] = []
-    for entry in entries[:-1]:
+    for entry in entries[:first_null]:
         item = re.fullmatch(r"&([A-Za-z_]\w*)", entry)
         if item is None:
             raise ValueError(f"{filename}: unsupported animation table entry {entry}")
@@ -351,6 +354,10 @@ def _strip_c_comments(filename: str, source: str) -> str:
 def _selected_comma_fields(filename: str, body: str, label: str) -> list[str]:
     """Split one flat selected initializer without erasing empty positions."""
     fields = [field.strip() for field in body.split(",")]
+    # C permits one trailing comma in an initializer. Preserve fail-closed
+    # rejection for every interior or doubled empty field.
+    if fields and fields[-1] == "":
+        fields.pop()
     if any(not field for field in fields):
         raise ValueError(f"{filename}: empty {label}")
     return fields
@@ -457,7 +464,7 @@ def parse_generic_animation_file_text(
         body = _selected_initializer(
             filename, source,
             r"(?:static\s+)?const\s+struct\s+Animation\s+" +
-            re.escape(symbol) + r"\s*\[\]",
+            re.escape(symbol) + r"\s*(?:\[\])?",
             f"Animation {symbol}",
         )
         fields = _selected_comma_fields(

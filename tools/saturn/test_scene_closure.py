@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
-from collect_scene_closure import ClosureError, _file_source_regions, _native_discovery, _native_spawn_edges, _native_symbol_index, _reachable_native_regions, _rules, collect_scene_closure
+from collect_scene_closure import ClosureError, _file_source_regions, _native_discovery, _native_spawn_edges, _native_symbol_index, _reachable_native_regions, _rules, collect_scene_closure, write_closure
 from scene_package_schema import validate_scene_closure
 
 
@@ -22,6 +23,17 @@ def write(path: Path, text: str) -> None:
 
 
 class SceneClosureTest(unittest.TestCase):
+    def test_byte_identical_publication_preserves_existing_file_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "closure.json"
+            document = {"schema": "fixture", "source_root": str(Path(directory))}
+            first = write_closure(output, document)
+            fixed_ns = 1_700_000_000_000_000_000
+            os.utime(output, ns=(fixed_ns, fixed_ns))
+            second = write_closure(output, document)
+            self.assertEqual(first, second)
+            self.assertEqual(output.stat().st_mtime_ns, fixed_ns)
+
     def fixture(self, with_cycle: bool = False) -> Path:
         root = Path(tempfile.mkdtemp(prefix="scene-closure-"))
         write(root / "levels/test/script.c", """
