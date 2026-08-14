@@ -1,5 +1,9 @@
 # Mario Port Product Recovery Implementation Plan
 
+**Status:** active — Task 1 baseline/donor inventory; no current candidate accepted
+
+**Activation commit:** `1f07485a` (`docs(saturn): make playable port the product gate`)
+
 > **For agentic workers:** Execute this plan serially. Do not dispatch parallel
 > implementation lanes. Every task ends with a new live CUE or an explicit
 > rollback/bypass decision. A component test or review cannot advance a task.

@@ -17,6 +17,9 @@ Status: **active — Task 1 baseline/donor inventory; no current candidate accep
   - measured 5.294 FPS; owner-observed range 4–6 FPS.
 - Current builds are not accepted: Mario rendering, normal Bobomb rendering, audible audio, and performance have all regressed in owner observation.
 - Repository governance was rewritten around live product evidence. Historical plans and ledgers remain evidence, but they no longer authorize work or define progress.
+- Governance, product goal, active plan, and this forced/scoped ledger were committed as `1f07485a` (`docs(saturn): make playable port the product gate`).
+- Documentation verification: archived A9A hashes recomputed exact; authoritative relative links passed; placeholder scan passed; staged `git diff --check` and post-commit `git show --check` passed.
+- Persistent workspace constitution: `D:/Code/RetroDev/sm64-saturn-port/AGENTS.md`, SHA-256 `e0edf890da1c2d1c977c82da69c8e1851bb9b87a60125648cd2fab670a27ce58`.
 - No code, build, emulator, or owner-acceptance gate ran during this documentation transition.
 
 ## Current execution boundary
