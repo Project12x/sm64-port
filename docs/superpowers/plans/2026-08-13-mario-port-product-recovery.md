@@ -1,8 +1,9 @@
 # Mario Port Product Recovery Implementation Plan
 
 **Status:** active — Task 1 evidence review passed; baseline-first hybrid
-selected; Task 2 is blocked before a fresh CUE; no current candidate accepted
-and the visual gate remains unresolved
+selected. Task 2 has produced a donor-derived diagnostic CUE and a Ymir frame,
+but the owner visual/audio acceptance gate remains unresolved. No current
+candidate is accepted.
 
 **Activation commit:** `1f07485a` (`docs(saturn): make playable port the product gate`)
 
@@ -162,11 +163,13 @@ unmet and blocks any acceptance claim.
 animated Mario with correct scale, texture colors, fixed Gouraud lighting,
 front/back occlusion, and painter order.
 
-**Status:** blocked before target CUE — the current Make graph unconditionally
-fails actor-package validation even with dynamic actors disabled; the isolated
-historical donor has not produced a CUE after its documented extraction route
-stopped at a missing Windows `mio0` host tool. The uncommitted focused Mario
-source restoration is host-contract-passed only, not target-proven.
+**Status:** active — the current Make graph still unconditionally fails
+actor-package validation even with dynamic actors disabled. The isolated
+historical donor is therefore the live diagnostic route. It now builds from
+`d7b04d61` plus the reviewed donor-only Windows extractor compatibility commit
+`5808cdbf`; Ymir has captured its exact CUE. That frame proves boot and terrain
+presentation only. Mario material, depth order, animation, controls/camera,
+and audio are still owner-acceptance gates.
 
 **Primary files (change only those implicated by the live diff):**
 
@@ -225,14 +228,25 @@ start earlier.
   closure-derived semantics`. `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=0` does not
   bypass its unconditional package-generation/sealing dependencies.
 - Isolated donor `d7b04d61` was prepared from only the bound ROM, `build/us_pc`,
-  and tool environment. The apparent missing `./tools/mio0` failure was a
+  tool environment, and an exact pinned libyaul gitlink. The apparent missing `./tools/mio0` failure was a
   diagnostic-command error: top-level `make -n` propagated its dry-run flag to
   the extractor's child `make -C tools`, printing tool commands without creating
   helpers. A real extraction regenerated the donor BOB PNG and host helpers,
   then reached the sound branch. It now stops because that branch hard-codes
   `python3`, which resolves to the unavailable Windows App Execution Alias rather
-  than the approved interpreter. No current generated Saturn output was borrowed;
-  no donor CUE or Ymir observation exists.
+  than the approved interpreter. The reviewed donor-only `5808cdbf` change uses
+  `sys.executable` for that branch; it has a focused RED/GREEN regression and
+  does not alter game/package behavior. Extraction then regenerated the donor's
+  own source assets and the Pipe-4 serial build produced its own CUE/ELF/ISO.
+  No current generated Saturn output was borrowed.
+- Exact donor diagnostic artifacts: CUE
+  `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`,
+  ELF `60c978973e682f8a1cdb3c060d58b8038ce021f7718d8f9c5a430b5cfbaff8d5`,
+  ISO `0e6eb40e868016df8b321187a27cd35738edcbe34d81938b01ef09a2484b3270`.
+  In-repo Ymir boot macro completed 3,300 emulated VBlanks and captured a
+  320x224 BOB frame (`401737ae49bb65bfe91f0488ff0ee7b4b7aed53701cb5cbcadd711df27696375`).
+  This is diagnostic evidence only, not an accepted Mario or audio result. A
+  visible Ymir session for this exact CUE was launched for owner review.
 - Keep the bounded source-policy regression and emitter hunk uncommitted in the
   existing dirty renderer file. Do not treat it as an accepted transplant,
   expand into an actor/package repair, or open Tasks 3–6. A new CUE requires an
