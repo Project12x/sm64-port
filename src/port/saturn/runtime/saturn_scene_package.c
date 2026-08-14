@@ -1,4 +1,5 @@
 #include "saturn_scene_package.h"
+#include "../platform/saturn_cart_code.h"
 #include "saturn_sha256.h"
 
 #include <stddef.h>
@@ -184,6 +185,7 @@ static bool dependency_digest_valid(const sm64_saturn_scene_package_view_t *view
            digest_equal(digest, view->dependency_set_sha256);
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_scene_package_validate(const void *source, uint32_t byte_count,
                                         sm64_saturn_scene_package_view_t *view)
 {
@@ -249,6 +251,7 @@ bool sm64_saturn_scene_package_is_provisional(const sm64_saturn_scene_package_vi
     return view != NULL && (view->flags & SM64_SATURN_SCENE_PACKAGE_FLAG_PROVISIONAL) != 0U;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_scene_package_validate_target(
     const void *bytes, uint32_t byte_count,
     sm64_saturn_scene_package_view_t *view)

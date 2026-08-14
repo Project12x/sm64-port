@@ -4,15 +4,16 @@
 
 static bool descriptors_match_snapshot(
     const sm64_saturn_actor_instance_snapshot_t *snapshots,
+    uint16_t snapshot_count,
     const sm64_saturn_actor_instance_descriptor_t *descriptors,
-    uint16_t count)
+    uint16_t descriptor_count)
 {
     uint16_t index;
-    for (index = 0U; index < count; index++) {
+    for (index = 0U; index < descriptor_count; index++) {
         sm64_saturn_actor_instance_descriptor_t expected;
         const sm64_saturn_actor_instance_descriptor_t *const supplied =
             &descriptors[index];
-        if (supplied->snapshot_index != index || supplied->source_order != index ||
+        if (supplied->snapshot_index >= snapshot_count ||
             !sm64_saturn_actor_instance_descriptor_from_snapshot(
                 &snapshots[supplied->snapshot_index], supplied->snapshot_index,
                 supplied->source_order, supplied->material_id,
@@ -77,8 +78,9 @@ bool sm64_saturn_actor_runtime_handoff_begin(
     handoff->batch_capacity = batch_capacity;
     handoff->bank_index = bank_index;
     handoff->state = SM64_SATURN_ACTOR_HANDOFF_ACQUIRED;
-    if (snapshot_count > manifest_capacity || descriptor_count != snapshot_count ||
-        !descriptors_match_snapshot(snapshots, descriptors, descriptor_count)) {
+    if (snapshot_count > manifest_capacity || descriptor_count > snapshot_count ||
+        !descriptors_match_snapshot(snapshots, snapshot_count, descriptors,
+                                    descriptor_count)) {
         quarantine_after_acquire(handoff);
         return false;
     }

@@ -142,8 +142,11 @@ static bool saturn_source_observe_object_begin(struct Object *node)
      * for a typed immutable parent source. */
     source.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
     source.parent_node_ordinal = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
-    (void)saturn_actor_identity_registry_apply(
-        model_id, node->behavior, &source);
+    /* Only registry-resolved actors belong to the generic actor pipeline.
+     * Unknown source objects continue through the authoritative geo walk,
+     * but must not consume the fixed 64-entry actor observation budget. */
+    if (!saturn_actor_identity_registry_apply(
+            model_id, node->behavior, &source)) return false;
     source.position_q16[0] = sm64_saturn_float_to_q16(
         node->header.gfx.pos[0]);
     source.position_q16[1] = sm64_saturn_float_to_q16(

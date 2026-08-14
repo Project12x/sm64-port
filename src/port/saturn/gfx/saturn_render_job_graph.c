@@ -1,4 +1,5 @@
 #include "saturn_render_job_graph.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <string.h>
 
@@ -80,6 +81,7 @@ static bool dependency_graph_acyclic(const uint8_t *dependency_mask,
     return retired == valid_mask;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_render_job_graph_init(sm64_saturn_render_job_graph_t *graph,
                                        sm64_saturn_render_job_queue_t *queue)
 {

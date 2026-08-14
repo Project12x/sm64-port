@@ -10,8 +10,27 @@ static int32_t clamp_s16_frame(int16_t frame)
     return frame < 0 ? 0 : (int32_t)frame;
 }
 
+/* The legacy Mario S64B retains source mesh/joint units.  Its LevelScript
+ * entry, mario_geo, applies GEO_SCALE(16384), i.e. one quarter in world
+ * space.  Keep this source-only conversion here rather than moving the
+ * generic renderer camera or changing the immutable bank bytes. */
+static int64_t mario_v1_world_scale(int64_t value)
+{
+    /* The SH-2 right shift is arithmetic.  Encoding the power-of-two divide
+     * this way preserves round-to-nearest-even for negative source vertices
+     * without pulling a 64-bit divide helper into the HWRAM image. */
+    int64_t quotient = value >> 2;
+    uint8_t remainder = (uint8_t)(value & 3);
+
+    if (remainder > 2 ||
+        (remainder == 2 && (quotient % 2) != 0))
+        quotient++;
+    return quotient;
+}
+
 static void matrix_apply(const sm64_saturn_mtx_t *matrix,
-                         const int16_t local[3], int16_t out[3])
+                         const int16_t local[3], uint8_t mario_v1,
+                         int16_t out[3])
 {
     int64_t x, y, z;
     x = ((int64_t)local[0] * matrix->m[0][0] +
@@ -26,6 +45,11 @@ static void matrix_apply(const sm64_saturn_mtx_t *matrix,
     x += matrix->m[3][0];
     y += matrix->m[3][1];
     z += matrix->m[3][2];
+    if (mario_v1 != 0U) {
+        x = mario_v1_world_scale(x);
+        y = mario_v1_world_scale(y);
+        z = mario_v1_world_scale(z);
+    }
     out[0] = (int16_t)(x > INT16_MAX ? INT16_MAX : x < INT16_MIN ? INT16_MIN : x);
     out[1] = (int16_t)(y > INT16_MAX ? INT16_MAX : y < INT16_MIN ? INT16_MIN : y);
     out[2] = (int16_t)(z > INT16_MAX ? INT16_MAX : z < INT16_MIN ? INT16_MIN : z);
@@ -92,17 +116,11 @@ bool sm64_saturn_actor_pose_evaluate(
                 return false;
             }
             angles[axis] = sample;
-            {
-                int64_t translation_q16 =
-                    (int64_t)source_joint.translation[axis] << 16;
-                if (joint == 0U)
-                    translation_q16 +=
-                        (int64_t)pose->root_translation[axis] << 16;
-                if (translation_q16 > INT32_MAX ||
-                    translation_q16 < INT32_MIN)
-                    return false;
-                translation[axis] = (int32_t)translation_q16;
-            }
+            /* mtxq_rotate_xyz_and_translate stores the translation row in
+             * raw actor/world units; only its 3x3 rotation is Q16.16. */
+            translation[axis] = (int32_t)source_joint.translation[axis];
+            if (joint == 0U)
+                translation[axis] += (int32_t)pose->root_translation[axis];
         }
         sm64_saturn_mtxq_rotate_xyz_and_translate(
             &local, translation, angles[0], angles[1], angles[2]);
@@ -125,6 +143,7 @@ bool sm64_saturn_actor_pose_evaluate(
             return false;
         }
         matrix_apply(&matrices[source_vertex.joint_ordinal], source_vertex.local,
+                     bank->bank.version == SM64_SATURN_ACTOR_BANK_VERSION_V1,
                      work->vertices[vertex]);
         if (work->light_intensity != NULL)
             work->light_intensity[vertex] = SM64_SATURN_ACTOR_POSE_LIGHT_DEFAULT;

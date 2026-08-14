@@ -1,10 +1,12 @@
 #include "saturn_geo_state_observer.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <string.h>
 
 static sm64_saturn_geo_state_observer_t *s_observer;
 static sm64_saturn_actor_source_observation_t *s_current;
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_geo_state_observer_init(
     sm64_saturn_geo_state_observer_t *observer, uint16_t capacity)
 {

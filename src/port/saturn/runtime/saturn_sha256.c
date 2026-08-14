@@ -1,4 +1,5 @@
 #include "saturn_sha256.h"
+#include "../platform/saturn_cart_code.h"
 
 #include <limits.h>
 #include <string.h>
@@ -22,7 +23,8 @@ static uint32_t rotate_right(uint32_t value, uint32_t shift)
     return (value >> shift) | (value << (32U - shift));
 }
 
-static void sha256_block(sm64_saturn_sha256_t *state, const uint8_t block[64])
+static SM64_SATURN_CART_COLD
+void sha256_block(sm64_saturn_sha256_t *state, const uint8_t block[64])
 {
     static const uint32_t constants[64] = {
         0x428A2F98U,0x71374491U,0xB5C0FBCFU,0xE9B5DBA5U,0x3956C25BU,0x59F111F1U,0x923F82A4U,0xAB1C5ED5U,
@@ -60,6 +62,7 @@ static void sha256_block(sm64_saturn_sha256_t *state, const uint8_t block[64])
     state->state[4]+=e; state->state[5]+=f; state->state[6]+=g; state->state[7]+=h;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_sha256_init(sm64_saturn_sha256_t *state)
 {
     static const uint32_t initial[8] = {0x6A09E667U,0xBB67AE85U,0x3C6EF372U,0xA54FF53AU,
@@ -70,6 +73,7 @@ void sm64_saturn_sha256_init(sm64_saturn_sha256_t *state)
     state->used = 0U;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_sha256_update(sm64_saturn_sha256_t *state,
                                const void *source, uint32_t byte_count)
 {
@@ -88,6 +92,7 @@ bool sm64_saturn_sha256_update(sm64_saturn_sha256_t *state,
     return true;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_sha256_finish(sm64_saturn_sha256_t *state, uint8_t digest[32])
 {
     uint64_t bits;
@@ -106,6 +111,7 @@ bool sm64_saturn_sha256_finish(sm64_saturn_sha256_t *state, uint8_t digest[32])
     return true;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_sha256_digest(const void *bytes, uint32_t byte_count,
                                uint8_t digest[32])
 {

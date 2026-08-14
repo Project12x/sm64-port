@@ -114,6 +114,12 @@ sm64_saturn_vdp1_backend_init_with_storage(sm64_saturn_vdp1_backend_t *backend,
 static inline void
 sm64_saturn_vdp1_backend_begin(sm64_saturn_vdp1_backend_t *backend)
 {
+    /* A prior painter-chain finalization turns the local-coordinate command
+     * into the head of a linked draw list.  Every new build starts from the
+     * ordinary sequential prefix so stale links cannot cross generations. */
+    vdp1_cmdt_jump_next(&backend->list.cmdts[
+        backend->commands.setup_count - 1U]);
+    backend->list.cmdts[backend->commands.setup_count - 1U].cmd_link = 0U;
     vdp1_cmdt_end_clear(&backend->list.cmdts[
         sm64_saturn_command_arena_begin(&backend->commands)]);
 }
@@ -134,6 +140,86 @@ sm64_saturn_vdp1_backend_finish(sm64_saturn_vdp1_backend_t *backend)
     vdp1_cmdt_end_set(&backend->list.cmdts[
         sm64_saturn_command_arena_finish(&backend->commands)]);
     backend->list.count = backend->commands.live_count;
+}
+
+/* Convert the completed sequential draw range into one VDP1 painter chain.
+ * Lowerers temporarily put their shared depth-bin tag in `cmd_link`; once all
+ * commands have been emitted, this rewrites the same field with libyaul's
+ * normal JUMP_ASSIGN links.  No command storage or per-frame side buffer is
+ * allocated.  Validation happens before the first write, so an invalid tag
+ * leaves the completed bank available for caller quarantine rather than
+ * publishing a partial chain.
+ *
+ * Build the links nearest-to-farthest, scanning each bin in reverse command
+ * order.  Prepending each entry then yields a far-to-near execution list with
+ * stable original producer ordering for equal bins.  Linked entries are
+ * recognized by their non-sequential VDP1 link type, so overwriting `cmd_link`
+ * never changes the classification of a later scan. */
+static inline bool
+sm64_saturn_vdp1_backend_link_depth_bins(
+    sm64_saturn_vdp1_backend_t *backend, uint16_t bin_count)
+{
+    uint16_t first;
+    uint16_t end;
+    uint16_t next;
+    uint16_t bin;
+    uint16_t index;
+
+    if (backend == NULL || bin_count == 0U ||
+        backend->commands.setup_count == 0U ||
+        backend->commands.live_count == 0U ||
+        backend->commands.live_count > backend->commands.capacity ||
+        backend->list.count != backend->commands.live_count)
+        return false;
+
+    first = backend->commands.setup_count;
+    end = (uint16_t)(backend->commands.live_count - 1U);
+    if (first > end || backend->commands.cursor != end ||
+        backend->commands.previous_end != end)
+        return false;
+
+    /* Validate every freshly lowered depth-bin tag before mutating even the
+     * local-coordinate prefix.  Rebound frame-bank storage may still carry a
+     * prior JUMP_ASSIGN type, but vdp1_cmdt_jump_assign() overwrites it when
+     * this frame's raw tag selects the command. */
+    for (index = first; index < end; index++) {
+        const vdp1_cmdt_t *const cmdt = &backend->list.cmdts[index];
+        if (cmdt->cmd_link >= bin_count)
+            return false;
+    }
+    /* The raw tags are now known-valid.  Their command records can retain a
+     * previous frame's link type because lowerers intentionally overwrite
+     * only cmd_link; strip that type before JUMP_ASSIGN establishes this
+     * frame's chain.  This is after full validation, so bad tags still leave
+     * the completed list unchanged. */
+    for (index = first; index < end; index++)
+        backend->list.cmdts[index].cmd_ctrl &= 0x8FFFU;
+
+    next = end;
+    for (bin = 0U; bin < bin_count; bin++) {
+        index = end;
+        while (index > first) {
+            vdp1_cmdt_t *cmdt;
+            index--;
+            cmdt = &backend->list.cmdts[index];
+            if ((cmdt->cmd_ctrl & 0x7000U) != 0U ||
+                cmdt->cmd_link != bin)
+                continue;
+            vdp1_cmdt_jump_assign(cmdt, next);
+            next = index;
+        }
+    }
+
+    if (next == end) {
+        vdp1_cmdt_jump_next(
+            &backend->list.cmdts[backend->commands.setup_count - 1U]);
+        backend->list.cmdts[backend->commands.setup_count - 1U].cmd_link =
+            0U;
+    } else {
+        vdp1_cmdt_jump_assign(
+            &backend->list.cmdts[backend->commands.setup_count - 1U], next);
+    }
+    return true;
 }
 
 /* Per-frame command-table upload. Two transfer paths, selected at

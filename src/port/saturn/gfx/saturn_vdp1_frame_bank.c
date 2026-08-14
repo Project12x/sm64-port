@@ -1,4 +1,5 @@
 #include "saturn_vdp1_frame_bank.h"
+#include "../platform/saturn_cart_code.h"
 
 #include "saturn_gouraud_bank.h"
 #include "../gpl/slavedriver_dma_queue.h"
@@ -94,6 +95,7 @@ static void init_bank(sm64_saturn_vdp1_frame_bank_t *bank,
     };
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_vdp1_frame_bank_set_init(
     sm64_saturn_vdp1_frame_bank_set_t *banks,
     void *command_bank_0, void *command_bank_1, uint16_t command_capacity,

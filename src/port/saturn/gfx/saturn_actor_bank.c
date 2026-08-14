@@ -1,4 +1,6 @@
 #include "saturn_actor_bank.h"
+
+#include "../platform/saturn_cart_code.h"
 #include "../runtime/saturn_sha256.h"
 
 #include <limits.h>
@@ -268,6 +270,63 @@ bool sm64_saturn_actor_bank_target_material(
     return true;
 }
 
+bool sm64_saturn_actor_bank_primitive(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t primitive,
+    sm64_saturn_actor_primitive_t *out)
+{
+    uint32_t relative, absolute;
+    const uint8_t *record;
+    if (out != NULL) memset(out, 0, sizeof(*out));
+    if (view == NULL || view->bytes == NULL || out == NULL ||
+        primitive >= view->bank.primitive_count ||
+        view->meshlets_size < GEOMETRY_HEADER_SIZE ||
+        !multiply_u32(primitive, PRIMITIVE_RECORD_SIZE, &relative) ||
+        !add_u32(read_be32(view->bytes + view->meshlets_offset + 34U),
+                 relative, &relative) ||
+        relative > view->meshlets_size ||
+        PRIMITIVE_RECORD_SIZE > view->meshlets_size - relative ||
+        !add_u32(view->meshlets_offset, relative, &absolute) ||
+        !span(absolute, PRIMITIVE_RECORD_SIZE, view->byte_count))
+        return false;
+    record = view->bytes + absolute;
+    out->material_id = read_be16(record);
+    for (uint16_t corner = 0U; corner < 4U; corner++)
+        out->vertex[corner] = read_be16(record + 2U + corner * 2U);
+    return out->material_id < view->material_count &&
+        out->vertex[0] < view->bank.vertex_count &&
+        out->vertex[1] < view->bank.vertex_count &&
+        out->vertex[2] < view->bank.vertex_count &&
+        out->vertex[3] < view->bank.vertex_count;
+}
+
+bool sm64_saturn_actor_bank_material_color(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t material,
+    sm64_saturn_actor_material_color_t *out)
+{
+    uint32_t relative, absolute;
+    const uint8_t *record;
+    if (out != NULL) memset(out, 0, sizeof(*out));
+    if (view == NULL || view->bytes == NULL || out == NULL ||
+        material >= view->material_count ||
+        view->meshlets_size < GEOMETRY_HEADER_SIZE ||
+        !multiply_u32(material, MATERIAL_RECORD_SIZE, &relative) ||
+        !add_u32(read_be32(view->bytes + view->meshlets_offset + 26U),
+                 relative, &relative) ||
+        relative > view->meshlets_size ||
+        MATERIAL_RECORD_SIZE > view->meshlets_size - relative ||
+        !add_u32(view->meshlets_offset, relative, &absolute) ||
+        !span(absolute, MATERIAL_RECORD_SIZE, view->byte_count))
+        return false;
+    record = view->bytes + absolute;
+    if (record[3] != 0U || record[0] > 31U || record[1] > 31U ||
+        record[2] > 31U)
+        return false;
+    out->rgb555[0] = record[0];
+    out->rgb555[1] = record[1];
+    out->rgb555[2] = record[2];
+    return true;
+}
+
 bool sm64_saturn_actor_bank_texture_tile(
     const sm64_saturn_actor_bank_view_t *view, uint16_t tile,
     sm64_saturn_actor_texture_tile_t *out)
@@ -464,6 +523,7 @@ static bool validate_v2_tail(const uint8_t *bytes, uint32_t byte_count,
            counted_gouraud == parsed->gouraud_tables_per_instance;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_actor_bank_validate_expected(
     const void *data, size_t byte_count, const uint32_t expected_source_hash[8],
     sm64_saturn_actor_bank_view_t *view)
@@ -814,10 +874,99 @@ bool sm64_saturn_actor_bank_validate_expected(
     return true;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_actor_bank_validate(const void *data, size_t byte_count,
                                      sm64_saturn_actor_bank_view_t *view)
 {
     return sm64_saturn_actor_bank_validate_expected(data, byte_count, NULL, view);
+}
+
+bool sm64_saturn_actor_bank_open_validated(
+    const void *data, size_t byte_count, const uint32_t expected_source_hash[8],
+    sm64_saturn_actor_bank_view_t *view)
+{
+    const uint8_t *bytes = data;
+    sm64_saturn_actor_bank_view_t parsed;
+    uint16_t word;
+    uint32_t geometry_end;
+    if (view != NULL) memset(view, 0, sizeof(*view));
+    if (bytes == NULL || view == NULL || expected_source_hash == NULL ||
+        byte_count < SM64_SATURN_ACTOR_BANK_HEADER_SIZE ||
+        byte_count > UINT32_MAX)
+        return false;
+    memset(&parsed, 0, sizeof(parsed));
+    parsed.bytes = bytes;
+    parsed.byte_count = byte_count;
+    parsed.bank.magic = read_be32(bytes + 0U);
+    parsed.bank.version = read_be16(bytes + 4U);
+    parsed.bank.family_id = read_be16(bytes + 6U);
+    parsed.bank.model_id = read_be16(bytes + 8U);
+    parsed.bank.joint_count = read_be16(bytes + 10U);
+    parsed.bank.animation_count = read_be16(bytes + 12U);
+    parsed.bank.meshlet_count = read_be16(bytes + 14U);
+    parsed.bank.primitive_count = read_be16(bytes + 16U);
+    parsed.bank.vertex_count = read_be16(bytes + 18U);
+    parsed.bank.max_instances = read_be16(bytes + 20U);
+    parsed.bank.feature_mask = read_be32(bytes + 22U);
+    for (word = 0U; word < 8U; word++) {
+        parsed.bank.source_hash_words[word] =
+            read_be32(bytes + 26U + (uint32_t)word * 4U);
+        if (parsed.bank.source_hash_words[word] != expected_source_hash[word])
+            return false;
+    }
+    parsed.records_offset = read_be32(bytes + 62U);
+    parsed.indices_offset = read_be32(bytes + 66U);
+    parsed.indices_size = read_be32(bytes + 70U);
+    parsed.values_offset = read_be32(bytes + 74U);
+    parsed.values_size = read_be32(bytes + 78U);
+    parsed.vertices_offset = read_be32(bytes + 82U);
+    parsed.vertices_size = read_be32(bytes + 86U);
+    parsed.meshlets_offset = read_be32(bytes + 90U);
+    parsed.meshlets_size = read_be32(bytes + 94U);
+    parsed.max_scratch = read_be32(bytes + 98U);
+    if (parsed.bank.magic != SM64_SATURN_ACTOR_BANK_MAGIC ||
+        (parsed.bank.version != SM64_SATURN_ACTOR_BANK_VERSION_V1 &&
+         parsed.bank.version != SM64_SATURN_ACTOR_BANK_VERSION_V2) ||
+        !span(parsed.meshlets_offset, parsed.meshlets_size, byte_count) ||
+        parsed.meshlets_size < GEOMETRY_HEADER_SIZE ||
+        !add_u32(parsed.meshlets_offset, parsed.meshlets_size, &geometry_end))
+        return false;
+    parsed.material_count = read_be16(bytes + parsed.meshlets_offset + 8U);
+    if (parsed.bank.version == SM64_SATURN_ACTOR_BANK_VERSION_V1) {
+        if (geometry_end != byte_count) return false;
+        parsed.hot_end = (uint32_t)byte_count;
+    } else {
+        if (byte_count < SM64_SATURN_ACTOR_BANK_V2_HEADER_SIZE ||
+            read_be32(bytes + 112U) != geometry_end ||
+            read_be32(bytes + 172U) != byte_count)
+            return false;
+        parsed.render_bindings_offset = read_be32(bytes + 112U);
+        parsed.render_bindings_size = read_be32(bytes + 116U);
+        parsed.target_materials_offset = read_be32(bytes + 120U);
+        parsed.target_materials_size = read_be32(bytes + 124U);
+        parsed.texture_tiles_offset = read_be32(bytes + 128U);
+        parsed.texture_tiles_size = read_be32(bytes + 132U);
+        parsed.texture_payload_offset = read_be32(bytes + 136U);
+        parsed.texture_payload_size = read_be32(bytes + 140U);
+        parsed.clut_payload_offset = read_be32(bytes + 144U);
+        parsed.clut_payload_size = read_be32(bytes + 148U);
+        parsed.texture_resident_bytes = read_be32(bytes + 152U);
+        parsed.clut_resident_bytes = read_be32(bytes + 156U);
+        parsed.draw_records_per_instance = read_be32(bytes + 160U);
+        parsed.texture_commands_per_instance = read_be32(bytes + 164U);
+        parsed.gouraud_tables_per_instance = read_be32(bytes + 168U);
+        parsed.bake_policy_id = read_be32(bytes + 176U);
+        parsed.hot_end = parsed.texture_payload_offset;
+        if ((parsed.texture_tiles_size %
+             SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE) != 0U ||
+            parsed.texture_tiles_size /
+                SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE > UINT16_MAX)
+            return false;
+        parsed.tile_count = (uint16_t)(parsed.texture_tiles_size /
+            SM64_SATURN_ACTOR_TEXTURE_TILE_RECORD_SIZE);
+    }
+    *view = parsed;
+    return true;
 }
 
 bool sm64_saturn_actor_bank_sample_channel(

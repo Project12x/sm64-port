@@ -159,6 +159,10 @@ bool sm64_saturn_actor_instance_bank_capture(
     uint16_t capacity, uint8_t *index, uint16_t *count,
     sm64_saturn_actor_capture_telemetry_t *stats);
 const sm64_saturn_actor_instance_snapshot_t *
+sm64_saturn_actor_instance_bank_ready_view(
+    const sm64_saturn_actor_instance_bank_t *bank, uint8_t index,
+    uint32_t generation, uint16_t *count);
+const sm64_saturn_actor_instance_snapshot_t *
 sm64_saturn_actor_instance_bank_acquire(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index,
     uint32_t generation, uint16_t *count);

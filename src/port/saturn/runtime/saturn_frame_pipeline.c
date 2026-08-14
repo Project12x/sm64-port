@@ -1,4 +1,5 @@
 #include "saturn_frame_pipeline.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <stddef.h>
 
@@ -70,6 +71,7 @@ static void pipeline_promote_queued_snapshot(
     pipeline->transfer_started = false;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_frame_pipeline_init(sm64_saturn_frame_pipeline_t *pipeline,
                                      uint32_t vblank_count,
                                      uint32_t displayed_generation)

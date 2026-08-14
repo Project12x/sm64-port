@@ -1,4 +1,5 @@
 #include "saturn_render_payload_bank.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 static bool span_valid(const sm64_saturn_render_payload_bank_t *bank,
                        uint16_t offset, uint16_t capacity)
@@ -7,6 +8,7 @@ static bool span_valid(const sm64_saturn_render_payload_bank_t *bank,
         capacity <= (uint16_t)(bank->capacity - offset);
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_render_payload_bank_init(
     sm64_saturn_render_payload_bank_t *bank, void *master, void *slave,
     uint16_t item_size, uint16_t capacity)

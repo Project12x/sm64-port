@@ -6,6 +6,7 @@
 #include <PR/gbi.h>
 
 #include "types.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 #if defined(SM64_SATURN_RUNTIME_CONTRACT_TEST)
 #include "pc/controller/controller_api.h"
 
@@ -46,12 +47,14 @@ static bool sSceneGraphSuppressed;
  * below. */
 void exec_display_list(struct SPTask *task);
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_source_runtime_configure(
         sm64_saturn_source_task_submit_fn submit, void *context) {
     sTaskSubmit = submit;
     sTaskSubmitContext = context;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_source_runtime_configure_input_replay(
         const sm64_saturn_input_replay_sample_t *samples, uint16_t sample_count) {
     sm64_saturn_input_replay_init(&sInputReplay, samples, sample_count);
@@ -64,6 +67,7 @@ void sm64_saturn_source_runtime_configure_input_replay(
     sState.input_replay_complete = sInputReplay.complete;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_source_runtime_init_controllers(
         uint8_t *controller_bits, OSContStatus *statuses, uint32_t count) {
     controller_saturn.init();

@@ -155,6 +155,15 @@ typedef struct sm64_saturn_actor_vertex {
     uint16_t branch_ordinal;
 } sm64_saturn_actor_vertex_t;
 
+typedef struct sm64_saturn_actor_primitive {
+    uint16_t material_id;
+    uint16_t vertex[4];
+} sm64_saturn_actor_primitive_t;
+
+typedef struct sm64_saturn_actor_material_color {
+    uint8_t rgb555[3];
+} sm64_saturn_actor_material_color_t;
+
 /* Generic immutable family-bank metadata.  Every span is an offset/count
  * relative to the validated S64F payload; no runtime pointer crosses this
  * boundary. */
@@ -196,6 +205,13 @@ bool sm64_saturn_actor_bank_workspace_requirements(
 bool sm64_saturn_actor_bank_validate_expected(
     const void *data, size_t byte_count, const uint32_t expected_source_hash[8],
     sm64_saturn_actor_bank_view_t *view);
+/* Opens a bank whose enclosing, generation-owned S64F bundle has already
+ * passed sm64_saturn_actor_bundle_validate(). It performs bounded header
+ * reconstruction and identity checks only; callers must not expose mutable
+ * bytes through the validated bundle lifetime. */
+bool sm64_saturn_actor_bank_open_validated(
+    const void *data, size_t byte_count, const uint32_t expected_source_hash[8],
+    sm64_saturn_actor_bank_view_t *view);
 bool sm64_saturn_actor_bank_animation(
     const sm64_saturn_actor_bank_view_t *view, uint16_t animation_id,
     sm64_saturn_actor_animation_record_t *record);
@@ -208,6 +224,12 @@ bool sm64_saturn_actor_bank_joint(
 bool sm64_saturn_actor_bank_vertex(
     const sm64_saturn_actor_bank_view_t *view, uint16_t vertex,
     sm64_saturn_actor_vertex_t *out);
+bool sm64_saturn_actor_bank_primitive(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t primitive,
+    sm64_saturn_actor_primitive_t *out);
+bool sm64_saturn_actor_bank_material_color(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t material,
+    sm64_saturn_actor_material_color_t *out);
 bool sm64_saturn_actor_bank_render_binding(
     const sm64_saturn_actor_bank_view_t *view, uint16_t primitive,
     sm64_saturn_actor_render_binding_t *out);

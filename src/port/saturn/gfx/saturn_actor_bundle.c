@@ -1,4 +1,6 @@
 #include "saturn_actor_bundle.h"
+
+#include "../platform/saturn_cart_code.h"
 #include "../runtime/saturn_sha256.h"
 
 #include <limits.h>
@@ -154,6 +156,7 @@ static bool read_variant_record(const sm64_saturn_actor_bundle_view_t *view,
     return true;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_actor_bundle_validate(const void *data, uint32_t byte_count,
                                        sm64_saturn_actor_bundle_view_t *out)
 {
@@ -357,7 +360,7 @@ bool sm64_saturn_actor_bundle_resolve(const sm64_saturn_actor_bundle_view_t *vie
         !add_u32(view->bank_payloads_offset, variant.bank_offset, &bank_absolute) ||
         !span_u32(bank_absolute, variant.bank_size, view->byte_count) ||
         variant.bank_size < SM64_SATURN_ACTOR_BANK_HEADER_SIZE ||
-        !sm64_saturn_actor_bank_validate_expected(
+        !sm64_saturn_actor_bank_open_validated(
             view->bytes + bank_absolute,
             variant.bank_size, source_hash_words, &parsed) ||
         parsed.bank.family_id != family_ordinal || parsed.bank.model_id != model_id ||

@@ -73,6 +73,14 @@ static uint8_t complete_actor_evaluate(
         slot->valid = 0U;
         return 0U;
     }
+    /* The generic pose evaluator correctly transforms the complete bank but
+     * deliberately initializes its lighting workspace uniformly.  Preserve
+     * the existing, source-generated per-vertex Gouraud contract here until
+     * the complete-animation bank carries its own matching light stream. */
+    memcpy(slot->lights,
+           sm64_mario_animation_light_intensity[
+               slot->evaluated.frame % SM64_MARIO_ANIMATION_FRAME_COUNT],
+           sizeof(slot->lights));
     slot->animation_id = slot->evaluated.animation_id;
     slot->animation_frame = slot->evaluated.frame;
     slot->valid = 1U;

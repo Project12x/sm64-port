@@ -1,4 +1,5 @@
 #include "saturn_render_snapshot.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <string.h>
 
@@ -23,6 +24,7 @@ static sm64_saturn_render_snapshot_slot_t *snapshot_slot(
     return NULL;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_render_snapshot_reset(sm64_saturn_render_snapshot_bank_t *bank)
 {
     uint32_t index;

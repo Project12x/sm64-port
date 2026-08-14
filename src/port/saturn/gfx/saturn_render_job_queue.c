@@ -1,4 +1,5 @@
 #include "saturn_render_job_queue.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <string.h>
 
@@ -114,6 +115,7 @@ static bool payload_spans_disjoint(const sm64_saturn_render_job_t *jobs,
     return true;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_render_job_queue_init(sm64_saturn_render_job_queue_t *queue)
 {
     queue = sm64_saturn_render_job_queue_cache_through(queue);

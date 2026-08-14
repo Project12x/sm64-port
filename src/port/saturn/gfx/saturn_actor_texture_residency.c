@@ -2,6 +2,7 @@
 
 #include "saturn_texture_residency.h"
 #include "../gpl/slavedriver_dma_queue.h"
+#include "../platform/saturn_cart_code.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -251,8 +252,9 @@ static bool current_publication_valid(
     return sm64_saturn_actor_texture_publication_validate(publication);
 }
 
-static bool bundle_views_equal(const sm64_saturn_actor_bundle_view_t *a,
-                               const sm64_saturn_actor_bundle_view_t *b)
+static SM64_SATURN_CART_COLD
+bool bundle_views_equal(const sm64_saturn_actor_bundle_view_t *a,
+                        const sm64_saturn_actor_bundle_view_t *b)
 {
     uint16_t word;
     if (a == NULL || b == NULL || a->bytes != b->bytes ||
@@ -275,7 +277,8 @@ static bool bundle_views_equal(const sm64_saturn_actor_bundle_view_t *a,
     return true;
 }
 
-static bool resolve_variant_index(
+static SM64_SATURN_CART_COLD
+bool resolve_variant_index(
     const sm64_saturn_actor_bundle_view_t *bundle, uint16_t index,
     sm64_saturn_actor_bundle_variant_t *variant,
     sm64_saturn_actor_bank_view_t *bank)
@@ -298,9 +301,10 @@ static bool resolve_variant_index(
         source_hash, bank);
 }
 
-static bool plan_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
-                        uint32_t *texture_bytes, uint32_t *clut_bytes,
-                        uint16_t *mapping_count)
+static SM64_SATURN_CART_COLD
+bool plan_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
+                 uint32_t *texture_bytes, uint32_t *clut_bytes,
+                 uint16_t *mapping_count)
 {
     uint32_t texture_cursor = 0U, clut_cursor = 0U;
     uint16_t count = 0U, index;
@@ -342,6 +346,7 @@ static bool plan_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
     return true;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_actor_texture_residency_requirements(
     const sm64_saturn_actor_bundle_view_t *bundle,
     uint32_t *texture_bytes, uint32_t *clut_bytes,
@@ -360,9 +365,10 @@ bool sm64_saturn_actor_texture_residency_requirements(
         plan_bundle(&validated, texture_bytes, clut_bytes, mapping_count);
 }
 
-static bool regions_fit(const sm64_saturn_texture_residency_t *texture_region,
-                        const sm64_saturn_texture_residency_t *clut_region,
-                        uint32_t texture_bytes, uint32_t clut_bytes)
+static SM64_SATURN_CART_COLD
+bool regions_fit(const sm64_saturn_texture_residency_t *texture_region,
+                 const sm64_saturn_texture_residency_t *clut_region,
+                 uint32_t texture_bytes, uint32_t clut_bytes)
 {
     uintptr_t texture = texture_region == NULL ? 0U :
         (uintptr_t)texture_region->base;
@@ -383,8 +389,9 @@ static bool regions_fit(const sm64_saturn_texture_residency_t *texture_region,
            !ranges_overlap(texture, texture_last, clut, clut_last);
 }
 
-static bool transfer_span(void *destination, const void *source,
-                          void *staging, uint32_t bytes)
+static SM64_SATURN_CART_COLD
+bool transfer_span(void *destination, const void *source,
+                   void *staging, uint32_t bytes)
 {
     saturn_dma_queue_sequence_t sequence;
     if (bytes == 0U) return true;
@@ -395,9 +402,10 @@ static bool transfer_span(void *destination, const void *source,
            saturn_dma_queue_wait(sequence) != 0;
 }
 
-static bool preflight_span(const sm64_saturn_texture_residency_t *region,
-                           uint32_t offset, uint32_t bytes,
-                           void *staging, uint32_t staging_capacity)
+static SM64_SATURN_CART_COLD
+bool preflight_span(const sm64_saturn_texture_residency_t *region,
+                    uint32_t offset, uint32_t bytes,
+                    void *staging, uint32_t staging_capacity)
 {
     uintptr_t destination, stage_source;
     if (bytes == 0U) return true;
@@ -409,7 +417,8 @@ static bool preflight_span(const sm64_saturn_texture_residency_t *region,
                SATURN_DMA_QUEUE_SCU) != 0;
 }
 
-static bool preflight_bundle(
+static SM64_SATURN_CART_COLD
+bool preflight_bundle(
     const sm64_saturn_actor_bundle_view_t *bundle,
     const sm64_saturn_texture_residency_t *texture_region,
     const sm64_saturn_texture_residency_t *clut_region,
@@ -440,10 +449,11 @@ static bool preflight_bundle(
     return true;
 }
 
-static bool upload_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
-                          const sm64_saturn_texture_residency_t *texture_region,
-                          const sm64_saturn_texture_residency_t *clut_region,
-                          void *staging)
+static SM64_SATURN_CART_COLD
+bool upload_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
+                   const sm64_saturn_texture_residency_t *texture_region,
+                   const sm64_saturn_texture_residency_t *clut_region,
+                   void *staging)
 {
     uint32_t texture_cursor = 0U, clut_cursor = 0U;
     uint16_t index;
@@ -484,9 +494,10 @@ static bool upload_bundle(const sm64_saturn_actor_bundle_view_t *bundle,
     return true;
 }
 
-static bool build_mappings(sm64_saturn_actor_texture_publication_t *publication,
-                           const sm64_saturn_actor_bundle_view_t *bundle,
-                           uint32_t generation)
+static SM64_SATURN_CART_COLD
+bool build_mappings(sm64_saturn_actor_texture_publication_t *publication,
+                    const sm64_saturn_actor_bundle_view_t *bundle,
+                    uint32_t generation)
 {
     uint32_t texture_cursor = 0U, clut_cursor = 0U;
     uint16_t count = 0U, index;
@@ -519,6 +530,7 @@ static bool build_mappings(sm64_saturn_actor_texture_publication_t *publication,
     return true;
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_actor_texture_residency_activate(
     sm64_saturn_actor_texture_publication_t *publication,
     const sm64_saturn_actor_bundle_view_t *bundle,

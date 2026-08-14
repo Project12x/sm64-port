@@ -7,6 +7,7 @@
 #include <PR/gbi.h>
 
 #include "types.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include "saturn_fast3d_frontend.h"
 #include "saturn_projected_workarea.h"
@@ -1482,6 +1483,7 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
     }
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_fast3d_frontend_init(
     sm64_saturn_fast3d_frontend_t *frontend)
 {

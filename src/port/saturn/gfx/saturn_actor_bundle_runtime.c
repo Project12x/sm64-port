@@ -1,5 +1,7 @@
 #include "saturn_actor_bundle_runtime.h"
 
+#include "../platform/saturn_cart_code.h"
+
 #include <limits.h>
 #include <string.h>
 
@@ -89,6 +91,7 @@ static bool publication_matches_bundle(
                     bundle->content_hash_words);
 }
 
+SM64_SATURN_CART_COLD
 bool sm64_saturn_actor_bundle_runtime_publish(
     sm64_saturn_actor_bundle_publication_t *publication,
     const sm64_saturn_actor_bundle_view_t *bundle,
@@ -155,8 +158,7 @@ bool sm64_saturn_actor_bundle_runtime_resolve(
     if (output != NULL) memset(output, 0, sizeof(*output));
     if (output == NULL || snapshot == NULL || records == NULL ||
         !publication_matches_bundle(publication, bundle) ||
-        snapshot->scene_package_generation !=
-            publication->residency_generation ||
+        snapshot->scene_package_generation != publication->package_generation ||
         snapshot->active == 0U || snapshot->render_active == 0U ||
         lane >= SM64_SATURN_ACTOR_MESHLET_WORK_LANE_COUNT ||
         publication->lane_claim[lane] != 1U ||

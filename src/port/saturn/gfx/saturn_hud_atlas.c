@@ -1,5 +1,6 @@
 /* src/port/saturn/gfx/saturn_hud_atlas.c */
 #include "saturn_hud_atlas.h"
+#include "../platform/saturn_cart_code.h"
 
 #include <yaul.h>
 
@@ -114,6 +115,7 @@ hud_atlas_upload_pattern(sm64_saturn_hud_glyph_t glyph, const uint16_t *src_pixe
     }
 }
 
+SM64_SATURN_CART_COLD
 void
 sm64_saturn_hud_atlas_init(void)
 {

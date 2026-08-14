@@ -171,6 +171,8 @@ bool sm64_saturn_actor_instance_queue_publish(
     uint16_t count)
 {
     uint16_t index;
+    const bool descriptors_in_place =
+        queue != NULL && descriptors == queue->descriptors;
     queue = actor_queue_uncached(queue);
     if (queue == NULL || generation == 0U || queue->generation != 0U ||
         manifest_capacity == 0U ||
@@ -184,7 +186,7 @@ bool sm64_saturn_actor_instance_queue_publish(
             return false;
     if (!descriptors_disjoint_and_unique(descriptors, count)) return false;
 
-    if (count != 0U)
+    if (count != 0U && !descriptors_in_place)
         memcpy(queue->descriptors, descriptors,
                (size_t)count * sizeof(*descriptors));
     memset(queue->results, 0, sizeof(queue->results));

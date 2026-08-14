@@ -6,6 +6,40 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class Vdp1FrameBankSourceTests(unittest.TestCase):
+    def test_mario_textured_detail_retains_a9a_direct_color_contract(self) -> None:
+        """Mario keeps the accepted per-material Gouraud and direct tile path."""
+        source = (ROOT / "src/port/saturn/gfx/saturn_demo_render.c").read_text()
+        start = source.index("static void __attribute__((unused)) demo_emit_mario_range(")
+        end = source.index("#if SATURN_SLAVE_RENDER", start)
+        mario_emit = source[start:end]
+
+        # A9A shaded the solid material command from its own source RGB and
+        # emitted the RGB1555 tile as direct colour.  Letting the generic
+        # neutral actor table modulate the tile changes Mario's source colours.
+        self.assertIn(
+            "const uint8_t *rgb = sm64_mario_material_rgb[indices[0]];",
+            mario_emit,
+        )
+        self.assertIn(
+            "const uint8_t r = (uint8_t)((rgb[0] * intensity) / 31U);",
+            mario_emit,
+        )
+        self.assertIn(
+            "const uint8_t g = (uint8_t)((rgb[1] * intensity) / 31U);",
+            mario_emit,
+        )
+        self.assertIn(
+            "const uint8_t b = (uint8_t)((rgb[2] * intensity) / 31U);",
+            mario_emit,
+        )
+        self.assertIn("VDP1_CMDT_CC_REPLACE, texture_vertices", mario_emit)
+        self.assertNotIn("SM64_SATURN_MARIO_TEXTURE_GOURAUD_MATERIAL", mario_emit)
+        self.assertIn(
+            "if (texture_start != SM64_MARIO_TEXTURE_TILE_NONE &&\n"
+            "            context->partitions != NULL)",
+            mario_emit,
+        )
+
     def test_command_source_contract_matches_cpu_dmac_hardware_path(self) -> None:
         source = (ROOT / "src/port/saturn/gfx/saturn_vdp1_frame_bank.c").read_text()
         self.assertIn(

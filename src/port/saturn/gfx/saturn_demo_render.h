@@ -6,7 +6,9 @@
 
 #include "saturn_fast3d_frontend.h"
 #include "saturn_actor_bridge.h"
+#include "saturn_actor_batch.h"
 #include "saturn_gouraud_bank.h"
+#include "saturn_render_snapshot.h"
 #include "saturn_render_lifecycle.h"
 #include "saturn_vdp1_backend.h"
 
@@ -15,6 +17,10 @@
  * interpreted Fast3D frontend remains available for differential builds. */
 /* Promote the generated bank out of cart_rodata before the frame loop. */
 void sm64_saturn_demo_render_init(void);
+
+/* Boot-time generic actor validation and frame-time actor preparation reuse
+ * the Mario transform context only while no Mario job owns it. */
+void *sm64_saturn_demo_render_actor_workspace(uint32_t *byte_count);
 
 /* Call after every authoritative source tick. This tracks a real area exit
  * (`active == false`) and same-ID re-entry, resetting hysteretic LOD state at
@@ -40,6 +46,8 @@ bool sm64_saturn_demo_render_start_frame(
     sm64_saturn_fast3d_profile_t *profile,
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_render_snapshot_t *scene_snapshot,
+    sm64_saturn_actor_runtime_storage_t *actor_runtime,
     uint32_t generation);
 
 /* Finalize only after positive slave retirement. The successful call owns

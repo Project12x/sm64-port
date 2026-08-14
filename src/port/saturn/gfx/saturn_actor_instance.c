@@ -1,5 +1,6 @@
 #include "saturn_actor_instance.h"
 #include "saturn_render_cluster.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <string.h>
 
@@ -86,6 +87,7 @@ static bool valid_observation(const sm64_saturn_actor_source_observation_t *sour
     return true;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_actor_instances_set_observer(
     sm64_saturn_geo_state_observer_t *observer)
 {
@@ -180,6 +182,7 @@ bool sm64_saturn_actor_instances_capture(
     return true;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_actor_instance_bank_init(
     sm64_saturn_actor_instance_bank_t *bank)
 {
@@ -269,6 +272,23 @@ bool sm64_saturn_actor_instance_bank_capture(
     *index = selected;
     *count = captured;
     return true;
+}
+
+const sm64_saturn_actor_instance_snapshot_t *
+sm64_saturn_actor_instance_bank_ready_view(
+    const sm64_saturn_actor_instance_bank_t *bank, uint8_t index,
+    uint32_t generation, uint16_t *count)
+{
+    const sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached((sm64_saturn_actor_instance_bank_t *)bank);
+    if (count != NULL) *count = 0U;
+    if (shared == NULL || index >= 2U || count == NULL ||
+        shared->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_READY ||
+        shared->generation[index] != generation)
+        return NULL;
+    actor_bank_fence();
+    *count = shared->count[index];
+    return shared->snapshots[index];
 }
 
 const sm64_saturn_actor_instance_snapshot_t *

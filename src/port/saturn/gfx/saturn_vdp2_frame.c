@@ -1,4 +1,5 @@
 #include "saturn_vdp2_frame.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -135,6 +136,7 @@ static int vdp2_frame_generation_state_is_coherent(
     return 1;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_vdp2_frame_init(sm64_saturn_vdp2_frame_t *frame)
 {
     if (frame == NULL)

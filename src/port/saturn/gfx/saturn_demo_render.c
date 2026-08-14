@@ -1,4 +1,5 @@
 #include "saturn_demo_render.h"
+#include "../platform/saturn_cart_code.h"
 
 #ifndef SATURN_DEMO_BSP_FRAGMENT_FLAT
 #define SATURN_DEMO_BSP_FRAGMENT_FLAT 0
@@ -21,6 +22,10 @@
 #include "game/camera.h"
 #include "saturn_dual_frame_bank.h"
 #include "saturn_actor_meshlets.h"
+#include "saturn_actor_material.h"
+#include "saturn_actor_pose.h"
+#include "saturn_actor_runtime_handoff.h"
+#include "saturn_actor_texture_residency.h"
 #include "saturn_gouraud.h"
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
@@ -41,8 +46,10 @@
 #include "saturn_terrain_queue_handoff.h"
 #include "saturn_transform.h"
 #include "saturn_visible_position_set.h"
+#include "../sourceboot/source_scene_bundle.h"
 #include "bob_scene.h"
 #include "bob_bsp.h"
+
 #if SM64_SATURN_BOB_SCENE_BSP_CONTENT_ID != SM64_SATURN_BOB_BSP_CONTENT_ID
 #error "bob_scene.h and bob_bsp.h were generated from different node spans"
 #endif
@@ -77,6 +84,33 @@
 #define sm64_saturn_bob_cluster_position_refs sm64_saturn_bob_fragment_cluster_position_refs
 #endif
 #include "saturn_mario_actor_mesh.h"
+/* Exact RGB1555 values for each material's baked 5-bit light. This is the
+ * fixed Gouraud table consumed by VDP1: no dynamic colour math belongs in
+ * the HWRAM-linked lowerer. */
+static const uint16_t sm64_saturn_mario_gouraud_color
+    [11U][32U] = {
+    {0x8000, 0x8001, 0x8002, 0x8003, 0x8004, 0x8005, 0x8006, 0x8007, 0x8008, 0x8009, 0x800A, 0x800B, 0x800C, 0x800D, 0x800E, 0x800F, 0x8010, 0x8011, 0x8012, 0x8013, 0x8014, 0x8015, 0x8016, 0x8017, 0x8018, 0x8019, 0x801A, 0x801B, 0x801C, 0x801D, 0x801E, 0x801F},
+    {0x8000, 0x8001, 0x8002, 0x8003, 0x8004, 0x8005, 0x8006, 0x8007, 0x8008, 0x8009, 0x800A, 0x800B, 0x800C, 0x800D, 0x800E, 0x800F, 0x8010, 0x8011, 0x8012, 0x8013, 0x8014, 0x8015, 0x8016, 0x8017, 0x8018, 0x8019, 0x801A, 0x801B, 0x801C, 0x801D, 0x801E, 0x801F},
+    {0x8000, 0x8400, 0x8800, 0x8C00, 0x9000, 0x9400, 0x9800, 0x9C00, 0xA000, 0xA400, 0xA800, 0xAC00, 0xB000, 0xB400, 0xB800, 0xBC00, 0xC000, 0xC400, 0xC800, 0xCC00, 0xD000, 0xD400, 0xD800, 0xDC00, 0xE000, 0xE400, 0xE800, 0xEC00, 0xF000, 0xF400, 0xF800, 0xFC00},
+    {0x8000, 0x8400, 0x8800, 0x8C00, 0x9000, 0x9400, 0x9800, 0x9C00, 0xA000, 0xA400, 0xA800, 0xAC00, 0xB000, 0xB400, 0xB800, 0xBC00, 0xC000, 0xC400, 0xC800, 0xCC00, 0xD000, 0xD400, 0xD800, 0xDC00, 0xE000, 0xE400, 0xE800, 0xEC00, 0xF000, 0xF400, 0xF800, 0xFC00},
+    {0x8000, 0x8400, 0x8820, 0x8C41, 0x9061, 0x9462, 0x9882, 0x9CA3, 0xA0C3, 0xA4C4, 0xA8E4, 0xAD05, 0xB125, 0xB546, 0xB946, 0xBD67, 0xC187, 0xC5A8, 0xC9A8, 0xCDC9, 0xD1E9, 0xD60A, 0xDA2A, 0xDE2B, 0xE24B, 0xE66C, 0xEA8C, 0xEE8D, 0xF2AD, 0xF6CE, 0xFAEE, 0xFF0F},
+    {0x8000, 0x8400, 0x8820, 0x8C41, 0x9061, 0x9462, 0x9882, 0x9CA3, 0xA0C3, 0xA4C4, 0xA8E4, 0xAD05, 0xB125, 0xB546, 0xB946, 0xBD67, 0xC187, 0xC5A8, 0xC9A8, 0xCDC9, 0xD1E9, 0xD60A, 0xDA2A, 0xDE2B, 0xE24B, 0xE66C, 0xEA8C, 0xEE8D, 0xF2AD, 0xF6CE, 0xFAEE, 0xFF0F},
+    {0x8000, 0x8400, 0x8820, 0x8C41, 0x9061, 0x9462, 0x9882, 0x9CA3, 0xA0C3, 0xA4C4, 0xA8E4, 0xAD05, 0xB125, 0xB546, 0xB946, 0xBD67, 0xC187, 0xC5A8, 0xC9A8, 0xCDC9, 0xD1E9, 0xD60A, 0xDA2A, 0xDE2B, 0xE24B, 0xE66C, 0xEA8C, 0xEE8D, 0xF2AD, 0xF6CE, 0xFAEE, 0xFF0F},
+    {0x8000, 0x8400, 0x8820, 0x8C41, 0x9061, 0x9462, 0x9882, 0x9CA3, 0xA0C3, 0xA4C4, 0xA8E4, 0xAD05, 0xB125, 0xB546, 0xB946, 0xBD67, 0xC187, 0xC5A8, 0xC9A8, 0xCDC9, 0xD1E9, 0xD60A, 0xDA2A, 0xDE2B, 0xE24B, 0xE66C, 0xEA8C, 0xEE8D, 0xF2AD, 0xF6CE, 0xFAEE, 0xFF0F},
+    {0x8000, 0x8000, 0x8000, 0x8400, 0x8400, 0x8800, 0x8800, 0x8C00, 0x8C00, 0x9000, 0x9000, 0x9000, 0x9400, 0x9400, 0x9800, 0x9800, 0x9C00, 0x9C00, 0xA000, 0xA000, 0xA400, 0xA400, 0xA400, 0xA800, 0xA800, 0xAC00, 0xAC00, 0xB000, 0xB000, 0xB400, 0xB400, 0xB820},
+    {0x8000, 0x8421, 0x8842, 0x8C63, 0x9084, 0x94A5, 0x98C6, 0x9CE7, 0xA108, 0xA529, 0xA94A, 0xAD6B, 0xB18C, 0xB5AD, 0xB9CE, 0xBDEF, 0xC210, 0xC631, 0xCA52, 0xCE73, 0xD294, 0xD6B5, 0xDAD6, 0xDEF7, 0xE318, 0xE739, 0xEB5A, 0xEF7B, 0xF39C, 0xF7BD, 0xFBDE, 0xFFFF},
+    {0x8000, 0x8000, 0x8000, 0x8400, 0x8400, 0x8800, 0x8800, 0x8C00, 0x8C20, 0x9020, 0x9020, 0x9020, 0x9420, 0x9420, 0x9820, 0x9820, 0x9C41, 0x9C41, 0xA041, 0xA041, 0xA441, 0xA441, 0xA441, 0xA841, 0xA861, 0xAC61, 0xAC61, 0xB061, 0xB061, 0xB461, 0xB461, 0xB882},
+};
+_Static_assert(sizeof(sm64_saturn_mario_gouraud_color) /
+                   sizeof(sm64_saturn_mario_gouraud_color[0]) ==
+                   SM64_MARIO_MATERIAL_COUNT,
+               "fixed Mario Gouraud table must match generated materials");
+/* Row nine is the existing neutral RGB1555 gray ramp.  VDP1 treats Gouraud
+ * entries as signed corrections around 0xC210, while each command supplies
+ * its material RGB base.  This one fixed light ramp therefore shades both
+ * direct-color texture texels and solid Mario material surfaces without a
+ * material hue being added twice. */
+#define SM64_SATURN_MARIO_TEXTURE_GOURAUD_MATERIAL 9U
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
 #include "mario_eye_uv_tiles.h"
 #endif
@@ -353,8 +387,13 @@ typedef struct demo_actor_queue_metadata {
     volatile uint16_t ready;
 } demo_actor_queue_metadata_t;
 #define DEMO_ACTOR_PRIMITIVE_REJECTED UINT16_MAX
+#define DEMO_ACTOR_DRAW_REF_TRANSLUCENT 0x8000U
+#define DEMO_ACTOR_DRAW_REF_INDEX_MASK 0x7FFFU
 #define DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY \
     (SM64_MARIO_VERTEX_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
+_Static_assert(SM64_MARIO_PRIMITIVE_COUNT <=
+                   DEMO_ACTOR_DRAW_REF_INDEX_MASK,
+               "Mario draw-ref encoding requires a free pass bit");
 /* This one contiguous bank is deliberately split into master [0, split) and
  * slave [split, vertex_count) result spans.  It contains no VDP state. */
 static demo_actor_vertex_result_t s_actor_results[SM64_MARIO_VERTEX_COUNT]
@@ -409,8 +448,19 @@ static sm64_saturn_gouraud_table_t *s_actor_gouraud[
     SM64_MARIO_PRIMITIVE_COUNT] DEMO_CPU_WORK_CACHE;
 static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT]
     DEMO_CPU_WORK_CACHE;
-static const uint8_t *s_actor_light_intensity;
 static uint16_t s_actor_draw_count;
+
+/* The meshlet core already owns Mario's painter-sorted opaque/translucent
+ * refs.  Keep a compact index+pass token in the existing draw-order array so
+ * final VDP1 lowering retains the bin instead of discarding it. */
+static const sm64_saturn_actor_draw_ref_t *
+demo_actor_draw_ref_from_order(uint16_t order)
+{
+    const uint16_t index = order & DEMO_ACTOR_DRAW_REF_INDEX_MASK;
+    if (index >= SM64_MARIO_PRIMITIVE_COUNT) return NULL;
+    return (order & DEMO_ACTOR_DRAW_REF_TRANSLUCENT) != 0U
+        ? &s_actor_translucent_refs[index] : &s_actor_opaque_refs[index];
+}
 static uint16_t s_actor_transform_ref_count;
 #if !SATURN_DEMO_HOT_PROMOTION
 /* Hot mode reads the generated immutable bank directly and promotes it into
@@ -539,11 +589,19 @@ typedef struct demo_render_transaction {
     sm64_saturn_fast3d_profile_t *profile;
     const sm64_saturn_mario_actor_snapshot_t *snapshot;
     const sm64_saturn_mario_actor_pose_t *pose;
+    const sm64_saturn_render_snapshot_t *scene_snapshot;
+    sm64_saturn_actor_runtime_storage_t *actor_runtime;
+    sm64_saturn_actor_runtime_handoff_t actor_handoff;
+    sm64_saturn_ir_transform_job_t actor_job;
     vdp1_vram_partitions_t partitions;
     uint32_t transform_generation;
     uint16_t required_positions;
     uint16_t actor_vertex_count;
+    uint16_t generic_actor_output_count;
+    uint16_t generic_actor_gouraud_count;
+    uint16_t generic_actor_gouraud_first;
     uint16_t frame_job_count;
+    uint8_t generic_actor_prepared;
 } demo_render_transaction_t;
 
 static demo_render_transaction_t s_demo_render_transaction;
@@ -1092,10 +1150,26 @@ typedef struct demo_mario_transform_context {
     uint16_t primitive_slave_begin;
     uint32_t sequence;
 } demo_mario_transform_context_t;
-static demo_mario_transform_context_t s_mario_transform_context
-    DEMO_TERRAIN_TRANSFORM_CACHE;
+union demo_actor_phase_workspace {
+    demo_mario_transform_context_t mario;
+    uint8_t source_scene_workspace[
+        SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES];
+};
+static union demo_actor_phase_workspace s_actor_phase_workspace
+    DEMO_TERRAIN_TRANSFORM_CACHE __attribute__((aligned(4)));
+#define s_mario_transform_context s_actor_phase_workspace.mario
 _Static_assert(sizeof(demo_mario_transform_context_t) <= UINT16_MAX,
                "Mario callback context must retain a bounded byte count");
+_Static_assert(sizeof(demo_mario_transform_context_t) >=
+                   SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES,
+               "Mario phase storage must cover generic actor workspace");
+
+void *sm64_saturn_demo_render_actor_workspace(uint32_t *byte_count)
+{
+    if (byte_count != NULL)
+        *byte_count = sizeof(s_actor_phase_workspace.source_scene_workspace);
+    return s_actor_phase_workspace.source_scene_workspace;
+}
 
 typedef struct demo_classify_context {
     const sm64_saturn_bob_primitive_t *primitives;
@@ -1272,7 +1346,10 @@ static void demo_classify_mario_range(void *opaque, uint16_t begin,
                 (c->projected.y - a->projected.y) -
             (int32_t)(b->projected.y - a->projected.y) *
                 (c->projected.x - a->projected.x);
-        if (cross == 0) continue;
+        /* Every generated Mario primitive in this target carries G_CULL_BACK;
+         * sourceboot's Y-down projection therefore rejects nonpositive area. */
+        if (cross <= 0)
+            continue;
         result->primitive_id = primitive_id;
         result->material_vertex = primitive[0];
     }
@@ -1318,7 +1395,6 @@ static bool demo_snapshot_mario_transform_context(
             return false;
         context->vertex_ref_slot[vertex] = ref;
     }
-    s_actor_light_intensity = context->light_intensity;
     return true;
 }
 
@@ -1494,6 +1570,7 @@ static void demo_build_primitive_work_metadata(void)
 #endif
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_demo_render_init(void)
 {
     demo_lod_storage_t *const lod_storage =
@@ -2544,7 +2621,9 @@ static bool __attribute__((unused)) demo_actor_queue_classify(
                 (c->projected.y - a->projected.y) -
             (int32_t)(b->projected.y - a->projected.y) *
                 (c->projected.x - a->projected.x);
-        if (cross == 0) continue;
+        /* See the matching direct Mario classifier above. */
+        if (cross <= 0)
+            continue;
         result->primitive_id = primitive_id;
         result->material_vertex = primitive[0];
     }
@@ -2928,37 +3007,238 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
         job, claimed_state, output.writer_lane, arena.count, compact.sequence);
 }
 
-/* Compatibility wrappers for the existing four-entry world graph. These are
- * deliberately adjacent to the Mario callbacks so a later generic cutover
- * has one auditable replacement point. Feature-off retains the exact callback
- * functions and descriptor/payload contract; feature-on does not pretend that
- * the generic actor package is ready and quarantines the actor job instead. */
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+static bool demo_generic_actor_emit(demo_render_transaction_t *transaction);
+
+static int64_t demo_generic_saturating_add_i64(int64_t left, int64_t right)
+{
+    if (right > 0 && left > INT64_MAX - right) return INT64_MAX;
+    if (right < 0 && left < INT64_MIN - right) return INT64_MIN;
+    return left + right;
+}
+
+static int64_t demo_generic_saturating_mul_i64(int64_t left, int64_t right)
+{
+    if (left == 0 || right == 0) return 0;
+    if (left == -1) return right == INT64_MIN ? INT64_MAX : -right;
+    if (right == -1) return left == INT64_MIN ? INT64_MAX : -left;
+    if (left > 0) {
+        if (right > 0 && left > INT64_MAX / right) return INT64_MAX;
+        if (right < 0 && right < INT64_MIN / left) return INT64_MIN;
+    } else {
+        if (right > 0 && left < INT64_MIN / right) return INT64_MIN;
+        if (right < 0 && left < INT64_MAX / right) return INT64_MAX;
+    }
+    return left * right;
+}
+
+static int32_t demo_generic_clamp_i64_i32(int64_t value)
+{
+    return value > INT32_MAX ? INT32_MAX :
+        value < INT32_MIN ? INT32_MIN : (int32_t)value;
+}
+
+static bool demo_generic_actor_world_vertex(
+    const sm64_saturn_actor_instance_snapshot_t *instance,
+    const sm64_saturn_actor_pose_work_t *pose, uint16_t vertex,
+    sm64_saturn_vec3i_t *world)
+{
+    int64_t scaled_x, scaled_y, scaled_z, rotated_x, rotated_z;
+    const int32_t sine = instance == NULL ? 0 :
+        sm64_saturn_sins_q16(instance->angle[1]);
+    const int32_t cosine = instance == NULL ? 0 :
+        sm64_saturn_coss_q16(instance->angle[1]);
+    if (instance == NULL || pose == NULL || pose->vertices == NULL ||
+        world == NULL || vertex >= pose->vertex_capacity)
+        return false;
+    scaled_x = (int64_t)pose->vertices[vertex][0] * instance->scale_q16[0];
+    scaled_y = (int64_t)pose->vertices[vertex][1] * instance->scale_q16[1];
+    scaled_z = (int64_t)pose->vertices[vertex][2] * instance->scale_q16[2];
+    rotated_x = demo_generic_saturating_add_i64(
+        demo_generic_saturating_mul_i64(scaled_x, cosine),
+        demo_generic_saturating_mul_i64(scaled_z, sine)) >> 32;
+    rotated_z = demo_generic_saturating_add_i64(
+        demo_generic_saturating_mul_i64(-scaled_x, sine),
+        demo_generic_saturating_mul_i64(scaled_z, cosine)) >> 32;
+    world->x = demo_generic_clamp_i64_i32(
+        ((int64_t)instance->position_q16[0] >> 16) + rotated_x);
+    world->y = demo_generic_clamp_i64_i32(
+        ((int64_t)instance->position_q16[1] >> 16) + (scaled_y >> 16));
+    world->z = demo_generic_clamp_i64_i32(
+        ((int64_t)instance->position_q16[2] >> 16) + rotated_z);
+    return true;
+}
+
+static bool demo_generic_actor_process(
+    const sm64_saturn_actor_instance_descriptor_t *descriptor,
+    const sm64_saturn_actor_instance_snapshot_t *snapshot, uint8_t lane,
+    void *context, uint16_t *output_count)
+{
+    demo_render_transaction_t *const transaction = context;
+    sm64_saturn_actor_bundle_resolution_t resolution;
+    bool prepared = false;
+    if (output_count != NULL) *output_count = 0U;
+    if (transaction == NULL || transaction->actor_runtime == NULL ||
+        transaction->scene_snapshot == NULL || descriptor == NULL ||
+        snapshot == NULL || output_count == NULL ||
+        descriptor->output_offset > SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING ||
+        descriptor->output_capacity >
+            SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING - descriptor->output_offset)
+        return false;
+    const uint8_t workspace_lane =
+        lane == SM64_SATURN_ACTOR_CLAIMED_MASTER ? 0U : 1U;
+    if (!sm64_saturn_source_scene_bundle_resolve(
+            snapshot, workspace_lane,
+            &transaction->actor_runtime->outputs[descriptor->output_offset],
+            descriptor->output_capacity, &resolution))
+        return false;
+    sm64_saturn_render_view_t view = transaction->scene_snapshot->camera;
+    view.generation = descriptor->generation;
+    prepared = resolution.package_generation ==
+            snapshot->scene_package_generation &&
+        sm64_saturn_actor_meshlets_prepare_bank(
+            &resolution.bank, snapshot, &view,
+            &resolution.workspace.pose_work, &resolution.workspace.output,
+            transaction->profile);
+    if (prepared) {
+        const uint32_t count =
+            (uint32_t)resolution.workspace.output.output.opaque_count +
+            resolution.workspace.output.output.translucent_count;
+        prepared = count <= descriptor->output_capacity;
+        /* S64B-v2 seals the maximum Gouraud claim for this bank.  Reserve it
+         * once per selected instance rather than decoding every primitive
+         * during the meshlet walk merely to reconstruct this capacity fact. */
+        if (prepared && resolution.bank.gouraud_tables_per_instance >
+                UINT16_MAX - transaction->generic_actor_gouraud_count)
+            prepared = false;
+        if (prepared)
+            transaction->generic_actor_gouraud_count = (uint16_t)(
+                transaction->generic_actor_gouraud_count +
+                resolution.bank.gouraud_tables_per_instance);
+        if (prepared) {
+            *output_count = (uint16_t)count;
+        }
+    }
+    if (!sm64_saturn_source_scene_bundle_release(
+            workspace_lane, resolution.residency_generation))
+        prepared = false;
+    return prepared;
+}
+
+static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
+                                       uint32_t generation)
+{
+    sm64_saturn_actor_instance_processor_t processor;
+    const sm64_saturn_actor_instance_snapshot_t *snapshots;
+    uint16_t snapshot_count = 0U, descriptor_count = 0U, output_cursor = 0U;
+    if (transaction == NULL || transaction->scene_snapshot == NULL ||
+        transaction->actor_runtime == NULL || generation == 0U)
+        return false;
+    transaction->generic_actor_prepared = 0U;
+    transaction->generic_actor_output_count = 0U;
+    transaction->generic_actor_gouraud_count = 0U;
+    transaction->generic_actor_gouraud_first = 0U;
+    sm64_saturn_actor_runtime_handoff_init(&transaction->actor_handoff);
+    if (transaction->scene_snapshot->actor_instance_count == 0U) {
+        transaction->generic_actor_prepared = 1U;
+        return true;
+    }
+    if (transaction->scene_snapshot->actor_instance_bank_valid == 0U ||
+        transaction->scene_snapshot->actor_instance_bank >= 2U)
+        return false;
+    snapshots = sm64_saturn_actor_instance_bank_ready_view(
+        &transaction->actor_runtime->instances,
+        transaction->scene_snapshot->actor_instance_bank, generation,
+        &snapshot_count);
+    if (snapshots == NULL || snapshot_count == 0U ||
+        snapshot_count != transaction->scene_snapshot->actor_instance_count)
+        return false;
+    for (uint16_t index = 0U; index < snapshot_count; index++) {
+        sm64_saturn_actor_bundle_resolution_t resolution;
+        if (snapshots[index].render_active == 0U) continue;
+        const uint16_t remaining = (uint16_t)(
+            SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING - output_cursor);
+        if (!sm64_saturn_source_scene_bundle_resolve(
+                &snapshots[index], 0U,
+                &transaction->actor_runtime->outputs[output_cursor], remaining,
+                &resolution))
+            return false;
+        const uint32_t capacity = resolution.bank.draw_records_per_instance;
+        const bool descriptor_ok = capacity != 0U && capacity <= remaining &&
+            capacity <= UINT16_MAX &&
+            sm64_saturn_actor_instance_descriptor_from_snapshot(
+                &snapshots[index], index, index, 0U,
+                SM64_SATURN_ACTOR_OUTPUT_OPAQUE, output_cursor,
+                (uint16_t)capacity,
+                &transaction->actor_runtime->queue.descriptors[descriptor_count]);
+        const bool released = sm64_saturn_source_scene_bundle_release(
+            0U, resolution.residency_generation);
+        if (!descriptor_ok || !released) return false;
+        output_cursor = (uint16_t)(output_cursor + capacity);
+        descriptor_count++;
+    }
+    if (!sm64_saturn_actor_runtime_handoff_begin(
+            &transaction->actor_handoff,
+            &transaction->actor_runtime->instances,
+            &transaction->actor_runtime->queue,
+            transaction->scene_snapshot->actor_instance_bank, generation,
+            transaction->actor_runtime->queue.descriptors, descriptor_count,
+            SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE,
+            SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING,
+            transaction->actor_runtime->batches,
+            SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE))
+        return false;
+    processor = (sm64_saturn_actor_instance_processor_t){
+        .snapshots = transaction->actor_handoff.snapshots,
+        .snapshot_count = transaction->actor_handoff.snapshot_count,
+        .generation = generation,
+        .process = demo_generic_actor_process,
+        .context = transaction,
+    };
+    if (sm64_saturn_actor_instance_queue_drain_master(
+            &transaction->actor_runtime->queue, generation, &processor) !=
+            descriptor_count ||
+        !sm64_saturn_actor_instance_queue_all_terminal(
+            &transaction->actor_runtime->queue, generation))
+        return false;
+    for (uint16_t index = 0U; index < descriptor_count; index++) {
+        const sm64_saturn_actor_instance_result_t *const result =
+            sm64_saturn_actor_instance_queue_result(
+                &transaction->actor_runtime->queue, generation, index);
+        if (result == NULL || result->reason !=
+                SM64_SATURN_ACTOR_QUARANTINE_NONE ||
+            result->output_count > UINT16_MAX -
+                transaction->generic_actor_output_count)
+            return false;
+        transaction->generic_actor_output_count = (uint16_t)(
+            transaction->generic_actor_output_count + result->output_count);
+    }
+    if (!sm64_saturn_actor_runtime_handoff_finalize(
+            &transaction->actor_handoff))
+        return false;
+    transaction->generic_actor_prepared = 1U;
+    return true;
+}
+
+#endif
+
+/* The existing ACTOR_ADMIT/ACTOR_LOWER descriptors own Mario's transform and
+ * classify payloads in every feature mode. Generic actors are prepared before
+ * graph publication and emitted after terrain/Mario assembly; retargeting
+ * these callback IDs leaves the Mario jobs DONE without their required result
+ * metadata and makes finalization fail closed. */
 static bool demo_actor_admit_compat_wrapper(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state, void *context)
 {
-#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
-    (void)job;
-    (void)claimed_state;
-    (void)context;
-    return false;
-#else
     return demo_actor_queue_transform(job, claimed_state, context);
-#endif
 }
 
 static bool demo_actor_lower_compat_wrapper(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state, void *context)
 {
-#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
-    (void)job;
-    (void)claimed_state;
-    (void)context;
-    return false;
-#else
     return demo_actor_queue_classify(job, claimed_state, context);
-#endif
 }
 
 static const sm64_saturn_render_job_callback_table_t *
@@ -3311,6 +3591,8 @@ static void demo_emit_terrain_result(
         profile->pipeline_faults++;
         return;
     }
+    const uint16_t painter_bin =
+        sm64_saturn_terrain_depth_bin(result->painter_key);
     const bool recovery = sm64_saturn_terrain_result_recovery(result);
     const bool texture_suppressed =
         sm64_saturn_terrain_result_texture_suppressed(result);
@@ -3346,17 +3628,20 @@ static void demo_emit_terrain_result(
              * reconstruct command state at frame time; the common fallback
              * tail below records it exactly once. */
         } else if (textured) {
+            cmdt->cmd_link = painter_bin;
             profile->texture_commands++;
             profile->triangles_vdp1_emitted++;
             profile->triangles_emitted++;
             return;
         } else if (shade_path == SM64_SATURN_SHADE_FLAT_REPLACE) {
+            cmdt->cmd_link = painter_bin;
             sm64_saturn_gouraud_bank_note_saved(gouraud_bank);
             profile->flat_primitives++;
             profile->triangles_vdp1_emitted++;
             profile->triangles_emitted++;
             return;
         } else if (table != NULL) {
+            cmdt->cmd_link = painter_bin;
             profile->gouraud_primitives++;
             profile->triangles_vdp1_emitted++;
             profile->triangles_emitted++;
@@ -3369,6 +3654,7 @@ static void demo_emit_terrain_result(
                 .cc_mode = VDP1_CMDT_CC_REPLACE});
             vdp1_cmdt_color_set(cmdt, RGB1555(
                 1, primitive->rgb[0], primitive->rgb[1], primitive->rgb[2]));
+            cmdt->cmd_link = painter_bin;
             profile->gouraud_bank_overflow++;
             profile->pipeline_faults++;
             profile->triangles_vdp1_emitted++;
@@ -3394,6 +3680,7 @@ static void demo_emit_terrain_result(
             (uint16_t)(primitive->clut_offset / sizeof(vdp1_clut_t)),
             VDP1_CMDT_CC_REPLACE, shape_vertices);
         if (bound) {
+            cmdt->cmd_link = painter_bin;
             profile->texture_commands++;
             profile->triangles_vdp1_emitted++;
             profile->triangles_emitted++;
@@ -3434,6 +3721,7 @@ static void demo_emit_terrain_result(
             }
         }
     }
+    cmdt->cmd_link = painter_bin;
     profile->triangles_vdp1_emitted++;
     profile->triangles_emitted++;
 }
@@ -3526,7 +3814,10 @@ static void __attribute__((unused)) demo_emit_mario_range(void *opaque, uint16_t
         if (((uint16_t)(ordinal - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled())
             break;
-        const uint16_t primitive = s_actor_draw_order[ordinal];
+        const sm64_saturn_actor_draw_ref_t *const ref =
+            demo_actor_draw_ref_from_order(s_actor_draw_order[ordinal]);
+        if (ref == NULL) continue;
+        const uint16_t primitive = ref->primitive_id;
         const uint16_t *indices = sm64_mario_primitives[primitive];
         const int16_vec2_t vertices[4] = {
             INT16_VEC2_INITIALIZER(demo_actor_projected_read(indices[1])->x,
@@ -3545,8 +3836,8 @@ static void __attribute__((unused)) demo_emit_mario_range(void *opaque, uint16_t
             const uint16_t corners[4] = {indices[1], indices[2], indices[3],
                                          indices[4]};
             for (uint8_t corner = 0; corner < 4U; corner++) {
-                const uint8_t intensity = s_actor_light_intensity != NULL
-                    ? s_actor_light_intensity[corners[corner]] : 31U;
+                const uint8_t intensity =
+                    s_mario_transform_context.light_intensity[corners[corner]];
                 const uint8_t r = (uint8_t)((rgb[0] * intensity) / 31U);
                 const uint8_t g = (uint8_t)((rgb[1] * intensity) / 31U);
                 const uint8_t b = (uint8_t)((rgb[2] * intensity) / 31U);
@@ -3568,6 +3859,7 @@ static void __attribute__((unused)) demo_emit_mario_range(void *opaque, uint16_t
             vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
         }
         vdp1_cmdt_vtx_set(cmdt, vertices);
+        cmdt->cmd_link = (uint16_t)(ref->sort_key >> 16);
         const uint16_t texture_start = sm64_mario_texture_tile_start[primitive];
         if (texture_start != SM64_MARIO_TEXTURE_TILE_NONE &&
             context->partitions != NULL) {
@@ -3581,18 +3873,19 @@ static void __attribute__((unused)) demo_emit_mario_range(void *opaque, uint16_t
                 INT16_VEC2_INITIALIZER(demo_actor_projected_read(texture_indices[2])->x,
                                        demo_actor_projected_read(texture_indices[2])->y),
                 INT16_VEC2_INITIALIZER(demo_actor_projected_read(texture_indices[2])->x,
-                                       demo_actor_projected_read(texture_indices[2])->y)};
+                                        demo_actor_projected_read(texture_indices[2])->y)};
             vdp1_cmdt_t *detail = &context->cmdts[s_actor_texture_slots[ordinal]];
-            (void)sm64_saturn_ir_texture_bind_rgb1555(
-                detail, context->partitions,
-                SATURN_MARIO_TEXTURE_BASE_OFFSET +
-                    (texture_start / 4U) *
-                    (SM64_MARIO_TEXTURE_UV_TILE_WIDTH *
-                     SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t)),
-                SM64_MARIO_TEXTURE_UV_TILE_WIDTH,
-                SM64_MARIO_TEXTURE_UV_TILE_WIDTH,
-                VDP1_CMDT_CC_REPLACE, texture_vertices);
-            context->stats[lane].texture_commands++;
+            if (sm64_saturn_ir_texture_bind_rgb1555(
+                    detail, context->partitions,
+                    SATURN_MARIO_TEXTURE_BASE_OFFSET +
+                        (texture_start / 4U) *
+                        (SM64_MARIO_TEXTURE_UV_TILE_WIDTH *
+                         SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t)),
+                    SM64_MARIO_TEXTURE_UV_TILE_WIDTH,
+                    SM64_MARIO_TEXTURE_UV_TILE_WIDTH,
+                    VDP1_CMDT_CC_REPLACE, texture_vertices)) {
+                detail->cmd_link = (uint16_t)(ref->sort_key >> 16);
+            }
         }
         context->stats[lane].triangles_emitted++;
     }
@@ -3701,7 +3994,9 @@ static bool demo_prepare_mario(
         for (uint16_t i = 0U; i < count; i++) {
             const uint16_t primitive_id = refs[i].primitive_id;
             if (primitive_id >= SM64_MARIO_PRIMITIVE_COUNT) return false;
-            s_actor_draw_order[s_actor_draw_count++] = primitive_id;
+            s_actor_draw_order[s_actor_draw_count++] =
+                (uint16_t)(i | (pass == 0U ? 0U :
+                                  DEMO_ACTOR_DRAW_REF_TRANSLUCENT));
         }
     }
     s_actor_transform_ref_count = meshlet_output.position_count;
@@ -3715,11 +4010,15 @@ static uint16_t demo_finalize_mario_draws(void)
     s_actor_draw_count = 0U;
     s_actor_texture_count = 0U;
     for (uint16_t i = 0U; i < candidate_count; i++) {
-        const uint16_t primitive_id = s_actor_draw_order[i];
+        const uint16_t order = s_actor_draw_order[i];
+        const sm64_saturn_actor_draw_ref_t *const ref =
+            demo_actor_draw_ref_from_order(order);
+        if (ref == NULL) continue;
+        const uint16_t primitive_id = ref->primitive_id;
         if (demo_actor_ref_read(primitive_id)->primitive_id ==
             DEMO_ACTOR_PRIMITIVE_REJECTED)
             continue;
-        s_actor_draw_order[s_actor_draw_count++] = primitive_id;
+        s_actor_draw_order[s_actor_draw_count++] = order;
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
         if (sm64_mario_texture_tile_start[primitive_id] !=
             SM64_MARIO_TEXTURE_TILE_NONE)
@@ -3737,13 +4036,17 @@ static void demo_reserve_mario_gouraud(
     memset(s_actor_gouraud, 0, sizeof(s_actor_gouraud));
     memset(s_actor_gouraud_addresses, 0, sizeof(s_actor_gouraud_addresses));
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
+    const uint32_t required_tables = s_actor_draw_count;
+    if (gouraud_bank == NULL ||
+        required_tables > (uint32_t)gouraud_bank->capacity -
+                              (uint32_t)gouraud_bank->used) {
+        profile->gouraud_bank_overflow += required_tables;
+        profile->pipeline_faults++;
+        return;
+    }
     for (uint16_t i = 0; i < s_actor_draw_count; i++) {
         s_actor_gouraud[i] = sm64_saturn_gouraud_bank_alloc(
             gouraud_bank, &s_actor_gouraud_addresses[i]);
-        if (s_actor_gouraud[i] == NULL) {
-            profile->gouraud_bank_overflow++;
-            profile->pipeline_faults++;
-        }
     }
 #else
     (void)gouraud_bank;
@@ -3771,7 +4074,10 @@ static void demo_emit_mario(
                                            s_actor_command_count);
         for (uint16_t i = 0; i < s_actor_draw_count; i++) {
             s_actor_slots[i] = command_slot++;
-            if (sm64_mario_texture_tile_start[s_actor_draw_order[i]] !=
+            const sm64_saturn_actor_draw_ref_t *const ref =
+                demo_actor_draw_ref_from_order(s_actor_draw_order[i]);
+            if (ref == NULL) return;
+            if (sm64_mario_texture_tile_start[ref->primitive_id] !=
                 SM64_MARIO_TEXTURE_TILE_NONE)
                 s_actor_texture_slots[i] = command_slot++;
         }
@@ -3784,8 +4090,8 @@ static void demo_emit_mario(
             .primitives = NULL,
             .cmdts = backend->list.cmdts,
             .partitions = partitions,
-            .gouraud_tables = NULL,
-            .gouraud_addresses = NULL,
+            .gouraud_tables = s_actor_gouraud,
+            .gouraud_addresses = s_actor_gouraud_addresses,
             .stats = {{0U, 0U, 0U}, {0U, 0U, 0U}}
         };
         demo_emit_mario_range(&actor_emit, 0U, s_actor_draw_count);
@@ -3797,7 +4103,10 @@ static void demo_emit_mario(
     }
 #endif
     for (uint16_t i = 0; i < s_actor_draw_count; i++) {
-        const uint16_t *primitive = sm64_mario_primitives[s_actor_draw_order[i]];
+        const sm64_saturn_actor_draw_ref_t *const ref =
+            demo_actor_draw_ref_from_order(s_actor_draw_order[i]);
+        if (ref == NULL) continue;
+        const uint16_t *primitive = sm64_mario_primitives[ref->primitive_id];
         const int16_vec2_t vertices[4] = {
             INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[1])->x,
                                    demo_actor_projected_read(primitive[1])->y),
@@ -3825,11 +4134,198 @@ static void demo_emit_mario(
             .cc_mode = VDP1_CMDT_CC_REPLACE});
         vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
         vdp1_cmdt_vtx_set(cmdt, vertices);
+        cmdt->cmd_link = (uint16_t)(ref->sort_key >> 16);
         profile->triangles_vdp1_emitted++;
         profile->triangles_emitted++;
         profile->demo_actor_primitives_emitted++;
     }
 }
+
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
+{
+    uint16_t emitted = 0U, gouraud_ordinal = 0U;
+    if (transaction == NULL || transaction->actor_runtime == NULL ||
+        transaction->scene_snapshot == NULL || transaction->profile == NULL)
+        return false;
+    if (transaction->scene_snapshot->actor_instance_count == 0U) {
+        transaction->generic_actor_gouraud_count = 0U;
+        return true;
+    }
+    if (transaction->actor_handoff.state !=
+        SM64_SATURN_ACTOR_HANDOFF_BATCHED)
+        return false;
+    for (uint16_t descriptor_index = 0U;
+         descriptor_index < transaction->actor_runtime->queue.count;
+         descriptor_index++) {
+        const sm64_saturn_actor_instance_descriptor_t *const descriptor =
+            sm64_saturn_actor_instance_queue_descriptor(
+                &transaction->actor_runtime->queue,
+                transaction->actor_handoff.generation, descriptor_index);
+        const sm64_saturn_actor_instance_result_t *const result =
+            sm64_saturn_actor_instance_queue_result(
+                &transaction->actor_runtime->queue,
+                transaction->actor_handoff.generation, descriptor_index);
+        const sm64_saturn_actor_instance_snapshot_t *const snapshot =
+            descriptor == NULL ? NULL :
+            &transaction->actor_handoff.snapshots[descriptor->snapshot_index];
+        sm64_saturn_actor_bundle_resolution_t resolution;
+        sm64_saturn_actor_texture_mapping_t mapping;
+        vdp1_vram_partitions_t actor_texture_partitions;
+        if (descriptor == NULL || result == NULL || snapshot == NULL ||
+            result->reason != SM64_SATURN_ACTOR_QUARANTINE_NONE ||
+            result->output_count > descriptor->output_capacity ||
+            !sm64_saturn_source_scene_bundle_resolve(
+                snapshot, 0U,
+                &transaction->actor_runtime->outputs[descriptor->output_offset],
+                descriptor->output_capacity, &resolution))
+            return false;
+        sm64_saturn_actor_pose_view_t pose;
+        bool valid = sm64_saturn_actor_pose_evaluate(
+            &resolution.bank, snapshot->animation_id, snapshot->animation_frame,
+            &resolution.workspace.pose_work, &pose);
+        const sm64_saturn_actor_texture_publication_t *const publication =
+            sm64_saturn_source_scene_bundle_textures(
+                resolution.residency_generation);
+        valid = valid && pose.vertices != NULL &&
+            pose.vertex_count == resolution.bank.bank.vertex_count &&
+            publication != NULL &&
+            sm64_saturn_source_scene_bundle_texture_partitions(
+                resolution.residency_generation, &actor_texture_partitions) &&
+            sm64_saturn_actor_texture_residency_lookup(
+                publication, resolution.residency_generation,
+                resolution.bank.bank.source_hash_words[0], &mapping);
+        for (uint16_t local = 0U; valid && local < result->output_count;
+             local++) {
+                const sm64_saturn_actor_output_record_t *const record =
+                    &transaction->actor_runtime->outputs[
+                        descriptor->output_offset + local];
+                sm64_saturn_actor_primitive_t primitive;
+                sm64_saturn_actor_render_binding_t binding;
+                sm64_saturn_actor_target_material_t material;
+                sm64_saturn_actor_material_color_t color;
+                sm64_saturn_projected_vertex_t projected[4];
+                int16_vec2_t vertices[4];
+                vdp1_cmdt_t command = {0};
+                const uint16_t painter_bin =
+                    (uint16_t)(record->sort_key >> 16);
+                bool projected_visible = true;
+                valid = sm64_saturn_actor_bank_primitive(
+                        &resolution.bank, record->primitive_id,
+                        &primitive) &&
+                    sm64_saturn_actor_bank_render_binding(
+                        &resolution.bank, record->primitive_id,
+                        &binding) &&
+                    primitive.material_id == binding.material_id &&
+                    sm64_saturn_actor_bank_target_material(
+                        &resolution.bank, binding.material_id, &material) &&
+                    sm64_saturn_actor_bank_material_color(
+                        &resolution.bank, binding.material_id, &color) &&
+                    painter_bin < SM64_SATURN_TERRAIN_DEPTH_BIN_COUNT;
+                for (uint16_t corner = 0U; valid && corner < 4U; corner++) {
+                    sm64_saturn_vec3i_t world, view_position;
+                    valid = demo_generic_actor_world_vertex(
+                        snapshot, &resolution.workspace.pose_work,
+                        primitive.vertex[corner], &world);
+                    if (valid && !sm64_saturn_ir_transform_one(
+                            &transaction->actor_job, world, &view_position,
+                            &projected[corner])) {
+                        projected_visible = false;
+                        break;
+                    }
+                    if (!valid) break;
+                    vertices[corner].x = projected[corner].x;
+                    vertices[corner].y = projected[corner].y;
+                }
+                if (!valid) break;
+                if (!projected_visible) {
+                    transaction->profile->reject_near_far++;
+                    emitted++;
+                    continue;
+                }
+                const int32_t cross =
+                    (int32_t)(vertices[1].x - vertices[0].x) *
+                        (vertices[2].y - vertices[0].y) -
+                    (int32_t)(vertices[1].y - vertices[0].y) *
+                        (vertices[2].x - vertices[0].x);
+                if (cross <= 0) {
+                    transaction->profile->reject_degenerate++;
+                    emitted++;
+                    continue;
+                } else if (!sm64_saturn_actor_material_bind(
+                               &command, &actor_texture_partitions,
+                               &resolution.bank, record->primitive_id,
+                               &mapping, resolution.residency_generation,
+                               vertices)) {
+                    valid = false;
+                }
+                const bool uses_gouraud =
+                    material.recipe == SM64_SATURN_ACTOR_RECIPE_FLAT_GOURAUD ||
+                    material.recipe == SM64_SATURN_ACTOR_RECIPE_CLUT16_GOURAUD ||
+                    material.recipe == SM64_SATURN_ACTOR_RECIPE_RGB1555_GOURAUD;
+                if (valid && uses_gouraud) {
+                    const uint32_t table_index =
+                        (uint32_t)transaction->generic_actor_gouraud_first +
+                        gouraud_ordinal;
+                    if (table_index >= transaction->gouraud_bank->used ||
+                        table_index >= transaction->gouraud_bank->capacity) {
+                        valid = false;
+                        break;
+                    }
+                    sm64_saturn_gouraud_table_t *const table =
+                        &transaction->gouraud_bank->staging[table_index];
+                    for (uint16_t corner = 0U; corner < 4U; corner++) {
+                        const uint8_t intensity =
+                            resolution.workspace.pose_work.light_intensity[
+                                primitive.vertex[corner]];
+                        const uint8_t r = (uint8_t)(
+                            ((uint16_t)color.rgb555[0] * intensity + 127U) /
+                            255U);
+                        const uint8_t g = (uint8_t)(
+                            ((uint16_t)color.rgb555[1] * intensity + 127U) /
+                            255U);
+                        const uint8_t b = (uint8_t)(
+                            ((uint16_t)color.rgb555[2] * intensity + 127U) /
+                            255U);
+                        const rgb1555_t shade = RGB1555(1, r, g, b);
+                        table->colors[corner] = shade.raw;
+                    }
+                    vdp1_cmdt_color_set(&command, (rgb1555_t){
+                        .raw = sm64_saturn_gouraud_neutral_color()});
+                    vdp1_cmdt_gouraud_base_set(
+                        &command,
+                        (vdp1_vram_t)(transaction->gouraud_bank->vram_base +
+                            table_index * sizeof(*table)));
+                    gouraud_ordinal++;
+                }
+                if (valid) {
+                    vdp1_cmdt_t *const target =
+                        sm64_saturn_vdp1_backend_reserve(
+                            transaction->backend, 1U);
+                    if (target == NULL) {
+                        valid = false;
+                        break;
+                    }
+                    vdp1_cmdt_end_clear(&command);
+                    command.cmd_link = painter_bin;
+                    *target = command;
+                    transaction->profile->triangles_vdp1_emitted++;
+                    transaction->profile->triangles_emitted++;
+                    transaction->profile->demo_actor_primitives_emitted++;
+                    if (binding.tile_id != UINT16_MAX)
+                        transaction->profile->texture_commands++;
+                }
+                emitted++;
+            }
+        if (!sm64_saturn_source_scene_bundle_release(
+                0U, resolution.residency_generation))
+            valid = false;
+        if (!valid) return false;
+    }
+    if (emitted != transaction->generic_actor_output_count) return false;
+    return gouraud_ordinal <= transaction->generic_actor_gouraud_count;
+}
+#endif
 
 static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
 {
@@ -3865,6 +4361,7 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
         .coord_max = terrain_job.coord_max,
         .clip_near = false
     };
+    transaction->actor_job = actor_job;
     /* Mario keeps the selected build tier while terrain cluster admission
      * below derives each tier from the immutable camera view and its own
      * hysteretic state before any worker transforms positions. */
@@ -3907,6 +4404,9 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
     const bool actor_prepare_ok =
         demo_prepare_mario(snapshot, pose, &actor_job, profile,
                            &actor_vertex_count);
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+    if (!demo_generic_actor_prepare(transaction, generation)) return false;
+#endif
     if (actor_prepare_ok)
         s_actor_publish_sequence =
             sm64_saturn_render_generation_next(s_actor_publish_sequence);
@@ -4010,6 +4510,8 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
     const uint16_t frame_job_count = transaction->frame_job_count;
     const vdp1_vram_partitions_t *const partitions = &transaction->partitions;
 
+#if SATURN_DIAGNOSTIC_MODE
+    /* The normal BOB profile has no dashboard consumer for these counters. */
     sm64_saturn_render_job_runtime_telemetry_t queue_telemetry;
     sm64_saturn_render_job_runtime_refresh_terminal_telemetry();
     const bool telemetry_ok =
@@ -4041,6 +4543,7 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
             queue_telemetry.slave_failures;
         profile->render_job_quarantined = queue_telemetry.quarantined;
     }
+#endif
     const bool terminal = sm64_saturn_render_job_queue_all_terminal(
         &s_render_job_queue, transform_generation);
     bool queue_ok = terminal &&
@@ -4083,12 +4586,25 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
         (uint32_t)sizeof(sm64_saturn_visible_terrain_t);
     const uint16_t actor_command_count = actor_vertex_count != 0U
         ? demo_finalize_mario_draws() : 0U;
+    uint32_t essential_actor_commands = actor_command_count;
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+    essential_actor_commands += transaction->generic_actor_output_count;
+#endif
+    if (essential_actor_commands > UINT16_MAX) return false;
     sm64_saturn_gouraud_bank_begin(gouraud_bank);
     /* Essential actor shading is reserved before optional world shading.
      * Previously terrain consumed the Gouraud bank first, which made Mario
      * flat even on frames where his command batch happened to fit. */
     if (actor_vertex_count != 0U)
         demo_reserve_mario_gouraud(gouraud_bank, profile);
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+    if (transaction->generic_actor_gouraud_count >
+            gouraud_bank->capacity - gouraud_bank->used)
+        return false;
+    transaction->generic_actor_gouraud_first = gouraud_bank->used;
+    gouraud_bank->used = (uint16_t)(
+        gouraud_bank->used + transaction->generic_actor_gouraud_count);
+#endif
     sm64_saturn_vdp1_backend_begin(backend);
     /* Preserve Mario's all-or-nothing textured tail batch, then retain the
      * nearest terrain results if the command arena is oversubscribed.
@@ -4097,7 +4613,7 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
      * be emitted far-to-near, so select its near tail before lowering it. */
     const uint16_t terrain_command_budget =
         sm64_saturn_command_arena_budget_before_tail(
-            &backend->commands, actor_command_count);
+            &backend->commands, (uint16_t)essential_actor_commands);
     const uint16_t terrain_first =
         s_terrain_emit_count > terrain_command_budget
         ? (uint16_t)(s_terrain_emit_count - terrain_command_budget) : 0U;
@@ -4122,7 +4638,19 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
      * reserved for SCSP/audio service rather than geometry dispatch. */
     if (actor_vertex_count != 0U)
         demo_emit_mario(snapshot, pose, backend, partitions, profile);
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+    if (!demo_generic_actor_emit(transaction)) return false;
+    if (transaction->scene_snapshot->actor_instance_count != 0U &&
+        (!sm64_saturn_actor_runtime_handoff_acknowledge_consumed(
+             &transaction->actor_handoff) ||
+         !sm64_saturn_actor_runtime_handoff_retire(
+             &transaction->actor_handoff)))
+        return false;
+#endif
     sm64_saturn_vdp1_backend_finish(backend);
+    if (!sm64_saturn_vdp1_backend_link_depth_bins(
+            backend, SM64_SATURN_TERRAIN_DEPTH_BIN_COUNT))
+        return false;
     /* Published profile diagnostics: never read to choose an allocation,
      * scheduling, LOD, or promotion decision. */
     profile->gouraud_tables_saved += gouraud_bank->saved_tables;
@@ -4172,10 +4700,13 @@ bool sm64_saturn_demo_render_start_frame(
     sm64_saturn_fast3d_profile_t *profile,
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_render_snapshot_t *scene_snapshot,
+    sm64_saturn_actor_runtime_storage_t *actor_runtime,
     uint32_t generation)
 {
     if (backend == NULL || gouraud_bank == NULL || profile == NULL ||
-        snapshot == NULL || pose == NULL || generation == 0U ||
+        snapshot == NULL || pose == NULL || scene_snapshot == NULL ||
+        actor_runtime == NULL || generation == 0U ||
         s_demo_render_transaction.lifecycle.active)
         return false;
     if (!sm64_saturn_lod_lifetime_begin(&s_lod_lifetime, generation))
@@ -4185,6 +4716,8 @@ bool sm64_saturn_demo_render_start_frame(
     s_demo_render_transaction.profile = profile;
     s_demo_render_transaction.snapshot = snapshot;
     s_demo_render_transaction.pose = pose;
+    s_demo_render_transaction.scene_snapshot = scene_snapshot;
+    s_demo_render_transaction.actor_runtime = actor_runtime;
     if (!sm64_saturn_render_lifecycle_start(
             &s_demo_render_transaction.lifecycle,
             &s_demo_render_lifecycle_ops, &s_demo_render_transaction,
@@ -4196,6 +4729,8 @@ bool sm64_saturn_demo_render_start_frame(
         s_demo_render_transaction.profile = NULL;
         s_demo_render_transaction.snapshot = NULL;
         s_demo_render_transaction.pose = NULL;
+        s_demo_render_transaction.scene_snapshot = NULL;
+        s_demo_render_transaction.actor_runtime = NULL;
         return false;
     }
     return true;
@@ -4222,6 +4757,8 @@ sm64_saturn_demo_render_status_t sm64_saturn_demo_render_poll_frame(
     s_demo_render_transaction.profile = NULL;
     s_demo_render_transaction.snapshot = NULL;
     s_demo_render_transaction.pose = NULL;
+    s_demo_render_transaction.scene_snapshot = NULL;
+    s_demo_render_transaction.actor_runtime = NULL;
     return status == SM64_SATURN_RENDER_LIFECYCLE_COMPLETE
         ? SM64_SATURN_DEMO_RENDER_COMPLETE
         : SM64_SATURN_DEMO_RENDER_FAILED;

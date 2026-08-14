@@ -477,12 +477,14 @@ static bool actor_meshlet_core(
 {
     uint32_t opaque_count = 0U, translucent_count = 0U;
     uint16_t admitted_positions = 0U, admitted_meshlets = 0U, culled = 0U;
+    uint16_t opaque_bins[SM64_SATURN_ACTOR_DEPTH_BIN_COUNT] = {0};
     uint16_t translucent_bins[SM64_SATURN_ACTOR_DEPTH_BIN_COUNT] = {0};
 
     if (draw_capacity == 0U && failure_reason != NULL)
         *failure_reason =
             SM64_SATURN_ACTOR_MESHLET_QUARANTINE_OUTPUT_OVERFLOW;
     if (source == NULL || transform == NULL || view == NULL || output == NULL ||
+        source->kind > ACTOR_MESHLET_SOURCE_BANK ||
         ((combined_records != NULL && draw_capacity == 0U) ||
          (combined_records == NULL &&
           (output->opaque == NULL || output->translucent == NULL))) ||
@@ -529,8 +531,9 @@ static bool actor_meshlet_core(
             if (admitted_positions == UINT16_MAX) return false;
             admitted_positions++;
         }
-        if (span.opacity != 0U) {
+        {
             const uint8_t bin = actor_depth_bin(depth_bounds.furthest_q16);
+            if (span.opacity != 0U) {
             translucent_count += span.primitive_count;
             if (translucent_count > UINT16_MAX ||
                 span.primitive_count >
@@ -538,9 +541,15 @@ static bool actor_meshlet_core(
                 return false;
             translucent_bins[bin] = (uint16_t)(translucent_bins[bin] +
                                                 span.primitive_count);
-        } else {
-            opaque_count += span.primitive_count;
-            if (opaque_count > UINT16_MAX) return false;
+            } else {
+                opaque_count += span.primitive_count;
+                if (opaque_count > UINT16_MAX ||
+                    span.primitive_count >
+                        (uint32_t)UINT16_MAX - opaque_bins[bin])
+                    return false;
+                opaque_bins[bin] = (uint16_t)(opaque_bins[bin] +
+                                               span.primitive_count);
+            }
         }
         if (opaque_count + translucent_count > draw_capacity) {
             if (failure_reason != NULL)
@@ -557,9 +566,10 @@ static bool actor_meshlet_core(
     }
 
     {
-        uint16_t opaque_cursor = 0U, position_cursor = 0U;
+        uint16_t opaque_cursor[SM64_SATURN_ACTOR_DEPTH_BIN_COUNT];
+        uint16_t position_cursor = 0U;
         uint16_t translucent_cursor[SM64_SATURN_ACTOR_DEPTH_BIN_COUNT];
-        uint16_t cursor = 0U;
+        uint16_t opaque_offset = 0U, translucent_offset = 0U;
         sm64_saturn_actor_draw_ref_t *opaque_output = combined_records != NULL
             ? combined_records : output->opaque;
         sm64_saturn_actor_draw_ref_t *translucent_output =
@@ -567,8 +577,11 @@ static bool actor_meshlet_core(
                 ? combined_records + opaque_count : output->translucent;
         for (int16_t bin = SM64_SATURN_ACTOR_DEPTH_BIN_COUNT - 1U;
              bin >= 0; bin--) {
-            translucent_cursor[bin] = cursor;
-            cursor = (uint16_t)(cursor + translucent_bins[bin]);
+            opaque_cursor[bin] = opaque_offset;
+            opaque_offset = (uint16_t)(opaque_offset + opaque_bins[bin]);
+            translucent_cursor[bin] = translucent_offset;
+            translucent_offset =
+                (uint16_t)(translucent_offset + translucent_bins[bin]);
         }
         memset(position_seen, 0, source->vertex_count);
         for (uint16_t meshlet = 0U; meshlet < source->meshlet_count; meshlet++) {
@@ -600,11 +613,17 @@ static bool actor_meshlet_core(
                                           &primitive);
                 ref.meshlet_id = meshlet;
                 ref.primitive_id = primitive;
-                ref.sort_key = ((uint32_t)bin << 16) | primitive;
+                /* Keep the frozen static-Mario output byte contract.  Queue
+                 * records have their primitive ID in a separate immutable
+                 * field, so their low sort bits can carry the one admission
+                 * fact needed for final lowering without another bank walk. */
+                ref.sort_key = ((uint32_t)bin << 16) |
+                    (source->kind == ACTOR_MESHLET_SOURCE_MARIO
+                        ? primitive : 0U);
                 if (span.opacity != 0U)
                     translucent_output[translucent_cursor[bin]++] = ref;
                 else
-                    opaque_output[opaque_cursor++] = ref;
+                    opaque_output[opaque_cursor[bin]++] = ref;
             }
         }
         if (combined_records != NULL) {

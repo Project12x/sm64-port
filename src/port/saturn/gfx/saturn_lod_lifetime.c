@@ -1,4 +1,5 @@
 #include "saturn_lod_lifetime.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <string.h>
 
@@ -13,6 +14,7 @@ static bool apply_scene(sm64_saturn_lod_lifetime_t *lifetime,
     return changed;
 }
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_lod_lifetime_init(
     sm64_saturn_lod_lifetime_t *lifetime,
     uint8_t *tiers, size_t tier_count,
