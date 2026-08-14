@@ -118,6 +118,45 @@ comparison remains unresolved**
   candidate; real audio remains a later causal live change after owner Mario
   acceptance.
 
+## 2026-08-14 — recovery audit: stop duplicate Mario/audio attempts
+
+- The focused A9A Mario source-policy contract is present in both the isolated
+  donor and the current dirty renderer: material RGB times source light in the
+  Gouraud table, neutral polygon base, and RGB1555 detail with `CC_REPLACE`.
+  The test is a code guardrail only; it does not identify a new live behavior
+  change.  A rebuild from that condition would be duplicate work and is not
+  authorized.
+- Four direct sourceboot audio CUEs were built as negative evidence.  Their
+  final target reads left rebuilt `_s_active` as eight zero bytes after 1,200
+  post-BIOS frames, including the final soundtest-style volatile driver/PCM
+  copy route (`fdeeca232b1d028d25d5dbc0dd7c79ac661b53ebb3b1f04ce162ab428c2fa60e`).
+  The same custom PCM68K binary reaches READY in standalone soundtest.  This
+  sourceboot experiment exceeded the two-attempt budget and is terminal; no
+  fifth variant or audible-success claim is permitted.
+- The current generic BOB route remains rejected (zero presentation events in
+  its bounded diagnostic; normal build may fail actor-family closure validation).
+  The historical donor CUE is diagnostic-only and still awaits an owner visual
+  verdict.  No Bob-omb, audio, cadence, or Whomp’s Fortress gate advances.
+- Next action: capture/inspect the actual scene-ready donor VDP1 Mario records
+  (order/link, PMOD, GRDA, base color, and texture source).  Only an observed
+  mismatch may justify one local Mario patch and a new CUE.  If no mismatch is
+  found, request the owner’s verdict on the named donor artifact rather than
+  opening new implementation work.
+
+## 2026-08-14 — sourceboot direct-SFX route retired
+
+- The semantic-audio tree still cannot be used as a music donor because its
+  linked MC68000 PCM image drops source sequence commands.  The isolated donor
+  tested the real grass-jump event `0x04018080` through the soundtest-style
+  cold-boot/mailbox/voice route, but four target CUE attempts left `_s_active`
+  zero after 1,200 post-BIOS frames.  The standalone sound test reaches READY
+  with the same custom PCM68K binary.
+- This disproves the tested sourceboot integration variants; it does not prove
+  an audible event, a music sequence, or an emulator configuration defect.  No
+  more sourceboot-audio changes, manual launches, or architecture work are
+  authorized from this preflight.  The next audio change requires telemetry
+  that identifies the distinct game-entry-to-driver activation boundary.
+
 ## Non-negotiable stop rules
 
 - Two failed live attempts or two hours on one regression triggers donor replacement or removal, not more abstraction.

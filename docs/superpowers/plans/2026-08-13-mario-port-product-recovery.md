@@ -23,6 +23,16 @@ candidate package/actor/audio infrastructure only when it produces a new live
 result within two attempts or two hours; otherwise bypass it without inventing
 a replacement format.
 
+**2026-08-14 recovery correction:** The isolated donor and current renderer
+already share the focused A9A Mario color contract (source-material times
+light Gouraud, neutral base, RGB1555 `CC_REPLACE`).  Do not make a duplicate
+Mario patch or build from that source test.  Four sourceboot direct-audio CUEs
+left the target driver guard inactive; that route is terminal negative evidence
+and is not an audio donor.  The next permitted behavior work is a live VDP1
+Mario-command observation that names a discrepant record, or a named-owner
+manual verdict on the existing donor CUE.  No new package, actor, residency,
+format, scheduler, level, or audio architecture work is authorized first.
+
 **Tech stack:** Original SM64 source game, SH-2 C, MC68000, Yaul/VDP1/VDP2/
 SCSP, 4 MiB DRAM cartridge, repository MSYS wrapper, Ymir headless/desktop,
 existing capture and profile tools.
@@ -323,6 +333,19 @@ actors before audio.
 
 **Product result:** The accepted BOB CUE plays one real music sequence and one
 game-triggered SFX without regressing rendering or cadence.
+
+**2026-08-14 direct-SFX result (terminal):** The visual donor deliberately
+links a no-op `source_audio_stub.c`; the current semantic-audio tree cannot be
+used as a music donor because its actually linked MC68000 PCM driver drops
+sequence commands.  Four direct sourceboot CUEs then tested the bounded
+soundtest cold-boot/mailbox/PCM-voice route for the real BOB grass-jump event
+`0x04018080`.  The final soundtest-style volatile copy image left `_s_active`
+zero after 1,200 post-BIOS target frames even though the same custom PCM68K
+binary reaches READY in standalone soundtest.  This route is now preserved as
+negative evidence, not an active implementation plan.  Do not change the
+sourceboot audio seam again until target telemetry names the game-entry-to-
+driver activation boundary.  A real sequence and a real game SFX remain
+mandatory, but neither can be claimed or scheduled from this failed branch.
 
 **Primary files:**
 
