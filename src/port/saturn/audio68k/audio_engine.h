@@ -28,6 +28,7 @@ typedef struct sm64_saturn_audio_engine {
     uint32_t last_service_generation;
     uint32_t malformed_events;
     uint32_t duplicate_generations;
+    uint16_t last_failure;
     bool has_service_generation;
 } sm64_saturn_audio_engine_t;
 

@@ -30,6 +30,23 @@ envelope, desired-voice, and slot-shadow work independent of game VBlank.
 Neither the example's `sdrv.bin`/PCM assets nor its native shared C structures
 are copied or distributed.
 
+### 2026-08-13 sourceboot cold-boot ordering
+
+The normal sourceboot and standalone diagnostic loaders use the reference only
+as a **pattern** for one cold-boot transition: `SNDOFF`, 512-KiB mode
+selection, a full `[0x25A00000, 0x25A80000)` SCSP-RAM clear, validated
+driver/metadata/PCM copies, then one final `SNDON`. No example source, binary,
+scheduler, slot logic, or shared C structure is copied. The reference's warm
+enable remains rejected because executing uncleared SCSP RAM is incompatible
+with sourceboot's live VDP/SCU process. The first safe-order CUE
+(`id-c2e8129e…`) still black-screened: its boot trace stopped at
+`bootstrap-retired`, and Ymir logged `SNDOFF` but no subsequent `SNDON`.
+The exact cause was an invalid readback assertion on the write-only SCSP mode
+latch. As in the reference, sourceboot now treats the ordered write as issued
+and relies on the later driver `READY`/heartbeat protocol to validate it. The
+outstanding evidence is one ordinary, identity-bound BOB CUE/manual run; this
+record makes no target or audible-success claim.
+
 ## Current increment
 
 `src/port/saturn/audio/saturn_pcm_protocol.h` is original project code. It

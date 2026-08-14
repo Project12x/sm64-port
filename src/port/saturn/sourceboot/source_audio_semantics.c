@@ -8,6 +8,7 @@
  * in s_spatial on the source SH-2.
  */
 #include <stddef.h>
+#include <string.h>
 #include <ultra64.h>
 
 #include "audio/external.h"
@@ -19,20 +20,51 @@
 #include "level_table.h"
 #include "port/saturn/audio/saturn_audio_policy.h"
 #include "port/saturn/audio/saturn_audio_spatial.h"
+#include "source_audio_semantics.h"
 
-s32 gAudioErrorFlags;
-f32 gGlobalSoundSource[3];
-u32 gAudioRandom;
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+#define SOURCE_AUDIO_EXTERNAL_WORKSPACE 1
+#define SOURCE_AUDIO_STATIC_ABI \
+    __attribute__((section(".lwram_bss"), used))
+#else
+#define SOURCE_AUDIO_STATIC_ABI
+#endif
 
-static sm64_saturn_audio_policy_t s_policy;
-static sm64_saturn_audio_spatial_table_t s_spatial;
-static u8 s_moving_speed[SM64_SATURN_AUDIO_BANK_COUNT];
-static u16 s_package_generation = 1U;
-static u32 s_audio_frame_count;
-static u8 s_pending_environment_seq_id;
-static u16 s_pending_environment_generation;
-static bool s_environment_completion_pending;
-static u8 s_initialized;
+typedef struct source_audio_semantic_workspace {
+    sm64_saturn_audio_policy_t policy;
+    sm64_saturn_audio_spatial_table_t spatial;
+    u8 moving_speed[SM64_SATURN_AUDIO_BANK_COUNT];
+    u16 package_generation;
+    u32 audio_frame_count;
+    u8 pending_environment_seq_id;
+    u16 pending_environment_generation;
+    bool environment_completion_pending;
+    u8 initialized;
+} source_audio_semantic_workspace_t;
+
+#if defined(SOURCE_AUDIO_EXTERNAL_WORKSPACE)
+static source_audio_semantic_workspace_t *s_state SOURCE_AUDIO_STATIC_ABI;
+#else
+static source_audio_semantic_workspace_t s_host_state;
+static source_audio_semantic_workspace_t *s_state = &s_host_state;
+#endif
+
+/* These three public ABI values are referenced by the source game objects.
+ * Keep only this 20-byte ABI in static HWRAM; the large policy/spatial state
+ * below is caller-owned main-pool memory. */
+s32 gAudioErrorFlags SOURCE_AUDIO_STATIC_ABI;
+f32 gGlobalSoundSource[3] SOURCE_AUDIO_STATIC_ABI;
+u32 gAudioRandom SOURCE_AUDIO_STATIC_ABI;
+
+#define s_policy (s_state->policy)
+#define s_spatial (s_state->spatial)
+#define s_moving_speed (s_state->moving_speed)
+#define s_package_generation (s_state->package_generation)
+#define s_audio_frame_count (s_state->audio_frame_count)
+#define s_pending_environment_seq_id (s_state->pending_environment_seq_id)
+#define s_pending_environment_generation (s_state->pending_environment_generation)
+#define s_environment_completion_pending (s_state->environment_completion_pending)
+#define s_initialized (s_state->initialized)
 
 #define STUB_LEVEL(_0, _1, _2, volume, _4, _5, _6, _7, _8) volume,
 #define DEFINE_LEVEL(_0, _1, _2, _3, _4, volume, _6, _7, _8, _9, _10) volume,
@@ -83,22 +115,54 @@ static bool source_emit(void *context,
     return sm64_saturn_source_audio_emit_event(event);
 }
 
-static void source_audio_initialize(void)
+size_t sm64_saturn_source_audio_semantic_workspace_bytes(void)
+{
+    return sizeof(source_audio_semantic_workspace_t);
+}
+
+bool sm64_saturn_source_audio_semantic_workspace_bind(void *workspace,
+                                                       size_t workspace_bytes)
+{
+    if (workspace == NULL ||
+        workspace_bytes < sizeof(source_audio_semantic_workspace_t) ||
+        ((uintptr_t)workspace % _Alignof(source_audio_semantic_workspace_t)) !=
+            0U) {
+        return false;
+    }
+    memset(workspace, 0, sizeof(source_audio_semantic_workspace_t));
+    s_state = workspace;
+    s_package_generation = 1U;
+    return true;
+}
+
+static bool source_audio_initialize(void)
 {
     u8 bank;
+    if (s_state == NULL) {
+        return false;
+    }
     sm64_saturn_audio_policy_init(&s_policy, source_emit, NULL);
     sm64_saturn_audio_spatial_init(&s_spatial);
+    gAudioErrorFlags = 0;
+    memset(gGlobalSoundSource, 0, sizeof(gGlobalSoundSource));
+    gAudioRandom = 0U;
     for (bank = 0U; bank < SM64_SATURN_AUDIO_BANK_COUNT; ++bank) {
         s_moving_speed[bank] = 32U;
     }
+    s_package_generation = 1U;
     s_initialized = TRUE;
+    return true;
 }
 
-static void source_audio_ensure_initialized(void)
+static bool source_audio_ensure_initialized(void)
 {
-    if (!s_initialized) {
-        source_audio_initialize();
+    if (s_state == NULL) {
+        return false;
     }
+    if (!s_initialized) {
+        return source_audio_initialize();
+    }
+    return true;
 }
 
 static u16 source_level_acoustic_reach(void)
@@ -223,6 +287,9 @@ static void consume_driver_completions(void)
 
 struct SPTask *create_next_audio_frame_task(void)
 {
+    if (!source_audio_ensure_initialized()) {
+        return NULL;
+    }
     s_audio_frame_count++;
     gAudioRandom = (gAudioRandom + s_audio_frame_count) * s_audio_frame_count;
     return NULL;
@@ -234,7 +301,9 @@ void play_sound(s32 soundBits, f32 *pos)
     sm64_saturn_audio_spatial_params_t params;
     u8 bank;
 
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     if (pos == NULL || soundBits == NO_SOUND) {
         return;
     }
@@ -270,7 +339,9 @@ void play_sound(s32 soundBits, f32 *pos)
 
 void audio_signal_game_loop_tick(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     refresh_active_source_positions();
     sm64_saturn_audio_policy_tick(&s_policy);
     consume_driver_completions();
@@ -279,46 +350,67 @@ void audio_signal_game_loop_tick(void)
 
 void seq_player_fade_out(u8 player, u16 fadeDuration)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_fade_player(&s_policy, player, 0U,
                                                fadeDuration);
 }
 
 void fade_volume_scale(u8 player, u8 targetScale, u16 fadeDuration)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_fade_channels(
         &s_policy, player, targetScale, fadeDuration);
 }
 
 void seq_player_lower_volume(u8 player, u16 fadeDuration, u8 percentage)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_lower(&s_policy, player, fadeDuration,
                                          percentage);
 }
 
 void seq_player_unlower_volume(u8 player, u16 fadeDuration)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_unlower(&s_policy, player, fadeDuration);
 }
 
 void set_audio_muted(u8 muted)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_mute(&s_policy, muted != 0U);
 }
 
 void sound_init(void)
 {
-    source_audio_initialize();
+    (void)source_audio_initialize();
 }
 
 void get_currently_playing_sound(u8 bank, u8 *numPlayingSounds,
                                  u8 *numSoundsInBank, u8 *soundId)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        if (numPlayingSounds != NULL) {
+            *numPlayingSounds = 0U;
+        }
+        if (numSoundsInBank != NULL) {
+            *numSoundsInBank = 0U;
+        }
+        if (soundId != NULL) {
+            *soundId = 0U;
+        }
+        return;
+    }
     sm64_saturn_audio_policy_get_playing(&s_policy, bank, numPlayingSounds,
                                          numSoundsInBank, soundId);
 }
@@ -326,7 +418,9 @@ void get_currently_playing_sound(u8 bank, u8 *numPlayingSounds,
 void stop_sound(u32 soundBits, f32 *pos)
 {
     u16 token;
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     token = sm64_saturn_audio_spatial_find(&s_spatial, pos);
     if (token != 0U && sm64_saturn_audio_policy_stop_handle(
                            &s_policy, soundBits, token,
@@ -339,7 +433,9 @@ void stop_sound(u32 soundBits, f32 *pos)
 void stop_sounds_from_source(f32 *pos)
 {
     u16 token;
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     token = sm64_saturn_audio_spatial_find(&s_spatial, pos);
     if (token != 0U) {
         (void)sm64_saturn_audio_policy_stop_source(
@@ -352,7 +448,9 @@ void stop_sounds_from_source(f32 *pos)
 
 void stop_sounds_in_continuous_banks(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_stop_bank(&s_policy, SOUND_BANK_MOVING);
     (void)sm64_saturn_audio_policy_stop_bank(&s_policy, SOUND_BANK_ENV);
     (void)sm64_saturn_audio_policy_stop_bank(&s_policy, SOUND_BANK_AIR);
@@ -361,19 +459,25 @@ void stop_sounds_in_continuous_banks(void)
 
 void sound_banks_disable(UNUSED u8 player, u16 bankMask)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     sm64_saturn_audio_policy_disable_banks(&s_policy, bankMask);
 }
 
 void sound_banks_enable(UNUSED u8 player, u16 bankMask)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     sm64_saturn_audio_policy_enable_banks(&s_policy, bankMask);
 }
 
 void set_sound_moving_speed(u8 bank, u8 speed)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     if (bank < SM64_SATURN_AUDIO_BANK_COUNT) {
         s_moving_speed[bank] = speed;
     }
@@ -425,6 +529,9 @@ static const s32 s_dialog_voice[] = {
 void play_dialog_sound(u8 dialogID)
 {
     u8 speaker;
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     if (dialogID >= DIALOG_COUNT) {
         dialogID = 0U;
     }
@@ -443,47 +550,61 @@ void play_dialog_sound(u8 dialogID)
 
 void play_music(u8 player, u16 seqArgs, u16 fadeTimer)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_play_music(&s_policy, player, seqArgs,
                                                fadeTimer);
 }
 
 void stop_background_music(u16 seqId)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_stop_background(&s_policy, seqId);
 }
 
 void fadeout_background_music(u16 seqId, u16 fadeOut)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_fadeout_background(&s_policy, seqId,
                                                        fadeOut);
 }
 
 void drop_queued_background_music(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     sm64_saturn_audio_policy_drop_queued(&s_policy);
 }
 
 u16 get_current_background_music(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return 0U;
+    }
     return sm64_saturn_audio_policy_current_background(&s_policy);
 }
 
 void play_secondary_music(u8 seqId, u8 bgMusicVolume, u8 volume,
                           u16 fadeTimer)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_play_secondary(
         &s_policy, seqId, bgMusicVolume, volume, fadeTimer);
 }
 
 void func_80321080(u16 fadeTimer)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_stop_secondary(&s_policy, fadeTimer);
 }
 
@@ -491,7 +612,9 @@ void func_803210D4(u16 fadeOutTime)
 {
     const u16 non_menu_banks =
         (u16)(0x03FFU & ~(u16)(1U << SOUND_BANK_MENU));
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     if (s_policy.global_fade_started) {
         return;
     }
@@ -506,35 +629,45 @@ void func_803210D4(u16 fadeOutTime)
 
 void play_course_clear(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_play_jingle(
         &s_policy, SEQ_EVENT_CUTSCENE_COLLECT_STAR, 0U);
 }
 
 void play_peachs_jingle(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_play_jingle(
         &s_policy, SEQ_EVENT_PEACH_MESSAGE, 0U);
 }
 
 void play_puzzle_jingle(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_play_jingle(
         &s_policy, SEQ_EVENT_SOLVE_PUZZLE, 20U);
 }
 
 void play_star_fanfare(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_play_jingle(
         &s_policy, SEQ_EVENT_HIGH_SCORE, 20U);
 }
 
 void play_power_star_jingle(u8 arg0)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     if (arg0 == 0U) {
         s_policy.background_target_volume = 0U;
     }
@@ -544,21 +677,27 @@ void play_power_star_jingle(u8 arg0)
 
 void play_race_fanfare(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_play_jingle(
         &s_policy, SEQ_EVENT_RACE, 20U);
 }
 
 void play_toads_jingle(void)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_play_jingle(
         &s_policy, SEQ_EVENT_TOAD_MESSAGE, 20U);
 }
 
 void sound_reset(u8 presetId)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_reset(&s_policy, presetId < 8U ? presetId
                                                                  : 0U);
     sm64_saturn_audio_spatial_init(&s_spatial);
@@ -566,13 +705,15 @@ void sound_reset(u8 presetId)
 
 void audio_set_sound_mode(u8 mode)
 {
-    source_audio_ensure_initialized();
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
     (void)sm64_saturn_audio_policy_set_sound_mode(&s_policy, mode);
 }
 
 void audio_init(void)
 {
-    source_audio_initialize();
+    (void)source_audio_initialize();
 }
 
 #if defined(VERSION_EU) || defined(VERSION_SH)

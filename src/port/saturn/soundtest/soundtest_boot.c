@@ -40,14 +40,17 @@ sm64_saturn_soundtest_boot_result_t sm64_saturn_soundtest_boot(
     if (!boot->sound_off(boot->context)) {
         return SM64_SATURN_SOUNDTEST_BOOT_SOUND_OFF_FAILED;
     }
+    /* Keep the SCSP CPU stopped while its entire RAM image is replaced.
+     * Sourceboot already owns a running VDP/SCU pipeline; unlike a standalone
+     * sample it must not execute uninitialized SCSP RAM during this handoff. */
     if (!boot->set_512k_mode(boot->context)) {
         return SM64_SATURN_SOUNDTEST_BOOT_512K_MODE_FAILED;
     }
-    for (offset = SM64_SATURN_PCM_MAILBOX_OFFSET;
-         offset < SM64_SATURN_PCM_MAILBOX_OFFSET +
-                      SM64_SATURN_PCM_MAILBOX_BYTES;
-         ++offset) {
+    for (offset = 0U; offset < SM64_SATURN_PCM_SOUND_RAM_BYTES; ++offset) {
         boot->sound_ram[offset] = 0U;
+    }
+    if (!boot->sound_off(boot->context)) {
+        return SM64_SATURN_SOUNDTEST_BOOT_SOUND_OFF_FAILED;
     }
     if (!boot->copy_region(boot->context, boot->sound_ram, boot->driver,
                            boot->driver_bytes) ||

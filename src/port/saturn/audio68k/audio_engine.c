@@ -18,6 +18,41 @@ static uint32_t mul_u16(uint16_t left, uint16_t right)
     return result;
 }
 
+/* Keep target diagnostics precise without weakening the shared validator. */
+static uint16_t request_invalid_reason(
+    const sm64_saturn_voice_request_t *request)
+{
+    uint16_t reason = 0U;
+    uint32_t end;
+    if (request == 0) return 0x0001U;
+    if (request->package_generation == 0U) reason |= 0x0002U;
+    if (request->note_id == 0U) reason |= 0x0004U;
+    if (request->sample_count == 0U) reason |= 0x0008U;
+    if (request->sample_rate == 0U || request->sample_rate > 44100U)
+        reason |= 0x0010U;
+    if (request->tuning_q12 < 1024U || request->tuning_q12 > 16384U)
+        reason |= 0x0020U;
+    if (request->velocity > 127U) reason |= 0x0040U;
+    if (request->sustain_q15 > 0x7fffU) reason |= 0x0080U;
+    if (request->source_class < SM64_SATURN_VOICE_CLASS_MUSIC ||
+        request->source_class > SM64_SATURN_VOICE_CLASS_SFX)
+        reason |= 0x0100U;
+    if (request->attack_ticks == 0U || request->decay_ticks == 0U ||
+        request->release_ticks == 0U)
+        reason |= 0x0200U;
+    if (request->root_note < -96 || request->root_note > 127 ||
+        request->note < -96 || request->note > 127)
+        reason |= 0x0400U;
+    end = request->sound_ram_offset + request->sample_count;
+    if (end < request->sound_ram_offset ||
+        request->sound_ram_offset >= SM64_SATURN_SOUND_RAM_LIMIT ||
+        end > SM64_SATURN_SOUND_RAM_LIMIT)
+        reason |= 0x0800U;
+    if (request->loop != 0U && request->loop_start >= request->sample_count)
+        reason |= 0x1000U;
+    return reason;
+}
+
 void sm64_saturn_audio_engine_init(sm64_saturn_audio_engine_t *engine,
                                    uint32_t active_package_generation)
 {
@@ -36,11 +71,24 @@ bool sm64_saturn_audio_engine_consume_sequence_event(
     sm64_saturn_voice_request_t request = {0};
     uint8_t duration;
     uint32_t lifetime;
-    if (engine == 0 || event == 0 || binding == 0 || allocation == 0 ||
-        event_generation == 0U ||
-        event->type != SM64_SATURN_SEQUENCE_VM_EVENT_NOTE ||
-        event->signed_value < -96 || event->signed_value > 127 ||
-        binding->package_generation != engine->active_package_generation) {
+    if (engine == 0 || event == 0 || binding == 0 || allocation == 0) {
+        if (engine != 0) engine->last_failure = 0x0001U;
+        if (engine != 0) engine->malformed_events++;
+        return false;
+    }
+    if (event_generation == 0U ||
+        event->type != SM64_SATURN_SEQUENCE_VM_EVENT_NOTE) {
+        engine->last_failure = 0x0002U;
+        engine->malformed_events++;
+        return false;
+    }
+    if (event->signed_value < -96 || event->signed_value > 127) {
+        engine->last_failure = 0x0004U;
+        engine->malformed_events++;
+        return false;
+    }
+    if (binding->package_generation != engine->active_package_generation) {
+        engine->last_failure = 0x0008U;
         if (engine != 0) engine->malformed_events++;
         return false;
     }
@@ -70,8 +118,16 @@ bool sm64_saturn_audio_engine_consume_sequence_event(
     request.attack_ticks = binding->attack_ticks;
     request.decay_ticks = binding->decay_ticks;
     request.release_ticks = binding->release_ticks;
+    if (!sm64_saturn_desired_voice_request_valid(&request)) {
+        engine->last_failure = (uint16_t)(0x0100U |
+                                          request_invalid_reason(&request));
+        engine->malformed_events++;
+        return false;
+    }
     if (!sm64_saturn_voice_allocator_start(&engine->allocator, &request,
                                             allocation)) {
+        engine->last_failure = engine->allocator.dropped_music != 0U
+            ? 0x0020U : 0x0040U;
         if (!sm64_saturn_desired_voice_request_valid(&request))
             engine->malformed_events++;
         return false;

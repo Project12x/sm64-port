@@ -90,12 +90,14 @@ static void test_boot_orders_copy_and_wait_then_enqueues_proof(void)
         make_boot(&fixture, driver, sizeof(driver), bank, sizeof(bank));
     sm64_saturn_pcm_transport_t transport;
 
+    fixture.ram[0x20000U] = 0xA5U;
     assert(sm64_saturn_soundtest_boot(&boot, &transport) ==
            SM64_SATURN_SOUNDTEST_BOOT_READY);
     assert(strcmp(fixture.order, "OMDBNWW") == 0);
     assert(memcmp(fixture.ram, driver, sizeof(driver)) == 0);
     assert(memcmp(fixture.ram + SM64_SATURN_PCM_BANK_OFFSET,
                   bank, sizeof(bank)) == 0);
+    assert(fixture.ram[0x20000U] == 0U);
     assert(sm64_saturn_pcm_get_be16(fixture.ram,
                      SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET) == 1U);
     assert(sm64_saturn_pcm_get_be16(fixture.ram,

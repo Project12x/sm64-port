@@ -51,6 +51,30 @@ void sm64_saturn_pcm68k_publish_boot(volatile uint8_t *sound_ram)
                             SM64_SATURN_PCM_CONTROL_CONSUMED_OFFSET, 0);
     sm64_saturn_pcm_put_be16(sound_ram,
                             SM64_SATURN_PCM_SFX_CONSUMED_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_STARTS_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_FAULTS_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_VM_TICKS_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_ACTIVE_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_NOTES_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_SEQUENCE_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_SEQUENCE_BYTES_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_REJECT_MASK_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_MALFORMED_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_DROPPED_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_CONSUME_FAIL_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_MUSIC_SCSP_FAIL_OFFSET, 0);
 }
 
 void sm64_saturn_pcm68k_publish_tick(volatile uint8_t *sound_ram,

@@ -370,6 +370,11 @@ static bool vm_tick_sequence(sm64_saturn_sequence_vm_t *vm,
                              SM64_SATURN_SEQUENCE_VM_EVENT_CHANNEL_START, cmd,
                              (uint16_t)(cmd & 0x0fU), target, 0U, 0,
                              source_offset)) return false;
+                /* A channel-start target is a layer entry point.  Yield to
+                 * the consumer before decoding bytes from that layer; this
+                 * keeps the bounded sequence VM from interpreting layer
+                 * opcodes as sequence-global controls. */
+                return true;
             } else if (family != 0x00U && family != 0x10U && family != 0x20U &&
                        family != 0x40U && family != 0x60U && family != 0xa0U) {
                 return false;

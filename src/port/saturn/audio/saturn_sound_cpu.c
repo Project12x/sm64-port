@@ -151,8 +151,14 @@ sm64_saturn_sound_cpu_yaul_command(void *context, uint8_t command)
 bool sm64_saturn_sound_cpu_yaul_set_512k(void *context __unused)
 {
     volatile uint8_t *const scsp_common = (volatile uint8_t *)0x25B00400UL;
+
+    /* The SCSP common control byte is a write-only mode latch.  The pinned
+     * PoneSound reference writes it before clearing SCSP RAM and does not
+     * read it back (jo_cdda_demo/pcmsys.c:218-224).  A readback is zero on
+     * Ymir and falsely aborts sourceboot before the later READY/heartbeat
+     * probe can validate the copied driver. */
     *scsp_common = 0x02U;
-    return *scsp_common == 0x02U;
+    return true;
 }
 #else
 sm64_saturn_sound_cpu_command_result_t
