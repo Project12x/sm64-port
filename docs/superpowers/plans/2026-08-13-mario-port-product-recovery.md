@@ -1,8 +1,8 @@
 # Mario Port Product Recovery Implementation Plan
 
 **Status:** active — Task 1 evidence review passed; baseline-first hybrid
-selected; Task 2 Mario restoration is active; no current candidate accepted and
-the visual gate remains unresolved
+selected; Task 2 is blocked before a fresh CUE; no current candidate accepted
+and the visual gate remains unresolved
 
 **Activation commit:** `1f07485a` (`docs(saturn): make playable port the product gate`)
 
@@ -162,8 +162,11 @@ unmet and blocks any acceptance claim.
 animated Mario with correct scale, texture colors, fixed Gouraud lighting,
 front/back occlusion, and painter order.
 
-**Status:** active — one baseline-derived Mario restoration only; its new CUE
-must be observed before any Bob-omb or audio change.
+**Status:** blocked before target CUE — the current Make graph unconditionally
+fails actor-package validation even with dynamic actors disabled; the isolated
+historical donor has not produced a CUE after its documented extraction route
+stopped at a missing Windows `mio0` host tool. The uncommitted focused Mario
+source restoration is host-contract-passed only, not target-proven.
 
 **Primary files (change only those implicated by the live diff):**
 
@@ -214,6 +217,23 @@ and stop adapting the probationary replacement.
 
 **Gate:** owner accepts Mario in the exact CUE. No actor or audio expansion may
 start earlier.
+
+**Blocker record (2026-08-14):**
+
+- Current serial build stopped before SH-2 compilation at
+  `compile_actor_family_bundle.py`: `family report does not match
+  closure-derived semantics`. `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=0` does not
+  bypass its unconditional package-generation/sealing dependencies.
+- Isolated donor `d7b04d61` was prepared from only the bound ROM, `build/us_pc`,
+  and tool environment. Its historical build reached the source-asset route but
+  top-level extraction then failed because `extract_assets.py` invokes a missing
+  `./tools/mio0` on Windows. No current generated Saturn output or PNG was
+  borrowed; no donor CUE or Ymir observation exists.
+- Keep the bounded source-policy regression and emitter hunk uncommitted in the
+  existing dirty renderer file. Do not treat it as an accepted transplant,
+  expand into an actor/package repair, or open Tasks 3–6. A new CUE requires an
+  explicit decision to repair the historical Windows tool path or to authorize a
+  different build boundary.
 
 ---
 

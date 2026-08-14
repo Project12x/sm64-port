@@ -123,6 +123,17 @@ captured video, so neither establishes a Mario/BOB visual gate or advances
 acceptance. Exact reports and hashes are in
 `docs/saturn/evidence/reports/current-product-gate.json`.
 
+## Task 2 status — blocked before a new CUE
+
+The current sourcebuild graph rejects its actor-family package before SH-2
+compilation even when dynamic actors are disabled. The isolated A9A-source donor
+also cannot yet make a fresh CUE: its documented top-level extractor reaches a
+missing Windows `./tools/mio0` invocation. The focused Mario emitter comparison
+is source-only evidence and remains uncommitted in an already dirty renderer
+file. No Bob-omb, audio, performance, or Whomp's Fortress work is authorized
+until an explicit build-boundary decision is made. The archived A9A CUE remains
+the only visual/control rollback artifact.
+
 ## Documentation authority
 
 The authority order is:
