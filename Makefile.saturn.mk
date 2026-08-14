@@ -8,6 +8,7 @@ CASTLEVIEWER_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/castleviewer
 SOURCEBOOT_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/sourceboot
 SOURCEBOOT_TARGET_PROFILE ?= $(SATURN_REPO_ROOT)/tools/saturn/profiles/sourceboot-bob-demo-v1.json
 SOURCEBOOT_RELEASE_MODE ?= development
+SOURCEBOOT_MANIFEST_ROOT ?= $(SATURN_REPO_ROOT)
 VDP2_PROBE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/vdp2probe
 DUAL_TRANSFORM_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/dualtransform
 PCM68K_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/audio68k
@@ -36,10 +37,10 @@ ACTOR_FAMILY_BUNDLE_DIR ?= $(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEV
 ACTOR_FAMILY_BUNDLE_REPORT ?= $(ACTOR_FAMILY_BUNDLE_DIR)/actor-family-bundle.json
 ACTOR_FAMILY_BUNDLE_PAYLOAD ?= $(ACTOR_FAMILY_BUNDLE_DIR)/bob-area1-actors-v3.s64f
 ACTOR_FAMILY_BUNDLE_DEPENDENCY ?= $(ACTOR_FAMILY_BUNDLE_DIR)/bob-area1-actors-v3-dependency.json
-# Published package generations are immutable/no-clobber. Generation 14 is
-# the first final S64P + textured S64F pair accepted by the generic BOB path;
+# Published package generations are immutable/no-clobber. Generation 15 adds
+# the first normal spawned Bob-omb bank to the same generic BOB package path;
 # any byte-changing follow-up must deliberately select a newer generation.
-SCENE_PACKAGE_GENERATION ?= 14
+SCENE_PACKAGE_GENERATION ?= 15
 PYTHON ?= python3
 HOST_CC ?= gcc
 ifeq ($(OS),Windows_NT)
@@ -136,7 +137,7 @@ SCENE_PACKAGE_FINAL_REPORT ?= $(SCENE_PACKAGE_FINAL_DIR)/scene-package-report.js
 SCENE_PACKAGE_FINAL_VALIDATION ?= $(SCENE_PACKAGE_FINAL_DIR)/scene-package-validation.json
 SCENE_PACKAGE_FINAL_PAYLOAD_MANIFEST ?= $(SCENE_PACKAGE_FINAL_DIR)/scene-package-payloads.json
 SCENE_PACKAGE_FINAL_HEADER ?= $(SCENE_PACKAGE_FINAL_DIR)/scene_package.h
-SCENE_PACKAGE_FINAL_ASM ?= $(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated/actor_scene_bundle.sx
+SCENE_PACKAGE_FINAL_ASM ?= $(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated/actor_scene_bundle_g$(SCENE_PACKAGE_GENERATION).sx
 SCENE_PACKAGE_ABI_HEADER ?= $(SATURN_REPO_ROOT)/build/saturn/packages/saturn_scene_package_abi.h
 SCENE_PACKAGE_WORLD_STATIC ?= $(BOB_MESH_GENERATED)/bob_area1_compiled.json
 SCENE_PACKAGE_COLLISION ?= $(SATURN_REPO_ROOT)/levels/$(SCENE_LEVEL)/areas/$(SCENE_AREA)/collision.inc.c
@@ -161,7 +162,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-saturn-object-pool-probe-contract verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-audio-sequences compile-saturn-audio verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-bank-v2 verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-family-bundle verify-actor-family-bundle-build verify-actor-identity-registry verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema verify-saturn-sha256 classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-actor-family-bundle inventory-actor-family-bundles compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-actor-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-saturn-object-pool-probe-contract verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-audio-sequences compile-saturn-audio verify-pcm-transport verify-source-audio-live verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-painter-chain verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-bank-v2 verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-family-bundle verify-actor-family-bundle-build verify-actor-identity-registry verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema verify-saturn-sha256 classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-actor-family-bundle inventory-actor-family-bundles compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-actor-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 .PHONY: verify-actor-variant-bank
 
@@ -261,24 +262,29 @@ sourceboot: check-libyaul check-sdk
 	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets \
 	  SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	  SOURCEBOOT_MANIFEST_ROOT="$(SOURCEBOOT_MANIFEST_ROOT)" \
 	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)"
 	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=discover identity-discovery \
 	  SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	  SOURCEBOOT_MANIFEST_ROOT="$(SOURCEBOOT_MANIFEST_ROOT)" \
 	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)"
 	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" \
 	  SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	  SOURCEBOOT_MANIFEST_ROOT="$(SOURCEBOOT_MANIFEST_ROOT)" \
 	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" print-identity-tag)" && \
 	  test -n "$$tag" && \
 	  printf 'sourceboot: sealed identity %s\n' "$$tag" && \
 	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag" \
 	    SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	    SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	    SOURCEBOOT_MANIFEST_ROOT="$(SOURCEBOOT_MANIFEST_ROOT)" \
 	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" && \
 	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag" \
 	    SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
 	    SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	    SOURCEBOOT_MANIFEST_ROOT="$(SOURCEBOOT_MANIFEST_ROOT)" \
 	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" verify-sealed-inputs seal-release
 
 # Read the sealed tag back from the frozen spec (no reseal) so verify runs
@@ -288,7 +294,8 @@ verify-sourceboot: sourceboot
 	  test -n "$$tag" && \
 	  printf 'verify-sourceboot: verifying sealed identity %s\n' "$$tag" && \
 	  $(MAKE) -C "$(SOURCEBOOT_DIR)" verify verify-release SOURCEBOOT_SEALED_IDENTITY="$$tag" \
-	    SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)"
+	    SOURCEBOOT_SCENE_PACKAGE_GENERATION="$(SCENE_PACKAGE_GENERATION)" \
+	    SOURCEBOOT_MANIFEST_ROOT="$(SOURCEBOOT_MANIFEST_ROOT)"
 
 verify-sourceboot-feature-identity:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_gen_build_identity.py"
@@ -414,6 +421,18 @@ verify-pcm-transport:
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/pcm-publication-order-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/pcm-publication-order-test$(HOST_EXEEXT)']).returncode)"
 
+verify-source-audio-live:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/sourceboot" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/audio" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/source_audio_live_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/sourceboot/source_audio_live.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/audio/saturn_pcm_transport.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/audio/saturn_sound_cpu.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/source-audio-live-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/source-audio-live-test$(HOST_EXEEXT)"
+
 verify-pcm68k-model:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
@@ -422,6 +441,10 @@ verify-pcm68k-model:
 	  "$(SATURN_REPO_ROOT)/tools/saturn/pcm68k_model_test.c" \
 	  "$(PCM68K_DIR)/pcm_voice.c" \
 	  "$(PCM68K_DIR)/scsp_pcm8.c" \
+	  "$(PCM68K_DIR)/sequence_vm.c" \
+	  "$(PCM68K_DIR)/audio_engine.c" \
+	  "$(PCM68K_DIR)/voice_allocator.c" \
+	  "$(PCM68K_DIR)/desired_voice.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/pcm68k-model-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/pcm68k-model-test$(HOST_EXEEXT)"
 
@@ -606,6 +629,10 @@ verify-sourceboot-boot-trace:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_sourceboot_boot_trace.py"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_capture_sourceboot_boot_trace.py"
 
+.PHONY: verify-sourceboot-cold-stage-return
+verify-sourceboot-cold-stage-return: check-host-tools
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_sourceboot_cold_stage_return.py"
+
 # Memory-residency campaign Task 2: source-text contract for the
 # gObjectPool occupancy probe (magic/volatile/TARGET_SATURN-gated fields,
 # wired at the real allocate/free sites). Pure host-side text parsing, no
@@ -748,31 +775,23 @@ verify-saturn-hud-layout: check-host-tools
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_hud_layout.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_hud_publish.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/saturn-hud-layout-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/saturn-hud-layout-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/saturn-hud-layout-test$(HOST_EXEEXT)"
 
-# Mutation-proves that the dirty-cell diff in sm64_saturn_hud_publish()'s
-# second pass (saturn_hud_publish.c) is load-bearing. Builds the same test
-# binary as verify-saturn-hud-layout above but with
-# SM64_SATURN_HUD_TEST_MUTATE_DIRTY_GATE defined, which makes that pass write
-# every cell unconditionally instead of gating on prior->glyph != next->glyph
-# (see the #ifdef in saturn_hud_publish.c). That mutation must make
-# tools/saturn/saturn_hud_layout_test.c's
-# test_publish_only_rewrites_changed_cells fail (an unchanged snapshot would
-# incorrectly trigger rewrites), so the mutated binary is expected to exit
-# nonzero -- expect_failure.py enforces that expectation and fails this
-# target if the mutant escapes (exits 0) instead.
+# Mutation-proves that the complete grid clear is load-bearing. The stateless
+# publisher owns no history, so skipping the bounded blank pass must make the
+# empty-layout assertion fail.
 verify-saturn-hud-layout-mutation: check-host-tools
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
-	  -DSM64_SATURN_HUD_TEST_MUTATE_DIRTY_GATE=1 \
+	  -DSM64_SATURN_HUD_TEST_MUTATE_SKIP_CLEAR=1 \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/saturn_hud_layout_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_hud_layout.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_hud_publish.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/saturn-hud-dirty-gate-mutation$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
-	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/saturn-hud-dirty-gate-mutation$(HOST_EXEEXT)" \
-	  --label "HUD dirty-cell gate mutation"
+	@if "$(SATURN_REPO_ROOT)/build/saturn/host-tests/saturn-hud-dirty-gate-mutation$(HOST_EXEEXT)"; then \
+	  echo "HUD complete-grid-clear mutation unexpectedly passed" >&2; exit 1; \
+	fi
 
 # Static proof that the HUD's own rendering logic (layout/publish/atlas)
 # never constructs or touches a VDP1 command-list symbol -- this HUD is
@@ -858,6 +877,7 @@ verify-sourceboot-hud-target: check-libyaul check-sdk check-host-tools
 verify-actor-instance-snapshot:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_instance_snapshot_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_instance.c" \
@@ -1023,6 +1043,7 @@ verify-actor-feature-off-wrapper:
 verify-actor-runtime-handoff:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_runtime_handoff_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_runtime_handoff.c" \
@@ -1090,6 +1111,7 @@ verify-actor-family-bank: compile-actor-banks
 	@"$(SATURN_TOOLS_PYTHON)" -c "import json; from pathlib import Path; p=Path(r'$(ACTOR_FAMILY_BANK_REPORT)'); d=json.loads(p.read_text()); assert d['payload_sha256'] and d['family_count'] > 0 and d['unsupported_required_capability_count'] == 13 and d['unsupported_family_representative_count'] == 13 and d['unsupported_closure_record_count'] == 14 and not d['complete_closure']; print('actor family report: PASS', d['family_count'], 'families', d['unsupported_family_representative_count'], 'unsupported representatives across', d['unsupported_closure_record_count'], 'records')"
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_family_bank_test.c" \
@@ -1246,9 +1268,10 @@ verify-actor-variant-bank: check-host-tools
 
 ACTOR_IDENTITY_REGISTRY_HEADER := $(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated/actor_identity_registry.h
 
-verify-actor-identity-registry: compile-actor-banks
+verify-actor-identity-registry: compile-actor-banks compile-actor-family-bundle
 	@"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/gen_actor_identity_registry.py" \
 	  --family-report "$(ACTOR_FAMILY_BANK_REPORT)" \
+	  --bundle-report "$(ACTOR_FAMILY_BUNDLE_REPORT)" \
 	  --closure "$(SCENE_CLOSURE_OUTPUT)" \
 	  --model-ids "$(SATURN_REPO_ROOT)/include/model_ids.h" \
 	  --scene-generation "$(SCENE_PACKAGE_GENERATION)" \
@@ -1343,6 +1366,7 @@ verify-render-overlap-integration:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_a9_overlap_target_coherency.py"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
@@ -1356,10 +1380,10 @@ verify-render-overlap-integration:
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-integration-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-integration-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-integration-test$(HOST_EXEEXT)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_LOD_LIFETIME_TEST_APPLY_DURING_ACTIVE=1 \
-	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
@@ -1375,7 +1399,7 @@ verify-render-overlap-integration:
 	  --label "render overlap active-generation LOD reset mutation"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_RENDER_OVERLAP_PHASE_TEST_OMIT_START=1 \
-	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
@@ -1391,7 +1415,7 @@ verify-render-overlap-integration:
 	  --label "render overlap omitted start-construction mutation"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_NOTIFY_MARKER=1 \
-	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
@@ -1407,7 +1431,7 @@ verify-render-overlap-integration:
 	  --label "render overlap late notify-marker timestamp mutation"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_RETIRE_MARKER=1 \
-	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
@@ -1423,7 +1447,7 @@ verify-render-overlap-integration:
 	  --label "render overlap late retirement-marker timestamp mutation"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_LOD_LIFETIME_TEST_IGNORE_GENERATION=1 \
-	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
@@ -1439,7 +1463,7 @@ verify-render-overlap-integration:
 	  --label "render overlap ignored LOD generation mutation"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_RENDER_JOB_RUNTIME_TEST_SKIP_TERMINAL_REFRESH=1 \
-	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
@@ -1489,6 +1513,15 @@ verify-demo-render-overlap: verify-render-overlap-integration
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/demo-render-overlap-replay-mutation$(HOST_EXEEXT)" \
 	  --label "demo render serial replay mutation"
+
+verify-vdp1-painter-chain:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -pedantic -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/vdp1_painter_chain_test.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/vdp1-painter-chain-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/vdp1-painter-chain-test$(HOST_EXEEXT)"
 
 verify-vdp1-frame-bank:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"

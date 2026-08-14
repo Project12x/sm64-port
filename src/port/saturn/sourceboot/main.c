@@ -2,6 +2,8 @@
 #include <yaul.h>
 #include <cpu/cache.h>
 
+#include "audio/external.h"
+#include "seq_ids.h"
 #include "game/camera.h"
 #include "game/area.h"
 #include "game/game_init.h"
@@ -39,8 +41,11 @@
 #include "source_q16_kernel_probe.h"
 #include "source_route_probe.h"
 #include "source_scene_bundle.h"
+#include "source_audio_live.h"
+#include "source_audio_semantics.h"
 #include "mario_eye_uv_tiles.h"
 #include "saturn_sky_gradient_generated.h"
+#include "../platform/saturn_cart_code.h"
 #include "../gpl/slavedriver_dma_queue.h" /* gpl/ is a sibling of sourceboot/
                                            * under src/port/saturn/; matches
                                            * hwtest's existing include style
@@ -73,6 +78,21 @@ extern void sourceboot_exception_dma_address_error(void);
 #endif
 #ifndef SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
 #define SATURN_FEATURE_COMPLETE_MARIO_ANIMATION 0
+#endif
+#ifndef SATURN_FEATURE_SEMANTIC_AUDIO
+#define SATURN_FEATURE_SEMANTIC_AUDIO 0
+#endif
+
+#if SATURN_FEATURE_SEMANTIC_AUDIO
+/* SH-2 C prepends one underscore to external symbol names.  The generated
+ * assembler assets deliberately define the corresponding single-underscore
+ * linker names, so their C spelling has no leading underscore. */
+extern const uint8_t sm64_saturn_sourceboot_pcm68k_driver[];
+extern const uint8_t sm64_saturn_sourceboot_pcm68k_driver_end[];
+extern const uint8_t sm64_saturn_sourceboot_sfx_metadata[];
+extern const uint8_t sm64_saturn_sourceboot_sfx_metadata_end[];
+extern const uint8_t sm64_saturn_sourceboot_sfx_pcm[];
+extern const uint8_t sm64_saturn_sourceboot_sfx_pcm_end[];
 #endif
 
 #define SOURCEBOOT_BOOT_TRACE_MAGIC 0x53394254U
@@ -180,10 +200,11 @@ volatile sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace = {
 /* One fixed target-visible seqlock snapshot. The host pauses after each
  * VBlank and owns append-only edge history, avoiding a target-side ring in
  * scarce HWRAM while retaining a coherent cumulative counter sample. */
-volatile sm64_saturn_sourceboot_cadence_trace_t sourceboot_cadence_trace = {
-    .magic = SOURCEBOOT_CADENCE_TRACE_MAGIC,
-    .version = SOURCEBOOT_CADENCE_TRACE_VERSION,
-};
+/* Cadence accounting is CPU-only telemetry.  It remains target-visible to
+ * Ymir through its ELF symbol, but uses the tracked NOLOAD LWRAM state rather
+ * than consuming the fixed HWRAM allocator floor. */
+volatile sm64_saturn_sourceboot_cadence_trace_t sourceboot_cadence_trace
+    __attribute__((section(".lwram_bss"), used));
 
 /* The Fast3D interpreter owns CPU-only matrix/vertex/resolve/profile state;
  * keep it in the NOLOAD LWRAM work arena rather than consuming HWRAM needed
@@ -372,17 +393,16 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
             &sourceboot_actor_instances, generation,
             SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE, &actor_bank, &actor_count,
             &actor_stats)) {
-        uint16_t acquired_count = 0U;
-        if (sm64_saturn_actor_instance_bank_acquire(
+        uint16_t ready_count = 0U;
+        if (sm64_saturn_actor_instance_bank_ready_view(
                 &sourceboot_actor_instances, actor_bank, generation,
-                &acquired_count) == NULL) {
+                &ready_count) == NULL || ready_count != actor_count) {
             (void)sm64_saturn_actor_instance_bank_recycle_pre_acquire(
                 &sourceboot_actor_instances, actor_bank, generation,
                 SM64_SATURN_ACTOR_INSTANCE_BANK_READY);
             actor_bank = 0xffU;
             actor_count = 0U;
         } else {
-            actor_count = acquired_count;
             sourceboot_actor_bank_generation[actor_bank] = generation;
         }
     }
@@ -402,6 +422,7 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
 #endif
     const uint8_t pose_ok = sm64_saturn_mario_actor_pose_selector(
         &snapshot->mario, &snapshot->mario_pose);
+    (void)pose_ok;
 #if SATURN_DIAGNOSTIC_MODE == 1
     sm64_saturn_mario_actor_pose_t diagnostic_pose;
     if (pose_ok != 0U &&
@@ -741,7 +762,7 @@ extern const uint8_t sm64_saturn_bob_clut_bank[];
  * CPU-DMAC/VDP1 transfer addresses and cache behavior; do not reintroduce a
  * `.lwram_cmdts` attribute (the linker rejects that legacy section). */
 static vdp1_cmdt_t sourceboot_vdp1_cmdts[2][SOURCEBOOT_VDP1_COMMAND_CAPACITY]
-    __aligned(32);
+    __attribute__((section(".sourceboot_vdp1_cmdts"), used)) __aligned(32);
 
 void *sm64_saturn_source_scene_bundle_upload_stage(void)
 {
@@ -827,6 +848,10 @@ _Static_assert(SOURCEBOOT_SKY_GRADIENT_GENERATED_LINES == SOURCEBOOT_BACKSCREEN_
  * bank can observe the state. */
 static void sourceboot_reset_lwram_state(void)
 {
+    memset((void *)&sourceboot_cadence_trace, 0,
+           sizeof(sourceboot_cadence_trace));
+    sourceboot_cadence_trace.magic = SOURCEBOOT_CADENCE_TRACE_MAGIC;
+    sourceboot_cadence_trace.version = SOURCEBOOT_CADENCE_TRACE_VERSION;
     sourceboot_sim_ticks_accum = 0U;
     sourceboot_sim_tick_count = 0U;
     sourceboot_render_ticks_accum = 0U;
@@ -878,13 +903,6 @@ static void sourceboot_reset_lwram_state(void)
     memset(sourceboot_gouraud_banks, 0,
            sizeof(sourceboot_gouraud_banks));
 }
-
-/* Remembers the layout last published to the VDP2 HUD atlas so
- * sm64_saturn_hud_publish() (called from sourceboot_present_generation())
- * can rewrite only the cells that changed. Ordinary .bss (crt0-zeroed), then
- * explicitly primed by sm64_saturn_hud_publish_init() below, alongside the
- * other one-writer frame-state globals in this file. */
-static sm64_saturn_hud_publish_state_t sourceboot_hud_publish_state;
 
 #define SOURCEBOOT_SKY_BITMAP_WIDTH 512U
 #define SOURCEBOOT_SKY_BITMAP_HEIGHT 256U
@@ -1063,7 +1081,7 @@ static void sourceboot_present_generation(
         0U;
     const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
         sourceboot_vdp2_camera_snapshot(bank);
-    sm64_saturn_hud_publish(&sourceboot_hud_publish_state, &bank->hud);
+    sm64_saturn_hud_publish(&bank->hud);
     const sm64_saturn_vdp2_generation_state_t vdp2_generations = {
         .displayed_generation = presentation_generation,
         .rendered_generation = presentation_generation,
@@ -1248,7 +1266,8 @@ static void sourceboot_frame_service_render(uint32_t generation)
             &sourceboot_vdp1_backend,
             sourceboot_active_build_bank->gouraud_bank,
             &sourceboot_fast3d.profile, &sourceboot_mario_snapshot,
-            &sourceboot_mario_pose, generation);
+            &sourceboot_mario_pose, sourceboot_active_render_snapshot,
+            &sourceboot_actor_runtime, generation);
         if (!render_complete) goto failed;
         sourceboot_render_started = true;
         goto finish;
@@ -1283,6 +1302,12 @@ static void sourceboot_frame_service_render(uint32_t generation)
     if (sourceboot_active_render_snapshot->actor_instance_bank_valid != 0U) {
         const uint8_t actor_bank =
             sourceboot_active_render_snapshot->actor_instance_bank;
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+        if (actor_bank >= 2U ||
+            sourceboot_actor_bank_generation[actor_bank] != generation) {
+            sourceboot_fast3d.profile.pipeline_faults++;
+        }
+#else
         if (actor_bank >= 2U ||
             sourceboot_actor_bank_generation[actor_bank] != generation ||
             !sm64_saturn_actor_instance_bank_complete(
@@ -1295,6 +1320,7 @@ static void sourceboot_frame_service_render(uint32_t generation)
                     &sourceboot_actor_instances, generation);
             sourceboot_fast3d.profile.pipeline_faults++;
         }
+#endif
         if (actor_bank < 2U &&
             sourceboot_actor_bank_generation[actor_bank] == generation)
             sourceboot_actor_bank_generation[actor_bank] = 0U;
@@ -1613,6 +1639,10 @@ void user_init(void) {
     smpc_peripheral_intback_issue();
 }
 
+static void sourceboot_post_cart_init(void);
+static bool sourceboot_audio_init(void);
+static void sourceboot_game_loop(void) __attribute__((noreturn));
+
 int main(void) {
     /* Install the project-owned exception trampolines immediately after
      * Yaul's crt0/__cpu_init path, before cart or scene setup can fault.  The
@@ -1656,6 +1686,16 @@ int main(void) {
         sm64_saturn_source_cart_report_failure(cart_status);
         for (;;) {}
     }
+    sourceboot_post_cart_init();
+    sourceboot_game_loop();
+}
+
+/* Everything in this bootstrap consumes the cart image and retires before
+ * the first source tick.  Keep the whole one-shot path in DRAM-cart instead
+ * of charging HWRAM for code that never runs during gameplay. */
+static SM64_SATURN_CART_COLD void
+sourceboot_post_cart_init(void)
+{
     /* The bitmap is linked in .cart_rodata and is not readable from its
      * final DRAM-cart address until source_cart_load() has completed. Keep
      * the VDP2 format setup in user_init(), but defer the actual copy so NBG1
@@ -1663,7 +1703,6 @@ int main(void) {
     sourceboot_reset_lwram_state();
     sourceboot_init_sky_bitmap();
     sm64_saturn_hud_atlas_init();
-    sm64_saturn_hud_publish_init(&sourceboot_hud_publish_state);
     sm64_saturn_vdp2_frame_init(&sourceboot_vdp2_frame);
 
     dbgio_init();
@@ -1857,6 +1896,18 @@ int main(void) {
         /* Exclusive frame-transport handoff: every boot-time SCU/CPU DMA
          * above is complete before the serial queue owns both channel 0s. */
         saturn_dma_queue_init();
+        {
+            uint32_t actor_workspace_bytes = 0U;
+            void *const actor_workspace =
+                sm64_saturn_demo_render_actor_workspace(
+                    &actor_workspace_bytes);
+            if (!sm64_saturn_source_scene_bundle_bind_workspace(
+                    actor_workspace, actor_workspace_bytes)) {
+                dbgio_puts("sourceboot: generic actor workspace failed\n");
+                dbgio_flush();
+                for (;;) {}
+            }
+        }
         if (!sm64_saturn_source_scene_bundle_init(
                 SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_LEVEL_ID,
                 SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_AREA_ID)) {
@@ -1887,9 +1938,70 @@ int main(void) {
             }
         }
     }
+}
 
+/* Semantic policy and its mailbox bridge live for this sourceboot main-pool
+ * lifetime.  They are not VDP1/SCU shared state, so keeping their 15 KiB in
+ * fixed HWRAM would steal the renderer's hard physical margin.  Reserve the
+ * exact aligned blocks from the long-lived RIGHT side before thread5 starts;
+ * neither block is a transient level allocation nor a hidden static debt. */
+static bool
+sourceboot_audio_init(void)
+{
+#if SATURN_FEATURE_SEMANTIC_AUDIO
+    const size_t semantic_bytes =
+        sm64_saturn_source_audio_semantic_workspace_bytes();
+    const size_t live_bytes = sm64_saturn_source_audio_live_workspace_bytes();
+    void *semantic_workspace;
+    void *live_workspace;
+
+    if (semantic_bytes == 0U || live_bytes == 0U ||
+        semantic_bytes > UINT32_MAX || live_bytes > UINT32_MAX) {
+        return false;
+    }
+    semantic_workspace =
+        main_pool_alloc((u32)semantic_bytes, MEMORY_POOL_RIGHT);
+    live_workspace = main_pool_alloc((u32)live_bytes, MEMORY_POOL_RIGHT);
+    if (semantic_workspace == NULL || live_workspace == NULL ||
+        !sm64_saturn_source_audio_semantic_workspace_bind(
+            semantic_workspace, semantic_bytes) ||
+        !sm64_saturn_source_audio_live_workspace_bind(live_workspace,
+                                                      live_bytes)) {
+        return false;
+    }
+    sound_init();
+    return sm64_saturn_source_audio_live_boot(
+        sm64_saturn_sourceboot_pcm68k_driver,
+        (uint32_t)(sm64_saturn_sourceboot_pcm68k_driver_end -
+                   sm64_saturn_sourceboot_pcm68k_driver),
+        sm64_saturn_sourceboot_sfx_metadata,
+        (uint32_t)(sm64_saturn_sourceboot_sfx_metadata_end -
+                   sm64_saturn_sourceboot_sfx_metadata),
+        sm64_saturn_sourceboot_sfx_pcm,
+        (uint32_t)(sm64_saturn_sourceboot_sfx_pcm_end -
+                   sm64_saturn_sourceboot_sfx_pcm), 1U);
+#else
+    return true;
+#endif
+}
+
+static void
+sourceboot_game_loop(void)
+{
     main_pool_init(sourceboot_main_pool,
                    sourceboot_main_pool + sizeof(sourceboot_main_pool));
+#if SATURN_FEATURE_SEMANTIC_AUDIO
+    if (!sourceboot_audio_init()) {
+        dbgio_puts("sourceboot: semantic SFX initialization failed\\n");
+        dbgio_flush();
+        for (;;) {}
+    }
+    /* The generic BOB path has no full-game level-update caller yet, so start
+     * its real level sequence at the same semantic API boundary used by the
+     * game.  This is intentionally one normal policy event, not an injected
+     * MC68000 command or object-specific renderer/audio shortcut. */
+    play_music(SEQ_PLAYER_LEVEL, SEQUENCE_ARGS(4, SEQ_LEVEL_GRASS), 0U);
+#endif
     gEffectsMemoryPool = mem_pool_init(0x4000U, MEMORY_POOL_LEFT);
     if (gEffectsMemoryPool == NULL) {
         dbgio_puts("sourceboot: effects pool allocation failed\n");
@@ -1905,6 +2017,13 @@ int main(void) {
     sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_BEFORE,
                                 sourceboot_vblank_out_count);
     thread5_game_loop(NULL);
+    /* BOB's normal source load must leave this documented headroom after the
+     * two persistent audio workspaces and all source-owned level data. */
+    if (main_pool_available() < 0x8000U) {
+        dbgio_puts("sourceboot: BOB main-pool margin exhausted\\n");
+        dbgio_flush();
+        for (;;) {}
+    }
     sm64_saturn_frame_pipeline_init(&sourceboot_frame_pipeline,
                                      sourceboot_vblank_out_count, 0U);
     sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_AFTER,

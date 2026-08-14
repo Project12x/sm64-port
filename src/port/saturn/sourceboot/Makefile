@@ -3,6 +3,11 @@ ifeq ($(strip $(YAUL_INSTALL_ROOT)),)
 endif
 
 ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
+# Compile through a short Windows junction when needed, but seal through the
+# same physical checkout so DirectoryNamespaceGuard can reject reparse paths
+# without blocking a valid candidate build.
+SOURCEBOOT_MANIFEST_ROOT ?= $(ROOT)
+sourceboot-manifest-path = $(SOURCEBOOT_MANIFEST_ROOT)/$(patsubst $(ROOT)/%,%,$(1))
 SH_PROGRAM := sm64-saturn-sourceboot-e2
 SOURCEBOOT_GENERATED := $(ROOT)/build/saturn/sourceboot/generated
 # GNU as resolves .incbin operands from this Makefile's working directory,
@@ -88,13 +93,24 @@ SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
 SOURCEBOOT_QUAD_MAP_H := $(SOURCEBOOT_GENERATED)/saturn_quad_map.h
 SOURCEBOOT_ACTOR_BANK := $(ROOT)/build/saturn/actors/mario/mario.s64b
 SOURCEBOOT_ACTOR_BANK_C := $(SOURCEBOOT_GENERATED)/mario_actor_bank.c
+SOURCEBOOT_AUDIO_GENERATED := $(ROOT)/build/saturn/audio/generated
+SOURCEBOOT_PCM68K_BIN := $(ROOT)/build/saturn/audio68k/pcm68k-heartbeat.bin
+SOURCEBOOT_SFX_DIR := $(SOURCEBOOT_AUDIO_GENERATED)/sourceboot-sfx
+SOURCEBOOT_SFX_METADATA := $(SOURCEBOOT_SFX_DIR)/bob_sfx_metadata.bin
+SOURCEBOOT_SFX_PCM := $(SOURCEBOOT_SFX_DIR)/bob_sfx_pcm.bin
+SOURCEBOOT_SFX_MANIFEST := $(SOURCEBOOT_SFX_DIR)/bob_sfx_manifest.json
+SOURCEBOOT_SFX_ASM := $(SOURCEBOOT_GENERATED)/sourceboot_sfx_bundle.sx
+SOURCEBOOT_PONESOUND_ROOT := $(firstword $(realpath \
+  $(ROOT)/work/upstream/SCSP_poneSound \
+  $(ROOT)/../../work/upstream/SCSP_poneSound))
+SOURCEBOOT_M68K_BINDIR := $(SOURCEBOOT_PONESOUND_ROOT)/m68k-elf
 SATURN_SOURCEBOOT_ROUTE_REPLAY ?= 0
 SATURN_SOURCEBOOT_LEVEL_ID ?= 9
 SATURN_SOURCEBOOT_AREA_ID ?= 1
 SATURN_SOURCEBOOT_ROUTE_ID ?= 0
 SATURN_FEATURE_COMPLETE_MARIO_ANIMATION ?= 0
 SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE ?= 0
-SATURN_FEATURE_SEMANTIC_AUDIO ?= 0
+SATURN_FEATURE_SEMANTIC_AUDIO ?= 1
 SATURN_DIAGNOSTIC_MODE ?= 0
 SATURN_CART_MBIT ?= 32
 SATURN_FAST3D_Q16_TRACE ?= 0
@@ -311,9 +327,10 @@ SOURCEBOOT_SKY_GRADIENT_HEADER := $(SOURCEBOOT_GENERATED)/saturn_sky_gradient_ge
 SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER := $(SOURCEBOOT_GENERATED)/actor_identity_registry.h
 SOURCEBOOT_ACTOR_FAMILY_REPORT := $(ROOT)/build/saturn/packages/bob/1/actors/actor-families.json
 SOURCEBOOT_ACTOR_CLOSURE := $(ROOT)/build/saturn/packages/bob/1/closure.json
-SOURCEBOOT_SCENE_PACKAGE_GENERATION ?= 14
+SOURCEBOOT_SCENE_PACKAGE_GENERATION ?= 15
 SOURCEBOOT_ACTOR_BUNDLE_DIR := $(ROOT)/build/saturn/packages/bob/1/actors-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
 SOURCEBOOT_ACTOR_BUNDLE := $(SOURCEBOOT_ACTOR_BUNDLE_DIR)/bob-area1-actors-v3.s64f
+SOURCEBOOT_ACTOR_BUNDLE_REPORT := $(SOURCEBOOT_ACTOR_BUNDLE_DIR)/actor-family-bundle.json
 SOURCEBOOT_SCENE_PACKAGE_DIR := $(ROOT)/build/saturn/packages/bob/1/scene-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
 SOURCEBOOT_SCENE_PACKAGE_ROOT := $(SOURCEBOOT_SCENE_PACKAGE_DIR)/scene.s64p
 SOURCEBOOT_BOB_TOOLS := \
@@ -399,11 +416,15 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/runtime/saturn_camera_fixed.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bridge.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_instance.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_instance_queue.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_batch.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_runtime_handoff.c \
   $(ROOT)/src/port/saturn/gfx/saturn_geo_state_observer.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bank.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bundle.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bundle_runtime.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_texture_residency.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_material.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_pose.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c \
@@ -454,8 +475,11 @@ endif
 
 ifeq ($(SATURN_FEATURE_SEMANTIC_AUDIO),1)
 SH_SRCS += source_audio_semantics.c \
+  source_audio_live.c \
   $(ROOT)/src/port/saturn/audio/saturn_audio_policy.c \
-  $(ROOT)/src/port/saturn/audio/saturn_audio_spatial.c
+  $(ROOT)/src/port/saturn/audio/saturn_audio_spatial.c \
+  $(ROOT)/src/port/saturn/audio/saturn_pcm_transport.c \
+  $(ROOT)/src/port/saturn/audio/saturn_sound_cpu.c
 else
 SH_SRCS += source_audio_stub.c
 endif
@@ -592,13 +616,16 @@ export TMPDIR := $(SOURCEBOOT_TOOL_TMPDIR)
 SOURCEBOOT_BOB_SKY_ASM := $(SOURCEBOOT_GENERATED)/bob_sky_bitmap.sx
 SOURCEBOOT_BOB_TEXTURE_ASM := $(SOURCEBOOT_GENERATED)/bob_texture_bank.sx
 SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM := $(SOURCEBOOT_GENERATED)/bob_bsp_fragment_texture_bank.sx
-SOURCEBOOT_ACTOR_SCENE_ASM := $(SOURCEBOOT_GENERATED)/actor_scene_bundle.sx
+SOURCEBOOT_ACTOR_SCENE_ASM := $(SOURCEBOOT_GENERATED)/actor_scene_bundle_g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION).sx
 SH_SRCS += $(SOURCEBOOT_BOB_TEXTURE_ASM)
 ifeq ($(SATURN_DEMO_BSP_FRAGMENTS),1)
 SH_SRCS += $(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM)
 endif
 SH_SRCS += $(SOURCEBOOT_BOB_SKY_ASM)
 SH_SRCS += $(SOURCEBOOT_ACTOR_SCENE_ASM)
+ifeq ($(SATURN_FEATURE_SEMANTIC_AUDIO),1)
+SH_SRCS += $(SOURCEBOOT_SFX_ASM)
+endif
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 
@@ -760,7 +787,7 @@ SOFTFP_HEADERS := $(wildcard $(SOFTFP_DIR)/soft-fp/*.h) \
 # later libgcc, which is a normal archive-ordering resolution.
 SH_LDFLAGS += -L$(SOFTFP_BUILD_DIR) -lsm64softfp
 
-$(SOFTFP_BUILD_DIR)/%.o: $(SOFTFP_DIR)/soft-fp/%.c $(SOFTFP_HEADERS)
+$(SOFTFP_BUILD_DIR)/%.o: $(SOFTFP_DIR)/soft-fp/%.c $(SOFTFP_HEADERS) | $(SOURCEBOOT_TOOL_TMPDIR)
 	@mkdir -p "$(@D)"
 	$(ECHO)$(SH_CC) $(SOFTFP_CFLAGS) -c "$<" -o "$@"
 
@@ -860,7 +887,8 @@ endif
 identity-assets: source-assets source-geo-depth $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
   $(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_ACTOR_BANK) \
   $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER) $(SOURCEBOOT_ACTOR_SCENE_ASM) \
-  $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C))
+  $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C)) \
+  $(if $(filter 1,$(SATURN_FEATURE_SEMANTIC_AUDIO)),$(SOURCEBOOT_SFX_ASM))
 
 # Emits only the seal-stage identity directory tag, so an orchestrating make
 # (Makefile.saturn.mk sourceboot/verify-sourceboot) can seal once and hand the
@@ -981,12 +1009,35 @@ source-actor-families:
 	  SCENE_PACKAGE_GENERATION="$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)" \
 	  compile-actor-banks
 
-$(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER): source-actor-families \
+.PHONY: source-actor-family-bundle
+# actor-families.json has a stable pathname but binds the selected package
+# generation.  Regenerate that report before verifying the matching immutable
+# bundle; the mere existence of a report from another generation is not input
+# compatibility.
+source-actor-family-bundle: source-actor-families
+	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/compile_actor_family_bundle.py" \
+	  --root "$(ROOT)" --closure "$(SOURCEBOOT_ACTOR_CLOSURE)" \
+	  --family-report "$(SOURCEBOOT_ACTOR_FAMILY_REPORT)" \
+	  --model-ids "$(ROOT)/include/model_ids.h" \
+	  --package-generation "$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)" \
+	  --output-dir "$(SOURCEBOOT_ACTOR_BUNDLE_DIR)" --verify-publication
+
+.PHONY: source-actor-identity-registry-force
+source-actor-identity-registry-force:
+
+# This header has one stable pathname but embeds SOURCEBOOT_SCENE_PACKAGE_GENERATION.
+# Re-run its deterministic generator on each sourceboot invocation so a prior
+# generation's registry cannot survive as a newer package's runtime binding.
+$(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER): source-actor-identity-registry-force \
+    source-actor-family-bundle \
+    $(SOURCEBOOT_ACTOR_FAMILY_REPORT) $(SOURCEBOOT_ACTOR_BUNDLE_REPORT) \
+    $(SOURCEBOOT_ACTOR_CLOSURE) \
     $(ROOT)/tools/saturn/gen_actor_identity_registry.py \
     $(ROOT)/include/model_ids.h
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/gen_actor_identity_registry.py" \
 	  --family-report "$(SOURCEBOOT_ACTOR_FAMILY_REPORT)" \
+	  --bundle-report "$(SOURCEBOOT_ACTOR_BUNDLE_REPORT)" \
 	  --closure "$(SOURCEBOOT_ACTOR_CLOSURE)" \
 	  --model-ids "$(ROOT)/include/model_ids.h" \
 	  --scene-generation "$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)" \
@@ -1056,6 +1107,57 @@ $(SOURCEBOOT_BOB_SKY_ASM): $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_ASSET_ASM_RECIPE)
 	  '_sm64_saturn_bob_sky_bitmap_end:' \
 	  '.align 4' > "$@"
 
+.PHONY: sourceboot-audio-sfx-inputs
+sourceboot-audio-sfx-inputs:
+	@test -d "$(SOURCEBOOT_M68K_BINDIR)" || { printf '%s\n' 'sourceboot: pinned MC68000 toolchain is unavailable' >&2; exit 1; }
+	@$(MAKE) -C "$(ROOT)" -f Makefile.saturn.mk -j1 \
+	  M68K_BINDIR="$(SOURCEBOOT_M68K_BINDIR)" \
+	  SATURN_AUDIO_SCENE_CLOSURE="$(SOURCEBOOT_ACTOR_CLOSURE)" \
+	  pcm68k-image compile-saturn-audio
+
+$(SOURCEBOOT_SFX_METADATA) $(SOURCEBOOT_SFX_PCM) $(SOURCEBOOT_SFX_MANIFEST) &: \
+    sourceboot-audio-sfx-inputs \
+    $(ROOT)/tools/saturn/compile_sourceboot_sfx_bundle.py \
+    $(ROOT)/tools/saturn/saturn_audio_package.py \
+    $(ROOT)/tools/saturn/gen_sequence_bank.py \
+    $(ROOT)/tools/saturn/m64_decode_walk.py
+	@mkdir -p "$(SOURCEBOOT_SFX_DIR)"
+	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/compile_sourceboot_sfx_bundle.py" \
+	  --root "$(ROOT)" \
+	  --closure "$(SOURCEBOOT_AUDIO_GENERATED)/bob_audio_closure.json" \
+	  --sequences-bin "$(SOURCEBOOT_AUDIO_GENERATED)/sequences.bin" \
+	  --metadata-output "$(SOURCEBOOT_SFX_METADATA)" \
+	  --pcm-output "$(SOURCEBOOT_SFX_PCM)" \
+	  --manifest "$(SOURCEBOOT_SFX_MANIFEST)"
+
+$(SOURCEBOOT_PCM68K_BIN): sourceboot-audio-sfx-inputs
+	@test -s "$@"
+
+$(SOURCEBOOT_SFX_ASM): $(SOURCEBOOT_PCM68K_BIN) $(SOURCEBOOT_SFX_METADATA) \
+    $(SOURCEBOOT_SFX_PCM) $(SOURCEBOOT_ASSET_ASM_RECIPE)
+	@mkdir -p "$(dir $@)"
+	@printf '%s\n' \
+	  '.section .rodata' \
+	  '.align 4' \
+	  '.global _sm64_saturn_sourceboot_pcm68k_driver' \
+	  '_sm64_saturn_sourceboot_pcm68k_driver:' \
+	  '.incbin "$(call sourceboot-repo-input,$(SOURCEBOOT_PCM68K_BIN))"' \
+	  '.global _sm64_saturn_sourceboot_pcm68k_driver_end' \
+	  '_sm64_saturn_sourceboot_pcm68k_driver_end:' \
+	  '.align 4' \
+	  '.global _sm64_saturn_sourceboot_sfx_metadata' \
+	  '_sm64_saturn_sourceboot_sfx_metadata:' \
+	  '.incbin "$(call sourceboot-repo-input,$(SOURCEBOOT_SFX_METADATA))"' \
+	  '.global _sm64_saturn_sourceboot_sfx_metadata_end' \
+	  '_sm64_saturn_sourceboot_sfx_metadata_end:' \
+	  '.align 4' \
+	  '.global _sm64_saturn_sourceboot_sfx_pcm' \
+	  '_sm64_saturn_sourceboot_sfx_pcm:' \
+	  '.incbin "$(call sourceboot-repo-input,$(SOURCEBOOT_SFX_PCM))"' \
+	  '.global _sm64_saturn_sourceboot_sfx_pcm_end' \
+	  '_sm64_saturn_sourceboot_sfx_pcm_end:' \
+	  '.align 4' > "$@"
+
 $(SOURCEBOOT_BUILD_IDENTITY_INC) $(SOURCEBOOT_BUILD_IDENTITY_BIN) \
 $(SOURCEBOOT_BUILD_IDENTITY_JSON) $(SOURCEBOOT_BUILD_IDENTITY_LABEL) &: \
     $(SOURCEBOOT_BUILD_IDENTITY_SPEC) $(ROOT)/tools/saturn/gen_build_identity.py
@@ -1089,7 +1191,8 @@ SOURCEBOOT_GENERATED_COMPILED_INPUTS := \
   $(SOURCEBOOT_BOB_TEXTURE_ASM) \
   $(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENTS)),$(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM)) \
   $(SOURCEBOOT_BOB_SKY_ASM) \
-  $(SOURCEBOOT_ACTOR_SCENE_ASM)
+  $(SOURCEBOOT_ACTOR_SCENE_ASM) \
+  $(if $(filter 1,$(SATURN_FEATURE_SEMANTIC_AUDIO)),$(SOURCEBOOT_SFX_ASM))
 SOURCEBOOT_ALL_COMPILED_INPUTS := $(foreach source,$(SH_SRCS_UNIQ),$(abspath $(source)))
 SOURCEBOOT_COMPILED_INPUTS := $(filter-out $(SOURCEBOOT_GENERATED_COMPILED_INPUTS),$(SOURCEBOOT_ALL_COMPILED_INPUTS))
 SOURCEBOOT_RECIPE_INPUTS := \
@@ -1121,6 +1224,10 @@ SOURCEBOOT_GENERATOR_INPUTS := $(sort \
   $(ROOT)/tools/saturn/emit_actor_bank_c.py \
   $(ROOT)/tools/saturn/extract_hud_glyphs.py \
   $(ROOT)/tools/saturn/gen_sourceboot_sky_gradient.py \
+  $(ROOT)/tools/saturn/compile_sourceboot_sfx_bundle.py \
+  $(ROOT)/tools/saturn/saturn_audio_package.py \
+  $(ROOT)/tools/saturn/gen_sequence_bank.py \
+  $(ROOT)/tools/saturn/m64_decode_walk.py \
   $(ROOT)/tools/saturn/gen_actor_identity_registry.py \
   $(ROOT)/tools/saturn/compile_actor_bank.py \
   $(ROOT)/tools/saturn/collect_scene_closure.py \
@@ -1136,10 +1243,12 @@ SOURCEBOOT_GENERATED_INPUTS := $(filter-out $(SOURCEBOOT_PC_ASSET_REQUIRED_INPUT
   $(SOURCEBOOT_BOB_SCENE) $(SOURCEBOOT_MARIO_TEXTURE_HEADER) \
   $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_SKY_GRADIENT_HEADER) \
   $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER) \
-  $(SOURCEBOOT_ACTOR_FAMILY_REPORT) $(SOURCEBOOT_ACTOR_CLOSURE) \
+  $(SOURCEBOOT_ACTOR_FAMILY_REPORT) $(SOURCEBOOT_ACTOR_BUNDLE_REPORT) \
+  $(SOURCEBOOT_ACTOR_CLOSURE) \
   $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) \
   $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) \
   $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_ACTOR_BANK) \
+  $(if $(filter 1,$(SATURN_FEATURE_SEMANTIC_AUDIO)),$(SOURCEBOOT_PCM68K_BIN) $(SOURCEBOOT_SFX_METADATA) $(SOURCEBOOT_SFX_PCM) $(SOURCEBOOT_SFX_MANIFEST)) \
   $(SOURCEBOOT_SCENE_PACKAGE_ROOT) $(SOURCEBOOT_ACTOR_BUNDLE) \
   $(ROOT)/$(SOURCEBOOT_TEXT_STRINGS)))
 SOURCEBOOT_RELEASE_MANIFEST := $(SH_OUTPUT_PATH)/saturn-release-manifest-v1.json
@@ -1290,22 +1399,22 @@ verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf $(SOURCEBOOT_POSTLINK_S
 .PHONY: seal-release verify-release
 seal-release: verify-sealed-inputs $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/release_manifest.py" write \
-	  --root "$(ROOT)" \
-	  --profile "$(SOURCEBOOT_RESOLVED_PROFILE)" \
-	  --source-closure "$(SOURCEBOOT_SOURCE_CLOSURE)" \
-	  --package-set "$(SOURCEBOOT_PACKAGE_SET)" \
-	  --toolchain-attestation "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)" \
+	  --root "$(SOURCEBOOT_MANIFEST_ROOT)" \
+	  --profile "$(call sourceboot-manifest-path,$(SOURCEBOOT_RESOLVED_PROFILE))" \
+	  --source-closure "$(call sourceboot-manifest-path,$(SOURCEBOOT_SOURCE_CLOSURE))" \
+	  --package-set "$(call sourceboot-manifest-path,$(SOURCEBOOT_PACKAGE_SET))" \
+	  --toolchain-attestation "$(call sourceboot-manifest-path,$(SOURCEBOOT_TOOLCHAIN_ATTESTATION))" \
 	  --mode "$(SOURCEBOOT_RELEASE_MODE)" \
-	  --identity-json "$(SOURCEBOOT_BUILD_IDENTITY_JSON)" \
-	  --elf "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" \
-	  --source-dat "$(SOURCEBOOT_CART_IMAGE)" \
-	  --iso "$(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso" \
-	  --cue "$(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue" \
-	  --output "$(SOURCEBOOT_RELEASE_MANIFEST)"
+	  --identity-json "$(call sourceboot-manifest-path,$(SOURCEBOOT_BUILD_IDENTITY_JSON))" \
+	  --elf "$(call sourceboot-manifest-path,$(SH_BUILD_PATH)/$(SH_PROGRAM).elf)" \
+	  --source-dat "$(call sourceboot-manifest-path,$(SOURCEBOOT_CART_IMAGE))" \
+	  --iso "$(call sourceboot-manifest-path,$(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso)" \
+	  --cue "$(call sourceboot-manifest-path,$(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue)" \
+	  --output "$(call sourceboot-manifest-path,$(SOURCEBOOT_RELEASE_MANIFEST))"
 
 verify-release: seal-release
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/release_manifest.py" verify \
-	  --manifest "$(SOURCEBOOT_RELEASE_MANIFEST)"
+	  --manifest "$(call sourceboot-manifest-path,$(SOURCEBOOT_RELEASE_MANIFEST))"
 
 # Yaul's bundled rule declares the CUE's ISO prerequisite order-only. That
 # leaves a stale CUE whenever the ISO/ELF is rebuilt in place, and capture's
