@@ -7,7 +7,10 @@
 
 int main(void)
 {
-    uint8_t sound_ram[SM64_SATURN_PCM_MAILBOX_OFFSET + 64U];
+    /* publish_boot also zeroes the music diagnostics at 0x7F00..0x7F1F, so
+     * the model buffer must span sound RAM up to the PCM bank, not just the
+     * mailbox window. */
+    uint8_t sound_ram[SM64_SATURN_PCM_BANK_OFFSET];
     uint16_t heartbeat = 0xFFFFU;
 
     memset(sound_ram, 0xA5, sizeof(sound_ram));

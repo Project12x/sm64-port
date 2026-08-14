@@ -79,7 +79,12 @@ static void publish_sfx_bundle(uint8_t *ram, uint32_t sound_bits,
     sm64_saturn_pcm_put_be16(ram, (uint16_t)(samples + 10U), 0U);
 }
 
-static void test_semantic_sequence_start_reaches_scsp(void)
+/* Task 4 driver diet: the sequence VM is out of the linked image, so
+ * SEQ_START temporarily keys music off (Task 6 rewrites it as the
+ * looped-sample music start).  The command must stay a known opcode, the
+ * attested music bundle must keep parsing, and the VM-sourced mailbox
+ * words must publish 0 without moving any protocol offset. */
+static void test_seq_start_is_consumed_and_keys_music_off(void)
 {
     uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
     uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
@@ -129,30 +134,29 @@ static void test_semantic_sequence_start_reaches_scsp(void)
     sm64_saturn_pcm_put_be16(ram,
         SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
     assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
-    for (i = 0U; i < 8192U && state.voices_started == 0U; ++i) {
-        (void)sm64_saturn_pcm68k_consume_scsp(ram, registers, &state);
-    }
-    assert(state.music_sequence_starts == 1U);
-    assert(state.music_notes_started != 0U);
-    assert(state.voices_started != 0U);
+    assert(state.unknown_opcodes == 0U);
+    assert(state.protocol_faults == 0U);
+    assert(state.music_active == 0U);
+    assert(state.music_sequence_starts == 0U);
+    assert(state.music_notes_started == 0U);
     assert(state.music_faults == 0U);
+    assert(state.voices_started == 0U);
     assert(sm64_saturn_pcm_get_be16(
-               ram, SM64_SATURN_PCM_VOICES_STARTED_OFFSET) != 0U);
-    assert(state.music_direct_fallback != 0U);
+               ram, SM64_SATURN_PCM_VOICES_STARTED_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
                ram, SM64_SATURN_PCM_SOUND_SERVICE_TICK_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
-               ram, SM64_SATURN_PCM_ACTIVE_VOICE_COUNT_OFFSET) != 0U);
+               ram, SM64_SATURN_PCM_ACTIVE_VOICE_COUNT_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
-               ram, SM64_SATURN_PCM_MUSIC_STARTS_OFFSET) != 0U);
+               ram, SM64_SATURN_PCM_MUSIC_STARTS_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
                ram, SM64_SATURN_PCM_MUSIC_FAULTS_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
                ram, SM64_SATURN_PCM_MUSIC_VM_TICKS_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
-               ram, SM64_SATURN_PCM_MUSIC_ACTIVE_OFFSET) != 0U);
+               ram, SM64_SATURN_PCM_MUSIC_ACTIVE_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
-               ram, SM64_SATURN_PCM_MUSIC_NOTES_OFFSET) != 0U);
+               ram, SM64_SATURN_PCM_MUSIC_NOTES_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
                ram, SM64_SATURN_PCM_MUSIC_REJECT_MASK_OFFSET) == 0U);
 }
@@ -343,10 +347,19 @@ static void test_semantic_sfx_uses_validated_sound_ram_bundle(void)
     assert(state.invalid_samples == 1U);
 }
 
+static void test_voice_state_fits_reserved_stack(void)
+{
+    /* linker.ld reserves 0x3C00..0x3FFC (1,020 bytes). The state no longer
+       lives on the stack, but keep it small enough that moving it back
+       could never overflow again. */
+    assert(sizeof(sm64_saturn_pcm_voice_state_t) <= 768);
+}
+
 int main(void)
 {
+    test_voice_state_fits_reserved_stack();
     test_proof_metadata_is_deterministic_and_bounded();
-    test_semantic_sequence_start_reaches_scsp();
+    test_seq_start_is_consumed_and_keys_music_off();
     test_consumer_drains_control_before_sfx_under_budget();
     test_reset_play_invalid_and_unknown_are_safe();
     test_version_and_either_corrupt_ring_fail_before_consumption();

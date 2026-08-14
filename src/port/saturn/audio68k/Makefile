@@ -19,9 +19,12 @@ BUILD := $(ROOT)/build/saturn/audio68k
 ELF := $(BUILD)/pcm68k-heartbeat.elf
 BIN := $(BUILD)/pcm68k-heartbeat.bin
 MAP := $(BUILD)/pcm68k-heartbeat.map
+# Task 4 driver diet: the sequence VM / software voice engine objects
+# (sequence_vm, audio_engine, voice_allocator, desired_voice) stay in the
+# tree but are no longer linked into the image.  audio_freestanding remains:
+# GCC emits memset for struct zero-initialization even with -fno-builtin.
 OBJECTS := $(BUILD)/start.o $(BUILD)/main.o $(BUILD)/pcm_voice.o $(BUILD)/scsp_pcm8.o \
-	$(BUILD)/sequence_vm.o $(BUILD)/audio_engine.o $(BUILD)/voice_allocator.o \
-	$(BUILD)/desired_voice.o $(BUILD)/audio_freestanding.o
+	$(BUILD)/audio_freestanding.o
 TASK17_OBJECTS := $(BUILD)/audio_engine.o $(BUILD)/voice_allocator.o \
 	$(BUILD)/desired_voice.o $(BUILD)/slot_shadow.o $(BUILD)/scsp_timer.o \
 	$(BUILD)/audio_freestanding.o
@@ -50,8 +53,7 @@ $(BUILD)/start.o: start.S | $(BUILD)
 $(BUILD)/main.o: main.c pcm68k_heartbeat.h pcm_voice.h $(PROTOCOL_HEADER) | $(BUILD)
 	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/pcm_voice.o: pcm_voice.c pcm_voice.h sequence_vm.h audio_engine.h \
-	$(PROTOCOL_HEADER) | $(BUILD)
+$(BUILD)/pcm_voice.o: pcm_voice.c pcm_voice.h $(PROTOCOL_HEADER) | $(BUILD)
 	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(BUILD)/sequence_vm.o: sequence_vm.c sequence_vm.h | $(BUILD)
@@ -95,4 +97,5 @@ verify: all
 		--elf $(ELF) --objdump $(OBJDUMP)
 
 clean:
-	rm -f $(OBJECTS) $(TASK17_OBJECTS) $(TASK17_RELOC) $(ELF) $(BIN) $(MAP)
+	rm -f $(OBJECTS) $(TASK17_OBJECTS) $(TASK17_RELOC) $(BUILD)/sequence_vm.o \
+		$(ELF) $(BIN) $(MAP)

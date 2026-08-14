@@ -21,6 +21,30 @@
 
 ### Changed
 
+- Removed the M64 sequence VM, its 20-voice software allocator, and the
+  software envelope engine from the linked MC68000 driver image and moved the
+  driver state off the reserved stack. Root cause of diagnostic failure
+  0x0340 (garbage note velocity, zeroed envelope fields): the voice state
+  struct had grown to 2,080 bytes — the embedded allocator alone is 1,760 —
+  while remaining a stack local in `pcm68k_main` against the 1,020-byte
+  reserved stack (`linker.ld` 0x3C00..0x3FFC), so deep call frames corrupted
+  the note bindings. The state is now a 102-byte file-scope `.bss` object
+  (guarded by a `_Static_assert` at 768 bytes and a host regression test),
+  and `start.S` already byte-clears `.bss` before `pcm68k_main`. Removed
+  from the image only: `sequence_vm`, `audio_engine`, `voice_allocator`,
+  `desired_voice` objects — the sources stay in the tree (still compiled by
+  the TASK17 relocatable-module target and their host tests) banked for a
+  future sprint, which also moots the secondary defect of channel scripts
+  being decoded as layer scripts. The image shrank from 13,520 to 5,643
+  bytes, leaving 9,612 bytes between `__driver_end` and `__stack_bottom`.
+  Consumer impact: music via the sequence VM is gone — `SEQ_START`
+  temporarily keys music off until the looped-sample music path lands in the
+  next tasks; the semantic SFX path, mailbox protocol offsets, and SFXB wire
+  format are unchanged (VM-sourced diagnostic words now publish 0). The
+  heartbeat host test also regained a buffer large enough for the music
+  diagnostics window at 0x7F00 that `publish_boot` already wrote (its
+  previous 0x4040-byte model buffer made the newly-linking test overflow).
+
 - Packed the unchanged, 32-byte-aligned sourceboot VDP1 command double-buffer
   first in HWRAM BSS after a master-only 72-byte camera transition record moved
   to explicitly reset NOLOAD LWRAM. This removes alignment-only heap loss

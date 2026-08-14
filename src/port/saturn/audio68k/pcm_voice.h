@@ -4,9 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "audio_engine.h"
-#include "sequence_vm.h"
-
 enum {
     SM64_SATURN_PCM_VOICE_COUNT = 4U,
     SM64_SATURN_PCM_COMMANDS_PER_POLL = 8U,
@@ -43,23 +40,16 @@ typedef struct sm64_saturn_pcm_voice_state {
     uint16_t last_opcode;
     uint16_t active_slot;
     uint16_t next_slot;
-    sm64_saturn_sequence_vm_t music_vm;
-    sm64_saturn_audio_engine_t music_engine;
+    /* Music state kept after the Task 4 driver diet: the sequence VM and
+     * software voice engine are banked out of the image, so only the fields
+     * the mailbox publisher and the upcoming looped-sample music path need
+     * survive here. */
     uint32_t music_generation;
-    uint32_t music_sequence_offset;
-    uint16_t music_sequence_bytes;
-    uint16_t music_sample_index;
-    uint16_t music_poll_divider;
-    uint16_t music_fallback_ticks;
-    uint16_t music_fallback_period;
-    uint8_t music_active;
-    uint8_t music_direct_fallback;
-    uint8_t music_sequence_id;
     uint32_t music_sequence_starts;
     uint32_t music_notes_started;
     uint32_t music_faults;
-    uint32_t music_consume_failures;
     uint32_t music_scsp_failures;
+    uint8_t music_active;
 } sm64_saturn_pcm_voice_state_t;
 
 void sm64_saturn_pcm_voice_state_init(sm64_saturn_pcm_voice_state_t *state);

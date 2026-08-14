@@ -87,21 +87,29 @@ void sm64_saturn_pcm68k_publish_tick(volatile uint8_t *sound_ram,
                             *heartbeat);
 }
 
+/* The driver state lives in .bss, not on the 1,020-byte reserved stack
+ * (linker.ld: 0x3C00..0x3FFC).  A ~2 KB stack local here corrupted note
+ * bindings on deep call frames (diagnostic failure 0x0340).  start.S clears
+ * .bss before pcm68k_main, and sm64_saturn_pcm_voice_state_init() below
+ * still performs the same explicit field initialization the local received. */
+static sm64_saturn_pcm_voice_state_t s_voice_state;
+_Static_assert(sizeof(sm64_saturn_pcm_voice_state_t) <= 768,
+               "voice state must stay far below the 1020-byte reserved stack");
+
 void pcm68k_main(void)
 {
     volatile uint8_t *const sound_ram = (volatile uint8_t *)(uintptr_t)0;
     volatile uint8_t *const scsp_registers =
         (volatile uint8_t *)(uintptr_t)SM64_SATURN_SCSP_SLOT_BASE;
-    sm64_saturn_pcm_voice_state_t voice_state;
     uint16_t heartbeat = 0;
 
     sm64_saturn_pcm68k_publish_boot(sound_ram);
-    sm64_saturn_pcm_voice_state_init(&voice_state);
+    sm64_saturn_pcm_voice_state_init(&s_voice_state);
 
     for (;;) {
         (void)sound_ram;
         (void)sm64_saturn_pcm68k_consume_mapped_zero(scsp_registers,
-                                                     &voice_state);
+                                                     &s_voice_state);
         sm64_saturn_pcm68k_publish_tick(sound_ram, &heartbeat);
     }
 }

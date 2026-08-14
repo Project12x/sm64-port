@@ -36,21 +36,6 @@ typedef struct sm64_saturn_pcm_sfx_bundle_view {
     uint32_t pcm_bytes;
 } sm64_saturn_pcm_sfx_bundle_view_t;
 
-/* The MC68000 consumer is scheduled at the SCSP service cadence (~240 Hz on
- * the Saturn).  A semantic sequence tick therefore belongs to every consumer
- * poll; a large divider makes a live level appear silent for seconds and is
- * not an audio-rate implementation. */
-enum { SM64_SATURN_PCM_MUSIC_POLLS_PER_TICK = 1U };
-
-/* The target scalar sequence/voice ABI currently rejects the same note
- * request that the host model accepts (velocity/envelope fields arrive
- * corrupted on the MC68000).  Keep the semantic SEQ_START command and the
- * already-attested package, but use its bounded music sample directly until
- * that ABI is repaired.  This is deliberately a bypass, not a new wire
- * format: the sequence trailer remains present and the sequence VM remains
- * diagnostic-only when the target scalar ABI rejects a note request. */
-#define SM64_SATURN_PCM_MUSIC_DIRECT_FALLBACK 1
-
 static void sm64_saturn_pcm_play_sample(
     sm64_saturn_pcm_voice_state_t *state, uint16_t sample_id,
     const sm64_saturn_pcm_sample_t *sample, uint16_t volume, int16_t pan,
@@ -86,18 +71,13 @@ static uint16_t sm64_saturn_pcm_clamp_u16(uint16_t value, uint16_t maximum)
     return value > maximum ? maximum : value;
 }
 
-static uint16_t sm64_saturn_pcm_music_period(uint16_t sample_count,
-                                              uint16_t sample_rate)
+/* Keys the music path off.  The sequence VM and its software voice engine
+ * were removed from the linked image (Task 4 driver diet); until the
+ * looped-sample music path lands, keying music off only means clearing the
+ * activity flag the mailbox publisher reports. */
+static void sm64_saturn_pcm_music_key_off(sm64_saturn_pcm_voice_state_t *state)
 {
-    uint32_t numerator = (uint32_t)sample_count * 240U;
-    uint16_t period = 0U;
-    if (sample_rate == 0U) return 1U;
-    while (numerator >= sample_rate && period != 0xffffU) {
-        numerator -= sample_rate;
-        ++period;
-    }
-    if (numerator != 0U && period != 0xffffU) ++period;
-    return period == 0U ? 1U : period;
+    state->music_active = 0U;
 }
 
 static sm64_saturn_pcm_sfx_bundle_state_t
@@ -236,23 +216,12 @@ void sm64_saturn_pcm_voice_state_init(sm64_saturn_pcm_voice_state_t *state)
     state->last_opcode = SM64_SATURN_AUDIO_OPCODE_NOP;
     state->active_slot = 0xFFFFU;
     state->next_slot = 0U;
-    state->music_vm = (sm64_saturn_sequence_vm_t){0};
-    sm64_saturn_audio_engine_init(&state->music_engine, 1U);
     state->music_generation = 0U;
-    state->music_sequence_offset = 0U;
-    state->music_sequence_bytes = 0U;
-    state->music_sample_index = 0U;
-    state->music_poll_divider = 0U;
-    state->music_fallback_ticks = 0U;
-    state->music_fallback_period = 0U;
-    state->music_active = 0U;
-    state->music_direct_fallback = 0U;
-    state->music_sequence_id = 0U;
     state->music_sequence_starts = 0U;
     state->music_notes_started = 0U;
     state->music_faults = 0U;
-    state->music_consume_failures = 0U;
     state->music_scsp_failures = 0U;
+    state->music_active = 0U;
 }
 
 uint16_t sm64_saturn_pcm_proof_sample_count(void)
@@ -309,225 +278,6 @@ bool sm64_saturn_pcm_sfx_sample_descriptor(
     return sample->sample_count != 0U && sample->sample_rate != 0U;
 }
 
-static bool sm64_saturn_pcm_music_start(
-    sm64_saturn_pcm_voice_state_t *state, volatile uint8_t *sound_ram,
-    volatile uint8_t *scsp_registers, const uint16_t words[7])
-{
-    const uint16_t base = SM64_SATURN_PCM_SFX_BUNDLE_OFFSET;
-    const uint32_t sequence_offset = sm64_saturn_pcm_get_be32(
-        sound_ram, (uint16_t)(base +
-            SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SEQUENCE_OFFSET_FIELD));
-    const uint16_t sequence_bytes = sm64_saturn_pcm_get_be16(
-        sound_ram, (uint16_t)(base +
-            SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SEQUENCE_BYTES_FIELD));
-    const uint16_t sample_index = sm64_saturn_pcm_get_be16(
-        sound_ram, (uint16_t)(base +
-            SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SAMPLE_INDEX_FIELD));
-    const uint16_t generation = sm64_saturn_pcm_get_be16(
-        sound_ram, (uint16_t)(base + 8U));
-    sm64_saturn_pcm_sample_t sample;
-    uint16_t reject_mask = 0U;
-    if (state == 0) reject_mask |= 0x0001U;
-#if !defined(SM64_SATURN_PCM_MAPPED_ZERO)
-    if (sound_ram == 0) reject_mask |= 0x0002U;
-#endif
-    if (words == 0 || (words != 0 && words[1] != 3U)) reject_mask |= 0x0004U;
-    if (sequence_offset < SM64_SATURN_PCM_BANK_OFFSET) reject_mask |= 0x0008U;
-    if (sequence_bytes == 0U) reject_mask |= 0x0010U;
-    if (sequence_offset + sequence_bytes > SM64_SATURN_PCM_SOUND_RAM_BYTES)
-        reject_mask |= 0x0020U;
-    if (generation == 0U) reject_mask |= 0x0040U;
-    if (!sm64_saturn_pcm_sfx_sample_descriptor(sound_ram, sample_index,
-                                               &sample))
-        reject_mask |= 0x0080U;
-    if (state != 0) {
-        sm64_saturn_pcm_put_be16(
-            sound_ram, SM64_SATURN_PCM_MUSIC_SEQUENCE_OFFSET,
-            (uint16_t)sequence_offset);
-        sm64_saturn_pcm_put_be16(
-            sound_ram, SM64_SATURN_PCM_MUSIC_SEQUENCE_BYTES_OFFSET,
-            sequence_bytes);
-        sm64_saturn_pcm_put_be16(
-            sound_ram, SM64_SATURN_PCM_MUSIC_REJECT_MASK_OFFSET,
-            reject_mask);
-    }
-    if (reject_mask != 0U) {
-        if (state != 0) state->music_faults++;
-        return false;
-    }
-    sm64_saturn_sequence_vm_init_ex(
-        &state->music_vm, sequence_bytes, 0U,
-        SM64_SATURN_SEQUENCE_VM_SEQUENCE,
-        SM64_SATURN_SEQUENCE_VM_FORMAT_US);
-    sm64_saturn_audio_engine_init(&state->music_engine, generation);
-    state->music_generation = generation;
-    state->music_sequence_offset = sequence_offset;
-    state->music_sequence_bytes = sequence_bytes;
-    state->music_sample_index = sample_index;
-    state->music_poll_divider = 0U;
-    state->music_sequence_id = (uint8_t)words[1];
-    state->music_active = 1U;
-    state->music_sequence_starts++;
-#if SM64_SATURN_PCM_MUSIC_DIRECT_FALLBACK
-    {
-        const uint32_t before = state->voices_started;
-        state->music_direct_fallback = 1U;
-        state->music_fallback_ticks = 0U;
-        state->music_fallback_period = sm64_saturn_pcm_music_period(
-            sample.sample_count, sample.sample_rate);
-        sm64_saturn_pcm_play_sample(state, sample_index, &sample,
-                                    sample.default_volume, 0,
-                                    scsp_registers);
-        if (state->voices_started == before) {
-            state->music_faults++;
-            state->music_scsp_failures++;
-            state->music_active = 0U;
-            return false;
-        }
-        state->music_notes_started++;
-        return true;
-    }
-#else
-    (void)sample;
-#endif
-    return true;
-}
-
-static void sm64_saturn_pcm_music_service(
-    sm64_saturn_pcm_voice_state_t *state, volatile uint8_t *sound_ram,
-    volatile uint8_t *scsp_registers)
-{
-    sm64_saturn_sequence_vm_event_t events[8];
-    sm64_saturn_pcm_sample_t sample;
-    sm64_saturn_audio_note_binding_t binding;
-    uint8_t event_count = 0U;
-    uint8_t index;
-#if !defined(SM64_SATURN_PCM_MAPPED_ZERO)
-    if (state == 0 || sound_ram == 0 || !state->music_active) return;
-#else
-    if (state == 0 || !state->music_active) return;
-#endif
-    if (++state->music_poll_divider < SM64_SATURN_PCM_MUSIC_POLLS_PER_TICK)
-        return;
-    state->music_poll_divider = 0U;
-    if (state->music_direct_fallback) {
-        sm64_saturn_pcm_sample_t fallback_sample;
-        const uint32_t before = state->voices_started;
-        if (++state->music_fallback_ticks < state->music_fallback_period)
-            return;
-        state->music_fallback_ticks = 0U;
-        if (!sm64_saturn_pcm_sfx_sample_descriptor(
-                sound_ram, state->music_sample_index, &fallback_sample)) {
-            state->music_faults++;
-            state->music_active = 0U;
-            return;
-        }
-        sm64_saturn_pcm_play_sample(
-            state, state->music_sample_index, &fallback_sample,
-            fallback_sample.default_volume, 0, scsp_registers);
-        if (state->voices_started == before) {
-            state->music_faults++;
-            state->music_scsp_failures++;
-            state->music_active = 0U;
-        } else {
-            state->music_notes_started++;
-        }
-        return;
-    }
-    if (!sm64_saturn_pcm_sfx_sample_descriptor(sound_ram,
-                                               state->music_sample_index,
-                                               &sample) ||
-        !sm64_saturn_sequence_vm_tick(
-            &state->music_vm,
-            (const uint8_t *)(sound_ram + state->music_sequence_offset),
-            state->music_sequence_bytes, events,
-            (uint8_t)(sizeof(events) / sizeof(events[0])), &event_count)) {
-        state->music_faults++;
-        state->music_active = 0U;
-        return;
-    }
-    for (index = 0U; index < event_count; ++index) {
-        sm64_saturn_voice_allocation_t allocation;
-        if (events[index].type == SM64_SATURN_SEQUENCE_VM_EVENT_END) {
-            sm64_saturn_sequence_vm_init_ex(
-                &state->music_vm, state->music_sequence_bytes, 0U,
-                SM64_SATURN_SEQUENCE_VM_SEQUENCE,
-                SM64_SATURN_SEQUENCE_VM_FORMAT_US);
-            continue;
-        }
-        if (events[index].type ==
-                SM64_SATURN_SEQUENCE_VM_EVENT_CHANNEL_START &&
-            events[index].arg1 < state->music_sequence_bytes) {
-            /* The source sequence's channel target is a layer script in the
-             * same resident m64 span.  Keep the existing bounded VM and
-             * switch it to the small-layer decoder; on layer END the code
-             * above returns to the sequence dispatcher. */
-            sm64_saturn_sequence_vm_init_ex(
-                &state->music_vm, state->music_sequence_bytes,
-                events[index].arg1, SM64_SATURN_SEQUENCE_VM_LAYER_SMALL,
-                SM64_SATURN_SEQUENCE_VM_FORMAT_US);
-            continue;
-        }
-        if (events[index].type != SM64_SATURN_SEQUENCE_VM_EVENT_NOTE) continue;
-        binding.package_generation = state->music_generation;
-        binding.sound_ram_offset = sample.sound_ram_offset;
-        binding.sample_count = sample.sample_count;
-        binding.loop_start = 0U;
-        binding.sample_rate = sample.sample_rate;
-        binding.tuning_q12 = 4096U;
-        binding.sustain_q15 = 0x7FFFU;
-        binding.root_note = 60;
-        binding.pan = 0;
-        binding.priority = 255U;
-        binding.source_class = SM64_SATURN_VOICE_CLASS_MUSIC;
-        binding.loop = 0U;
-        binding.attack_ticks = 1U;
-        binding.decay_ticks = 1U;
-        binding.release_ticks = 2U;
-        if (!sm64_saturn_audio_engine_consume_sequence_event(
-                &state->music_engine, state->music_generation, &events[index],
-                &binding, &allocation)) {
-            state->music_faults++;
-            state->music_consume_failures++;
-            sm64_saturn_pcm_put_be16(
-                sound_ram, SM64_SATURN_PCM_MUSIC_LAST_NOTE_OFFSET,
-                (uint16_t)events[index].signed_value);
-            sm64_saturn_pcm_put_be16(
-                sound_ram, SM64_SATURN_PCM_MUSIC_LAST_ARG1_OFFSET,
-                events[index].arg1);
-            sm64_saturn_pcm_put_be16(
-                sound_ram, SM64_SATURN_PCM_MUSIC_LAST_ARG0_OFFSET,
-                events[index].arg0);
-            continue;
-        }
-        if (scsp_registers != 0 && sm64_saturn_scsp_pcm8_start(
-                scsp_registers,
-                (uint16_t)(allocation.voice_index % SM64_SATURN_PCM_VOICE_COUNT),
-                &sample,
-                (uint16_t)(events[index].arg1 >> 8), 0)) {
-            state->music_notes_started++;
-            /* Keep the existing mailbox telemetry authoritative for both
-             * semantic SFX and the music path.  The target proof reads this
-             * counter; a music-only voice must not be invisible to it. */
-            state->voices_started++;
-        } else {
-            state->music_faults++;
-            state->music_scsp_failures++;
-        }
-    }
-    if (!state->music_engine.has_service_generation) {
-        if (!sm64_saturn_audio_engine_service_generation(
-                &state->music_engine, state->music_generation)) {
-            state->music_faults++;
-        }
-    } else {
-        /* A sequence remains in one package generation for its lifetime;
-         * servicing it with the same generation is valid and must not be
-         * reported as a duplicate publication. */
-        sm64_saturn_voice_allocator_tick(&state->music_engine.allocator);
-    }
-}
-
 static void sm64_saturn_pcm_stop_all(sm64_saturn_pcm_voice_state_t *state,
                                      volatile uint8_t *scsp_registers)
 {
@@ -542,9 +292,7 @@ static void sm64_saturn_pcm_stop_all(sm64_saturn_pcm_voice_state_t *state,
         }
     }
     state->active_slot = 0xFFFFU;
-    state->music_active = 0U;
-    state->music_direct_fallback = 0U;
-    state->music_fallback_ticks = 0U;
+    sm64_saturn_pcm_music_key_off(state);
 }
 
 static void sm64_saturn_pcm_play_sample(
@@ -741,13 +489,13 @@ static void sm64_saturn_pcm_publish_stats(
                             (uint16_t)state->sfx_commands_consumed);
     SM64_SATURN_PCM_CONSUMER_WRITE_OBSERVER(
         SM64_SATURN_PCM_SFX_CONSUMED_OFFSET);
-    /* These fields are part of the v2 mailbox ABI and were previously left
-     * unwritten by the consumer.  Publish the semantic VM cadence and live
-     * allocator occupancy so a target run can distinguish a stopped VM from
-     * a rejected SCSP voice without adding a second diagnostic channel. */
+    /* These fields are part of the v2 mailbox ABI; every offset keeps being
+     * written so the protocol layout is unchanged.  The sequence VM and its
+     * software voice engine are no longer linked into the image (Task 4
+     * driver diet), so the VM/engine-sourced words publish a constant 0
+     * while the surviving music counters stay live. */
     sm64_saturn_pcm_put_be16(sound_ram,
-        SM64_SATURN_PCM_SOUND_SERVICE_TICK_OFFSET,
-        (uint16_t)state->music_vm.tick_count);
+        SM64_SATURN_PCM_SOUND_SERVICE_TICK_OFFSET, 0U);
     SM64_SATURN_PCM_CONSUMER_WRITE_OBSERVER(
         SM64_SATURN_PCM_SOUND_SERVICE_TICK_OFFSET);
     sm64_saturn_pcm_put_be16(sound_ram,
@@ -762,8 +510,7 @@ static void sm64_saturn_pcm_publish_stats(
         SM64_SATURN_PCM_MUSIC_FAULTS_OFFSET,
         (uint16_t)state->music_faults);
     sm64_saturn_pcm_put_be16(sound_ram,
-        SM64_SATURN_PCM_MUSIC_VM_TICKS_OFFSET,
-        (uint16_t)state->music_vm.tick_count);
+        SM64_SATURN_PCM_MUSIC_VM_TICKS_OFFSET, 0U);
     sm64_saturn_pcm_put_be16(sound_ram,
         SM64_SATURN_PCM_MUSIC_ACTIVE_OFFSET,
         (uint16_t)state->music_active);
@@ -771,20 +518,16 @@ static void sm64_saturn_pcm_publish_stats(
         SM64_SATURN_PCM_MUSIC_NOTES_OFFSET,
         (uint16_t)state->music_notes_started);
     sm64_saturn_pcm_put_be16(sound_ram,
-        SM64_SATURN_PCM_MUSIC_MALFORMED_OFFSET,
-        (uint16_t)state->music_engine.malformed_events);
+        SM64_SATURN_PCM_MUSIC_MALFORMED_OFFSET, 0U);
     sm64_saturn_pcm_put_be16(sound_ram,
-        SM64_SATURN_PCM_MUSIC_DROPPED_OFFSET,
-        (uint16_t)state->music_engine.allocator.dropped_music);
+        SM64_SATURN_PCM_MUSIC_DROPPED_OFFSET, 0U);
     sm64_saturn_pcm_put_be16(sound_ram,
-        SM64_SATURN_PCM_MUSIC_CONSUME_FAIL_OFFSET,
-        (uint16_t)state->music_consume_failures);
+        SM64_SATURN_PCM_MUSIC_CONSUME_FAIL_OFFSET, 0U);
     sm64_saturn_pcm_put_be16(sound_ram,
         SM64_SATURN_PCM_MUSIC_SCSP_FAIL_OFFSET,
         (uint16_t)state->music_scsp_failures);
     sm64_saturn_pcm_put_be16(sound_ram,
-        SM64_SATURN_PCM_MUSIC_LAST_FAILURE_OFFSET,
-        state->music_engine.last_failure);
+        SM64_SATURN_PCM_MUSIC_LAST_FAILURE_OFFSET, 0U);
 }
 
 static void sm64_saturn_pcm_protocol_fault(
@@ -840,14 +583,11 @@ static void sm64_saturn_pcm_apply_command(
             case SM64_SATURN_AUDIO_OPCODE_SOUND_MODE:
                 break;
             case SM64_SATURN_AUDIO_OPCODE_SEQ_START:
-                if (!sm64_saturn_pcm_music_start(state, sound_ram,
-                                                 scsp_registers, words)) {
-                    state->music_active = 0U;
-                }
+                /* Task 6 rewrites this as the looped-sample music start. */
+                sm64_saturn_pcm_music_key_off(state);
                 break;
             case SM64_SATURN_AUDIO_OPCODE_SEQ_STOP:
-                state->music_active = 0U;
-                state->music_direct_fallback = 0U;
+                sm64_saturn_pcm_music_key_off(state);
                 break;
             default:
                 state->unknown_opcodes++;
@@ -942,10 +682,9 @@ static uint16_t sm64_saturn_pcm68k_consume_internal(
         sound_ram, scsp_registers, state, &s_consumer_sfx_ring, sfx_producer,
         sfx_consumer,
         (uint16_t)(SM64_SATURN_PCM_COMMANDS_PER_POLL - consumed)));
-    sm64_saturn_pcm_music_service(state, sound_ram, scsp_registers);
-    /* Music is serviced after the command-ring publication. Publish once
-     * more so the existing mailbox counters describe the SCSP state reached
-     * by this same consumer poll, rather than lagging by one poll. */
+    /* Publish once per poll even when no command was consumed so the
+     * mailbox counters always describe the SCSP state reached by this
+     * consumer poll. */
     sm64_saturn_pcm_publish_stats(sound_ram, state);
     return consumed;
 }
