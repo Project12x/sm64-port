@@ -59,6 +59,18 @@ no current candidate accepted and visual comparison remains unresolved**
   zero-presentation diagnostics are retained unchanged. Task 2 is still the
   next live behavior task; no product acceptance is claimed.
 
+## 2026-08-14 — Task 1 review pass; Task 2 active
+
+- Same-reviewer rereview of correction `d8858728` returned **PASS**: the parent
+  TOML is comparator-only, visible Task 1 steps remain open, and the record has
+  resolved commands/output paths plus `YmirClient`'s injected `--dram-cart`.
+- Task 1 therefore establishes only baseline/current identities, the diagnostic
+  rejection, and the baseline-first hybrid decision. It does not close the
+  visual capture requirement or any product gate.
+- Task 2 is active: identify the smallest accepted A9A Mario render-path
+  divergence, make one causal restoration, then build one new CUE and observe
+  it before any Bob-omb, audio, performance, or Whomp's Fortress work.
+
 ## Non-negotiable stop rules
 
 - Two failed live attempts or two hours on one regression triggers donor replacement or removal, not more abstraction.

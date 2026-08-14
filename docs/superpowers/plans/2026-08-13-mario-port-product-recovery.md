@@ -1,7 +1,8 @@
 # Mario Port Product Recovery Implementation Plan
 
-**Status:** active — Task 1 evidence recorded; baseline-first hybrid selected;
-no current candidate accepted and the visual gate remains unresolved
+**Status:** active — Task 1 evidence review passed; baseline-first hybrid
+selected; Task 2 Mario restoration is active; no current candidate accepted and
+the visual gate remains unresolved
 
 **Activation commit:** `1f07485a` (`docs(saturn): make playable port the product gate`)
 
@@ -160,6 +161,9 @@ unmet and blocks any acceptance claim.
 **Product result:** The new CUE preserves the accepted baseline’s controllable,
 animated Mario with correct scale, texture colors, fixed Gouraud lighting,
 front/back occlusion, and painter order.
+
+**Status:** active — one baseline-derived Mario restoration only; its new CUE
+must be observed before any Bob-omb or audio change.
 
 **Primary files (change only those implicated by the live diff):**
 
