@@ -247,6 +247,13 @@ start earlier.
   320x224 BOB frame (`401737ae49bb65bfe91f0488ff0ee7b4b7aed53701cb5cbcadd711df27696375`).
   This is diagnostic evidence only, not an accepted Mario or audio result. A
   visible Ymir session for this exact CUE was launched for owner review.
+- A second independent headless run held logical Saturn D-pad Up (`0x1000`) for
+  120 frames after that same startup. Its 3,420-VBlank screenshot contains a
+  clearly visible red/blue Mario on BOB ground
+  (`f9dd7a3f133438aed8ab9d6950385b12b04e5690ee0a06ebeb4892d36be002b5`).
+  This is evidence of rendering after input on the exact CUE; it does not
+  establish full controls/camera, animation, audio, cadence, or owner
+  acceptance.
 - Keep the bounded source-policy regression and emitter hunk uncommitted in the
   existing dirty renderer file. Do not treat it as an accepted transplant,
   expand into an actor/package repair, or open Tasks 3–6. A new CUE requires an

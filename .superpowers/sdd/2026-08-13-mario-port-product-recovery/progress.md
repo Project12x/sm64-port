@@ -102,6 +102,12 @@ comparison remains unresolved**
   `401737ae49bb65bfe91f0488ff0ee7b4b7aed53701cb5cbcadd711df27696375`.
   It proves CUE boot and visible BOB terrain only. It does not prove correct
   Mario materials/depth/animation/controls, audible music/SFX, or FPS.
+- A separate run held logical D-pad Up (`0x1000`) for 120 frames after the same
+  boot and captured VBlank 3,420. Its frame SHA-256 is
+  `f9dd7a3f133438aed8ab9d6950385b12b04e5690ee0a06ebeb4892d36be002b5` and
+  visibly shows red/blue Mario on BOB ground. It is narrow evidence that the
+  donor path reacts to input and renders Mario; it does not close any owner
+  acceptance or audio/cadence requirement.
 - A visible Ymir session was launched with that exact CUE and the desktop
   profile. Owner review is now the next acceptance boundary. Tasks 3–6 remain
   closed; do not repair the actor stack or Make graph before that result.

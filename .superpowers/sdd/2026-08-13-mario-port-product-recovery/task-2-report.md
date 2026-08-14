@@ -36,6 +36,12 @@ Status: **ACTIVE — DIAGNOSTIC CUE BOOTED; OWNER ACCEPTANCE PENDING**
    and captured a 320x224 frame (`401737ae49bb65bfe91f0488ff0ee7b4b7aed53701cb5cbcadd711df27696375`).
    It proves the donor CUE boots and presents BOB terrain; it does **not** prove
    Mario is visually correct, controllable, animated, or audible.
+4. A separate exact-CUE headless run held logical Saturn D-pad Up (`0x1000`) for
+   120 frames after startup and captured at VBlank 3,420. The resulting 320x224
+   image SHA-256 is `f9dd7a3f133438aed8ab9d6950385b12b04e5690ee0a06ebeb4892d36be002b5`
+   and visibly contains red/blue Mario on BOB ground. This demonstrates one
+   input-associated rendered state; it is not a substitute for owner checks of
+   controls, camera, collision, animation, materials/depth, cadence, or audio.
 
 The visible desktop Ymir session uses this exact CUE for owner review. The
 detailed donor log is
