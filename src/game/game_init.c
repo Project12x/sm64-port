@@ -1,4 +1,5 @@
 #include <ultra64.h>
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include "sm64.h"
 #include "gfx_dimensions.h"
@@ -644,6 +645,7 @@ void read_controller_inputs(void) {
 /**
  * Initialize the controller structs to point at the OSCont information.
  */
+SM64_SATURN_CART_COLD
 void init_controllers(void) {
     s16 port, cont;
 
@@ -690,6 +692,7 @@ void init_controllers(void) {
 /**
  * Setup main segments and framebuffers.
  */
+SM64_SATURN_CART_COLD
 void setup_game_memory(void) {
     UNUSED u64 padding;
 
@@ -728,6 +731,7 @@ static struct LevelCommand *levelCommandAddr;
 /**
  * Main game loop thread. Runs forever as long as the game continues.
  */
+SM64_SATURN_CART_COLD
 void thread5_game_loop(UNUSED void *arg) {
 #ifdef TARGET_N64
     struct LevelCommand *levelCommandAddr;

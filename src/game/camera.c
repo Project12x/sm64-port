@@ -1,4 +1,5 @@
 #include <ultra64.h>
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #define INCLUDED_FROM_CAMERA_C
 
@@ -32,6 +33,16 @@
 #include "port/saturn/runtime/saturn_camera_probe.h"
 #include "port/saturn/runtime/saturn_camera_fixed.h"
 #include "port/saturn/runtime/saturn_camera_role.h"
+#endif
+
+/* Sourceboot's HWRAM TLSF floor cannot carry this master-only transition
+ * record.  The linker-owned LWRAM section is NOLOAD, so reset_camera() below
+ * restores the BSS-zeroed contract before any camera transition can read it. */
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+#define SM64_SATURN_SOURCEBOOT_CAMERA_STATE \
+    __attribute__((section(".lwram_bss"), used))
+#else
+#define SM64_SATURN_SOURCEBOOT_CAMERA_STATE
 #endif
 
 #define CBUTTON_MASK (U_CBUTTONS | D_CBUTTONS | L_CBUTTONS | R_CBUTTONS)
@@ -357,7 +368,7 @@ f32 sCannonYOffset;
  * Check the cutscene_start functions for documentation on the cvars used by a specific cutscene.
  */
 struct CutsceneVariable sCutsceneVars[10];
-struct ModeTransitionInfo sModeInfo;
+struct ModeTransitionInfo sModeInfo SM64_SATURN_SOURCEBOOT_CAMERA_STATE;
 /**
  * Offset added to sFixedModeBasePosition when Mario is inside, near the castle lobby entrance
  */
@@ -3377,12 +3388,14 @@ void update_camera(struct Camera *c) {
 /**
  * Reset all the camera variables to their arcane defaults
  */
+SM64_SATURN_CART_COLD
 void reset_camera(struct Camera *c) {
     UNUSED s32 unused = 0;
     UNUSED u8 unused1[16];
     UNUSED struct LinearTransitionPoint *start = &sModeInfo.transitionStart;
     UNUSED struct LinearTransitionPoint *end = &sModeInfo.transitionEnd;
 
+    bzero(&sModeInfo, sizeof(sModeInfo));
     gCamera = c;
     gCameraMovementFlags = 0;
     s2ndRotateFlags = 0;
@@ -3450,6 +3463,7 @@ void reset_camera(struct Camera *c) {
     unused8033B310 = 0;
 }
 
+SM64_SATURN_CART_COLD
 void init_camera(struct Camera *c) {
     struct Surface *floor = 0;
     Vec3f marioOffset;

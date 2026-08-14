@@ -1,4 +1,5 @@
 #include <ultra64.h>
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include "sm64.h"
 #include "seq_ids.h"
@@ -375,6 +376,7 @@ void set_mario_initial_action(struct MarioState *m, u32 spawnType, u32 actionArg
     set_mario_initial_cap_powerup(m);
 }
 
+SM64_SATURN_CART_COLD
 void init_mario_after_warp(void) {
     struct ObjectWarpNode *spawnNode = area_get_warp_node(sWarpDest.nodeId);
     u32 marioSpawnType = get_mario_spawn_type(spawnNode->object);
@@ -1180,6 +1182,7 @@ s32 update_level(void) {
     return changeLevel;
 }
 
+SM64_SATURN_CART_COLD
 s32 init_level(void) {
     s32 val4 = 0;
 

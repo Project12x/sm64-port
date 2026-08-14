@@ -1,4 +1,5 @@
 #include <PR/ultratypes.h>
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include "sm64.h"
 #include "area.h"
@@ -1785,6 +1786,7 @@ s32 execute_mario_action(UNUSED struct Object *o) {
  *                  INITIALIZATION                *
  **************************************************/
 
+SM64_SATURN_CART_COLD
 void init_mario(void) {
     Vec3s capPos;
     struct Object *capObject;

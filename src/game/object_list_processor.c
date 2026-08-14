@@ -1,4 +1,5 @@
 #include <PR/ultratypes.h>
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include "sm64.h"
 #include "area.h"
@@ -442,6 +443,7 @@ void set_object_respawn_info_bits(struct Object *obj, u8 bits) {
 /**
  * Unload all objects whose activeAreaIndex is areaIndex.
  */
+SM64_SATURN_CART_COLD
 void unload_objects_from_area(UNUSED s32 unused, s32 areaIndex) {
     struct Object *obj;
     struct ObjectNode *node;
@@ -467,6 +469,7 @@ void unload_objects_from_area(UNUSED s32 unused, s32 areaIndex) {
 /**
  * Spawn objects given a list of SpawnInfos. Called when loading an area.
  */
+SM64_SATURN_CART_COLD
 void spawn_objects_from_info(UNUSED s32 unused, struct SpawnInfo *spawnInfo) {
     gObjectLists = gObjectListArray;
     gTimeStopState = 0;
@@ -542,6 +545,7 @@ void stub_obj_list_processor_1(void) {
 /**
  * Clear objects, dynamic surfaces, and some miscellaneous level data used by objects.
  */
+SM64_SATURN_CART_COLD
 void clear_objects(void) {
     s32 i;
 

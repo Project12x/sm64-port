@@ -1,4 +1,5 @@
 #include <PR/ultratypes.h>
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include "prevent_bss_reordering.h"
 #include "area.h"
@@ -130,6 +131,7 @@ void print_intro_text(void) {
     }
 }
 
+SM64_SATURN_CART_COLD
 u32 get_mario_spawn_type(struct Object *o) {
     s32 i;
     const BehaviorScript *behavior = virtual_to_segmented(0x13, o->behavior);
@@ -142,6 +144,7 @@ u32 get_mario_spawn_type(struct Object *o) {
     return 0;
 }
 
+SM64_SATURN_CART_COLD
 struct ObjectWarpNode *area_get_warp_node(u8 id) {
     struct ObjectWarpNode *node = NULL;
 
@@ -153,12 +156,14 @@ struct ObjectWarpNode *area_get_warp_node(u8 id) {
     return node;
 }
 
+SM64_SATURN_CART_COLD
 struct ObjectWarpNode *area_get_warp_node_from_params(struct Object *o) {
     u8 sp1F = (o->oBehParams & 0x00FF0000) >> 16;
 
     return area_get_warp_node(sp1F);
 }
 
+SM64_SATURN_CART_COLD
 void load_obj_warp_nodes(void) {
     struct ObjectWarpNode *sp24;
     struct Object *sp20 = (struct Object *) gObjParentGraphNode.children;
@@ -181,6 +186,7 @@ void load_obj_warp_nodes(void) {
              != (struct Object *) gObjParentGraphNode.children);
 }
 
+SM64_SATURN_CART_COLD
 void clear_areas(void) {
     s32 i;
 
@@ -212,6 +218,7 @@ void clear_areas(void) {
     }
 }
 
+SM64_SATURN_CART_COLD
 void clear_area_graph_nodes(void) {
     s32 i;
 
@@ -229,6 +236,7 @@ void clear_area_graph_nodes(void) {
     }
 }
 
+SM64_SATURN_CART_COLD
 void load_area(s32 index) {
     if (gCurrentArea == NULL && gAreaData[index].unk04 != NULL) {
         gCurrentArea = &gAreaData[index];
@@ -248,6 +256,7 @@ void load_area(s32 index) {
     }
 }
 
+SM64_SATURN_CART_COLD
 void unload_area(void) {
     if (gCurrentArea != NULL) {
         unload_objects_from_area(0, gCurrentArea->index);
@@ -259,6 +268,7 @@ void unload_area(void) {
     }
 }
 
+SM64_SATURN_CART_COLD
 void load_mario_area(void) {
     stop_sounds_in_continuous_banks();
     load_area(gMarioSpawnInfo->areaIndex);
@@ -269,6 +279,7 @@ void load_mario_area(void) {
     }
 }
 
+SM64_SATURN_CART_COLD
 void unload_mario_area(void) {
     if (gCurrentArea != NULL && (gCurrentArea->flags & 0x01)) {
         unload_objects_from_area(0, gMarioSpawnInfo->activeAreaIndex);
@@ -280,6 +291,7 @@ void unload_mario_area(void) {
     }
 }
 
+SM64_SATURN_CART_COLD
 void change_area(s32 index) {
     s32 areaFlags = gCurrentArea->flags;
 

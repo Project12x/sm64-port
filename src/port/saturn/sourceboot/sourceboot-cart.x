@@ -20,32 +20,11 @@ INCLUDE saturn_geo_depth_manifest.ld
 MEMORY {
   ram   (Wx) : ORIGIN = 0x06004000, LENGTH = 0x000FC000
   lwram (W)  : ORIGIN = 0x00200000, LENGTH = 0x00100000
-  cart  (R)  : ORIGIN = 0x22400000, LENGTH = 0x00400000
+  cart  (Rx) : ORIGIN = 0x22400000, LENGTH = 0x00400000
 }
 
 SECTIONS
 {
-  .text :
-  {
-     *(.text)
-     *(.text.*)
-     *(.gnu.linkonce.t.*)
-
-     INCLUDE ldscripts/yaul-c++.x
-
-     . = ALIGN (4);
-  } > ram
-
-  /* These few constants must be available before the cart image has been
-   * copied from CD.  The loader deliberately avoids ordinary string literals
-   * and keeps its ISO filename and failure text here. */
-  .bootdata :
-  {
-     . = ALIGN (16);
-     *(.bootdata)
-     *(.bootdata.*)
-  } > ram
-
   /* Every object built from this source tree is named *@sm64-port@*.o by
    * Yaul's build-path conversion.  Put its immutable source data in the cart
    * bank, but keep libyaul/libgcc constants in work RAM so boot services are
@@ -58,6 +37,19 @@ SECTIONS
      *sm64-port?*(.rodata)
      *sm64-port?*(.rodata.*)
      *sm64-port?*(.gnu.linkonce.r.*)
+     /* Semantic audio services become live only after SOURCE.DAT has been
+      * copied. Keep both their per-frame SH-2 code and the PCM mailbox
+      * transport out of the fixed HWRAM heap budget. */
+     *source_audio_semantics.o(.text .text.*)
+     *source_audio_live.o(.text .text.*)
+     *saturn_audio_policy.o(.text .text.*)
+     *saturn_audio_spatial.o(.text .text.*)
+     *saturn_pcm_transport.o(.text .text.*)
+     *saturn_sound_cpu.o(.text .text.*)
+     /* Scene-load validators execute only after source_cart_load() has made
+      * SOURCE.DAT resident. They are immutable cold code, not permanent
+      * HWRAM consumers. */
+     *(.cart_cold_text)
      /* Some generated objects (e.g. tools/saturn/emit_actor_bank_c.py) place
       * their payload directly into an input section literally named
       * .cart_rodata -- the same name as this OUTPUT section -- via
@@ -77,6 +69,33 @@ SECTIONS
   ASSERT (SIZEOF (.cart_rodata) ==
           (___sourceboot_cart_rodata_end - ___sourceboot_cart_rodata_start),
           "cart_rodata orphan input section: SIZEOF(.cart_rodata) disagrees with the start/end symbol span -- an input section named .cart_rodata is bypassing this script's glob rules")
+
+  /* This section intentionally precedes the generic .text collector. GNU ld
+   * assigns an input section to the first matching output rule, so placing
+   * the cart image first moves only the named post-cart audio objects below
+   * to DRAM cart; every other .text.* remains in the normal HWRAM section.
+   * SOURCE.DAT is extracted from this output section, so code and immutable
+   * audio data share the same verified [start,end) cold-cart span. */
+  .text :
+  {
+     *(.text)
+     *(.text.*)
+     *(.gnu.linkonce.t.*)
+
+     INCLUDE ldscripts/yaul-c++.x
+
+     . = ALIGN (4);
+  } > ram
+
+  /* These few constants must be available before the cart image has been
+   * copied from CD. The loader deliberately avoids ordinary string literals
+   * and keeps its ISO filename and failure text here. */
+  .bootdata :
+  {
+     . = ALIGN (16);
+     *(.bootdata)
+     *(.bootdata.*)
+  } > ram
 
   .rodata :
   {
@@ -105,6 +124,15 @@ SECTIONS
   {
      . = ALIGN (16);
      PROVIDE (___bss_start = .);
+
+     /* The two persistent 32-byte VDP1 command banks total 0x20000 bytes.
+      * Put that fixed HWRAM-only block first while the BSS cursor is aligned
+      * deterministically; leaving it behind small state makes its required
+      * alignment consume avoidable heap-margin padding. This is layout-only:
+      * capacity, HWRAM residency, zeroing lifetime, and every caller retain
+      * their existing contract. */
+     . = ALIGN (32);
+     *(.sourceboot_vdp1_cmdts)
 
      *(.bss)
      *(.bss.*)
@@ -145,13 +173,16 @@ SECTIONS
    * after the fact).
    *
    * 0x1B00 bytes is a deliberate over-estimate of the measured ~3,188-byte
-   * control block, leaving room for TLSF's own alignment padding. Raise
+   * control block, leaving room for TLSF's own alignment padding. The final
+   * 0x400 bytes are a 1 KiB growth reserve: an image that merely clears the
+   * allocator floor is already carrying memory debt and must fail at link.
+   * Raise
    * it, don't lower it. If this fires, the fix is to shrink a static
    * HWRAM consumer -- see the budget comment on
    * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES in
    * src/port/saturn/gfx/saturn_fast3d_frontend.h -- not to weaken this
    * assert. */
-  PROVIDE (__sourceboot_required_hwram_margin = 0x1B00);
+  PROVIDE (__sourceboot_required_hwram_margin = 0x1F00);
   ASSERT (___end <= ORIGIN (ram) + LENGTH (ram),
           "HWRAM sections extend past the physical top of work RAM. Move bulk CPU-only state to LWRAM before evaluating the required heap margin.")
   ASSERT (ORIGIN (ram) + LENGTH (ram) - ___end >= __sourceboot_required_hwram_margin,

@@ -1,4 +1,5 @@
 #include <PR/ultratypes.h>
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include "prevent_bss_reordering.h"
 
@@ -618,6 +619,7 @@ u32 get_area_terrain_size(s16 *data) {
  * Process the level file, loading in vertices, surfaces, some objects, and environmental
  * boxes (water, gas, JRB fog).
  */
+SM64_SATURN_CART_COLD
 void load_area_terrain(s16 index, s16 *data, s8 *surfaceRooms, s16 *macroObjects) {
     s16 terrainLoadType;
     s16 *vertexData;

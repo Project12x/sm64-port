@@ -1,4 +1,5 @@
 #include <ultra64.h>
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include "sm64.h"
 #include "game_init.h"
@@ -288,6 +289,7 @@ BAD_RETURN(s32) save_file_copy(s32 srcFileIndex, s32 destFileIndex) {
     save_file_do_save(destFileIndex);
 }
 
+SM64_SATURN_CART_COLD
 void save_file_load_all(void) {
     s32 file;
     s32 validSlots;
