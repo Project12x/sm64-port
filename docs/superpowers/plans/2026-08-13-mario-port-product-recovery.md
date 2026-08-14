@@ -33,6 +33,14 @@ Mario-command observation that names a discrepant record, or a named-owner
 manual verdict on the existing donor CUE.  No new package, actor, residency,
 format, scheduler, level, or audio architecture work is authorized first.
 
+**2026-08-14 VDP1 result:** The scene-ready donor observation at VBlank 3,420
+has now confirmed the expected Mario command modes in both LWRAM staging banks
+(neutral RGB1555 Gouraud solids with nonzero GRDA and direct RGB1555
+`CC_REPLACE` detail).  It names no Mario lowerer mismatch, so no renderer
+patch or duplicate CUE is authorized.  The next boundary is the owner verdict
+on this exact named donor CUE; it remains diagnostic-only because terrain is
+visibly wrong and Bob-omb/audio/cadence are still unproven.
+
 **Tech stack:** Original SM64 source game, SH-2 C, MC68000, Yaul/VDP1/VDP2/
 SCSP, 4 MiB DRAM cartridge, repository MSYS wrapper, Ymir headless/desktop,
 existing capture and profile tools.

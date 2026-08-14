@@ -143,6 +143,30 @@ comparison remains unresolved**
   found, request the owner’s verdict on the named donor artifact rather than
   opening new implementation work.
 
+## 2026-08-14 — scene-ready donor VDP1 command observation
+
+- The first bounded probe stopped at 2,100 VBlanks and captured only the Sega
+  license screen; it is invalid scene evidence.  The corrected explicit BIOS,
+  DRAM-cart, and Up-input run reached VBlank 3,420 and reproduced the existing
+  post-startup PNG SHA-256 `f9dd7a3f...002b5`.
+- Both LWRAM command staging banks are populated and source-consistent:
+  `0x00200000` has 894 nonzero commands/SHA-256 `aa46f9e2...60a1d`; and
+  `0x00210000` has 920/SHA-256 `7624d479...b0d3`.  Mario-screen commands have
+  RGB1555 Gouraud `CMDPMOD`, neutral `CMDCOLR=0xC210`, nonzero `CMDGRDA`, and
+  RGB1555 `CC_REPLACE` detail sprites.  No color-mode/GRDA discrepancy exists
+  for the donor; no Mario renderer patch or new CUE follows.
+- The frame still visibly has bad terrain presentation and does not prove a
+  normal Bob-omb, sound, cadence, or owner acceptance.  The next allowed
+  action is the owner verdict on this exact CUE or a new probe that explains a
+  specific remaining visual defect; Tasks 3–6 stay closed.
+- A visible Ymir window was then launched for that manual verdict using only
+  `ymir-agent/build-agent2/.../ymir-sdl3.exe --profile
+  sm64-port/.ymir-profile --disc <named donor CUE>`; its local launch report is
+  `build/saturn/task2-a9a-donor-vdp1-manual-launch-20260814.json` in the donor
+  worktree.  It binds CUE `cdbf0bfa...f46dba7` and ISO
+  `0e6eb40e...4b3270`.  No owner verdict has been recorded and other preexisting
+  Ymir windows were left untouched.
+
 ## 2026-08-14 — sourceboot direct-SFX route retired
 
 - The semantic-audio tree still cannot be used as a music donor because its

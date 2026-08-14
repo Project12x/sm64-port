@@ -47,6 +47,31 @@ The focused source policy test passes for the current source, and the donor
 has the same required statements.  Reapplying that patch would make a new CUE
 without changing the tested behavior.  Do not do that.
 
+### Scene-ready VDP1 observation
+
+The donor was observed with the explicit USA BIOS, DRAM cart, and normal Up
+input after 3,420 emulated VBlanks.  Its PNG is SHA-256
+`f9dd7a3f133438aed8ab9d6950385b12b04e5690ee0a06ebeb4892d36be002b5`.
+Both LWRAM command banks contain scene-ready commands, not a flat fallback:
+
+- bank 0 (`0x00200000`): 894 nonzero commands, raw SHA-256
+  `aa46f9e2d26940c448003b4a50a38ed3f5d4991a6358a3b5df61662c82760a1d`;
+- bank 1 (`0x00210000`): 920 nonzero commands, raw SHA-256
+  `7624d479aa7083429fdf8dc4792c0e94a6ec3683876a07089cc01b4ca609b0d3`.
+
+At Mario's observed screen span, the solid commands have RGB1555 Gouraud
+mode, neutral `CMDCOLR=0xC210`, and nonzero `CMDGRDA`; the detail commands
+are RGB1555 distorted sprites with `CC_REPLACE` and white source color.  This
+is the target manifestation of the tested color contract.  It rules out a
+new “Mario is flat because this lowerer emits the wrong mode” patch for this
+donor.  It does not prove visual acceptance: the same frame still has visibly
+bad terrain presentation, contains no proven normal Bob-omb, and contains no
+audio evidence.
+
+An earlier 2,100-VBlank capture showed only the Sega license screen.  It is
+retained solely to prevent another premature screenshot claim; startup must
+reach the known scene-ready window before visual evidence is interpreted.
+
 The four direct sourceboot audio CUE experiments are terminal negative
 evidence.  Each left rebuilt `_s_active` at eight zero bytes after 1,200
 post-BIOS target frames:
