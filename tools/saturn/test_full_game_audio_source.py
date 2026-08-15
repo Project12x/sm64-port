@@ -106,18 +106,33 @@ class FullGameAudioSourceContract(unittest.TestCase):
         self.assertIn("uint16_t package_generation", body)
         self.assertIn("uint16_t freshness_generation", body)
 
-    def test_normal_bob_sourceboot_starts_level_music_through_semantic_api(self) -> None:
+    def test_level_script_owns_music_not_a_sourceboot_bootstrap_call(self) -> None:
+        """The level script is the sole owner of the level music start.
+
+        sourceboot used to issue its own bootstrap ``play_music`` on the claim
+        that the generic BOB path had no level-update caller.  A control-ring
+        dump disproved that: the ring carried SET_MASTER, SEQ_START, RESET,
+        SEQ_START, and the trailing pair is the game's own
+        ``init_mario_after_warp`` -> ``set_background_music`` responding to
+        BOB's ``SET_BACKGROUND_MUSIC``.  The bootstrap call bypassed
+        sound_init.c's ``sCurrentMusic`` bookkeeping, so the game's guard could
+        not suppress the duplicate.  Ownership must stay in the level script.
+        """
         main = (ROOT / "src/port/saturn/sourceboot/main.c").read_text(
             encoding="utf-8"
         )
-        self.assertIn('#include "seq_ids.h"', main)
-        self.assertRegex(
+        self.assertNotRegex(
             main,
-            re.compile(
-                r"sourceboot_audio_init\(\).*?play_music\(SEQ_PLAYER_LEVEL,\s*"
-                r"SEQUENCE_ARGS\(4,\s*SEQ_LEVEL_GRASS\),\s*0U\)",
-                re.S,
-            ),
+            re.compile(r"^[^\S\n]*play_music\s*\(", re.M),
+            "sourceboot must not issue a bootstrap play_music; the level "
+            "script owns music so sCurrentMusic bookkeeping stays correct",
+        )
+        script = (ROOT / "levels/bob/script.c").read_text(encoding="utf-8")
+        self.assertRegex(
+            script,
+            re.compile(r"SET_BACKGROUND_MUSIC\([^)]*SEQ_LEVEL_GRASS", re.S),
+            "music ownership must still exist somewhere: BOB's level script "
+            "must carry SET_BACKGROUND_MUSIC with SEQ_LEVEL_GRASS",
         )
 
     def test_audio_init_failure_does_not_hang(self) -> None:

@@ -458,6 +458,29 @@
 
 ### Fixed
 
+- `src/port/saturn/sourceboot/main.c` no longer issues its own bootstrap
+  `play_music(SEQ_PLAYER_LEVEL, SEQUENCE_ARGS(4, SEQ_LEVEL_GRASS), 0U)`; the
+  level script is the sole owner of the level music start. The call carried a
+  comment claiming "the generic BOB path has no full-game level-update caller
+  yet". That claim was wrong: dumping the audio control ring found exactly
+  `SET_MASTER(12)`, `SEQ_START(seq 3)`, `RESET`, `SEQ_START(seq 3)`, and the
+  trailing `RESET`+`SEQ_START` pair is the game's own
+  `init_mario_after_warp` -> `set_background_music` (which calls
+  `sound_reset` then `play_music`) responding to `levels/bob/script.c`'s
+  `SET_BACKGROUND_MUSIC(0x0000, SEQ_LEVEL_GRASS)`. Root cause of the
+  duplication: the bootstrap call bypassed `src/game/sound_init.c`'s
+  `sCurrentMusic` bookkeeping, so the game's own duplicate-suppression guard
+  could not see it and the sequence was started twice — restarting the music
+  sample. Removing the call restores that bookkeeping, so later warps are
+  suppressed correctly. The now-unused `#include "seq_ids.h"` went with it;
+  the Task 7 audio-init failure handling in the same
+  `SATURN_FEATURE_SEMANTIC_AUDIO` block is untouched.
+  `tools/saturn/test_full_game_audio_source.py` replaces its source-presence
+  assertion with `test_level_script_owns_music_not_a_sourceboot_bootstrap_call`,
+  which pins both halves of the new contract: `main.c` issues no `play_music`,
+  and `levels/bob/script.c` still carries `SET_BACKGROUND_MUSIC` with
+  `SEQ_LEVEL_GRASS` so music ownership provably still exists.
+
 - Continuous SFX are no longer re-keyed on every game-loop tick — the R1
   owner-reported "periodic piercing noise". Root cause: SM64 re-asserts every
   *continuous* (non-discrete) sound once per tick and expects the sound driver

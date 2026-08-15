@@ -3,7 +3,6 @@
 #include <cpu/cache.h>
 
 #include "audio/external.h"
-#include "seq_ids.h"
 #include "game/camera.h"
 #include "game/area.h"
 #include "game/game_init.h"
@@ -2027,12 +2026,12 @@ sourceboot_game_loop(void)
         dbgio_puts("sourceboot: audio init failed; music+SFX muted\n");
         dbgio_flush();
     }
-    /* The generic BOB path has no full-game level-update caller yet, so start
-     * its real level sequence at the same semantic API boundary used by the
-     * game.  This is intentionally one normal policy event, not an injected
-     * MC68000 command or object-specific renderer/audio shortcut.  When audio
-     * init failed it is a safe unbound no-op. */
-    play_music(SEQ_PLAYER_LEVEL, SEQUENCE_ARGS(4, SEQ_LEVEL_GRASS), 0U);
+    /* No bootstrap play_music here: the level script owns music.  BOB's
+     * SET_BACKGROUND_MUSIC reaches the driver through the game's own
+     * init_mario_after_warp -> set_background_music path, which keeps
+     * sound_init.c's sCurrentMusic bookkeeping correct.  A bootstrap call
+     * bypassed that bookkeeping, so the game's guard could not suppress the
+     * level script's start and the sequence was issued twice. */
 #endif
     gEffectsMemoryPool = mem_pool_init(0x4000U, MEMORY_POOL_LEFT);
     if (gEffectsMemoryPool == NULL) {
