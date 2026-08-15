@@ -24,6 +24,7 @@
 
 #ifdef TARGET_SATURN
 #include "port/saturn/runtime/saturn_source_runtime.h"
+#include "port/saturn/runtime/saturn_peak_probe.h"
 #endif
 
 // First 3 controller slots
@@ -258,6 +259,23 @@ void make_viewport_clip_rect(Vp *viewport) {
  */
 void create_gfx_task_structure(void) {
     s32 entries = gDisplayListHead - gGfxPool->buffer;
+
+#if defined(TARGET_SATURN) && SATURN_DIAGNOSTIC_MODE != 0
+    {
+        /* Sprint 2 T2.1: run-long high-water of master display-list usage.
+         * `entries` is the frame's final Gfx count against GFX_POOL_SIZE;
+         * it is discarded below, so the accumulator lives here.  Diagnostic
+         * builds only -- see saturn_peak_probe.h. */
+        volatile sm64_saturn_peak_probe_t *const peakProbe =
+            sm64_saturn_peak_probe_visible();
+        u32 dlEntries = (u32) entries;
+        peakProbe->gfx_pool_entries_last = dlEntries;
+        if (dlEntries > peakProbe->gfx_pool_entries_highwater) {
+            peakProbe->gfx_pool_entries_highwater = dlEntries;
+        }
+        peakProbe->gfx_pool_task_count++;
+    }
+#endif
 
     gGfxSPTask->msgqueue = &gGfxVblankQueue;
     gGfxSPTask->msg = (OSMesg) 2;

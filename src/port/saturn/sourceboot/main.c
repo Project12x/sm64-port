@@ -34,6 +34,7 @@
 #include "saturn_hud_publish.h"
 #include "saturn_build_identity.h"
 #include "saturn_object_pool_probe.h"
+#include "saturn_peak_probe.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
 #include "source_camera_idle_probe.h"
@@ -158,6 +159,17 @@ volatile sm64_saturn_sourceboot_animation_sweep_t sourceboot_animation_sweep = {
     .magic = SOURCEBOOT_ANIMATION_SWEEP_MAGIC,
     .version = SOURCEBOOT_ANIMATION_SWEEP_VERSION,
 };
+
+#endif
+
+#if SATURN_DIAGNOSTIC_MODE != 0
+/* Sprint 2 T2.1 diagnostic peak accumulators (see saturn_peak_probe.h).
+ * NOLOAD LWRAM telemetry state; initialized by
+ * sourceboot_reset_lwram_state() and never reset afterwards, so the
+ * highwater fields are run-long maxima.  Product builds compile this out
+ * entirely. */
+volatile sm64_saturn_peak_probe_t g_sm64_saturn_peak_probe
+    __attribute__((section(".lwram_bss"), used));
 #endif
 
 _Static_assert(sizeof(sm64_saturn_sourceboot_cadence_trace_t) == 76U,
@@ -851,6 +863,22 @@ static void sourceboot_reset_lwram_state(void)
            sizeof(sourceboot_cadence_trace));
     sourceboot_cadence_trace.magic = SOURCEBOOT_CADENCE_TRACE_MAGIC;
     sourceboot_cadence_trace.version = SOURCEBOOT_CADENCE_TRACE_VERSION;
+#if SATURN_DIAGNOSTIC_MODE != 0
+    {
+        /* Field-wise stores through the P2 alias (no memset on a volatile
+         * cache-through view); this is the only reset for the run. */
+        volatile sm64_saturn_peak_probe_t *const peak_probe =
+            sm64_saturn_peak_probe_visible();
+        peak_probe->gfx_pool_entries_last = 0U;
+        peak_probe->gfx_pool_entries_highwater = 0U;
+        peak_probe->gfx_pool_task_count = 0U;
+        peak_probe->vdp1_commands_last = 0U;
+        peak_probe->vdp1_commands_highwater = 0U;
+        peak_probe->vdp1_gouraud_last = 0U;
+        peak_probe->vdp1_gouraud_highwater = 0U;
+        peak_probe->magic = SM64_SATURN_PEAK_PROBE_MAGIC;
+    }
+#endif
     sourceboot_sim_ticks_accum = 0U;
     sourceboot_sim_tick_count = 0U;
     sourceboot_render_ticks_accum = 0U;
@@ -1553,6 +1581,23 @@ static void sourceboot_frame_update_telemetry(void)
             ? sourceboot_vdp1_frame_banks.published->gouraud_count : 0U;
     if (gouraud_highwater > sourceboot_fast3d.profile.vdp1_gouraud_highwater)
         sourceboot_fast3d.profile.vdp1_gouraud_highwater = gouraud_highwater;
+#if SATURN_DIAGNOSTIC_MODE != 0
+    {
+        /* T2.1: the profile fields above are wiped by the per-frame profile
+         * clear in sm64_saturn_fast3d_frontend_submit(); this mirror is the
+         * run-long monotonic high-water the capacity gates require. */
+        volatile sm64_saturn_peak_probe_t *const peak_probe =
+            sm64_saturn_peak_probe_visible();
+        const uint32_t vdp1_commands_last =
+            sourceboot_fast3d.profile.vdp1_commands_last;
+        peak_probe->vdp1_commands_last = vdp1_commands_last;
+        if (vdp1_commands_last > peak_probe->vdp1_commands_highwater)
+            peak_probe->vdp1_commands_highwater = vdp1_commands_last;
+        peak_probe->vdp1_gouraud_last = gouraud_highwater;
+        if (gouraud_highwater > peak_probe->vdp1_gouraud_highwater)
+            peak_probe->vdp1_gouraud_highwater = gouraud_highwater;
+    }
+#endif
     sourceboot_fast3d.profile.demo_lod_resident_bytes =
         SOURCEBOOT_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES;
     sourceboot_fast3d.profile.vdp1_vram_bytes =

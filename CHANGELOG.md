@@ -4,6 +4,26 @@
 
 ### Added
 
+- Sprint 2 T2.1 diagnostic peak instrumentation, **diagnostic-gated —
+  the product build is unaffected** (every definition, store, and the
+  probe symbol itself sit behind `SATURN_DIAGNOSTIC_MODE == 1`; a
+  `SATURN_DIAGNOSTIC_MODE=0` build sees only a typedef). Why: two of the
+  four capacity-shrink gates had no durable rail — the fast3d profile's
+  `vdp1_command_highwater` is erased by the per-frame profile clear in
+  `sm64_saturn_fast3d_frontend_submit()` (it only ever holds the latest
+  frame), and `create_gfx_task_structure()` computes the master
+  display-list usage then discards it. New `g_sm64_saturn_peak_probe`
+  (`src/port/saturn/runtime/saturn_peak_probe.h`, NOLOAD `.lwram_bss`,
+  written through the P2 cache-through alias) accumulates run-long maxima
+  for VDP1 `command_count`, gouraud count, and `gGfxPool` entries; updated
+  from `sourceboot_frame_update_telemetry()` and
+  `create_gfx_task_structure()`. Consumed by the new
+  `tools/saturn/capture_sprint2_peaks.py` (headless Ymir; also samples
+  libyaul's `_peripherals_memb` and stain-scans/walks the TLSF
+  `_private_pool` dump host-side — those two needed no target code).
+  Host tests: `tools/saturn/test_capture_sprint2_peaks.py` (13 tests,
+  mutation-checked). Evidence:
+  `docs/saturn/evidence/reports/sprint2-t2_1-peak-capture.md`.
 - `make verify-audio-loop-contracts`: wires the four previously-orphaned
   regression suites from the Sprint 1 defect loop (24 tests) into a runnable
   target — the DSP-quiesce-before-staging ordering, the single-owner music
