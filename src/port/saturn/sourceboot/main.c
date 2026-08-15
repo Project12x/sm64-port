@@ -2024,7 +2024,7 @@ sourceboot_game_loop(void)
          * audio/external.h entry stays a safe no-op, and boot continues
          * without the sound CPU instead of spinning here. */
         sourceboot_audio_live_failed = true;
-        dbgio_puts("sourceboot: semantic SFX init failed; audio muted\n");
+        dbgio_puts("sourceboot: audio init failed; music+SFX muted\n");
         dbgio_flush();
     }
     /* The generic BOB path has no full-game level-update caller yet, so start
