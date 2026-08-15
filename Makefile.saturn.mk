@@ -773,6 +773,7 @@ verify-render-snapshot-bank:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_snapshot_bank_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)"
@@ -1349,6 +1350,7 @@ verify-dma-queue:
 	  -DSATURN_DMA_QUEUE_HOST_TEST=1 \
 	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/dma_queue_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/slavedriver_dma_queue.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/dma-queue-test$(HOST_EXEEXT)"
@@ -1358,6 +1360,7 @@ verify-frame-pipeline:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-test$(HOST_EXEEXT)"
@@ -1365,6 +1368,7 @@ verify-frame-pipeline:
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_FRAME_PIPELINE_TEST_FOUR_TICK=1 \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-four-tick-mutation$(HOST_EXEEXT)"
@@ -1374,6 +1378,7 @@ verify-frame-pipeline:
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_FRAME_PIPELINE_TEST_READD_CREDIT=1 \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-readd-credit-mutation$(HOST_EXEEXT)"
@@ -1383,6 +1388,7 @@ verify-frame-pipeline:
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_FRAME_PIPELINE_TEST_PUBLISH_INCOMPLETE=1 \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-incomplete-mutation$(HOST_EXEEXT)"
