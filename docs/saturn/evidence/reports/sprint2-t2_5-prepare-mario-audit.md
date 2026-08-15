@@ -41,7 +41,7 @@ multiply.**
 
 **Verdict on the mesh (§10): NO.** Polygon count is not a material
 contributor. Halving the mesh would leave 5.72 VBlanks/frame; fixing the
-arithmetic at *full* mesh detail leaves ~0.19. The fix is ~30x better than
+arithmetic at *full* mesh detail leaves ~0.2. The fix is ~30x better than
 the reduction and costs no fidelity.
 
 ## 1. The sub-stage enumeration, established before instrumenting
