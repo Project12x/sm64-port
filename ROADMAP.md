@@ -21,13 +21,27 @@ Known levers, in evidence order (**updated after T2.2's measured result**):
   32-bit HWRAM; cadence moved 1.071 → 1.068 FPS, i.e. not at all. Banked
   wins: slack 472 B → 13,944 B, and a silent `gGfxPool` overflow corruption
   fixed. Do not spend further effort here on this evidence.
-- **The painter relink is O(bins x commands) per frame** (64 x ~1,800 ≈
-  115,200 steps). A counting-sort scatter cuts it to ~1,864. Design pinned by
-  the reference sweep (T2.0 L7-L9): sort out-of-band 8-byte references like
-  SGL rather than overloading `cmd_link`, reusing the stable radix scatter
-  already in `saturn_terrain_depth_bins.h`. **This is the active lever.**
-- Scene construction is 24.72 VBlanks of a 56-VBlank frame (44%) — the
-  counting sort attacks part of it; the remainder needs its own profiling.
+- ~~The painter relink is O(bins x commands) per frame~~ — **DONE, kept, and
+  much smaller than estimated.** T2.3 replaced the per-bin rescan with a
+  counting sort over intrusive per-bin chains (T2.0 L7's separation of sort
+  from link write; 128 B of stack, no side buffer), byte-identical output
+  verified against the retained predecessor and an independent model on 16
+  cases with three mutation kills. 42,900 -> 2,078 record visits per frame
+  (20.6x). Cadence 1.0682 -> 1.0866 FPS (+1.72%), all of it attributable to
+  master finalization (5.80 -> 4.83 VBlanks/frame) with every other phase
+  counter bit-identical. L8's "115,200 steps" assumed ~1,800 live commands;
+  T2.1 measured 653, so the stage was only ~4% of construction.
+- **Scene construction is now 23.75 VBlanks/frame, and 18.92 of it is the
+  unmeasured pre-notification window** (dispatch -> slave notification),
+  which T2.3 left bit-identical. **This is the active lever.** T2.0 **L14**
+  names the instrument: SlaveDriver's `PROFILE.C` FRT tree profiler — fixed
+  tables, no allocation, FRT reads rather than VBlank counts, so it can
+  resolve below one VBlank where the current rig cannot. T2.0 **L12**'s
+  master-spin measurement is the companion, given that
+  `slave_work_vblank_crossings` has now been identical (164/60 frames)
+  across three builds.
+- Not the next step: T2.0 **L10**'s coarser per-BSP-leaf ordering unit. It
+  would attack a stage that now costs 2,078 record visits per frame.
 - Mario dominates the command stream (638 of 882 visible items; 50 source
   triangles expanding to ~200 VDP1 commands).
 - Structural, deferred: SlaveDriver keeps both VDP1 command banks in VRAM

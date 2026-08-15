@@ -5,8 +5,9 @@
 **Active plan:**
 [`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
 **Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
-**Sprint 2 (cadence recovery):** T2.0 reference sweep, T2.1 peak capture, and
-T2.2 reclamation+un-split all COMPLETE (2026-08-15). **T2.2's result is the
+**Sprint 2 (cadence recovery):** T2.0 reference sweep, T2.1 peak capture,
+T2.2 reclamation+un-split and T2.3 painter counting sort all COMPLETE
+(2026-08-15). **T2.2's result is the
 load-bearing one: recovering 67,584 B of HWRAM and returning the full
 54,080 B hot working set to 32-bit memory did NOT move cadence** (1.068 FPS
 vs the R1 baseline's comparable 1.071). Memory objective met — true slack
@@ -14,10 +15,21 @@ over the floor went 472 B → 13,944 B, and a real latent `gGfxPool` overflow
 corruption was fixed en route. Cadence objective not met. The memory-tier
 hypothesis is narrowed, not refuted (`_sourceboot_fast3d`, 44,616 B, is still
 in LWRAM; its unlock is the T2.0 L3 staging-window architecture, which needs
-its own CUE). **Evidence now points at the algorithmic levers — construction
-is 24.72 VBlanks of a 56-VBlank frame (44%) — so T2.3's painter counting sort
-is next.** Open: owner look-and-listen on candidate `id-6b7c7e5d5f71e809`.
-Evidence: `docs/saturn/evidence/reports/sprint2-t2_2-reclaim-unsplit.md`.
+its own CUE). **T2.3 painter counting sort COMPLETE (2026-08-15,
+candidate `id-aa57d83c898e3af1`): correctness objective met — the relink is
+a byte-identical counting sort, 20.6x fewer record visits — and cadence
+moved 1.0682 -> 1.0866 FPS (+1.72%), a real but small gain.** The saving is
+0.97 VBlanks/frame and its attribution is exact: master finalization
+5.80 -> 4.83 while the pre-notification window (18.92), slave overlap (2.73)
+and simulation (6.07) counters are bit-identical. Honest read: the rescan
+was ~4% of construction, not the bulk of it — T2.0 L8's "115,200 steps"
+assumed ~1,800 live commands, but T2.1 measured 653. **The next unmeasured
+block is the pre-notification window, 18.92 of construction's 23.75
+VBlanks/frame; T2.0 L14's FRT tree profiler is the instrument.** Open: owner
+look-and-listen on `id-6b7c7e5d5f71e809` (T2.2's capacity cuts, inherited by
+this build). Evidence:
+`docs/saturn/evidence/reports/sprint2-t2_2-reclaim-unsplit.md`,
+`sprint2-t2_3-painter-counting-sort.md`.
 
 ## Product truth
 

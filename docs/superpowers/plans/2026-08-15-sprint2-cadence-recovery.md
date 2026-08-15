@@ -98,11 +98,42 @@ look-and-listen (no visual/audio regression).
   T2.3's counting sort. Cadence recovery should not be expected from
   further memory-tier work.
 
-### Task T2.3: Painter relink counting-sort (existing board task)
+### Task T2.3: Painter relink counting-sort — **complete, cadence +1.72%**
 
-O(64×~1,800)/frame → one counting pass. Design informed by T2.0's Z-Treme
+O(64×N)/frame → one counting pass. Design informed by T2.0's Z-Treme
 findings. Host test pins chain equivalence (same far-to-near order, stable
 within bins) before/after. FPS capture isolates its contribution.
+
+**Status 2026-08-15 — evidence
+`docs/saturn/evidence/reports/sprint2-t2_3-painter-counting-sort.md`,
+candidate `id-aa57d83c898e3af1`, commits `55449eb2`, `0a5b5ccd`:**
+
+- Correctness objective MET. The relink is now validate → intrusive per-bin
+  chain scatter through `cmd_link` itself (T2.0 L7's out-of-band `NEXT`;
+  128 B of stack, no side buffer) → far-to-near drain. Output is
+  **byte-identical** to the predecessor, pinned by a three-way host harness
+  (retained reference + shipped code + an independent model) over 16 cases
+  up to the arena's full 1664-command capacity, with the three required
+  mutations — within-bin stability, bin direction, END/tail — each verified
+  KILLED by the harness alone.
+- 42,900 → 2,078 record visits/frame at T2.1's measured peak (20.6x);
+  109,626 → 5,111 at capacity. Costs +80 B `.text`, zero storage.
+- Gates green: `verify-memory-map` RESULT OK (`hwram_remaining` 0x5518,
+  true slack 13,848 B, −96 B vs T2.2 — all of it `.text`),
+  `verify-vdp1-painter-chain` PASS, `verify-audio-loop-contracts` 24,
+  `verify-pcm68k-model` 18, work-storage 4, staging relocation,
+  terrain depth bins, frame bank 4, demo-render-overlap.
+- **Cadence 1.0682 → 1.0866 FPS (+1.72%)**, 56.17 → 55.22 VBlanks/frame.
+  Attribution exact: master finalization 5.80 → 4.83 (−58 crossings over 60
+  frames) while the pre-notification window (1,135), slave overlap (164) and
+  simulation (370) totals are **bit-identical** across the two builds.
+- Honest correction to L8: its "115,200 steps" assumed ~1,800 live commands;
+  T2.1 measured **653 published / 650 drawable**, so the stage was ~4% of
+  construction, not the bulk. Removing all of it buys 1.7%.
+- Redirect: the **pre-notification window (18.92 of construction's 23.75
+  VBlanks/frame)** is now the largest unmeasured block. T2.0 L14's FRT tree
+  profiler is the instrument; L12's master-spin measurement is the
+  companion. L10 (per-BSP-leaf ordering) is explicitly NOT next.
 
 ### Task T2.4+: next levers, planned on T2.2/T2.3 results
 

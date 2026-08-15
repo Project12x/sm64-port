@@ -82,9 +82,9 @@
   chain through `cmd_link` itself (SGL's intrusive `NEXT`, so no second
   command-sized buffer — working memory is one 128-byte stack table of chain
   heads), then drain far-to-near writing each JUMP_ASSIGN once. Cost falls to
-  `N * 3 + bin_count * 2`: **2,087 record visits against 43,098** at T2.1's
-  measured 653-command peak (20.7x), 5,111 against 109,626 at the arena's
-  1,661-command capacity. The predecessor's separate link-type strip pass is
+  `N * 3 + bin_count * 2`: **2,078 record visits against 42,900** at T2.1's
+  measured peak (653 published commands = 650 drawable; 20.6x), 5,111
+  against 109,626 at the arena's 1,661-command capacity. The predecessor's separate link-type strip pass is
   gone because `vdp1_cmdt_jump_assign()` already clears that field and every
   live command is now assigned exactly once. Ordering is unchanged and pinned
   byte-for-byte by the equivalence harness above — far-to-near by descending
