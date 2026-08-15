@@ -135,6 +135,27 @@ bool sm64_saturn_source_audio_semantic_workspace_bind(void *workspace,
     return true;
 }
 
+void sm64_saturn_source_audio_semantics_reset(void)
+{
+    /* Explicitly park the module in its unbound fail-closed state.  On the
+     * sourceboot target every static here lives in NOLOAD .lwram_bss, which
+     * is never crt0-zeroed: until someone stores to them, s_state and the
+     * public ABI globals hold whatever the RAM powered up with.  Sourceboot
+     * calls this before any bind attempt so both a fresh boot and a failed
+     * audio init end with a provably-NULL workspace pointer and zeroed ABI
+     * globals.  Must not read or dereference s_state: its current contents
+     * are untrusted. */
+#if defined(SOURCE_AUDIO_EXTERNAL_WORKSPACE)
+    s_state = NULL;
+#else
+    memset(&s_host_state, 0, sizeof(s_host_state));
+    s_state = &s_host_state;
+#endif
+    gAudioErrorFlags = 0;
+    memset(gGlobalSoundSource, 0, sizeof(gGlobalSoundSource));
+    gAudioRandom = 0U;
+}
+
 static bool source_audio_initialize(void)
 {
     u8 bank;

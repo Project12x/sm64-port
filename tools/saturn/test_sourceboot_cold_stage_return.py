@@ -88,7 +88,21 @@ class SourcebootColdStageReturnTest(unittest.TestCase):
         self.assertEqual(audio_init.count("MEMORY_POOL_RIGHT"), 2)
         self.assertIn("sm64_saturn_source_audio_semantic_workspace_bind(", audio_init)
         self.assertIn("sm64_saturn_source_audio_live_workspace_bind(", audio_init)
-        require_after(audio_init, "sound_init();", "sm64_saturn_source_audio_live_boot(")
+        # Fail-open contract (Task 7): the semantic workspace binds only as
+        # the last step of a fully successful init -- after the sound-CPU
+        # boot -- so any audio failure leaves it unbound (fail-closed no-ops)
+        # instead of feeding a dead mailbox.  sound_init() then initializes
+        # the freshly bound workspace.
+        require_after(
+            audio_init,
+            "sm64_saturn_source_audio_live_boot(",
+            "sm64_saturn_source_audio_semantic_workspace_bind(",
+        )
+        require_after(
+            audio_init,
+            "sm64_saturn_source_audio_semantic_workspace_bind(",
+            "sound_init();",
+        )
 
     def test_semantic_audio_uses_c_spelling_for_assembled_cart_symbols(self) -> None:
         text = source_for_revision(self.revision)

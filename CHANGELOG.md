@@ -323,6 +323,26 @@
 
 ### Fixed
 
+- Extended the fail-open audio-boot fix to real hardware: the fallback's
+  fail-closed contract relied on the modules' workspace pointers reading
+  `NULL` when unbound, but both `s_state` statics (and the public
+  `gAudioErrorFlags`/`gGlobalSoundSource`/`gAudioRandom` ABI globals) live
+  in NOLOAD `.lwram_bss`, which is never crt0-zeroed — on a non-zeroing
+  power-up a failed audio init would have left garbage pointers that every
+  game audio call then dereferences, worse than the original spin. Each
+  module now exposes a tiny reset (`..._semantics_reset`, `..._live_reset`)
+  that parks it unbound without trusting current static contents (the live
+  module's `deactivate` writes through `s_state`, so it cannot be the first
+  touch); `sourceboot_audio_init` calls both before any bind attempt, so
+  fresh boots and failed inits both end provably unbound with zeroed ABI
+  globals. Also fixed a reviewer-found edge in `live_boot`: a refused
+  SET_MASTER enqueue immediately after activation previously returned false
+  with the layer still active — it now falls through to the power-off /
+  deactivate tail. The stale donor-era ordering assertion in
+  `test_sourceboot_cold_stage_return.py` (sound_init-before-live_boot) is
+  rewritten to guard the new bind-last order, and a new source-policy test
+  asserts both resets precede any bind.
+
 - Audio-boot failure previously hung the console in an infinite `for (;;)`
   spin at the sourceboot audio-init failure site, making a bad SFXB bundle
   or a sound-CPU handshake timeout indistinguishable from a renderer hang.

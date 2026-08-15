@@ -50,6 +50,19 @@ bool sm64_saturn_source_audio_live_workspace_bind(void *workspace,
     return true;
 }
 
+void sm64_saturn_source_audio_live_reset(void)
+{
+    /* Parks the bridge unbound without dereferencing s_state: on the
+     * sourceboot target it lives in NOLOAD .lwram_bss and holds garbage
+     * before the first bind, so deactivate() -- which writes through the
+     * pointer -- must never be the first touch. */
+#if defined(SOURCE_AUDIO_EXTERNAL_WORKSPACE)
+    s_state = NULL;
+#else
+    memset(&s_host_state, 0, sizeof(s_host_state));
+#endif
+}
+
 static bool source_audio_live_protocol_ready(const volatile uint8_t *sound_ram)
 {
     return sound_ram != NULL &&
@@ -237,9 +250,15 @@ bool sm64_saturn_source_audio_live_boot(const uint8_t *driver,
                 heartbeat &&
             sm64_saturn_source_audio_live_activate(sound_ram,
                                                     bundle_generation)) {
-            return sm64_saturn_audio_control_enqueue(
-                &s_transport, SM64_SATURN_AUDIO_OPCODE_SET_MASTER,
-                master_words);
+            if (sm64_saturn_audio_control_enqueue(
+                    &s_transport, SM64_SATURN_AUDIO_OPCODE_SET_MASTER,
+                    master_words)) {
+                return true;
+            }
+            /* The mailbox refused the very first control word: a failed
+             * boot must not leave the layer active without its master
+             * volume, so fall through to the power-off/deactivate tail. */
+            break;
         }
     }
     (void)sm64_saturn_sound_cpu_yaul_command(

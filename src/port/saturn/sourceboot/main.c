@@ -1962,6 +1962,12 @@ sourceboot_audio_init(void)
     void *semantic_workspace;
     void *live_workspace;
 
+    /* Both audio modules keep their workspace pointers in NOLOAD .lwram_bss,
+     * which is never crt0-zeroed: park them unbound first, so every early
+     * return below provably leaves the fail-closed no-op state instead of
+     * whatever garbage the RAM powered up with. */
+    sm64_saturn_source_audio_semantics_reset();
+    sm64_saturn_source_audio_live_reset();
     if (semantic_bytes == 0U || live_bytes == 0U ||
         semantic_bytes > UINT32_MAX || live_bytes > UINT32_MAX) {
         return false;

@@ -17,6 +17,10 @@ bool sm64_saturn_source_audio_emit_event(
 size_t sm64_saturn_source_audio_live_workspace_bytes(void);
 bool sm64_saturn_source_audio_live_workspace_bind(void *workspace,
                                                   size_t workspace_bytes);
+/* Parks the bridge unbound without touching current workspace contents;
+ * .lwram_bss is NOLOAD, so this must run before the first bind attempt on
+ * the target (deactivate() writes through s_state and cannot be first). */
+void sm64_saturn_source_audio_live_reset(void);
 bool sm64_saturn_source_audio_live_boot(const uint8_t *driver,
                                         uint32_t driver_bytes,
                                         const uint8_t *metadata,

@@ -18,7 +18,20 @@ INFINITE_SPIN = re.compile(r"for\s*\(\s*;\s*;\s*\)|while\s*\(\s*1\s*\)")
 
 
 def public_functions(text: str) -> set[str]:
-    return set(re.findall(r"^(?:struct SPTask \*|void|u16)\s*(\w+)\s*\(", text, re.M))
+    """Inherited N64 audio ABI names owned by the translation unit.
+
+    Saturn-internal workspace APIs (``sm64_saturn_``-prefixed bind/bytes/
+    reset entries) are not part of the external.h ownership contract and are
+    excluded so both the semantic unit and the stub stay comparable to the
+    inherited header.
+    """
+    return {
+        name
+        for name in re.findall(
+            r"^(?:struct SPTask \*|void|u16)\s*(\w+)\s*\(", text, re.M
+        )
+        if not name.startswith("sm64_saturn_")
+    }
 
 
 def function_body(text: str, name: str) -> str:
@@ -132,6 +145,35 @@ class FullGameAudioSourceContract(unittest.TestCase):
             "audio boot failure must fall through to the silent no-op path, "
             "not hang the console",
         )
+
+    def test_audio_init_resets_unbound_state_before_any_bind(self) -> None:
+        """Unbound audio state must be explicitly cleared before any bind.
+
+        Both modules keep their workspace pointer in NOLOAD .lwram_bss,
+        which is never crt0-zeroed: the fail-closed contract (unbound means
+        s_state == NULL means every entry no-ops) only holds if sourceboot
+        parks both modules unbound before the first bind attempt.  Without
+        the resets a failed init on real hardware leaves garbage pointers
+        that game audio calls would dereference.
+        """
+        text = MAIN_C.read_text(encoding="utf-8")
+        body = function_body(text, "sourceboot_audio_init")
+        first_bind = min(
+            body.index("sm64_saturn_source_audio_live_workspace_bind"),
+            body.index("sm64_saturn_source_audio_semantic_workspace_bind"),
+        )
+        for reset in (
+            "sm64_saturn_source_audio_semantics_reset()",
+            "sm64_saturn_source_audio_live_reset()",
+        ):
+            self.assertIn(
+                reset, body,
+                f"{reset} must park never-zeroed LWRAM state unbound",
+            )
+            self.assertLess(
+                body.index(reset), first_bind,
+                f"{reset} must run before any workspace bind attempt",
+            )
 
     def test_music_is_hardware_looped_not_serviced(self) -> None:
         """Music is one hardware-looped SCSP sample, not a serviced cadence.
