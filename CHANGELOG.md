@@ -4,6 +4,40 @@
 
 ### Changed
 
+- Sprint 2 T2.6 step 2 (performance): the actor depth walk **no longer
+  performs a 64-bit software division per multiply**
+  (`src/port/saturn/gfx/saturn_actor_meshlets.c`). **Root cause:** every
+  per-vertex product went through `actor_saturating_mul_i64()`, which checks
+  overflow by *dividing* — the SH-2 has no 64-bit divide, so each call emitted
+  a libgcc `___divdi3`. T2.5 counted 10 per position visit, 1,408 visits per
+  frame, **~14,080 software divisions per frame**, and identified
+  `actor_saturating_mul_i64` as the only 64-bit-division caller on any hot
+  path in the entire linked image. Three of the ten were literally a multiply
+  by 2^16. On top of that the loop recomputed per vertex what is per-actor
+  algebra, and recomputed the yaw sine/cosine once per meshlet. **Fix:** a
+  per-actor `actor_depth_kernel_t` prepared once per
+  `actor_meshlet_core()` call, holding the trig and the constant
+  `SUM_a ((P_a - C_a) * F_a >> 16)`; the per-vertex body then collapses to four
+  `dmuls.l` for the rotation and three for the dot product, with no division,
+  no 64-bit multiply and no libgcc call. **Why it is exact, not approximate:**
+  `q_a * F_a` is an integer, so it pulls straight out of the per-axis floor —
+  `((B_a + (q_a << 16)) * F_a) >> 16 == ((B_a * F_a) >> 16) + q_a * F_a` — and
+  under unit scale the reference's two `>>16` narrowings compose into one
+  `>>32`, letting the 2^16 factor out of the numerator. **New prerequisite:**
+  the rewrite is only exact while no saturating helper would have saturated,
+  so it is gated on per-actor preconditions (unit scale, `|position_q16| <=
+  2^40`, `|view_forward_q16| <= 2^20`, `|sin|,|cos| <= 2^16`) that bound every
+  intermediate inside `int64`. Outside them the pre-T2.6 `actor_depth_reference()`
+  still runs — which is why it was retained rather than deleted; the generic
+  bank path admits arbitrary per-axis scales and does not qualify.
+  **Equivalence result: bit-identical.** The T2.6 oracle sweeps 685,456 cases,
+  268,816 through the new kernel and 416,640 through the saturating fallback,
+  with **zero divergences** and zero LOD-tier or painter-bin changes; the
+  file's pinned Mario output hashes are unchanged. Mutation-verified with six
+  kills (precondition dropped, rotation shift, `base_depth` shift, dot-product
+  axes swapped, sine/cosine swapped, `rotated_z` sign) against a surviving
+  no-op control.
+
 - Sprint 2 T2.6 step 1 (performance): `actor_meshlet_core()`'s **emission pass
   no longer recomputes the depth bounds** the admission pass already produced
   (`src/port/saturn/gfx/saturn_actor_meshlets.c`). **Root cause:** the two

@@ -732,10 +732,11 @@ static void depth_check_case(const int16_t vertex[3],
         &reference, &candidate, &fast_taken);
     tally->cases++;
     if (fast_taken != 0U) tally->fast_cases++; else tally->fallback_cases++;
-    /* The shipped code may legitimately be more conservative than this mirror
-     * (it can decline the fast path for a reason the mirror does not model),
-     * but it must never be more permissive. */
-    if (fast_taken != 0U && expected_fast == 0) tally->domain_mismatches++;
+    /* The mirror above restates the kernel's declared preconditions, so the
+     * two must agree in BOTH directions: a shipped path that is more
+     * permissive would be unsound, and one that is more conservative means the
+     * documented domain is wrong. */
+    if ((fast_taken != 0U) != (expected_fast != 0)) tally->domain_mismatches++;
     if (reference != candidate) {
         const int64_t delta = reference > candidate
             ? reference - candidate : candidate - reference;
@@ -900,9 +901,20 @@ static int depth_equivalence_sweep(void)
     }
     if (tally.domain_mismatches != 0U) {
         fprintf(stderr,
-                "depth equivalence: %llu cases took the fast kernel outside "
-                "its declared precondition domain\n",
+                "depth equivalence: %llu cases disagree about whether the "
+                "fast kernel's preconditions hold\n",
                 (unsigned long long)tally.domain_mismatches);
+        return 0;
+    }
+    /* The divide-free kernel must actually be the path under test, or a sweep
+     * that silently fell back everywhere would report a clean equivalence
+     * while measuring the reference against itself. */
+    if (tally.fast_cases != tally.model_cases) {
+        fprintf(stderr,
+                "depth equivalence: %llu fast-kernel cases against %llu "
+                "in-domain cases\n",
+                (unsigned long long)tally.fast_cases,
+                (unsigned long long)tally.model_cases);
         return 0;
     }
     /* Non-vacuity: the sweep must really exercise both the hoisted domain and

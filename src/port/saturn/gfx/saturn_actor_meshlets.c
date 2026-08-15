@@ -486,6 +486,102 @@ static int64_t actor_depth_reference(const int16_t vertex[3],
     return depth;
 }
 
+/* T2.6 step 2.  Everything the reference recomputes per vertex that is in fact
+ * per-actor: the yaw sine/cosine (T2.5 caught these being recomputed once per
+ * meshlet from a yaw that cannot change within the frame) and the constant
+ * (actor_position - camera_position) . view_forward term.
+ *
+ * The reference computes, per axis,
+ *     term_a = ((B_a + (q_a << 16)) * F_a) >> 16
+ * where B_a = P_a - C_a is per-actor and q_a is the integer-quantised rotated
+ * vertex component.  Since q_a * F_a is an exact integer it pulls straight out
+ * of the floor:
+ *     term_a = ((B_a * F_a) >> 16) + q_a * F_a
+ * so SUM_a ((B_a * F_a) >> 16) is a per-actor constant -- base_depth -- and the
+ * per-vertex work collapses to four dmuls.l for the rotation and three for the
+ * dot product.  No division, no 64-bit multiply, no libgcc call.
+ *
+ * This is an exact rewrite, NOT an approximation, but only while no saturating
+ * helper in the reference would actually have saturated -- otherwise the
+ * reference clamps where the fast form wraps.  The preconditions below are
+ * checked once per actor and bound every intermediate:
+ *   |v| <= 2^15 by type; |sin|,|cos| <= 2^16 checked; unit scale checked, so
+ *   |v * trig| <= 2^31 and the rotation sum <= 2^32, giving |q| <= 2^16;
+ *   |P| <= 2^40 checked and |C| <= 2^31 by type, so |B| < 2^41;
+ *   |F| <= 2^20 checked, so |B * F| <= 2^61 and |relative * F| <= 2^62.
+ * Every product therefore stays inside int64 and the saturating helpers are
+ * exact addition and multiplication.  Outside the preconditions the reference
+ * still runs, which is why it was kept rather than deleted -- the generic bank
+ * path admits arbitrary per-axis scales and does not qualify. */
+#define ACTOR_DEPTH_FAST_UNIT_SCALE_Q16 INT32_C(65536)
+#define ACTOR_DEPTH_FAST_POSITION_LIMIT INT64_C(0x10000000000) /* 2^40 */
+#define ACTOR_DEPTH_FAST_FORWARD_LIMIT  INT32_C(0x100000)      /* 2^20 */
+
+typedef struct actor_depth_kernel {
+    int64_t base_depth;
+    int32_t forward_q16[3];
+    int32_t sine;
+    int32_t cosine;
+    bool fast;
+} actor_depth_kernel_t;
+
+/* Written as a widening 32x32 -> 64 product so the SH-2 emits a single
+ * dmuls.l, the primitive saturn_q16_sh2.h's sm64_saturn_q16_mul_sh2() is built
+ * on, rather than a __muldi3 call. */
+static int64_t actor_widen_mul(int32_t left, int32_t right)
+{
+    return (int64_t)left * (int64_t)right;
+}
+
+static void actor_depth_kernel_prepare(
+    const actor_meshlet_transform_t *transform,
+    const sm64_saturn_render_view_t *view, actor_depth_kernel_t *kernel)
+{
+    kernel->base_depth = 0;
+    kernel->fast = false;
+    kernel->sine = sm64_saturn_sins_q16(transform->yaw);
+    kernel->cosine = sm64_saturn_coss_q16(transform->yaw);
+    for (uint16_t axis = 0U; axis < 3U; axis++)
+        kernel->forward_q16[axis] = view->view_forward_q16[axis];
+    if (kernel->sine > 65536 || kernel->sine < -65536 ||
+        kernel->cosine > 65536 || kernel->cosine < -65536)
+        return;
+    for (uint16_t axis = 0U; axis < 3U; axis++) {
+        if (transform->scale_q16[axis] != ACTOR_DEPTH_FAST_UNIT_SCALE_Q16 ||
+            transform->position_q16[axis] > ACTOR_DEPTH_FAST_POSITION_LIMIT ||
+            transform->position_q16[axis] < -ACTOR_DEPTH_FAST_POSITION_LIMIT ||
+            view->view_forward_q16[axis] > ACTOR_DEPTH_FAST_FORWARD_LIMIT ||
+            view->view_forward_q16[axis] < -ACTOR_DEPTH_FAST_FORWARD_LIMIT)
+            return;
+    }
+    for (uint16_t axis = 0U; axis < 3U; axis++) {
+        const int64_t base = transform->position_q16[axis] -
+            (int64_t)view->camera_position_q16[axis];
+        kernel->base_depth +=
+            (base * (int64_t)view->view_forward_q16[axis]) >> 16;
+    }
+    kernel->fast = true;
+}
+
+/* Unit scale means the reference's scaled_* are exactly vertex << 16, so its
+ * two successive >>16 narrowings compose into one >>32 and the 2^16 factors
+ * straight out of the numerator -- leaving a single >>16 over 32x32 products.
+ * scaled_y >> 16 is then exactly vertex[1]. */
+static int64_t actor_depth_fast(const int16_t vertex[3],
+                                const actor_depth_kernel_t *kernel)
+{
+    const int32_t rotated_x = (int32_t)(
+        (actor_widen_mul(vertex[0], kernel->cosine) +
+         actor_widen_mul(vertex[2], kernel->sine)) >> 16);
+    const int32_t rotated_z = (int32_t)(
+        (actor_widen_mul(vertex[2], kernel->cosine) -
+         actor_widen_mul(vertex[0], kernel->sine)) >> 16);
+    return kernel->base_depth +
+        actor_widen_mul(rotated_x, kernel->forward_q16[0]) +
+        actor_widen_mul(vertex[1], kernel->forward_q16[1]) +
+        actor_widen_mul(rotated_z, kernel->forward_q16[2]);
+}
+
 /* Admission reads the selected live pose. Furthest depth rejects only wholly
  * behind meshlets and orders translucent bins; nearest depth chooses a
  * conservative LOD for any visible extent. Rotation is quantized to integer
@@ -493,26 +589,27 @@ static int64_t actor_depth_reference(const int16_t vertex[3],
 static bool actor_meshlet_live_depth_bounds(
     const actor_meshlet_source_t *source,
     const actor_meshlet_transform_t *transform,
-    const sm64_saturn_render_view_t *view, uint16_t meshlet,
+    const sm64_saturn_render_view_t *view,
+    const actor_depth_kernel_t *kernel, uint16_t meshlet,
     actor_meshlet_depth_bounds_t *bounds)
 {
     actor_meshlet_span_t tier_zero;
     int64_t nearest = INT64_MAX, furthest = INT64_MIN;
-    int32_t sine, cosine;
     if (bounds == NULL || transform == NULL || transform->vertices == NULL ||
+        kernel == NULL ||
         !actor_meshlet_span(source, meshlet, 0U, &tier_zero) ||
         tier_zero.position_count == 0U)
         return false;
-    sine = sm64_saturn_sins_q16(transform->yaw);
-    cosine = sm64_saturn_coss_q16(transform->yaw);
     for (uint32_t local = 0U; local < tier_zero.position_count; local++) {
         uint16_t vertex;
         int64_t depth;
         if (!actor_position_ref(source, tier_zero.position_offset + local,
                                 &vertex) || vertex >= transform->vertex_count)
             return false;
-        depth = actor_depth_reference(transform->vertices[vertex], transform,
-                                      view, sine, cosine);
+        depth = kernel->fast
+            ? actor_depth_fast(transform->vertices[vertex], kernel)
+            : actor_depth_reference(transform->vertices[vertex], transform,
+                                    view, kernel->sine, kernel->cosine);
         if (depth < nearest) nearest = depth;
         if (depth > furthest) furthest = depth;
     }
@@ -534,6 +631,7 @@ static bool actor_meshlet_core(
     uint16_t admitted_positions = 0U, admitted_meshlets = 0U, culled = 0U;
     uint16_t opaque_bins[SM64_SATURN_ACTOR_DEPTH_BIN_COUNT] = {0};
     uint16_t translucent_bins[SM64_SATURN_ACTOR_DEPTH_BIN_COUNT] = {0};
+    actor_depth_kernel_t depth_kernel;
 
     if (draw_capacity == 0U && failure_reason != NULL)
         *failure_reason =
@@ -554,6 +652,11 @@ static bool actor_meshlet_core(
         return false;
 
     memset(position_seen, 0, source->vertex_count);
+    /* T2.6 step 2.  Prepared once per actor -- not once per meshlet, and
+     * certainly not once per vertex.  The yaw trig and the
+     * (actor_position - camera_position) . view_forward term are invariant
+     * across all 704 tier-0 position visits of the walk. */
+    actor_depth_kernel_prepare(transform, view, &depth_kernel);
     /* A source with more meshlets than the carry holds simply keeps the old
      * two-walk behaviour; correctness never depends on the carry being live. */
     if (carry != NULL &&
@@ -584,7 +687,8 @@ static bool actor_meshlet_core(
         SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
             SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_ADMIT);
         bounds_ok = actor_meshlet_live_depth_bounds(source, transform, view,
-                                                    meshlet, &depth_bounds);
+                                                    &depth_kernel, meshlet,
+                                                    &depth_bounds);
         SM64_SATURN_PRENOTIFY_PROFILE_POP();
         if (!bounds_ok) {
             SM64_SATURN_PRENOTIFY_PROFILE_POP();
@@ -717,7 +821,8 @@ static bool actor_meshlet_core(
                 SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
                     SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_EMIT);
                 (void)actor_meshlet_live_depth_bounds(source, transform, view,
-                                                      meshlet, &depth_bounds);
+                                                      &depth_kernel, meshlet,
+                                                      &depth_bounds);
                 SM64_SATURN_PRENOTIFY_PROFILE_POP();
             }
             if (depth_bounds.furthest_q16 <= 0) continue;
@@ -946,7 +1051,7 @@ void sm64_saturn_actor_meshlet_depth_probe(
 {
     actor_meshlet_transform_t transform;
     sm64_saturn_render_view_t view;
-    int32_t sine, cosine;
+    actor_depth_kernel_t kernel;
     memset(&transform, 0, sizeof(transform));
     memset(&view, 0, sizeof(view));
     for (uint16_t axis = 0U; axis < 3U; axis++) {
@@ -957,14 +1062,17 @@ void sm64_saturn_actor_meshlet_depth_probe(
     }
     transform.yaw = yaw;
     view.generation = 1U;
-    sine = sm64_saturn_sins_q16(yaw);
-    cosine = sm64_saturn_coss_q16(yaw);
+    actor_depth_kernel_prepare(&transform, &view, &kernel);
     if (reference_depth != NULL)
-        *reference_depth =
-            actor_depth_reference(vertex, &transform, &view, sine, cosine);
-    if (fast_taken != NULL) *fast_taken = 0U;
+        *reference_depth = actor_depth_reference(vertex, &transform, &view,
+                                                 kernel.sine, kernel.cosine);
+    if (fast_taken != NULL) *fast_taken = kernel.fast ? 1U : 0U;
+    /* Exactly the dispatch actor_meshlet_live_depth_bounds() performs, so the
+     * oracle measures what ships rather than a restatement of it. */
     if (candidate_depth != NULL)
-        *candidate_depth =
-            actor_depth_reference(vertex, &transform, &view, sine, cosine);
+        *candidate_depth = kernel.fast
+            ? actor_depth_fast(vertex, &kernel)
+            : actor_depth_reference(vertex, &transform, &view, kernel.sine,
+                                    kernel.cosine);
 }
 #endif
