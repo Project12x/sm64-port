@@ -52,6 +52,20 @@
   ROM-derived and must never be committed; `.gitignore` now covers
   `bob_theme.us.wav` and `*.pcm8`.
 
+- `tools/saturn/render_m64_wav.py`: host M64-to-WAV sequence renderer used
+  to produce the gitignored owner music WAV (`bob_theme.us.wav`) from
+  ROM-extracted assets (decomp sound-bank JSONs plus extracted AIFF
+  samples). The tool is pure format logic — it embeds zero Nintendo
+  sample or sequence bytes; all copyrighted inputs stay gitignored on the
+  owner's machine. Opcode semantics are a close port of the US
+  `src/audio/seqplayer.c` switch statements (sequence, channel, and layer
+  scripts) with `src/audio/effects.c` volume math and `src/audio/heap.c`
+  tick timing (tempo 14360, 240 updates/s, 48 tatums/beat). Documented
+  simplifications (vibrato, portamento, reverb, envelope shape, pan) are
+  logged per render, and the tool refuses to write output when fewer than
+  20 notes parse rather than emit garbage. Stdlib only; runs on Python
+  3.12+ (parses AIFF with `struct`, not the removed `aifc` module).
+
 ### Changed
 
 - Three-way work-storage split in `saturn_demo_render.c` (Sprint 1
