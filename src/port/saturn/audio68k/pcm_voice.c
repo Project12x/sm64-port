@@ -71,6 +71,15 @@ static uint16_t sm64_saturn_pcm_clamp_u16(uint16_t value, uint16_t maximum)
     return value > maximum ? maximum : value;
 }
 
+/* Wraps the SFX rotor into 0..SM64_SATURN_PCM_VOICE_COUNT-2 (the three SFX
+ * slots; slot 0 is the pinned music slot).  The wrap is a comparison, not
+ * '%': the freestanding MC68000 image links no libgcc, so a non-power-of-two
+ * modulo would need __umodsi3. */
+static uint16_t sm64_saturn_pcm_sfx_rotor_wrap(uint16_t rotor)
+{
+    return rotor >= (uint16_t)(SM64_SATURN_PCM_VOICE_COUNT - 1U) ? 0U : rotor;
+}
+
 /* Keys the pinned music slot off and clears the activity flag the mailbox
  * publisher reports.  Idempotent: when the music slot is already inactive
  * only the flag is cleared. */
@@ -354,22 +363,16 @@ static void sm64_saturn_pcm_play_sample(
         return;
     }
     /* SFX round-robin over slots 1..3 only: SM64_SATURN_PCM_MUSIC_SLOT is
-     * pinned to the looped music sample and never selected here.  The rotor
-     * wraps by comparison, not '%': the freestanding MC68000 image links no
-     * libgcc, so a non-power-of-two modulo would need __umodsi3. */
-    rotor = state->next_slot;
-    if (rotor >= (uint16_t)(SM64_SATURN_PCM_VOICE_COUNT - 1U)) {
-        rotor = 0U;
-    }
+     * pinned to the looped music sample and never selected here.  The entry
+     * wrap also re-bounds a corrupt rotor before it can name slot 0. */
+    rotor = sm64_saturn_pcm_sfx_rotor_wrap(state->next_slot);
     slot = (uint16_t)(1U + rotor);
     if (!sm64_saturn_pcm_start_voice(state, slot, sample_id, sample, volume,
                                      pan, scsp_registers)) {
         state->invalid_samples++;
         return;
     }
-    rotor = (uint16_t)(rotor + 1U);
-    state->next_slot =
-        rotor >= (uint16_t)(SM64_SATURN_PCM_VOICE_COUNT - 1U) ? 0U : rotor;
+    state->next_slot = sm64_saturn_pcm_sfx_rotor_wrap((uint16_t)(rotor + 1U));
 }
 
 static void sm64_saturn_pcm_play(sm64_saturn_pcm_voice_state_t *state,

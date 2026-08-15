@@ -674,6 +674,36 @@ static void test_seq_start_with_invalid_music_row_faults(void)
     assert(state.voices_started == 0U);
 }
 
+/* The SFX rotor's entry wrap must recover from corrupt state: even a wild
+ * next_slot value can never let an SFX voice land on the pinned music slot. */
+static void test_sfx_slot_rotor_recovers_from_corrupt_state(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t play[7] = {0x2400U, 0x8080U, 9U, 1U, 0xFF40U, 4096U, 1U};
+
+    publish_v2_header(ram);
+    publish_sfx_bundle(ram, 0x24008080U, 1U,
+                       SM64_SATURN_PCM_BANK_OFFSET, 32U, 16000U);
+    sm64_saturn_pcm_voice_state_init(&state);
+    state.next_slot = 0xFFFFU; /* corrupt rotor */
+    put_sfx(ram, 0U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, play);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 1U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.voices_started == 1U);
+    /* The entry wrap re-bounded the rotor: the SFX started on slot 1. */
+    assert(state.voices[1].active);
+    assert(!state.voices[SM64_SATURN_PCM_MUSIC_SLOT].active);
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_SA_LOW) ==
+           SM64_SATURN_PCM_BANK_OFFSET);
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_KEYS) == 0U);
+    /* And the rotor resumed in range. */
+    assert(state.next_slot == 1U);
+}
+
 static void test_voice_state_fits_reserved_stack(void)
 {
     /* linker.ld reserves 0x3C00..0x3FFC (1,020 bytes). The state no longer
@@ -698,5 +728,6 @@ int main(void)
     test_sfx_never_uses_slot0_while_music_plays();
     test_seq_start_without_music_row_is_silent_not_fault();
     test_seq_start_with_invalid_music_row_faults();
+    test_sfx_slot_rotor_recovers_from_corrupt_state();
     return 0;
 }

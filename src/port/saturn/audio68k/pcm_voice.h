@@ -34,6 +34,8 @@ typedef struct sm64_saturn_pcm_voice_state {
     uint32_t commands_consumed;
     uint32_t control_commands_consumed;
     uint32_t sfx_commands_consumed;
+    /* Since Task 6 these two blend music (slot 0) and SFX (slots 1..3)
+     * voice activity -- they are not SFX-only counters. */
     uint32_t voices_started;
     uint32_t keyoffs;
     uint32_t unknown_opcodes;
@@ -42,12 +44,18 @@ typedef struct sm64_saturn_pcm_voice_state {
     uint16_t master_volume;
     uint16_t last_opcode;
     uint16_t active_slot;
+    /* Rotor over SFX slots 1..3 only, stored as 0..2; see play_sample(). */
     uint16_t next_slot;
     /* Music state kept after the Task 4 driver diet: the sequence VM and
      * software voice engine are banked out of the image, so only the fields
      * the mailbox publisher and the upcoming looped-sample music path need
      * survive here. */
+    /* Intentionally reserved for bundle-generation staleness checks,
+     * mirroring the SFX pattern; unused until then. */
     uint32_t music_generation;
+    /* With one looped sample as the whole song these two stay in lockstep
+     * (one "note" per sequence start); the distinct mailbox word remains
+     * reserved for future per-note tracking. */
     uint32_t music_sequence_starts;
     uint32_t music_notes_started;
     uint32_t music_faults;
