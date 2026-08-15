@@ -46,7 +46,12 @@ HWRAM_TOP = 0x06100000
 HWRAM_BASE = 0x06000000
 LWRAM_TOP = 0x00300000
 LWRAM_BASE = 0x00200000
-VDP1_COMMAND_BANK_BYTES = 2 * 2048 * 32
+# Sprint 2 T2.2: capacity 2048 -> 1664 per T2.1's measured 653-command
+# bank peak (sprint2-t2_1-peak-capture.md, Peak 1).  Must track
+# SOURCEBOOT_VDP1_COMMAND_CAPACITY in
+# src/port/saturn/sourceboot/main.c: this gate pins the transport
+# bank's exact extent, so the two move together.
+VDP1_COMMAND_BANK_BYTES = 2 * 1664 * 32
 GOURAUD_STAGING_BYTES = 2 * 1536 * 8
 MINIMUM_FINAL_MARGIN = 0x1B00
 MINIMUM_LWRAM_MARGIN = 0x4000

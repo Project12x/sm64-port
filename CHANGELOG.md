@@ -81,6 +81,16 @@
 
 ### Fixed
 
+- `verify_sourceboot_memory_map.py`'s `VDP1_COMMAND_BANK_BYTES` tracks the
+  T2.2 capacity cut (`2 * 2048 * 32` -> `2 * 1664 * 32`). The margin gate
+  pins the VDP1 transport bank's *exact* extent, so it fails closed on any
+  capacity change until updated — it did exactly that on the first T2.2
+  gate run (`RESULT = FAIL: ELF command banks are not the exact aligned
+  HWRAM range`), which is the gate working as designed. The constant and
+  `SOURCEBOOT_VDP1_COMMAND_CAPACITY` must move together; both the stale
+  2048 value and an off-by-one were verified to still fail the gate.
+  Revert note: reverting the capacity commit requires reverting this too.
+
 - Master display-list pool overflow now degrades instead of corrupting
   (Sprint 2 T2.2, T2.0 lesson L5 prerequisite for the `GFX_POOL_SIZE`
   shrink). Root cause: stock SM64's `gGfxPool` is a two-sided shared arena
