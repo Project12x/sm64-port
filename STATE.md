@@ -1,30 +1,53 @@
 # State
 
 **Authoritative goal:** [`docs/saturn/PRODUCT_GOAL.md`](docs/saturn/PRODUCT_GOAL.md)
+**Active branch:** `saturn/recovery` (worktree `.worktrees/saturn-recovery`)
 **Active plan:**
-[`docs/superpowers/plans/2026-08-13-mario-port-product-recovery.md`](docs/superpowers/plans/2026-08-13-mario-port-product-recovery.md)
-**Status:** implementation paused for handoff; no current development CUE is
-accepted. The candid failure history and constrained restart are in
-[`docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md`](docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md).
-One isolated historical donor has booted to a BOB frame, but is diagnostic
-only—not the presentation artifact.
+[`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
+**Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
 
 ## Product truth
 
-The repository has a historical BOB slice that the owner accepted at 4–6 FPS,
-with a measured 5.294 FPS mean and normal controls/camera. It is constrained
-and incomplete, but it is the visual/control/performance rollback oracle.
+**There is now an owner-accepted current CUE: `id-86d3880727ed1d10`.**
+ELF `b8754557…b501`, ISO `d952aea4…521a`, preserved at
+`releases/2026-08-15_0705/id-86d3880727ed1d10/`.
 
-The current development tree is not an accepted improvement. Recent manual
-observations found:
+Owner-observed and accepted at the gate:
 
-- Mario rendered with incorrect colors/material association;
-- flat or incorrect Gouraud shading;
-- incorrect front/back occlusion and painter order;
-- Bob-omb textures and ground placement were wrong;
-- no audible game music or SFX;
-- at least one current run was approximately 1 FPS; and
-- stale or wrongly profiled artifacts were launched during integration.
+- **Audible looping music**, started by the source game's own `play_music`
+  call through the semantic API into the MC68000/SCSP driver — the first game
+  audio in this project's history.
+- **Visuals accepted** as non-regressed against the A9A oracle (Mario,
+  terrain, camera, input).
+- Cadence ~1.1-2 FPS: recorded, and explicitly **non-blocking for R1** by
+  owner instruction (`0ad5fb31`). It is Sprint 2's first objective.
+
+The A9A slice (5.294 FPS) remains the immutable historical oracle at
+`build/saturn/baselines/a9a-2026-08-05/`. The regressions it was contrasted
+against were diagnosed as configuration-attributable and are neutralised in
+this candidate's feature tuple.
+
+One owner-observed artifact — a periodic piercing noise — was investigated to
+mechanism and **dispositioned as a Ymir host-audio underrun, not a port
+defect** (Ymir's `ProcessAudioCallback` drains without underrun detection;
+this build is a pathological slow producer). Full elimination chain:
+[`docs/saturn/evidence/reports/sprint1-r1-owner-gate.md`](docs/saturn/evidence/reports/sprint1-r1-owner-gate.md).
+
+## What Sprint 1 delivered
+
+- The donor worktree's entire unlanded state preserved in git (117 tracked
+  modifications + 53 zero-history files), byte-verified.
+- `AGENTS.md` product-gate constitution restored.
+- MC68000 driver diet: state 2,080 B -> 104 B off a 1,020 B stack — the root
+  cause of the `0x0340` audio failure; image 13,520 B -> 5,883 B.
+- Music as a hardware-looped SCSP sample (`wav_to_pcm8.py`, packager
+  `--music-pcm`, loop-bit validator), plus `render_m64_wav.py` to produce the
+  owner's ROM-derived music asset.
+- `SEQ_START`/`SEQ_STOP` handlers, music pinned to slot 0, SFX on slots 1-3.
+- Audio boot fail-open, hardened for never-zeroed LWRAM.
+- Three-way work-storage split after measuring 49,648 B of committed HWRAM
+  overflow; memory-map margin is now a build output (`verify-memory-map`).
+- Continuous SFX no longer re-keyed every frame.
 
 Host tests, SH-2 compilation, manifest verification, and review verdicts do not
 override those observations.

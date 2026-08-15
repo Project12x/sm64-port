@@ -5,21 +5,30 @@ This roadmap is subordinate to
 playable product capabilities, not technical subsystems. A milestone advances
 only with a newly built, uniquely identified CUE and its live evidence.
 
-## Now — recover the product feedback loop
+## Now — cadence recovery (Sprint 2)
 
-**Deliverable:** a trustworthy comparison between the immutable A9A baseline
-and one current candidate.
+**Deliverable:** the accepted R1 capability set at a materially better frame
+rate, without losing music, audio, or visual acceptance.
 
-- Preserve and hash-check the accepted A9A artifact.
-- Preserve the current dirty tree as a donor; do not reset unrelated work.
-- Record the exact current CUE, source state, profile, build time, and hashes.
-- Capture after gameplay renders, not at an arbitrary early frame.
-- Compare Mario scale/animation/materials/Gouraud/occlusion, controls, camera,
-  terrain, Bob-omb, audio output, failures, and FPS.
-- Select one causal defect and one donor path. Build and boot immediately.
+Measured starting point (candidate `id-86d3880727ed1d10`): ~1.1 FPS sustained,
+~53 VBlanks per presented frame, dominated by scene construction (~24.5
+VBlanks) and master finalization (~5.8).
 
-**Stop rule:** two failed causal attempts or two hours without a new live
-observation forces rollback, bypass, or a smaller transplant.
+Known levers, in evidence order:
+
+- **Committed HWRAM reduction.** Sprint 1 measured 49,648 B of always-on
+  growth since A9A, which forced the 43,776 B promoted-geometry workarea and
+  Mario's emission scratch into 16-bit LWRAM. Recovering that budget lets the
+  renderer's hot working set return to 32-bit HWRAM — the single mechanism
+  most directly implicated in the cadence collapse.
+- The painter relink is O(bins x commands) per frame (64 x ~1,800); a
+  counting-sort scatter would cut it to one pass.
+- Mario dominates the command stream (638 of 882 visible items; 50 source
+  triangles expanding to ~200 VDP1 commands).
+
+**Gate:** owner-observed cadence improvement with music, audio, and visuals
+still accepted. The >=4 FPS floor becomes binding again once a cadence
+baseline is re-established.
 
 ## Milestone 1 — presentation BOB
 
