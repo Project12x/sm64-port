@@ -24,6 +24,16 @@ remain applicable and require a separate release audit.
 - Repository path: `third_party/libyaul` (Git submodule/gitlink).
 - Status: pinned external dependency. The parent repository records the exact
   commit while libyaul source remains in its upstream repository.
+- Build-time patched copy (Sprint 2 T2.2): the sourceboot build stages a
+  patched copy of `libyaul/kernel/mm/internal.c` (TLSF private pool
+  0xA000 -> 0x4000) plus a verbatim copy of `libyaul/kernel/internal.h`
+  into the generated-sources tree and links that object ahead of the
+  prebuilt `libyaul.a` (reuse mode: direct-copy + patch of one MIT
+  translation unit; the submodule itself is never modified). The change
+  notice and pinned SHA-256 record live in
+  `tools/patches/libyaul-private-pool-0x4000.patch`; the staged copy
+  retains the upstream copyright header, satisfying the license term
+  above.
 
 The upstream license text at the pinned revision is:
 

@@ -1,0 +1,82 @@
+sm64-saturn-port build-time patch: libyaul kernel TLSF private pool 0xA000 -> 0x4000
+====================================================================================
+
+Sprint 2 Task T2.2 (plan: docs/superpowers/plans/2026-08-15-sprint2-cadence-recovery.md).
+
+WHAT
+  Shrinks libyaul's kernel-internal TLSF `_private_pool` from 40,960 to
+  16,384 bytes (-24,576 B of HWRAM .bss), and carries the MALLOC_IMPL_TLSF
+  configuration macro into the translation unit (the port compiles this file
+  outside libyaul's env.mk, which is where -DMALLOC_IMPL_TLSF normally comes
+  from; .yaul.env pins YAUL_OPTION_MALLOC_IMPL=tlsf).
+
+WHY THE SIZE IS SAFE (measured, not assumed)
+  T2.1's instrumented capture (docs/saturn/evidence/reports/
+  sprint2-t2_1-peak-capture.md, Peak 2) walked the live pool's physical TLSF
+  chain and stain-scanned the boot-zeroed pool over a 24,000-frame scripted
+  route: historical extent 8,276 bytes from pool base (TLSF control 3,188 B +
+  six boot-time blocks totalling 4,980 B payload; zero churn after boot).
+  A 0x4000 pool provides 13,188 B of arena after control+sentinel:
+  8,108 B of margin over the measured extent.
+
+HOW IT IS APPLIED (never in-place)
+  third_party/libyaul is a READ-ONLY pinned submodule
+  (6012f79f237773378c8014e70d8998ad95a38d98). The sourceboot Makefile's
+  `sourceboot-libyaul-mm-patch` staging rule extracts the pristine file
+  bytes from the pinned submodule commit with `git show` (canonical LF,
+  independent of checkout smudge), verifies both the submodule HEAD and the
+  pristine file SHA-256, applies this patch with GNU patch into
+  $(SOURCEBOOT_GENERATED)/libyaul_mm_internal.c, verifies the patched
+  SHA-256, and compiles that staged copy as an ordinary port object.
+  Because the object precedes `-lyaul` on the link line and defines every
+  global symbol of the archive's mm/internal.o member, the linker never
+  pulls the upstream member (same supersede mechanism as the soft-fp
+  archive; see the LINK ORDER note in src/port/saturn/sourceboot/Makefile).
+  kernel/internal.h (not installed by yaul) is staged verbatim next to it.
+
+PINNED HASHES (the staging rule fails loudly on any mismatch)
+  submodule HEAD          6012f79f237773378c8014e70d8998ad95a38d98
+  pristine internal.c     a6f81201fc598abaadfa641295537513f8d170e2672f16efd6fc12bc88fd83ef
+  pristine internal.h     e9cb1859e9957a9bb6fd92f2f7b437f16df959c092ce7f3fa464b65d431cb09e
+  patched  internal.c     1837d35ee9831477150e226a535462b8692fcb794603d7ea849db0984f8bd58e
+
+LICENSE
+  libyaul is MIT (Copyright (c) 2012-2023 Israel Jacquez); the staged copy
+  retains the upstream copyright header and this patch constitutes the
+  change notice. See THIRD_PARTY_LICENSES.md ("libyaul 0.3.1").
+
+--- a/libyaul/kernel/mm/internal.c
++++ b/libyaul/kernel/mm/internal.c
+@@ -5,6 +5,18 @@
+  * Israel Jacquez <mrkotfw@gmail.com>
+  */
+ 
++/* sm64-saturn-port Sprint 2 T2.2 (header of
++ * tools/patches/libyaul-private-pool-0x4000.patch has the full record):
++ * MALLOC_IMPL_TLSF mirrors the pinned toolchain build configuration
++ * (.yaul.env YAUL_OPTION_MALLOC_IMPL=tlsf -> libyaul env.mk
++ * -DMALLOC_IMPL_TLSF).  This translation unit is compiled by the port
++ * build, outside libyaul's env.mk, so the configuration macro must
++ * travel with the file for the user-pool behavior to stay identical to
++ * the installed libyaul.a. */
++#ifndef MALLOC_IMPL_TLSF
++#define MALLOC_IMPL_TLSF 1
++#endif
++
+ #include <sys/cdefs.h>
+ 
+ #include <mm/tlsf.h>
+@@ -19,7 +31,12 @@
+ #define TLSF_HANDLE_COUNT         (2)
+ 
+ #define TLSF_POOL_PRIVATE_START ((uint32_t)&_private_pool[0])
+-#define TLSF_POOL_PRIVATE_SIZE  (0xA000)
++/* sm64-saturn-port Sprint 2 T2.2: 0xA000 -> 0x4000.  T2.1 measured the
++ * pool's historical extent at 8,276 bytes from base (TLSF control 3,188 +
++ * 6 boot-time blocks, zero churn over 24,000 frames); a 0x4000 pool
++ * leaves 8,108 bytes of margin over that extent.  Evidence:
++ * docs/saturn/evidence/reports/sprint2-t2_1-peak-capture.md (Peak 2). */
++#define TLSF_POOL_PRIVATE_SIZE  (0x4000)
+ 
+ #define TLSF_POOL_USER_START    ((uint32_t)&__end)
+ #define TLSF_POOL_USER_END      (HWRAM(HWRAM_SIZE))

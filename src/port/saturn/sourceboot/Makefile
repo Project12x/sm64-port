@@ -26,6 +26,28 @@ SOURCEBOOT_ASSET_ASM_RECIPE := $(realpath $(firstword $(MAKEFILE_LIST)))
 # %{L*} cluster it builds from ordinary -L flags, regardless of Makefile
 # flag order).
 export SOURCEBOOT_GENERATED_LDDIR := $(SOURCEBOOT_GENERATED)
+# --- libyaul private-pool patch (Sprint 2 T2.2): staged, never in-place ----
+# third_party/libyaul is a READ-ONLY pinned submodule and the linked
+# libyaul.a is prebuilt in $(YAUL_INSTALL_ROOT). TLSF_POOL_PRIVATE_SIZE is a
+# bare #define in kernel/mm/internal.c (not user-configurable), so the
+# 0xA000 -> 0x4000 shrink is realized by staging a patched COPY of that one
+# translation unit into $(SOURCEBOOT_GENERATED) and compiling it as an
+# ordinary port object. Because the object precedes -lyaul on the link line
+# and defines every global of the archive's mm/internal.o member, the
+# linker never pulls the upstream member (the same supersede-by-link-order
+# mechanism as libsm64softfp; see the LINK ORDER note further down).
+# kernel/internal.h is not installed by yaul, so a verbatim copy is staged
+# beside it ($(SOURCEBOOT_GENERATED) is already on the -I path).
+# The staging rule re-validates the submodule HEAD and all three SHA-256
+# hashes on every build and fails loudly on any mismatch; see the patch
+# header for the full record.
+SOURCEBOOT_LIBYAUL_MM_PATCH := $(ROOT)/tools/patches/libyaul-private-pool-0x4000.patch
+SOURCEBOOT_LIBYAUL_MM_PATCHED := $(SOURCEBOOT_GENERATED)/libyaul_mm_internal.c
+SOURCEBOOT_LIBYAUL_INTERNAL_H := $(SOURCEBOOT_GENERATED)/internal.h
+SOURCEBOOT_LIBYAUL_PINNED_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
+SOURCEBOOT_LIBYAUL_MM_PRISTINE_SHA256 := a6f81201fc598abaadfa641295537513f8d170e2672f16efd6fc12bc88fd83ef
+SOURCEBOOT_LIBYAUL_INTERNAL_H_SHA256 := e9cb1859e9957a9bb6fd92f2f7b437f16df959c092ce7f3fa464b65d431cb09e
+SOURCEBOOT_LIBYAUL_MM_PATCHED_SHA256 := 1837d35ee9831477150e226a535462b8692fcb794603d7ea849db0984f8bd58e
 SOURCEBOOT_PYTHON ?= $(ROOT)/.venv-saturn-tools/Scripts/python.exe
 SOURCEBOOT_BUILD_IDENTITY_SPEC ?= $(SOURCEBOOT_GENERATED)/saturn_build_identity_spec.json
 SOURCEBOOT_BUILD_IDENTITY_INC := $(SOURCEBOOT_GENERATED)/saturn_build_identity_values.inc
@@ -475,6 +497,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/gpl/slavedriver_dual_worker.c \
   $(ROOT)/src/port/saturn/gpl/slavedriver_projection.sx \
   source_scene_bundle.c \
+  $(SOURCEBOOT_LIBYAUL_MM_PATCHED) \
   $(ROOT)/src/port/saturn/compat/sqrtf.c \
   $(ROOT)/src/buffers/buffers.c $(ROOT)/src/buffers/gfx_output_buffer.c \
   $(SOURCEBOOT_GAME_SRCS) $(SOURCEBOOT_ENGINE_SRCS) $(SOURCEBOOT_MENU_SRCS) \
@@ -826,6 +849,51 @@ IP_SLAVE_STACK_ADDR := 0x00300000
 IP_1ST_READ_ADDR := 0x06004000
 IP_1ST_READ_SIZE := 0
 
+# libyaul private-pool patch staging (variables and mechanism note at the
+# top of this Makefile). Pipeline: git show from the pinned submodule
+# commit -> sha256 gate -> GNU patch -> sha256 gate -> atomic move, so a
+# failed stage never leaves a fresh-mtime partial output behind. The
+# staged bytes come from the pinned commit's blob (canonical LF),
+# independent of the checkout's CRLF smudge. Submodule-bump protection is
+# layered: `make sourceboot`'s check-libyaul prerequisite fails the whole
+# build on any commit mismatch before this rule runs, and this recipe
+# re-checks the HEAD itself for direct invocations.
+$(SOURCEBOOT_LIBYAUL_MM_PATCHED) $(SOURCEBOOT_LIBYAUL_INTERNAL_H) &: \
+    $(SOURCEBOOT_LIBYAUL_MM_PATCH)
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@actual=$$(git -c safe.directory="$(ROOT)/third_party/libyaul" \
+	  -C "$(ROOT)/third_party/libyaul" rev-parse HEAD); \
+	if [ "$$actual" != "$(SOURCEBOOT_LIBYAUL_PINNED_COMMIT)" ]; then \
+	  printf 'libyaul-mm-patch: submodule HEAD %s != pinned %s\n' \
+	    "$$actual" '$(SOURCEBOOT_LIBYAUL_PINNED_COMMIT)' >&2; \
+	  printf 'libyaul-mm-patch: re-validate %s against the new commit and update its pinned hashes\n' \
+	    '$(SOURCEBOOT_LIBYAUL_MM_PATCH)' >&2; \
+	  exit 1; \
+	fi
+	@git -C "$(ROOT)/third_party/libyaul" show \
+	  HEAD:libyaul/kernel/mm/internal.c > "$(SOURCEBOOT_LIBYAUL_MM_PATCHED).stage"; \
+	actual=$$(sha256sum "$(SOURCEBOOT_LIBYAUL_MM_PATCHED).stage" | awk '{print $$1}'); \
+	if [ "$$actual" != "$(SOURCEBOOT_LIBYAUL_MM_PRISTINE_SHA256)" ]; then \
+	  printf 'libyaul-mm-patch: pristine internal.c sha256 %s != pinned %s\n' \
+	    "$$actual" '$(SOURCEBOOT_LIBYAUL_MM_PRISTINE_SHA256)' >&2; exit 1; \
+	fi; \
+	patch --batch --binary --silent "$(SOURCEBOOT_LIBYAUL_MM_PATCHED).stage" \
+	  "$(SOURCEBOOT_LIBYAUL_MM_PATCH)"; \
+	actual=$$(sha256sum "$(SOURCEBOOT_LIBYAUL_MM_PATCHED).stage" | awk '{print $$1}'); \
+	if [ "$$actual" != "$(SOURCEBOOT_LIBYAUL_MM_PATCHED_SHA256)" ]; then \
+	  printf 'libyaul-mm-patch: patched internal.c sha256 %s != pinned %s\n' \
+	    "$$actual" '$(SOURCEBOOT_LIBYAUL_MM_PATCHED_SHA256)' >&2; exit 1; \
+	fi; \
+	mv "$(SOURCEBOOT_LIBYAUL_MM_PATCHED).stage" "$(SOURCEBOOT_LIBYAUL_MM_PATCHED)"
+	@git -C "$(ROOT)/third_party/libyaul" show \
+	  HEAD:libyaul/kernel/internal.h > "$(SOURCEBOOT_LIBYAUL_INTERNAL_H).stage"; \
+	actual=$$(sha256sum "$(SOURCEBOOT_LIBYAUL_INTERNAL_H).stage" | awk '{print $$1}'); \
+	if [ "$$actual" != "$(SOURCEBOOT_LIBYAUL_INTERNAL_H_SHA256)" ]; then \
+	  printf 'libyaul-mm-patch: internal.h sha256 %s != pinned %s\n' \
+	    "$$actual" '$(SOURCEBOOT_LIBYAUL_INTERNAL_H_SHA256)' >&2; exit 1; \
+	fi; \
+	mv "$(SOURCEBOOT_LIBYAUL_INTERNAL_H).stage" "$(SOURCEBOOT_LIBYAUL_INTERNAL_H)"
+
 $(SOURCEBOOT_GENERATED)/mario_anim_data.c: $(ROOT)/tools/mario_anims_converter.py $(wildcard $(ROOT)/assets/anims/*.inc.c)
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@cd "$(ROOT)" && "$(SOURCEBOOT_PYTHON)" tools/mario_anims_converter.py > "$(SOURCEBOOT_GENERATED)/mario_anim_data.c"
@@ -901,6 +969,7 @@ endif
 # outputs or on the identity spec it is about to create.
 .PHONY: identity-assets
 identity-assets: source-assets source-geo-depth $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
+  $(SOURCEBOOT_LIBYAUL_MM_PATCHED) $(SOURCEBOOT_LIBYAUL_INTERNAL_H) \
   $(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_ACTOR_BANK) \
   $(SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER) $(SOURCEBOOT_ACTOR_SCENE_ASM) \
   $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C)) \
@@ -1212,6 +1281,7 @@ $(SH_BUILD_PATH)/IP.BIN: | $(SOURCEBOOT_TOOL_TMPDIR)
 SOURCEBOOT_GENERATED_COMPILED_INPUTS := \
   $(SOURCEBOOT_WATER_SKYBOX) \
   $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
+  $(SOURCEBOOT_LIBYAUL_MM_PATCHED) \
   $(SOURCEBOOT_QUAD_MAP_C) \
   $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C)) \
   $(SOURCEBOOT_BOB_TEXTURE_ASM) \
@@ -1230,6 +1300,7 @@ SOURCEBOOT_RECIPE_INPUTS := \
   $(ROOT)/third_party/libyaul/libyaul/build/build.post.bin.mk \
   $(ROOT)/third_party/libyaul/libyaul/build/build.post.iso-cue.mk
 SOURCEBOOT_GENERATOR_INPUTS := $(sort \
+  $(SOURCEBOOT_LIBYAUL_MM_PATCH) \
   $(ROOT)/tools/saturn/gen_source_closure.py \
   $(ROOT)/tools/saturn/gen_toolchain_attestation.py \
   $(ROOT)/tools/saturn/bootstrap_sourceboot_identity_spec.py \
@@ -1264,6 +1335,7 @@ SOURCEBOOT_GENERATOR_INPUTS := $(sort \
 SOURCEBOOT_PC_ASSET_REQUIRED_INPUTS := $(SOURCEBOOT_WATER_SKYBOX) $(ROOT)/$(SOURCEBOOT_TEXT_STRINGS)
 SOURCEBOOT_GENERATED_INPUTS := $(filter-out $(SOURCEBOOT_PC_ASSET_REQUIRED_INPUTS),$(sort \
   $(SOURCEBOOT_GENERATED_COMPILED_INPUTS) \
+  $(SOURCEBOOT_LIBYAUL_INTERNAL_H) \
   $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_COLLISION_CATALOG) \
   $(SOURCEBOOT_GEO_DEPTH_HEADER) $(SOURCEBOOT_GEO_DEPTH_LINKER) \
   $(SOURCEBOOT_BOB_BSP_HEADER) $(SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER) \

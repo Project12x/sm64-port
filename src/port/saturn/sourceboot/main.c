@@ -735,7 +735,21 @@ void *sm64_saturn_source_cart_phase_workspace(void)
     return sourceboot_main_pool;
 }
 
-#define SOURCEBOOT_VDP1_COMMAND_CAPACITY 2048U
+/* Sprint 2 T2.2: 2048 -> 1664. T2.1's instrumented capture measured a
+ * run-long published-bank peak of 653 cmdts (including the 3 setup
+ * commands) over the full scripted BOB route -- a 1,011-command margin
+ * against 1664 (sprint2-t2_1-peak-capture.md, Peak 1). Reference practice
+ * brackets the value (T2.0 L4: SlaveDriver ships 1,540; Z-Treme reserves
+ * 1,052; stock SGL reserves 1,569). Overflow is clamp-and-drop (L5:
+ * sm64_saturn_command_arena_reserve fails cleanly preserving the END
+ * slot) and the drop lands on the FAR head of the painter stream with
+ * Mario's batch tail-reserved (L6: demo_render_finalize's
+ * budget_before_tail selection). The historical 1:1 pairing with
+ * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES (1536) below applied to the
+ * dormant non-demo emit path; the demo path's quad merge keeps the bank
+ * well under the resolve count. Recovers 2 x 384 x 32 = 24,576 B of
+ * HWRAM toward returning the hot working set (T2.2 un-split). */
+#define SOURCEBOOT_VDP1_COMMAND_CAPACITY 1664U
 #if defined(SATURN_DEMO_BSP_FRAGMENTS) && SATURN_DEMO_BSP_FRAGMENTS
 #define SOURCEBOOT_BOB_TEXTURE_BYTES 261248U
 #define SOURCEBOOT_BOB_CLUT_COUNT 2041U
@@ -768,7 +782,9 @@ extern const uint8_t sm64_saturn_bob_clut_bank[];
  * Capacity raised 512 -> 2048 (2026-07-22) to track
  * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES's 192 -> 1536 increase 1:1
  * (saturn_fast3d_vdp1_emit.c emits exactly one vdp1_cmdt_t per resolved
- * triangle). Both 2048-command banks occupy 0x20000 bytes, aligned to the
+ * triangle), then shrunk 2048 -> 1664 (Sprint 2 T2.2) against T2.1's
+ * measured 653-command bank peak -- see the capacity macro's comment
+ * above. Both 1664-command banks occupy 0x1A000 bytes, aligned to the
  * VDP1 command layout. This ordinary HWRAM storage keeps the established
  * CPU-DMAC/VDP1 transfer addresses and cache behavior; do not reintroduce a
  * `.lwram_cmdts` attribute (the linker rejects that legacy section). */

@@ -2,6 +2,60 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Sprint 2 T2.2 capacity shrinks — the peak-cleared reclamation package,
+  recovering 67,584 B of committed HWRAM to fund returning the renderer's
+  hot working set (see the companion un-split entry). Every member is
+  gated on T2.1's instrumented peaks (`sprint2-t2_1-peak-capture.md`),
+  not on estimates, and each is independently revertable:
+  - `SOURCEBOOT_VDP1_COMMAND_CAPACITY` 2048 → 1664 (−24,576 B from the
+    double-buffered command staging). Measured run-long bank peak: 653
+    commands including the 3 setup commands — 1,011 headroom. Reference
+    practice brackets the value (T2.0 L4: SlaveDriver ships 1,540,
+    Z-Treme reserves 1,052, stock SGL 1,569). Safety preconditions
+    verified in-tree before cutting (T2.0 L5/L6): the command arena
+    clamps (reserve fails clean, END slot preserved, counted via
+    `reject_vdp1_arena_capacity`) and exhaustion drops the FAR head of
+    the painter stream with Mario's batch tail-reserved
+    (`demo_render_finalize`'s `budget_before_tail` selection, citing
+    ZT_RENDERING.c:494-503). The VDP1 VRAM partition arithmetic follows
+    the macro, so the VRAM command region shrinks in step. The orphaned
+    Task-14 contract `test_vdp1_staging_relocation.py` was retargeted to
+    1664 and repaired: it had been failing at base HEAD `a90f1628` on the
+    deliberate `.sourceboot_vdp1_cmdts` own-section attribute its old
+    no-section assert predated (pre-existing failure, verified by stash).
+  - `GFX_POOL_SIZE` 6400 → 4096 (−18,432 B). Measured bottom-up DL peak:
+    443 entries (9.2x headroom) — the Saturn path routes geometry through
+    its own IR, so the master DL carries scaffolding and HUD. Honestly
+    recorded caveat: the pool is two-sided and the top-down
+    `alloc_display_list` high-water was NOT separately measured by T2.1;
+    the new L5 overflow guard (see Fixed) converts any exhaustion into a
+    detected dropped-submission degrade rather than corruption.
+  - libyaul `_private_pool` 0xA000 → 0x4000 (−24,576 B). Measured
+    historical extent 8,276 B from pool base, boot-time-only, zero churn
+    over 24,000 frames; 8,108 B margin in the 0x4000 pool. Mechanism —
+    the dependency is READ-ONLY and its `TLSF_POOL_PRIVATE_SIZE` is a
+    bare `#define` (verified not user-configurable): a build-time-staged
+    patched copy of the one MIT translation unit
+    (`tools/patches/libyaul-private-pool-0x4000.patch`, applied by the
+    sourceboot Makefile from the pinned submodule commit's canonical-LF
+    blob via `git show`, triple-SHA-256-pinned, atomic staging) is
+    compiled as a port object ahead of `-lyaul`, so the linker never
+    pulls the archive's `mm/internal.o` member — the same
+    supersede-by-link-order mechanism as `libsm64softfp`. The staged TU
+    carries `-DMALLOC_IMPL_TLSF` inside the patch so user-pool behavior
+    stays identical to the installed `libyaul.a`. `third_party/` is not
+    modified; `tools/patches/**` is checked out byte-for-byte
+    (`.gitattributes -text`); THIRD_PARTY_LICENSES.md records the copy.
+  - SMPC peripheral pool 14 → 4 (the T2.1 NEEDS-MARGIN reserve, ≈5,320 B):
+    **deliberately skipped.** It is not reachable through the same
+    configuration surface — it would require superseding libyaul's entire
+    413-line `smpc_peripheral.c` driver TU (vs the 182-line self-contained
+    allocator shim), and the arithmetic closes without it (67,584 B
+    recovered vs 54,080 B + margin required). It remains the ranked
+    reserve if a future rung needs it.
+
 ### Fixed
 
 - Master display-list pool overflow now degrades instead of corrupting

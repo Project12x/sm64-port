@@ -36,3 +36,9 @@ tools/saturn/sh2_native_math_*.txt text eol=lf
 third_party/gcc-soft-fp/soft-fp/** -text
 third_party/gcc-soft-fp/include/** -text
 third_party/gcc-soft-fp/config/** -text
+
+# Build-time dependency patches apply against canonical-LF blob bytes
+# extracted with `git show` and are themselves SHA-256-pinned by the build
+# (src/port/saturn/sourceboot/Makefile's libyaul-mm-patch staging rule). A
+# CRLF checkout would break both the application and the pin.
+tools/patches/** -text

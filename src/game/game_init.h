@@ -12,7 +12,18 @@
 #ifdef USE_SYSTEM_MALLOC
 #define GFX_POOL_SIZE 1
 #else
-#define GFX_POOL_SIZE 6400 // Size of how large the master display list (gDisplayListHead) can be
+/* Size of the master display list (gDisplayListHead) shared arena.
+ * Sprint 2 T2.2: 6400 -> 4096. T2.1's run-long accumulator measured a
+ * bottom-up peak of 443 Gfx entries over the full scripted BOB route
+ * (sprint2-t2_1-peak-capture.md, Peak 3) -- the Saturn render path routes
+ * geometry through its own IR, so the master DL carries frame scaffolding
+ * and HUD only. NOTE the pool is two-sided: alloc_display_list() carves
+ * matrices/viewports down from gGfxPoolEnd inside the same arena, and that
+ * top-down high-water was NOT separately measured by T2.1; the L5 overflow
+ * guard (gGfxPoolOverrun, game_init.c) makes exhaustion a detected
+ * dropped-submission degrade rather than corruption. Recovers
+ * 2304 x 8 = 18,432 B of HWRAM toward the T2.2 un-split. */
+#define GFX_POOL_SIZE 4096
 #endif
 
 struct GfxPool {
