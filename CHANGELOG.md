@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+### Added
+
+- Sprint 2 T2.2 evidence: the reclamation package + un-split measured end
+  to end on candidate `id-6b7c7e5d5f71e809`. **Memory objective met,
+  cadence objective not met** — 67,584 B of HWRAM recovered and the full
+  54,080 B hot working set returned to 32-bit HWRAM (true slack over the
+  0x1F00 floor 472 B → 13,944 B, `verify-memory-map` RESULT OK), but
+  sustained cadence is **1.068 FPS against the R1 baseline's comparable
+  1.071 — a −0.24% change, i.e. no material difference**, with every
+  phase unchanged (construction 24.72 VBlanks/frame, master finalization
+  5.80, dropped credits 14.42). No regression either: queue clean
+  (0 master/slave failures), zero SH-2 exceptions, identity matched on
+  target at startup attempt 681.
+  Why it matters: returning the workarea + actor scratch to HWRAM is
+  **not** sufficient to recover cadence, so the sprint's remaining budget
+  belongs to the algorithmic levers (construction is 44% of a 56-VBlank
+  frame — T2.3's counting sort), not to further memory-tier work. The
+  T1 hypothesis is narrowed rather than refuted: `_sourceboot_fast3d`
+  (44,616 B, per-frame hot) is still in LWRAM, and T1 measured full A9A
+  hot-set residency at ~98,192 B, so "hot set in 16-bit LWRAM" has not
+  been tested end to end. Owner look-and-listen on the capacity cuts
+  remains open. Evidence:
+  `docs/saturn/evidence/reports/sprint2-t2_2-reclaim-unsplit.md`
+  (+ `sprint2-t2_2-throughput.json`).
+
+### Fixed
+
+- Two stale in-tree comments corrected (comment-only, no behavior change):
+  `sourceboot-cart.x` claimed the VDP1 command banks "total 0x20000 bytes"
+  (now 0x1A000 after the T2.2 capacity cut), and
+  `saturn_fast3d_frontend.h` claimed "Task 10's VDP1 command list lives in
+  LWRAM, not HWRAM, so it doesn't compete with this budget" — false since
+  Task 14 moved the banks to HWRAM, and a direct contradiction of T1's
+  central finding that they are the largest single HWRAM tenant. Both
+  would have misled the next capacity decision.
+
 ### Changed
 
 - Sprint 2 T2.2 un-split: the renderer's full 54,080 B hot working set is
@@ -84,7 +120,7 @@
 - `verify_sourceboot_memory_map.py`'s `VDP1_COMMAND_BANK_BYTES` tracks the
   T2.2 capacity cut (`2 * 2048 * 32` -> `2 * 1664 * 32`). The margin gate
   pins the VDP1 transport bank's *exact* extent, so it fails closed on any
-  capacity change until updated � it did exactly that on the first T2.2
+  capacity change until updated — it did exactly that on the first T2.2
   gate run (`RESULT = FAIL: ELF command banks are not the exact aligned
   HWRAM range`), which is the gate working as designed. The constant and
   `SOURCEBOOT_VDP1_COMMAND_CAPACITY` must move together; both the stale

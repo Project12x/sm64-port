@@ -605,8 +605,12 @@ typedef struct sm64_saturn_fast3d_q16_trace {
  * (26 bytes/entry as of the general-quad-merging design's four-corner
  * change, 2026-07-25 -- was 20, and 16 before the Gouraud design's
  * corner_rgb1555[3]) and SM64_SATURN_FAST3D_MAX_VERTICES (16 bytes/entry)
- * are the two knobs to shrink first (Task 10's VDP1 command list lives in LWRAM,
- * not HWRAM, so it doesn't compete with this budget) -- but note the region
+ * are the two knobs to shrink first (NOTE, corrected 2026-08-15: this
+ * parenthetical used to say the VDP1 command list lives in LWRAM and does
+ * not compete with this budget.  That has been false since Task 14 moved
+ * the command banks to HWRAM -- they are the single largest HWRAM tenant
+ * and they DO compete; see docs/saturn/evidence/reports/
+ * sprint2-t1-hwram-attribution.md) -- but note the region
  * is now tight enough that even a modest amount of new .text elsewhere in
  * sourceboot could overflow it before these knobs are touched at all.
  *

@@ -125,7 +125,8 @@ SECTIONS
      . = ALIGN (16);
      PROVIDE (___bss_start = .);
 
-     /* The two persistent 32-byte VDP1 command banks total 0x20000 bytes.
+     /* The two persistent 32-byte VDP1 command banks total 0x1A000 bytes
+      * (2 x 1664 commands since Sprint 2 T2.2; was 0x20000 at 2048).
       * Put that fixed HWRAM-only block first while the BSS cursor is aligned
       * deterministically; leaving it behind small state makes its required
       * alignment consume avoidable heap-margin padding. This is layout-only:

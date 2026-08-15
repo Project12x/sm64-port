@@ -57,7 +57,7 @@ NOLOAD diagnostic fields gated behind `SATURN_DIAGNOSTIC_MODE=1` — the
 product build stays untouched. Deliverable: measured peaks + verdict per
 shrink candidate (safe / unsafe / needs-margin), committed as evidence.
 
-### Task T2.2: Reclamation package + un-split (elaborated after T2.1)
+### Task T2.2: Reclamation package + un-split — **complete (memory), cadence NEGATIVE**
 
 Apply the verdict-approved shrinks; libyaul change via patch file under
 `tools/patches/` (or the project's established mechanism — investigate; never
@@ -66,6 +66,37 @@ edit `third_party/` in place). Return the workarea + actor scratch (and
 `verify-memory-map` OK with ≥0x1F00; `verify-audio-loop-contracts` +
 `verify-pcm68k-model` green; FPS capture vs the 1.1 baseline; owner
 look-and-listen (no visual/audio regression).
+
+**Status 2026-08-15 — evidence
+`docs/saturn/evidence/reports/sprint2-t2_2-reclaim-unsplit.md`, candidate
+`id-6b7c7e5d5f71e809`, commits `971f8f93`, `26ae9c38`, `98dab715`,
+`03c697f5`:**
+
+- Memory objective MET. 67,584 B recovered (cmdt 2048→1664,
+  `GFX_POOL_SIZE` 6400→4096, libyaul `_private_pool` 0xA000→0x4000 via a
+  build-time-staged patched copy of the one MIT translation unit, linked
+  ahead of `-lyaul`; SMPC 14→4 skipped — it needs a full driver-TU
+  supersede and the arithmetic closes without it). Full 54,080 B hot set
+  returned to HWRAM. `verify-memory-map` RESULT OK; `hwram_remaining`
+  0x20D8 → **0x5578**, true slack over the floor **472 B → 13,944 B**.
+- Gates green: `verify-memory-map` OK, `verify-audio-loop-contracts` 24,
+  `verify-pcm68k-model` 18, work-storage contract 4 (retargeted to the
+  all-HWRAM policy + mutation-verified), staging-relocation contract
+  repaired (it was already failing at base HEAD).
+- **Cadence objective NOT met: 1.068 FPS sustained vs the R1 baseline's
+  comparable 1.071 (−0.24%, no material change).** All phases unchanged
+  (construction 24.72 VBlanks/frame, master finalization 5.80). No
+  regression either: queue clean, zero SH-2 exceptions.
+- Confound recorded: `_sourceboot_fast3d` (44,616 B, per-frame hot) is
+  still in LWRAM — T1 measured full A9A hot-set residency at ~98,192 B, so
+  the LWRAM hypothesis is half-tested, not refuted. Next rung is T2.0 L3's
+  build-in-VRAM staging window, not more tier shuffling.
+- **Owner gate still open:** look-and-listen on `id-6b7c7e5d5f71e809` for
+  any visual/audio regression from the capacity cuts.
+- Design correction for T2.3+: the evidence now points at the algorithmic
+  levers (construction = 44% of a 56-VBlank frame), which is exactly
+  T2.3's counting sort. Cadence recovery should not be expected from
+  further memory-tier work.
 
 ### Task T2.3: Painter relink counting-sort (existing board task)
 
