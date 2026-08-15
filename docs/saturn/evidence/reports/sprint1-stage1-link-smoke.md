@@ -171,3 +171,85 @@ isolated to HWRAM `.bss` capacity with exact numbers recorded above.
 
 Not proved: link success, margin gate, boot, visuals, audio, input, FPS —
 no claims are made about any of these.
+
+## Stage 1b: HWRAM relief + linking margin-passing build (2026-08-14)
+
+- Date: 2026-08-14 (23:38–23:56 local); build 23:38:26–23:55:45 (17m19s).
+- Same invocation as stage 1's pool-208 attempt (identical 27-variable set,
+  `SATURN_OBJECT_POOL_CAPACITY=208`), on top of two new commits:
+  - `1b8b8239` `fix(build)`: profile reconciled to the R1 tuple
+    (features.complete_mario_animation/dynamic_actor_closure 1→0; pool 208
+    and semantic audio 1 were already committed) + the missing
+    `audio-sourceboot-sfx-v1.json` manifest committed (descriptor metadata
+    only, not gitignored — purely a missing commit).
+  - `49370e31` `perf(render)`: three-way work-storage split (fallback
+    rung b, refined). `s_bob_hot_workarea` (43,776 B) back to
+    `.lwram_bss` (the 91f02ffd placement, aligned(16) kept); five
+    actor-path-only scratch arrays evicted via the new
+    `DEMO_ACTOR_WORK_CACHE` macro (`s_actor_queue_merge_ids` 2,576 B,
+    `s_actor_slots` 1,288 B, `s_actor_texture_slots` 1,288 B,
+    `s_actor_gouraud` 2,576 B, `s_actor_gouraud_addresses` 2,576 B =
+    10,304 B). Each was verified actor-path-only by reading every use
+    (only `demo_actor_queue_assemble_done`, `demo_reserve_mario_gouraud`,
+    `demo_emit_mario`, `demo_emit_mario_range`; never the terrain path).
+    The 18 terrain/primitive scratch arrays stay in HWRAM.
+    `test_dual_sh2_work_storage_contract.py` retargeted to pin the split
+    (4 tests OK).
+
+### Outcome
+
+**LINK SUCCEEDED — margin gate OK.** Sealed identity `id-29429bb2a7b03158`
+(`build/saturn/sourceboot/e2-bob-identity-id-29429bb2a7b03158/`). No
+emulator launch; no claims about boot, visuals, audio, input, or FPS.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `obj/sm64-saturn-sourceboot-e2.elf` | `b25c8cf2097bd8fcf205e34f133bdf69db1b0b5c3404dbd7fab64e7b5c8a6b0c` |
+| `sm64-saturn-sourceboot-e2.iso` | `33ba93beb92e498ca551ccf26d195cdd76149b64aba236282542ce73d89ff8d1` |
+| `obj/sm64-saturn-sourceboot-e2.map` | `245196a6b5b2bf9c0eeee204166c6d2a19b13ecd44a3dbb2a6958b1256320db8` |
+
+### Margin gate output (verbatim, `verify-memory-map` via make; it
+auto-selected this build's ELF)
+
+```
+verify-memory-map: checking /d/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/saturn-recovery/build/saturn/sourceboot/e2-bob-identity-id-29429bb2a7b03158/obj/sm64-saturn-sourceboot-e2.elf
+verify: D:\Code\RetroDev\sm64-saturn-port\sm64-port\.worktrees\saturn-recovery\build\saturn\sourceboot\e2-bob-identity-id-29429bb2a7b03158\obj\sm64-saturn-sourceboot-e2.elf
+  ___end          = 0x060FDF28
+  hwram_remaining = 0x20D8 bytes (required >= 0x1F00)
+  lwram_end       = 0x002F5D40
+  lwram_remaining = 0xA2C0 bytes (floor >= 0x4000)
+  RESULT          = OK
+```
+
+### Deltas vs the stage-1 pool-208 map (`id-26f79a882b63d52d`)
+
+| Section | Stage 1 size | Stage 1b size | Delta |
+| --- | --- | --- | --- |
+| `.text` | `0x83D08` (539,912) | `0x83D08` | 0 |
+| `.rodata` | `0x1DFD` (7,677) | `0x1DFD` | 0 |
+| `.data` | `0x857C` (34,172) | `0x857C` | 0 |
+| `.bss` | `0x77FD0` (491,472) | `0x6AC90` (437,392) | **−54,080** |
+| `.uncached` | `0xF78` (3,960), spilled past top | `0xF78` at `0x060FCFB0` | 0 (now fits) |
+| `.lwram_bss` | `0xD89D8` (887,256) | `0xE5D38` (941,368) | +54,112 |
+
+The `.bss` shrink is exactly the eviction sum (43,776 + 10,304 = 54,080 B);
+`.lwram_bss` grew 54,112 B (32 B of section-placement alignment). The
+margin arithmetic closes: stage 1 needed 49,648 B measured at the `.bss`
+end, but `___end` also counts the 3,960 B `.uncached` section that now
+fits below the top, so the effective requirement was 53,608 B against
+54,080 B recovered — hwram slack over the 0x1F00 gate is 0x1D8 (472 B).
+This margin is thin: any committed-`.bss` growth ≥ 472 B reopens the
+overflow at this configuration.
+
+LWRAM floor: `lwram_remaining` 0xA2C0 (41,664 B) against the 0x4000
+(16,384 B) floor — 25,280 B of headroom after absorbing the eviction.
+
+### What stage 1b proved / did not prove
+
+Proved: the recovery branch links at the mandated R1 stage-1 configuration
+with the margin gate passing as a build output; the profile equality gate
+and SFX manifest are now committed (self-building tree); the three-way
+split is pinned by the work-storage contract test.
+
+Not proved: boot, visuals, audio, input, FPS. The 4 FPS floor gate
+(Task 11) decides whether the actor/workarea LWRAM placement is retained.
