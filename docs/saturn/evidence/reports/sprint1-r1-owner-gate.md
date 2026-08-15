@@ -362,3 +362,28 @@ packager built, at playback time, on target.**
 Owner listening session on `id-782c9c8f323a01a0`. Everything above is
 register- and byte-level measurement; whether the audible artifact is gone is
 an owner observation, and cadence (~1-2 FPS) is unchanged by this fix.
+
+### OWNER CONFIRMATION 2026-08-15 — piercing noise RESOLVED
+
+Owner observed candidate `id-782c9c8f323a01a0` in desktop Ymir: **"the sound
+bug is fixed"** — the periodic piercing noise is gone, and the music loop plays
+cleanly in the background. This closes the defect end to end: measured
+byte-level proof (PCM bank 65,354 -> 0 differing bytes) followed by owner
+confirmation by ear.
+
+Remaining owner observation: **no obvious SFX when jumping.** This is a
+CONTENT gap, not a defect. Mario's own action/voice sounds are absent from the
+54-entry BOB closure, which contains exactly one `SOUND_ACTION_*` entry
+(`SOUND_ACTION_READ_SIGN`); everything else is object/enemy/environment
+(`SOUND_OBJ_*`, `SOUND_GENERAL_*`, `SOUND_ENV_*`). Jump/land/voice IDs
+(`SOUND_ACTION_TERRAIN_JUMP`, `SOUND_MARIO_YAH_WAH_HOO`, `SOUND_MARIO_HOOHOO`,
+`SOUND_ACTION_TERRAIN_LANDING`, ...) are simply not packaged, so no amount of
+driver work can make them sound. Compounding it: with
+`DYNAMIC_ACTOR_CLOSURE=0` most of the object sounds that ARE packaged have no
+live emitter in this build.
+
+Fix path (bounded, next audio task): extend the BOB closure to include Mario's
+action/voice sound IDs, repackage the SFXB bundle (218 KB of sound RAM spare,
+so budget is not a constraint), rebuild. The semantic path, mapping lookup,
+slot allocation, and coalescing are all proven working — this is purely a
+packaging-coverage change.
