@@ -79,11 +79,11 @@ static void publish_sfx_bundle(uint8_t *ram, uint32_t sound_bits,
     sm64_saturn_pcm_put_be16(ram, (uint16_t)(samples + 10U), 0U);
 }
 
-/* Task 4 driver diet: the sequence VM is out of the linked image, so
- * SEQ_START temporarily keys music off (Task 6 rewrites it as the
- * looped-sample music start).  The command must stay a known opcode, the
- * attested music bundle must keep parsing, and the VM-sourced mailbox
- * words must publish 0 without moving any protocol offset. */
+/* Task 6 no-music discrimination: this attested bundle carries the retired
+ * m64 trailer words but a zero music_sample_index, so SEQ_START must key any
+ * stale music off (replace semantics), start nothing, and count no fault.
+ * The command must stay a known opcode, the bundle must keep parsing, and
+ * the VM-sourced mailbox words must publish 0 without moving any offset. */
 static void test_seq_start_is_consumed_and_keys_music_off(void)
 {
     uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
@@ -163,6 +163,10 @@ static void test_seq_start_is_consumed_and_keys_music_off(void)
                ram, SM64_SATURN_PCM_MUSIC_NOTES_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
                ram, SM64_SATURN_PCM_MUSIC_REJECT_MASK_OFFSET) == 0U);
+    /* The requested source sequence id (words[1]) is recorded in the
+     * MUSIC_SEQUENCE diagnostic word even when no music row exists. */
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_SEQUENCE_OFFSET) == 3U);
 }
 
 static void test_proof_metadata_is_deterministic_and_bounded(void)
@@ -284,6 +288,64 @@ static uint16_t register_word(const uint16_t *registers, uint16_t offset)
     return registers[offset / 2U];
 }
 
+static uint16_t slot_word(const uint16_t *registers, uint16_t slot,
+                          uint16_t field)
+{
+    return register_word(registers,
+                         (uint16_t)(slot * SM64_SATURN_SCSP_SLOT_BYTES +
+                                    field));
+}
+
+/* Task 6: bundle with one semantic-SFX row plus a trailer-indexed music row.
+ * The trailer index and the music row's flags word are caller-controlled so
+ * tests cover the valid looped row and the loop-less invalid row. */
+static void publish_music_bundle(uint8_t *ram, uint16_t music_index,
+                                 uint16_t music_flags)
+{
+    const uint16_t base = SM64_SATURN_PCM_SFX_BUNDLE_OFFSET;
+    const uint16_t maps = (uint16_t)(base +
+        SM64_SATURN_PCM_SFX_BUNDLE_HEADER_BYTES);
+    const uint16_t samples = (uint16_t)(maps +
+        SM64_SATURN_PCM_SFX_BUNDLE_MAPPING_BYTES);
+    const uint16_t music_row = (uint16_t)(samples +
+        SM64_SATURN_PCM_SFX_BUNDLE_SAMPLE_BYTES);
+    sm64_saturn_pcm_put_be32(ram, base, SM64_SATURN_PCM_SFX_BUNDLE_MAGIC);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 4U),
+                             SM64_SATURN_PCM_SFX_BUNDLE_VERSION);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 6U),
+                             SM64_SATURN_PCM_SFX_BUNDLE_HEADER_BYTES);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 8U), 1U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 10U), 1U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 12U), 2U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 14U),
+                             SM64_SATURN_PCM_SFX_BUNDLE_HEADER_BYTES);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 16U),
+                             (uint16_t)(samples - base));
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 18U),
+                             (uint16_t)(samples - base +
+                                        2U * SM64_SATURN_PCM_SFX_BUNDLE_SAMPLE_BYTES));
+    sm64_saturn_pcm_put_be32(ram, (uint16_t)(base + 20U), 96U);
+    sm64_saturn_pcm_put_be16(ram,
+        (uint16_t)(base + SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SAMPLE_INDEX_FIELD),
+        music_index);
+    sm64_saturn_pcm_put_be32(ram, maps, 0x24008080U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(maps + 4U), 0U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(maps + 6U), 1U);
+    /* Row 0: the mapped SFX sample. */
+    sm64_saturn_pcm_put_be32(ram, samples, SM64_SATURN_PCM_BANK_OFFSET);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(samples + 4U), 32U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(samples + 6U), 16000U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(samples + 8U), 15U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(samples + 10U), 0U);
+    /* Row 1: the music sample the trailer points at. */
+    sm64_saturn_pcm_put_be32(ram, music_row,
+                             SM64_SATURN_PCM_BANK_OFFSET + 32U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 4U), 64U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 6U), 11025U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 8U), 12U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 10U), music_flags);
+}
+
 static void test_consumer_drives_scsp_play_master_and_reset(void)
 {
     uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
@@ -302,8 +364,12 @@ static void test_consumer_drives_scsp_play_master_and_reset(void)
         SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
     sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 1U);
     assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 2U);
-    assert(register_word(register_words, SM64_SATURN_SCSP_SLOT_KEYS) ==
+    /* Task 6 slot pinning: the first SFX voice lands on slot 1; the music
+     * slot's keys word is never written by the SFX path. */
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_KEYS) ==
            0x1810U);
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_KEYS) == 0U);
     assert(register_word(register_words, SM64_SATURN_SCSP_MASTER_OFFSET) ==
            0x0209U);
 
@@ -311,7 +377,7 @@ static void test_consumer_drives_scsp_play_master_and_reset(void)
     sm64_saturn_pcm_put_be16(ram,
         SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 2U);
     assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
-    assert(register_word(register_words, SM64_SATURN_SCSP_SLOT_KEYS) ==
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_KEYS) ==
            0x1000U);
 }
 
@@ -333,7 +399,8 @@ static void test_semantic_sfx_uses_validated_sound_ram_bundle(void)
     assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
     assert(state.voices_started == 1U);
     assert(state.invalid_samples == 0U);
-    assert(register_word(register_words, SM64_SATURN_SCSP_SLOT_SA_LOW) ==
+    /* Task 6 slot pinning: semantic SFX start at slot 1, not the music slot. */
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_SA_LOW) ==
            SM64_SATURN_PCM_BANK_OFFSET);
 
     /* A malformed present bundle must fail closed instead of falling back to
@@ -377,8 +444,9 @@ static void test_bundle_accepts_loop_flag_and_rejects_unknown_flags(void)
     assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
     assert(state.voices_started == 1U);
     assert(state.invalid_samples == 0U);
-    /* KEY_EXECUTE | KEY_ON | PCM8 | LOOP_NORMAL for a bank-offset sample. */
-    assert(register_word(register_words, SM64_SATURN_SCSP_SLOT_KEYS) ==
+    /* KEY_EXECUTE | KEY_ON | PCM8 | LOOP_NORMAL for a bank-offset sample,
+     * on SFX slot 1 (Task 6 pins slot 0 to music). */
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_KEYS) ==
            0x1830U);
 
     /* Any flag bit other than the loop bit stays an invalid bundle. */
@@ -388,6 +456,222 @@ static void test_bundle_accepts_loop_flag_and_rejects_unknown_flags(void)
     assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
     assert(state.voices_started == 1U);
     assert(state.invalid_samples == 1U);
+}
+
+/* Task 6: SEQ_START starts the trailer-indexed looped music row on the
+ * pinned music slot; every SEQ_START keys existing music off first. */
+static void test_seq_start_starts_looped_music_on_slot0(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t start[7] = {0U, 34U, 0U, 0U, 0U, 0U, 0U};
+    const uint16_t restart[7] = {0U, 35U, 0U, 0U, 0U, 0U, 0U};
+
+    publish_v2_header(ram);
+    publish_music_bundle(ram, 1U, SM64_SATURN_PCM_SAMPLE_LOOP);
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_control(ram, 0U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, start);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.unknown_opcodes == 0U);
+    assert(state.music_active == 1U);
+    assert(state.music_sequence_starts == 1U);
+    assert(state.music_notes_started == 1U);
+    assert(state.music_faults == 0U);
+    assert(state.music_scsp_failures == 0U);
+    assert(state.voices_started == 1U);
+    assert(state.voices[SM64_SATURN_PCM_MUSIC_SLOT].active);
+    /* KEY_EXECUTE | KEY_ON | PCM8 | LOOP_NORMAL on the pinned music slot. */
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_KEYS) == 0x1830U);
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_SA_LOW) ==
+           SM64_SATURN_PCM_BANK_OFFSET + 32U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_ACTIVE_OFFSET) == 1U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_STARTS_OFFSET) == 1U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_NOTES_OFFSET) == 1U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_SEQUENCE_OFFSET) == 34U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_VOICES_STARTED_OFFSET) == 1U);
+
+    /* Replace semantics: a second SEQ_START keys the old music off before
+     * starting again, so exactly one voice stays active on the music slot
+     * and its keys word is rewritten as a fresh looped key-on. */
+    put_control(ram, 1U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, restart);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 2U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.music_active == 1U);
+    assert(state.music_sequence_starts == 2U);
+    assert(state.keyoffs == 1U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_ACTIVE_VOICE_COUNT_OFFSET) == 1U);
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_KEYS) == 0x1830U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_SEQUENCE_OFFSET) == 35U);
+}
+
+static void test_seq_stop_keys_off_music(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t start[7] = {0U, 34U, 0U, 0U, 0U, 0U, 0U};
+    const uint16_t zero[7] = {0};
+
+    publish_v2_header(ram);
+    publish_music_bundle(ram, 1U, SM64_SATURN_PCM_SAMPLE_LOOP);
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_control(ram, 0U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, start);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.music_active == 1U);
+
+    put_control(ram, 1U, SM64_SATURN_AUDIO_OPCODE_SEQ_STOP, zero);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 2U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.music_active == 0U);
+    assert(state.keyoffs == 1U);
+    assert(!state.voices[SM64_SATURN_PCM_MUSIC_SLOT].active);
+    /* scsp_pcm8_stop leaves only KEY_EXECUTE in the slot's keys word. */
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_KEYS) == 0x1000U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_ACTIVE_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_ACTIVE_VOICE_COUNT_OFFSET) == 0U);
+
+    /* Idempotent: a second SEQ_STOP keys nothing off again. */
+    put_control(ram, 2U, SM64_SATURN_AUDIO_OPCODE_SEQ_STOP, zero);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 3U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.music_active == 0U);
+    assert(state.keyoffs == 1U);
+}
+
+static void test_sfx_never_uses_slot0_while_music_plays(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t start[7] = {0U, 34U, 0U, 0U, 0U, 0U, 0U};
+    const uint16_t play[7] = {0x2400U, 0x8080U, 9U, 1U, 0xFF40U, 4096U, 1U};
+    uint16_t i;
+
+    publish_v2_header(ram);
+    publish_music_bundle(ram, 1U, SM64_SATURN_PCM_SAMPLE_LOOP);
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_control(ram, 0U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, start);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
+    for (i = 0U; i < 3U; ++i) {
+        put_sfx(ram, i, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, play);
+    }
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 3U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 4U);
+    assert(state.voices_started == 4U);
+    assert(state.invalid_samples == 0U);
+    assert(state.music_active == 1U);
+    /* The music slot's registers still belong to the looped music sample. */
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_KEYS) == 0x1830U);
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_SA_LOW) ==
+           SM64_SATURN_PCM_BANK_OFFSET + 32U);
+    /* All three SFX landed on slots 1..3. */
+    for (i = 1U; i < SM64_SATURN_PCM_VOICE_COUNT; ++i) {
+        assert(state.voices[i].active);
+        assert(slot_word(register_words, i, SM64_SATURN_SCSP_SLOT_SA_LOW) ==
+               SM64_SATURN_PCM_BANK_OFFSET);
+        assert(slot_word(register_words, i, SM64_SATURN_SCSP_SLOT_KEYS) ==
+               0x1810U);
+    }
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_ACTIVE_VOICE_COUNT_OFFSET) == 4U);
+}
+
+static void test_seq_start_without_music_row_is_silent_not_fault(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t start[7] = {0U, 34U, 0U, 0U, 0U, 0U, 0U};
+
+    publish_v2_header(ram);
+    /* Real production bundle shape: no trailer words, music_sample_index 0. */
+    publish_sfx_bundle(ram, 0x24008080U, 1U,
+                       SM64_SATURN_PCM_BANK_OFFSET, 32U, 16000U);
+    sm64_saturn_pcm_voice_state_init(&state);
+    state.music_active = 1U; /* stale music must still be silenced */
+    put_control(ram, 0U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, start);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.music_active == 0U);
+    assert(state.music_faults == 0U);
+    assert(state.music_sequence_starts == 0U);
+    assert(state.music_notes_started == 0U);
+    assert(state.voices_started == 0U);
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_KEYS) == 0U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_FAULTS_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_ACTIVE_OFFSET) == 0U);
+}
+
+static void test_seq_start_with_invalid_music_row_faults(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t start[7] = {0U, 34U, 0U, 0U, 0U, 0U, 0U};
+
+    publish_v2_header(ram);
+    /* Nonzero trailer index pointing at a row WITHOUT the loop bit. */
+    publish_music_bundle(ram, 1U, 0U);
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_control(ram, 0U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, start);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.music_active == 0U);
+    assert(state.music_faults == 1U);
+    assert(state.music_sequence_starts == 0U);
+    assert(state.voices_started == 0U);
+    assert(slot_word(register_words, SM64_SATURN_PCM_MUSIC_SLOT,
+                     SM64_SATURN_SCSP_SLOT_KEYS) == 0U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_FAULTS_OFFSET) == 1U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_MUSIC_STARTS_OFFSET) == 0U);
+
+    /* A trailer index outside the sample table is the same fault class. */
+    sm64_saturn_pcm_put_be16(ram,
+        (uint16_t)(SM64_SATURN_PCM_SFX_BUNDLE_OFFSET +
+                   SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SAMPLE_INDEX_FIELD), 7U);
+    put_control(ram, 1U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, start);
+    sm64_saturn_pcm_put_be16(ram,
+        SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 2U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.music_active == 0U);
+    assert(state.music_faults == 2U);
+    assert(state.voices_started == 0U);
 }
 
 static void test_voice_state_fits_reserved_stack(void)
@@ -409,5 +693,10 @@ int main(void)
     test_consumer_drives_scsp_play_master_and_reset();
     test_semantic_sfx_uses_validated_sound_ram_bundle();
     test_bundle_accepts_loop_flag_and_rejects_unknown_flags();
+    test_seq_start_starts_looped_music_on_slot0();
+    test_seq_stop_keys_off_music();
+    test_sfx_never_uses_slot0_while_music_plays();
+    test_seq_start_without_music_row_is_silent_not_fault();
+    test_seq_start_with_invalid_music_row_faults();
     return 0;
 }

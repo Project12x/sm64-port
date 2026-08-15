@@ -71,12 +71,22 @@ static uint16_t sm64_saturn_pcm_clamp_u16(uint16_t value, uint16_t maximum)
     return value > maximum ? maximum : value;
 }
 
-/* Keys the music path off.  The sequence VM and its software voice engine
- * were removed from the linked image (Task 4 driver diet); until the
- * looped-sample music path lands, keying music off only means clearing the
- * activity flag the mailbox publisher reports. */
-static void sm64_saturn_pcm_music_key_off(sm64_saturn_pcm_voice_state_t *state)
+/* Keys the pinned music slot off and clears the activity flag the mailbox
+ * publisher reports.  Idempotent: when the music slot is already inactive
+ * only the flag is cleared. */
+static void sm64_saturn_pcm_music_key_off(sm64_saturn_pcm_voice_state_t *state,
+                                          volatile uint8_t *scsp_registers)
 {
+    sm64_saturn_pcm_voice_t *voice =
+        &state->voices[SM64_SATURN_PCM_MUSIC_SLOT];
+    if (voice->active) {
+        if (scsp_registers != 0) {
+            (void)sm64_saturn_scsp_pcm8_stop(scsp_registers,
+                                             SM64_SATURN_PCM_MUSIC_SLOT);
+        }
+        state->keyoffs++;
+        voice->active = false;
+    }
     state->music_active = 0U;
 }
 
@@ -224,6 +234,7 @@ void sm64_saturn_pcm_voice_state_init(sm64_saturn_pcm_voice_state_t *state)
     state->music_notes_started = 0U;
     state->music_faults = 0U;
     state->music_scsp_failures = 0U;
+    state->music_sequence_id = 0U;
     state->music_active = 0U;
 }
 
@@ -295,20 +306,18 @@ static void sm64_saturn_pcm_stop_all(sm64_saturn_pcm_voice_state_t *state,
         }
     }
     state->active_slot = 0xFFFFU;
-    sm64_saturn_pcm_music_key_off(state);
+    sm64_saturn_pcm_music_key_off(state, scsp_registers);
 }
 
-static void sm64_saturn_pcm_play_sample(
-    sm64_saturn_pcm_voice_state_t *state, uint16_t sample_id,
+/* Binds a validated sample to one explicit slot and keys it on.  Shared by
+ * the SFX round-robin and the pinned music slot; the caller owns the slot
+ * choice and the failure counter that a false return feeds. */
+static bool sm64_saturn_pcm_start_voice(
+    sm64_saturn_pcm_voice_state_t *state, uint16_t slot, uint16_t sample_id,
     const sm64_saturn_pcm_sample_t *sample, uint16_t volume, int16_t pan,
     volatile uint8_t *scsp_registers)
 {
-    sm64_saturn_pcm_voice_t *voice;
-    if (sample == 0) {
-        state->invalid_samples++;
-        return;
-    }
-    voice = &state->voices[state->next_slot];
+    sm64_saturn_pcm_voice_t *voice = &state->voices[slot];
     if (voice->active) {
         state->keyoffs++;
     }
@@ -323,16 +332,44 @@ static void sm64_saturn_pcm_play_sample(
     voice->pan = pan;
     voice->generation = (uint16_t)(voice->generation + 1U);
     if (scsp_registers != 0 &&
-        !sm64_saturn_scsp_pcm8_start(scsp_registers, state->next_slot,
-                                     sample, voice->volume, voice->pan)) {
+        !sm64_saturn_scsp_pcm8_start(scsp_registers, slot, sample,
+                                     voice->volume, voice->pan)) {
         voice->active = false;
+        return false;
+    }
+    state->voices_started++;
+    state->active_slot = slot;
+    return true;
+}
+
+static void sm64_saturn_pcm_play_sample(
+    sm64_saturn_pcm_voice_state_t *state, uint16_t sample_id,
+    const sm64_saturn_pcm_sample_t *sample, uint16_t volume, int16_t pan,
+    volatile uint8_t *scsp_registers)
+{
+    uint16_t rotor;
+    uint16_t slot;
+    if (sample == 0) {
         state->invalid_samples++;
         return;
     }
-    state->voices_started++;
-    state->active_slot = state->next_slot;
-    state->next_slot = (uint16_t)((state->next_slot + 1U) %
-                                  SM64_SATURN_PCM_VOICE_COUNT);
+    /* SFX round-robin over slots 1..3 only: SM64_SATURN_PCM_MUSIC_SLOT is
+     * pinned to the looped music sample and never selected here.  The rotor
+     * wraps by comparison, not '%': the freestanding MC68000 image links no
+     * libgcc, so a non-power-of-two modulo would need __umodsi3. */
+    rotor = state->next_slot;
+    if (rotor >= (uint16_t)(SM64_SATURN_PCM_VOICE_COUNT - 1U)) {
+        rotor = 0U;
+    }
+    slot = (uint16_t)(1U + rotor);
+    if (!sm64_saturn_pcm_start_voice(state, slot, sample_id, sample, volume,
+                                     pan, scsp_registers)) {
+        state->invalid_samples++;
+        return;
+    }
+    rotor = (uint16_t)(rotor + 1U);
+    state->next_slot =
+        rotor >= (uint16_t)(SM64_SATURN_PCM_VOICE_COUNT - 1U) ? 0U : rotor;
 }
 
 static void sm64_saturn_pcm_play(sm64_saturn_pcm_voice_state_t *state,
@@ -343,6 +380,51 @@ static void sm64_saturn_pcm_play(sm64_saturn_pcm_voice_state_t *state,
     sm64_saturn_pcm_play_sample(state, sample_id,
                                 sm64_saturn_pcm_proof_sample(sample_id),
                                 volume, pan, scsp_registers);
+}
+
+/* SEQ_START under the one-song contract: replace semantics key any active
+ * music off first, then the bundle trailer's music_sample_index names the
+ * hardware-looped row started on the pinned music slot.  Music is present
+ * iff the index is nonzero AND the row carries the loop flag.  Index zero
+ * means the bundle carries no music -- silence, not a fault.  A nonzero
+ * index whose descriptor fetch fails or whose row lacks the loop flag
+ * counts a music fault; an SCSP start refusal counts an SCSP failure.  The
+ * source sequence id is recorded for the MUSIC_SEQUENCE diagnostic word
+ * regardless of outcome; no filtering on specific sequence ids happens
+ * here. */
+static void sm64_saturn_pcm_music_start(sm64_saturn_pcm_voice_state_t *state,
+                                        volatile uint8_t *sound_ram,
+                                        volatile uint8_t *scsp_registers,
+                                        uint16_t sequence_id)
+{
+    sm64_saturn_pcm_sample_t sample;
+    uint16_t music_index;
+
+    state->music_sequence_id = sequence_id;
+    sm64_saturn_pcm_music_key_off(state, scsp_registers);
+    music_index = sm64_saturn_pcm_get_be16(
+        sound_ram,
+        (uint16_t)(SM64_SATURN_PCM_SFX_BUNDLE_OFFSET +
+                   SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SAMPLE_INDEX_FIELD));
+    if (music_index == 0U) {
+        return;
+    }
+    if (!sm64_saturn_pcm_sfx_sample_descriptor(sound_ram, music_index,
+                                               &sample) ||
+        (sample.flags & SM64_SATURN_PCM_SAMPLE_LOOP) == 0U) {
+        state->music_faults++;
+        return;
+    }
+    if (!sm64_saturn_pcm_start_voice(state, SM64_SATURN_PCM_MUSIC_SLOT,
+                                     music_index, &sample,
+                                     sample.default_volume, 0,
+                                     scsp_registers)) {
+        state->music_scsp_failures++;
+        return;
+    }
+    state->music_active = 1U;
+    state->music_sequence_starts++;
+    state->music_notes_started++;
 }
 
 static uint16_t sm64_saturn_pcm_semantic_volume(uint16_t encoded,
@@ -520,6 +602,11 @@ static void sm64_saturn_pcm_publish_stats(
     sm64_saturn_pcm_put_be16(sound_ram,
         SM64_SATURN_PCM_MUSIC_NOTES_OFFSET,
         (uint16_t)state->music_notes_started);
+    /* Same diagnostic position as ever; the write timing changed from a
+     * boot-only zero to the live SEQ_START-recorded source sequence id. */
+    sm64_saturn_pcm_put_be16(sound_ram,
+        SM64_SATURN_PCM_MUSIC_SEQUENCE_OFFSET,
+        state->music_sequence_id);
     sm64_saturn_pcm_put_be16(sound_ram,
         SM64_SATURN_PCM_MUSIC_MALFORMED_OFFSET, 0U);
     sm64_saturn_pcm_put_be16(sound_ram,
@@ -586,11 +673,12 @@ static void sm64_saturn_pcm_apply_command(
             case SM64_SATURN_AUDIO_OPCODE_SOUND_MODE:
                 break;
             case SM64_SATURN_AUDIO_OPCODE_SEQ_START:
-                /* Task 6 rewrites this as the looped-sample music start. */
-                sm64_saturn_pcm_music_key_off(state);
+                /* words[1] carries the source sequence id. */
+                sm64_saturn_pcm_music_start(state, sound_ram,
+                                            scsp_registers, words[1]);
                 break;
             case SM64_SATURN_AUDIO_OPCODE_SEQ_STOP:
-                sm64_saturn_pcm_music_key_off(state);
+                sm64_saturn_pcm_music_key_off(state, scsp_registers);
                 break;
             default:
                 state->unknown_opcodes++;

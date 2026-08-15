@@ -33,6 +33,28 @@
 
 ### Changed
 
+- `SEQ_START` on the MC68000 driver now starts the SFXB bundle's looped
+  music sample on SCSP slot 0, which is pinned to music; SFX round-robin is
+  confined to slots 1-3 and can never evict the music voice. Replace
+  semantics: every `SEQ_START` keys any active music off before evaluating
+  the new request, so a start against a music-less or invalid bundle also
+  silences stale music instead of leaking it. Presence discrimination per
+  the Task 5 review carry-over: music exists iff the trailer's
+  `music_sample_index` (+30) is nonzero AND the row carries
+  `SM64_SATURN_PCM_SAMPLE_LOOP` — a zero index is silent and not a fault,
+  while a nonzero index without a valid looped row counts a `music_fault`
+  and an SCSP start refusal counts a `music_scsp_failure`. `SEQ_STOP` (and
+  RESET/MUTE stop-all) key slot 0 off idempotently. The MUSIC_SEQUENCE
+  diagnostic word (0x7F0A) keeps its position but is now published live
+  with the last `SEQ_START` source sequence id (words[1]) instead of a
+  boot-only zero; no sequence-id filtering happens on the driver (one-song
+  contract for R1). The SFX rotor wraps by comparison because the
+  freestanding image links no libgcc (`% 3` would need `__umodsi3`); the
+  image grew 5,643 -> 5,883 bytes. Consumer impact: with a music-bearing
+  bundle (`--music-pcm`) the game's `play_music` now produces audible
+  hardware-looped music — the first time the semantic music path reaches
+  the SCSP; SFX-only bundles behave exactly as before.
+
 - Music is now packaged as one looped SFXB sample instead of an m64 sequence
   trailer. Why: the Task 4 driver diet removed the sequence VM (the trailer's
   only consumer), and the old fallback plan assumed a 240 Hz retrigger timer

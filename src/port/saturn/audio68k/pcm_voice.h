@@ -6,6 +6,9 @@
 
 enum {
     SM64_SATURN_PCM_VOICE_COUNT = 4U,
+    /* Slot 0 is pinned to the hardware-looped music sample; SFX round-robin
+     * over the remaining slots and can never land on the music slot. */
+    SM64_SATURN_PCM_MUSIC_SLOT = 0U,
     SM64_SATURN_PCM_COMMANDS_PER_POLL = 8U,
     SM64_SATURN_PCM_SAMPLE_LOOP = 1U,
 };
@@ -49,6 +52,9 @@ typedef struct sm64_saturn_pcm_voice_state {
     uint32_t music_notes_started;
     uint32_t music_faults;
     uint32_t music_scsp_failures;
+    /* Source sequence id (SEQ_START words[1]) most recently requested;
+     * published to the MUSIC_SEQUENCE diagnostic word. */
+    uint16_t music_sequence_id;
     uint8_t music_active;
 } sm64_saturn_pcm_voice_state_t;
 

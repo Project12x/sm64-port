@@ -81,6 +81,8 @@ enum {
     SM64_SATURN_PCM_SFX_BUNDLE_MAPPING_BYTES = 8U,
     SM64_SATURN_PCM_SFX_BUNDLE_SAMPLE_BYTES = 12U,
     /* Optional semantic-music trailer in the existing SFXB header. */
+    /* The two m64 sequence fields are historical: always emitted 0 and read
+     * by nothing since the looped-sample music contract (layout frozen). */
     SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SEQUENCE_OFFSET_FIELD = 24U,
     SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SEQUENCE_BYTES_FIELD = 28U,
     SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SAMPLE_INDEX_FIELD = 30U,
