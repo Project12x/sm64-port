@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Sprint 2 T2.6 step 1 (performance): `actor_meshlet_core()`'s **emission pass
+  no longer recomputes the depth bounds** the admission pass already produced
+  (`src/port/saturn/gfx/saturn_actor_meshlets.c`). **Root cause:** the two
+  passes walk the same 31 meshlets over the same `const` inputs, and pass 2
+  called `actor_meshlet_live_depth_bounds()` again for every one of them,
+  discarding the result with a `(void)` cast and re-deriving identical
+  `depth_bounds` and `span`. T2.5 measured the two walks at 20,491.7 and
+  20,491.9 FRT ticks — 0.001% apart, which is what identical work looks like —
+  worth **5.72 VBlanks/frame, 10.4% of the frame**. **Fix:** a 524-byte
+  master-only `static` carry (`ACTOR_MESHLET_DEPTH_CARRY_CAPACITY` 64 entries,
+  HWRAM `.bss`, `_Static_assert`-ed against `SM64_MARIO_MESHLET_COUNT`) holds
+  pass 1's bounds for pass 2. **Tradeoff and why it is safe:** this is a
+  memoisation of provably identical inputs, not a numeric change — `source`,
+  `transform` and `view` are `const` parameters neither pass writes, and the
+  only state mutated between the passes (bin cursors, the `position_seen`
+  re-clear) does not alias the pose vertices or the geometry tables. A
+  generation/meshlet-count/pose-pointer stamp is checked before serving, and a
+  mismatch recomputes rather than serving stale bounds. **Deliberately scoped
+  to the Mario entry point:** the bank entry point is dispatched on either
+  SH-2 (`saturn_demo_render.c:3129` selects a workspace lane from the claim),
+  so a shared static would be a cross-CPU race; it passes NULL and keeps the
+  two-walk behaviour. It is not on the measured hot path. Pinned by a new host
+  test that requires the carried emission to be byte-identical to a forced
+  fresh recompute across 4,000 randomised cases spanning all three pose banks,
+  four output capacities and z biased across the LOD-tier thresholds;
+  mutation-verified with three kills (carry index pinned to 0, off-by-one,
+  stored bounds swapped). The file's pre-existing pinned output hashes are
+  unchanged.
+
 ### Added
 
 - Sprint 2 T2.6 (oracle, landed before any behaviour change): a **host

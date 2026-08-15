@@ -926,6 +926,141 @@ static int depth_equivalence_sweep(void)
     return 1;
 }
 
+/* ---------------------------------------------------------------------------
+ * T2.6 step 1 -- the pass-1 -> pass-2 depth carry.
+ *
+ * The emission pass used to recompute actor_meshlet_live_depth_bounds() for
+ * every meshlet from inputs pass 1 had already used; T2.5 measured the two
+ * walks 0.001% apart.  The carry is a memoisation of identical inputs, so it
+ * must be bit-identical by construction -- but "by construction" is an
+ * argument, and this pins it as a measurement: the shipped entry point (which
+ * serves pass 2 from the carry) and a test-only entry point that withholds the
+ * carry (forcing the pre-T2.6 recomputation) must produce byte-identical
+ * output for every case.
+ * ------------------------------------------------------------------------- */
+bool sm64_saturn_actor_meshlets_prepare_recompute(
+    const sm64_saturn_render_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
+    sm64_saturn_fast3d_profile_t *stats);
+
+static uint64_t carry_case_hash(int carried, int32_t x, int32_t y, int32_t z,
+                                int16_t yaw, uint16_t capacity,
+                                const int16_t (*vertices)[3],
+                                const int32_t forward_q16[3])
+{
+    sm64_saturn_actor_draw_ref_t opaque[SM64_MARIO_PRIMITIVE_COUNT];
+    sm64_saturn_actor_draw_ref_t translucent[SM64_MARIO_PRIMITIVE_COUNT];
+    uint16_t positions[SM64_MARIO_VERTEX_COUNT];
+    sm64_saturn_actor_meshlet_output_t output = {
+        .opaque = opaque,
+        .translucent = translucent,
+        .positions = positions,
+        .position_capacity = SM64_MARIO_VERTEX_COUNT,
+    };
+    sm64_saturn_render_snapshot_t snapshot = admitted_snapshot();
+    sm64_saturn_mario_actor_pose_t pose = admitted_pose();
+    sm64_saturn_render_view_t view = forward_view();
+    sm64_saturn_fast3d_profile_t stats;
+    uint8_t accepted;
+    uint64_t hash = UINT64_C(1469598103934665603);
+    memset(opaque, 0xC3, sizeof(opaque));
+    memset(translucent, 0xC3, sizeof(translucent));
+    memset(positions, 0xC3, sizeof(positions));
+    memset(&stats, 0, sizeof(stats));
+    snapshot.mario.position[0] = x;
+    snapshot.mario.position[1] = y;
+    snapshot.mario.position[2] = z;
+    snapshot.mario.yaw = yaw;
+    pose.vertices = vertices;
+    for (int axis = 0; axis < 3; axis++)
+        view.view_forward_q16[axis] = forward_q16[axis];
+    accepted = carried
+        ? (uint8_t)sm64_saturn_actor_meshlets_prepare(
+              &snapshot, &pose, &view, &output, capacity, &stats)
+        : (uint8_t)sm64_saturn_actor_meshlets_prepare_recompute(
+              &snapshot, &pose, &view, &output, capacity, &stats);
+    hash = hash_bytes(hash, &accepted, sizeof(accepted));
+    hash = hash_bytes(hash, &output.opaque_count, sizeof(output.opaque_count));
+    hash = hash_bytes(hash, &output.translucent_count,
+                      sizeof(output.translucent_count));
+    hash = hash_bytes(hash, &output.position_count,
+                      sizeof(output.position_count));
+    hash = hash_bytes(hash, opaque, sizeof(opaque));
+    hash = hash_bytes(hash, translucent, sizeof(translucent));
+    hash = hash_bytes(hash, positions, sizeof(positions));
+    return hash_bytes(hash, &stats, sizeof(stats));
+}
+
+static int depth_carry_matches_recompute(void)
+{
+    static const uint16_t capacities[] = {
+        SM64_MARIO_PRIMITIVE_COUNT, 1U, 64U, 400U,
+    };
+    uint64_t state = UINT64_C(0x43617272794132);
+    uint32_t cases = 0U, admitted = 0U;
+
+    for (uint32_t iteration = 0U; iteration < 4000U; iteration++) {
+        const uint64_t draw = depth_rng(&state);
+        const uint16_t frame = (uint16_t)((draw >> 8) & 0xFFFFU);
+        /* Sweep all three pose banks: the neutral mesh and both animation
+         * banks, because the carry is stamped with the pose vertex pointer. */
+        const int16_t (*vertices)[3] =
+            (draw & 3U) == 0U ? sm64_mario_vertices :
+            (draw & 3U) == 1U
+                ? sm64_mario_animation_vertices[
+                      frame % SM64_MARIO_ANIMATION_FRAME_COUNT]
+                : sm64_mario_walking_animation_vertices[
+                      frame % SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT];
+        const int16_t yaw = (int16_t)(depth_rng(&state) & 0xFFFFU);
+        const int16_t pitch = (int16_t)(depth_rng(&state) & 0xFFFFU);
+        const int32_t x = (int32_t)(depth_rng(&state) % 16384U) - 8192;
+        const int32_t y = (int32_t)(depth_rng(&state) % 16384U) - 8192;
+        /* Bias z across the LOD-tier thresholds (2048 / 4096 world units) and
+         * the behind-camera cull, so the cases that actually change what pass
+         * 2 emits are exercised rather than only distant ones. */
+        const int32_t z = (int32_t)(depth_rng(&state) % 12288U) - 8192;
+        const uint16_t capacity =
+            capacities[depth_rng(&state) % (sizeof(capacities) /
+                                            sizeof(capacities[0]))];
+        const int32_t forward_q16[3] = {
+            sm64_saturn_sins_q16(yaw),
+            sm64_saturn_sins_q16(pitch) >> 2,
+            sm64_saturn_coss_q16(yaw),
+        };
+        const uint64_t carried = carry_case_hash(1, x, y, z, yaw, capacity,
+                                                 vertices, forward_q16);
+        const uint64_t fresh = carry_case_hash(0, x, y, z, yaw, capacity,
+                                               vertices, forward_q16);
+        cases++;
+        if (carried != fresh) {
+            fprintf(stderr,
+                    "depth carry: pass 2 diverged from a fresh recompute at "
+                    "pos (%d,%d,%d) yaw %d capacity %u\n",
+                    (int)x, (int)y, (int)z, (int)yaw, (unsigned)capacity);
+            return 0;
+        }
+        if (carry_case_hash(1, x, y, z, yaw, SM64_MARIO_PRIMITIVE_COUNT,
+                            vertices, forward_q16) !=
+            carry_case_hash(0, x, y, z, yaw, SM64_MARIO_PRIMITIVE_COUNT,
+                            vertices, forward_q16)) {
+            fprintf(stderr, "depth carry: full-capacity emission diverged\n");
+            return 0;
+        }
+        if (z < 0) admitted++;
+    }
+    /* Non-vacuity: an all-culled sweep would compare two empty outputs. */
+    if (admitted < 1000U) {
+        fprintf(stderr, "depth carry: only %u in-front-of-camera cases\n",
+                (unsigned)admitted);
+        return 0;
+    }
+    printf("depth carry: %u cases, carried emission == fresh recompute\n",
+           (unsigned)cases);
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
     sm64_saturn_actor_draw_ref_t opaque[SM64_MARIO_PRIMITIVE_COUNT];
@@ -947,6 +1082,7 @@ int main(int argc, char **argv)
         return 1;
     }
     if (!depth_equivalence_sweep()) return 1;
+    if (!depth_carry_matches_recompute()) return 1;
     if (argc > 2 || (argc == 2 && !bank_driven_cases(argv[1]))) return 1;
 
     if (!sm64_saturn_actor_meshlets_prepare(

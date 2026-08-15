@@ -51,6 +51,46 @@ typedef struct actor_meshlet_depth_bounds {
     int32_t furthest_q16;
 } actor_meshlet_depth_bounds_t;
 
+/* T2.6 step 1.  actor_meshlet_core() walks every meshlet twice -- once to
+ * admit and bin, once to emit -- and before this change the emission pass
+ * recomputed actor_meshlet_live_depth_bounds() from scratch for every meshlet.
+ * T2.5 measured the two walks at 20,491.7 and 20,491.9 FRT ticks, 0.001%
+ * apart: an exact, unconditional recomputation worth 5.72 VBlanks/frame.
+ *
+ * The two passes are input-identical by construction -- `source`, `transform`
+ * and `view` are const parameters that neither pass writes, and the only state
+ * mutated between them (the bin cursors and the position_seen re-clear) does
+ * not alias the pose vertices or the geometry tables.  Carrying pass 1's
+ * result into pass 2 is therefore a memoisation of identical inputs, not a
+ * numeric change.
+ *
+ * The stamp is belt-and-braces rather than load-bearing: nothing inside one
+ * actor_meshlet_core() call can invalidate it, so a mismatch means an
+ * invariant this code does not control has been broken, and the answer is to
+ * recompute rather than serve stale bounds. */
+#define ACTOR_MESHLET_DEPTH_CARRY_CAPACITY 64U
+
+typedef struct actor_meshlet_depth_carry {
+    const int16_t (*vertices)[3];
+    uint32_t generation;
+    uint16_t meshlet_count;
+    uint16_t valid;
+    actor_meshlet_depth_bounds_t bounds[ACTOR_MESHLET_DEPTH_CARRY_CAPACITY];
+} actor_meshlet_depth_carry_t;
+
+/* Master-only.  Bound solely by sm64_saturn_actor_meshlets_prepare(), which
+ * runs on the master SH-2 inside the pre-notification window alongside the
+ * rest of saturn_demo_render.c's file-scope frame state.  The bank entry point
+ * is dispatched on either CPU (saturn_demo_render.c:3129 picks a workspace
+ * lane from the claim), so it passes NULL and keeps recomputing -- a shared
+ * static would be a cross-CPU race, and the bank path is not on the measured
+ * hot path. */
+static actor_meshlet_depth_carry_t s_mario_depth_carry;
+
+_Static_assert(SM64_MARIO_MESHLET_COUNT <= ACTOR_MESHLET_DEPTH_CARRY_CAPACITY,
+               "Mario meshlet count outgrew the depth carry: raise the "
+               "capacity rather than silently falling back to recomputation");
+
 static uint16_t actor_read_be16(const uint8_t *data)
 {
     return (uint16_t)(((uint16_t)data[0] << 8) | data[1]);
@@ -488,7 +528,7 @@ static bool actor_meshlet_core(
     uint32_t position_seen_capacity, sm64_saturn_actor_meshlet_output_t *output,
     sm64_saturn_actor_draw_ref_t *combined_records, uint16_t draw_capacity,
     bool atomic_output, uint8_t *failure_reason,
-    sm64_saturn_fast3d_profile_t *stats)
+    sm64_saturn_fast3d_profile_t *stats, actor_meshlet_depth_carry_t *carry)
 {
     uint32_t opaque_count = 0U, translucent_count = 0U;
     uint16_t admitted_positions = 0U, admitted_meshlets = 0U, culled = 0U;
@@ -514,6 +554,17 @@ static bool actor_meshlet_core(
         return false;
 
     memset(position_seen, 0, source->vertex_count);
+    /* A source with more meshlets than the carry holds simply keeps the old
+     * two-walk behaviour; correctness never depends on the carry being live. */
+    if (carry != NULL &&
+        source->meshlet_count > ACTOR_MESHLET_DEPTH_CARRY_CAPACITY)
+        carry = NULL;
+    if (carry != NULL) {
+        carry->vertices = transform->vertices;
+        carry->generation = view->generation;
+        carry->meshlet_count = source->meshlet_count;
+        carry->valid = 0U;
+    }
     /* T2.5.  The depth node is pushed once per meshlet, never per vertex: an
      * FRT read costs tens of cycles and there are 704 tier-0 position visits
      * per pass, so a per-vertex probe would have measured mostly itself.
@@ -538,6 +589,10 @@ static bool actor_meshlet_core(
         if (!bounds_ok) {
             SM64_SATURN_PRENOTIFY_PROFILE_POP();
             return false;
+        }
+        if (carry != NULL) {
+            carry->bounds[meshlet] = depth_bounds;
+            carry->valid = (uint16_t)(meshlet + 1U);
         }
         if (depth_bounds.furthest_q16 <= 0) {
             culled++;
@@ -640,13 +695,31 @@ static bool actor_meshlet_core(
         SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
             SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_EMIT);
         for (uint16_t meshlet = 0U; meshlet < source->meshlet_count; meshlet++) {
-            actor_meshlet_depth_bounds_t depth_bounds;
+            /* Zero-initialised because the recompute fallback below discards
+             * its own success flag, exactly as the pre-T2.6 code did.  Pass 1
+             * has already validated every meshlet, so that path is
+             * unreachable; if it were ever reached, {0,0} skips the meshlet at
+             * the smallest safe object instead of reading a stack value. */
+            actor_meshlet_depth_bounds_t depth_bounds = {0, 0};
             actor_meshlet_span_t span;
-            SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
-                SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_EMIT);
-            (void)actor_meshlet_live_depth_bounds(source, transform, view,
-                                                  meshlet, &depth_bounds);
-            SM64_SATURN_PRENOTIFY_PROFILE_POP();
+            /* T2.6 step 1.  Pass 1 computed exactly this, from exactly these
+             * inputs, and threw it away.  Serve its answer when the stamp still
+             * describes this call; otherwise fall back to recomputation rather
+             * than trust a carry that cannot be shown to be current. */
+            const bool carry_current = carry != NULL &&
+                meshlet < carry->valid &&
+                carry->generation == view->generation &&
+                carry->meshlet_count == source->meshlet_count &&
+                carry->vertices == transform->vertices;
+            if (carry_current) {
+                depth_bounds = carry->bounds[meshlet];
+            } else {
+                SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+                    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_EMIT);
+                (void)actor_meshlet_live_depth_bounds(source, transform, view,
+                                                      meshlet, &depth_bounds);
+                SM64_SATURN_PRENOTIFY_PROFILE_POP();
+            }
             if (depth_bounds.furthest_q16 <= 0) continue;
             (void)actor_meshlet_span(source, meshlet,
                 actor_lod_tier(depth_bounds.nearest_q16), &span);
@@ -703,12 +776,12 @@ static bool actor_meshlet_core(
     return true;
 }
 
-bool sm64_saturn_actor_meshlets_prepare(
+static bool actor_mario_prepare_with_carry(
     const sm64_saturn_render_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose,
     const sm64_saturn_render_view_t *view,
     sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
-    sm64_saturn_fast3d_profile_t *stats)
+    sm64_saturn_fast3d_profile_t *stats, actor_meshlet_depth_carry_t *carry)
 {
     uint8_t position_seen[SM64_MARIO_VERTEX_COUNT];
     actor_meshlet_source_t source = actor_mario_source();
@@ -737,9 +810,21 @@ bool sm64_saturn_actor_meshlets_prepare(
     transform.yaw = snapshot->mario.yaw;
     admitted = actor_meshlet_core(&source, &transform, view, position_seen,
                                   SM64_MARIO_VERTEX_COUNT, output, NULL,
-                                  capacity, false, NULL, stats);
+                                  capacity, false, NULL, stats, carry);
     SM64_SATURN_PRENOTIFY_PROFILE_POP();
     return admitted;
+}
+
+bool sm64_saturn_actor_meshlets_prepare(
+    const sm64_saturn_render_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
+    sm64_saturn_fast3d_profile_t *stats)
+{
+    return actor_mario_prepare_with_carry(snapshot, pose, view, output,
+                                          capacity, stats,
+                                          &s_mario_depth_carry);
 }
 
 bool sm64_saturn_actor_meshlets_prepare_bank(
@@ -808,7 +893,7 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
             &source, &transform, view, output->position_seen,
             output->position_seen_capacity, &output->output, output->records,
             output->draw_capacity,
-            true, &failure_reason, stats)) {
+            true, &failure_reason, stats, NULL)) {
         output->quarantine_reason = failure_reason;
         return false;
     }
@@ -818,6 +903,29 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
 }
 
 #if defined(SM64_SATURN_ACTOR_MESHLET_DEPTH_REFERENCE)
+/* T2.6 step 1 oracle.  Test-only.  The shipped Mario entry point serves pass
+ * 2 from pass 1's carried depth bounds; this one forces the pre-T2.6 two-walk
+ * behaviour by withholding the carry, so the host test can require that the
+ * carried and the freshly recomputed emission produce identical output bytes
+ * rather than merely asserting that they should. */
+bool sm64_saturn_actor_meshlets_prepare_recompute(
+    const sm64_saturn_render_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
+    sm64_saturn_fast3d_profile_t *stats);
+
+bool sm64_saturn_actor_meshlets_prepare_recompute(
+    const sm64_saturn_render_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
+    sm64_saturn_fast3d_profile_t *stats)
+{
+    return actor_mario_prepare_with_carry(snapshot, pose, view, output,
+                                          capacity, stats, NULL);
+}
+
 /* T2.6 equivalence probe.  Test-only: no Saturn image defines this macro, so
  * this entry point exists only in tools/saturn/actor_meshlet_test.c's link.
  * It reaches the two file-private per-vertex depth implementations through
