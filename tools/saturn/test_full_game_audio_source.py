@@ -13,6 +13,14 @@ STUB_C = ROOT / "src/port/saturn/sourceboot/source_audio_stub.c"
 SOURCEBOOT_MAKE = ROOT / "src/port/saturn/sourceboot/Makefile"
 MAIN_C = ROOT / "src/port/saturn/sourceboot/main.c"
 PCM_VOICE_C = ROOT / "src/port/saturn/audio68k/pcm_voice.c"
+SOUND_CPU_C = ROOT / "src/port/saturn/audio/saturn_sound_cpu.c"
+AUDIO_LIVE_C = ROOT / "src/port/saturn/sourceboot/source_audio_live.c"
+
+# Sound-RAM facts measured on the R1 candidate by
+# tools/saturn/probe_sound_ram_verify.py (2026-08-15).
+SOUND_RAM_BYTES = 0x80000
+STAGED_BANK_END = 0x4AB49
+BIOS_LEFTOVER_RING_BASE = 0x30000
 
 INFINITE_SPIN = re.compile(r"for\s*\(\s*;\s*;\s*\)|while\s*\(\s*1\s*\)")
 
@@ -56,6 +64,28 @@ def function_body(text: str, name: str) -> str:
                     return text[match.start():index + 1]
         raise AssertionError(f"unbalanced braces after {name}")
     raise AssertionError(f"no definition found for {name}")
+
+
+def require_after(text: str, earlier: str, later: str, why: str) -> None:
+    """Assert regex ``later`` matches somewhere after regex ``earlier``.
+
+    Regex anchors (not fixed offsets or line numbers) so reformatting the
+    C source cannot silently retire the ordering guarantee.
+    """
+    earlier_match = re.search(earlier, text)
+    if earlier_match is None:
+        raise AssertionError(f"missing required step {earlier!r}: {why}")
+    if re.search(later, text[earlier_match.end():]) is None:
+        raise AssertionError(f"{later!r} must follow {earlier!r}: {why}")
+
+
+def enum_value(text: str, name: str) -> int:
+    """Read an enumerator's literal value out of C source."""
+    match = re.search(rf"\b{re.escape(name)}\s*=\s*(0[xX][0-9A-Fa-f]+|\d+)",
+                      text)
+    if match is None:
+        raise AssertionError(f"no enumerator named {name}")
+    return int(match.group(1), 0)
 
 
 def preprocessor_block_around(text: str, anchor: str) -> str:
@@ -253,6 +283,113 @@ class FullGameAudioSourceContract(unittest.TestCase):
             music_start,
             r"if\s*\(\s*music_index\s*==\s*0U?\s*\)",
             "a music-less bundle must be silent, not a fault",
+        )
+
+    def test_effect_dsp_is_programmed_before_any_sound_ram_staging(self) -> None:
+        """The SCSP effect DSP must be neutralised before we stage samples.
+
+        Measured 2026-08-15: SCSP common register 0x402 read back 0x0118 --
+        RBP = 24, RBL = 2 -- putting the effect DSP's reverb ring at
+        [0x30000, 0x40000) in sound RAM, with a live BIOS microprogram left
+        in MPRO.  The DSP rewrote that window continuously, over the staged
+        bank: 65,354 bytes of the PCM bank and 21,320 bytes of the music
+        sample at 0x3ACB8 (2.665 s of every 8.146 s loop) plus 8 SFX
+        samples were being read out of the reverb ring.  The port had never
+        written RBP, RBL, MPRO, COEF or MADRS, so it inherited whatever the
+        BIOS left -- which varies by revision and region.  The boot must
+        therefore program that state explicitly, with the sound CPU stopped
+        and before any byte of driver, metadata or PCM reaches sound RAM.
+        """
+        source = SOUND_CPU_C.read_text(encoding="utf-8")
+
+        quiesce = function_body(
+            source, "sm64_saturn_sound_cpu_program_effect_dsp"
+        )
+        for offset in (
+            "SM64_SATURN_SCSP_DSP_MPRO_OFFSET",
+            "SM64_SATURN_SCSP_DSP_COEF_OFFSET",
+            "SM64_SATURN_SCSP_DSP_MADRS_OFFSET",
+            "SM64_SATURN_SCSP_DSP_RING_OFFSET",
+        ):
+            self.assertIn(
+                offset, quiesce,
+                f"{offset} must be programmed, not inherited from the BIOS",
+            )
+        self.assertRegex(
+            quiesce, r"mpro\s*\[[^\]]+\]\s*=\s*0",
+            "MPRO must be zeroed: an all-NOP microprogram asserts neither "
+            "MWT nor MRD, so the DSP cannot touch sound RAM at all",
+        )
+        self.assertRegex(
+            quiesce,
+            r"\*\s*ring\s*=\s*\(uint16_t\)\s*SM64_SATURN_SCSP_DSP_RING_WORD",
+            "0x402 must be written with the programmed RBP/RBL word",
+        )
+        self.assertRegex(
+            source, r"SM64_SATURN_SCSP_DSP_RING_RBL\s*<<\s*7",
+            "0x402 packs RBP in bits 0-6 and RBL in bits 7-8 (Ymir "
+            "scsp.hpp WriteReg402)",
+        )
+
+        rbp = enum_value(source, "SM64_SATURN_SCSP_DSP_RING_RBP")
+        rbl = enum_value(source, "SM64_SATURN_SCSP_DSP_RING_RBL")
+        # Ymir scsp_dsp.hpp: ring base = RBP << 12 words, length =
+        # 0x2000 << RBL words; both counted in 16-bit units.
+        ring_base = rbp * 0x2000
+        ring_bytes = (0x2000 << rbl) * 2
+        self.assertNotEqual(
+            ring_base, BIOS_LEFTOVER_RING_BASE,
+            "the programmed ring must not land back on the BIOS leftover "
+            "window that corrupted the bank",
+        )
+        self.assertGreaterEqual(
+            ring_base, STAGED_BANK_END,
+            "the ring must start above the staged PCM bank end",
+        )
+        self.assertLessEqual(
+            ring_base + ring_bytes, SOUND_RAM_BYTES,
+            "the ring must fit inside 512 KiB sound RAM",
+        )
+
+        sh_block = preprocessor_block_around(
+            source, "sm64_saturn_sound_cpu_program_effect_dsp();"
+        )
+        self.assertIn("__sh__", sh_block.splitlines()[0])
+        sh_arm = sh_block.split("\n#else", 1)[0]
+        set_512k = function_body(sh_arm, "sm64_saturn_sound_cpu_yaul_set_512k")
+        self.assertIn(
+            "sm64_saturn_sound_cpu_program_effect_dsp()", set_512k,
+            "the target SCSP configuration entry must program the effect "
+            "DSP, so every cold-boot path inherits the fix",
+        )
+
+        boot = function_body(source, "sm64_saturn_sound_cpu_boot")
+        require_after(
+            boot, r"set_512k_mode\s*\(", r"clear_owned_regions\s*\(",
+            "the DSP must be quiesced before sound RAM is cleared",
+        )
+        require_after(
+            boot, r"set_512k_mode\s*\(", r"copy_staged_regions\s*\(",
+            "the DSP must be quiesced before staged samples are copied",
+        )
+
+        live = function_body(
+            AUDIO_LIVE_C.read_text(encoding="utf-8"),
+            "sm64_saturn_source_audio_live_boot",
+        )
+        require_after(
+            live,
+            r"sm64_saturn_sound_cpu_yaul_set_512k\s*\(",
+            r"memset\s*\(\s*\(void\s*\*\)\s*sound_ram",
+            "the live cold boot must quiesce the DSP before clearing "
+            "sound RAM",
+        )
+        require_after(
+            live,
+            r"sm64_saturn_sound_cpu_yaul_set_512k\s*\(",
+            r"memcpy\s*\([^;]*SM64_SATURN_PCM_BANK_OFFSET[^;]*pcm",
+            "the live cold boot must quiesce the DSP before the PCM bank "
+            "copy, or the ring overwrites what we just staged",
         )
 
 

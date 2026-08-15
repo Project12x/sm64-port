@@ -11,10 +11,11 @@
   with owner-accepted visuals. Measured cadence ~1.1-2 FPS was recorded and
   ruled non-blocking for this milestone by owner instruction; it becomes the
   next sprint's first objective. The one owner-observed artifact (a periodic
-  piercing noise) was investigated to mechanism and dispositioned as a Ymir
-  host-audio underrun rather than a port defect, after the owner confirmed it
-  occurs with zero controller input and the audio control path was measured
-  frozen. Evidence:
+  piercing noise) was first dispositioned as a Ymir host-audio underrun
+  rather than a port defect; **that disposition is retracted.** A sound-RAM
+  staging verification found it to be a port defect with register-level
+  evidence -- the SCSP's own effect DSP writing its reverb ring over the
+  staged sample bank -- and it is fixed under Fixed below. Evidence:
   `docs/saturn/evidence/reports/sprint1-r1-owner-gate.md`.
 
 ### Added
@@ -472,6 +473,65 @@
   byte-accounting overflow explicitly.
 
 ### Fixed
+
+- The SCSP's effect DSP no longer overwrites the staged PCM sample bank --
+  the root cause of the R1 owner-observed periodic piercing noise, and of
+  the unrecognizable SFX. Root cause: the port never programmed any part of
+  the SCSP effect-DSP state, so it inherited whatever the BIOS left behind.
+  `tools/saturn/probe_sound_ram_verify.py` read SCSP common register `0x402`
+  back as `0x0118` on candidate `id-b3aceeb28570230b` -- RBP = 24, RBL = 2,
+  i.e. a reverb ring buffer occupying `[0x30000, 0x40000)` of sound RAM --
+  with a live BIOS microprogram still in `MPRO` (377 of 1024 bytes nonzero,
+  COEF 51, MADRS 24). The DSP rewrote that entire 64 KiB window every sample
+  period, on top of data the cold boot had just staged there: 65,354 bytes
+  of the 273,225-byte PCM bank differed from the packager's blob (23.9%),
+  including 21,320 bytes of the music sample at `0x3ACB8` -- 2.665 s of
+  every 8.146 s loop -- plus 8 whole SFX samples that sat inside the ring.
+  Every byte outside the window matched exactly; the staging `memcpy` and
+  the ISO were always clean, which is why six previous eliminations (control
+  path frozen, slot registers correct, loop seam clean, LEA math right, PCM
+  file on disk correct) all passed while the defect persisted: none of them
+  had ever compared the bytes actually resident in sound RAM at playback
+  time.
+  Fix: `sm64_saturn_sound_cpu_yaul_set_512k()` (the SCSP configuration step
+  that already runs with the sound CPU stopped, after SNDOFF and before the
+  sound-RAM clear and the driver/metadata/PCM copies) now calls a new
+  `sm64_saturn_sound_cpu_program_effect_dsp()` which zeroes `MPRO`
+  (`0x25B00800`-`0x25B00BFF`), `COEF` (`0x700`-`0x77F`) and `MADRS`
+  (`0x780`-`0x7BF`), then writes `0x402 = 0x0128` (RBP = 0x28, RBL = 2),
+  moving the ring to `[0x50000, 0x60000)` -- above the bank end at `0x4AB49`
+  and inside the 512 KiB of sound RAM. An all-zero microprogram asserts
+  neither MWT nor MRD, so the DSP issues no sound-RAM access at all; the
+  ring move is defence in depth. Register offsets and the RBP/RBL encodings
+  were verified against Ymir's own SCSP core rather than assumed
+  (`ymir-core/include/ymir/hw/scsp/scsp.hpp` `WriteReg402` for the bit
+  layout, `scsp_dsp.hpp` `UpdateRBP`/`UpdateRBL` for `RBP << 12` words and
+  `0x2000 << RBL` words).
+  This is programmed explicitly rather than dodged by relocating our own
+  data out of the one observed window, because RBP, RBL and `MPRO` are BIOS
+  leftovers that vary by BIOS revision and region: a bank placed to miss the
+  USA BIOS's ring would still be destroyed under another. It also removes
+  the whole class of failure rather than one instance of it -- the same
+  inherited-hardware-state class as open follow-up 1 (uninitialized slot
+  registers `0x0E`/`0x12`/`0x14`/`0x18`).
+  Verified on target, not inferred: re-running the same probe against the
+  new candidate `id-782c9c8f323a01a0` reports SCSP `0x402` = `0x0128`
+  (RBP = 40, RBL = 2, ring `[0x50000, 0x60000)`), `MPRO` 0 of 1024 bytes
+  nonzero, COEF 0, MADRS 0, and all three staged regions EXACT MATCH -- the
+  1,232-byte SFXB metadata, the whole 273,225-byte PCM bank (was 65,354
+  differing) and the 65,169-byte music sample (was 21,276 differing) -- 0
+  differing bytes everywhere.
+  Consumer impact: the music sample and all 8 affected SFX samples now play
+  from the bytes the packager built. Compile-time `_Static_assert`s pin the
+  `0x402` encoding and keep the ring inside sound RAM and above the bank
+  base; `tools/saturn/test_full_game_audio_source.py` gains
+  `test_effect_dsp_is_programmed_before_any_sound_ram_staging`, which pins
+  the register writes, the RBP/RBL decode (ring must clear the staged bank
+  and must not land back on `0x30000`), and the ordering in both the boot
+  state machine and `source_audio_live.c` (quiesce before clear, before the
+  metadata copy, before the PCM bank copy). Six mutations of the fix were
+  each killed by that test. The Task 7 audio-init failure handling and the
+  cold-boot ordering contract are untouched.
 
 - `src/port/saturn/sourceboot/main.c` no longer issues its own bootstrap
   `play_music(SEQ_PLAYER_LEVEL, SEQUENCE_ARGS(4, SEQ_LEVEL_GRASS), 0U)`; the
