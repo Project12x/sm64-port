@@ -1,0 +1,761 @@
+{
+  "addressing": {
+    "note": "all region offsets in this report are sound-RAM-relative",
+    "sound_ram_base_cpu_address": "0x25A00000",
+    "space": "SH-2 CPU bus view of SCSP sound RAM"
+  },
+  "corrupt_window_resample": {
+    "requested_frames": 0
+  },
+  "evidence_kind": "sm64-saturn-sound-ram-staging-verify",
+  "final_frame": 5100,
+  "gameplay_confirmed_frame": 5100,
+  "handoff_frame": 1500,
+  "inputs": {
+    "bank_pcm": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\audio\\generated\\sourceboot-sfx\\bob_sfx_pcm.bin",
+    "driver": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\audio68k\\pcm68k-heartbeat.bin",
+    "music_pcm": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\audio\\bob_theme_8k.pcm8",
+    "sfx_metadata": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\audio\\generated\\sourceboot-sfx\\bob_sfx_metadata.bin"
+  },
+  "mailbox_state": {
+    "mb.active_voice_count": 1,
+    "mb.heartbeat": 29205,
+    "mb.invalid_samples": 0,
+    "mb.magic": 20534,
+    "mb.status": 2,
+    "mb.voices_started": 1,
+    "music.active": 1,
+    "music.faults": 0,
+    "music.starts": 1
+  },
+  "music_observed_source": "sliced from the bank dump",
+  "past_loop_end": {
+    "all_zero": true,
+    "bytes": 1024,
+    "cpu_address_hex": "0x25A4AB49",
+    "distinct_values": 1,
+    "first_nonzero_offset": null,
+    "hexdump_first_256": [
+      "0004ab49  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ab59  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ab69  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ab79  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ab89  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ab99  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004aba9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004abb9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004abc9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004abd9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004abe9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004abf9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ac09  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ac19  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ac29  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004ac39  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|"
+    ],
+    "hexdump_last_64": [
+      "0004af09  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004af19  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004af29  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|",
+      "0004af39  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|"
+    ],
+    "identity": {
+      "all_zero": true,
+      "constant_byte": 0,
+      "found_in_bank_blob": 10471,
+      "found_in_music_pcm": 18041,
+      "printable_fraction": 0.0
+    },
+    "music_last_64_signed_stats": {
+      "abs_mean": 6.031,
+      "count": 64,
+      "max": 15,
+      "mean": -0.031,
+      "min": -34
+    },
+    "nonzero_bytes": 0,
+    "sha256": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+    "signed_stats": {
+      "abs_mean": 0.0,
+      "count": 1024,
+      "max": 0,
+      "mean": 0.0,
+      "min": 0
+    },
+    "sound_ram_offset": 305993,
+    "sound_ram_offset_hex": "0x4AB49"
+  },
+  "regions": [
+    {
+      "cpu_address_hex": "0x25A05000",
+      "differing_bytes": 0,
+      "expected_bytes": 1232,
+      "expected_sha256": "b13869267e2b7af56cbfed8bb8943405ef501137dcb1378e92d1333fa84279a9",
+      "match": true,
+      "observed_bytes": 1232,
+      "observed_sha256": "b13869267e2b7af56cbfed8bb8943405ef501137dcb1378e92d1333fa84279a9",
+      "region": "sfxb_metadata",
+      "sound_ram_offset": 20480,
+      "sound_ram_offset_hex": "0x05000",
+      "verdict": "EXACT MATCH"
+    },
+    {
+      "contiguous_tail": false,
+      "cpu_address_hex": "0x25A08000",
+      "differing_bytes": 65354,
+      "expected_bytes": 273225,
+      "expected_sha256": "b76e6cbc913aa3aed0600848def97abf7d806d83f5c4096840ed03a049601924",
+      "first_mismatch_expected_hexdump": [
+        "00027ff0  28 1f 22 1f 24 1f 05 21 21 2c 21 23 25 1f 20 21  |(.\".$..!!,!#%. !|",
+        "00028000  21 1e 18 1c 19 17 18 15 17 13 0f 0c 08 0d 0a 0c  |!...............|"
+      ],
+      "first_mismatch_observed_hexdump": [
+        "00027ff0  28 1f 22 1f 24 1f 05 21 21 2c 21 23 25 1f 20 21  |(.\".$..!!,!#%. !|",
+        "00028000  af 57 ad ec ac 94 a9 5b a6 86 a4 c3 a3 18 a1 37  |.W.....[.......7|"
+      ],
+      "first_mismatch_offset": 163840,
+      "first_mismatch_offset_hex": "0x28000",
+      "first_mismatch_sound_ram_hex": "0x30000",
+      "last_mismatch_offset": 229375,
+      "last_mismatch_offset_hex": "0x37FFF",
+      "match": false,
+      "mismatch_fraction": 0.239195,
+      "observed_bytes": 273225,
+      "observed_identity_at_first_mismatch": {
+        "found_in_bank_blob": 163824,
+        "printable_fraction": 0.438
+      },
+      "observed_sha256": "e3bc88a9ae20d07b4e38fb0fe37c0ae2e2db3b3b48bba63cc03545c004f6fa95",
+      "region": "pcm_bank",
+      "run_count_capped_at": 64,
+      "runs": [
+        {
+          "length": 911,
+          "start": 163840
+        },
+        {
+          "length": 521,
+          "start": 164752
+        },
+        {
+          "length": 5,
+          "start": 165274
+        },
+        {
+          "length": 105,
+          "start": 165280
+        },
+        {
+          "length": 353,
+          "start": 165386
+        },
+        {
+          "length": 429,
+          "start": 165740
+        },
+        {
+          "length": 30,
+          "start": 166170
+        },
+        {
+          "length": 212,
+          "start": 166201
+        },
+        {
+          "length": 219,
+          "start": 166414
+        },
+        {
+          "length": 129,
+          "start": 166634
+        },
+        {
+          "length": 132,
+          "start": 166764
+        },
+        {
+          "length": 433,
+          "start": 166897
+        },
+        {
+          "length": 693,
+          "start": 167331
+        },
+        {
+          "length": 572,
+          "start": 168025
+        },
+        {
+          "length": 128,
+          "start": 168598
+        },
+        {
+          "length": 502,
+          "start": 168727
+        },
+        {
+          "length": 257,
+          "start": 169230
+        },
+        {
+          "length": 402,
+          "start": 169488
+        },
+        {
+          "length": 827,
+          "start": 169891
+        },
+        {
+          "length": 1,
+          "start": 170719
+        },
+        {
+          "length": 60,
+          "start": 170721
+        },
+        {
+          "length": 295,
+          "start": 170782
+        },
+        {
+          "length": 825,
+          "start": 171078
+        },
+        {
+          "length": 685,
+          "start": 171904
+        },
+        {
+          "length": 699,
+          "start": 172590
+        },
+        {
+          "length": 225,
+          "start": 173290
+        },
+        {
+          "length": 188,
+          "start": 173516
+        },
+        {
+          "length": 532,
+          "start": 173705
+        },
+        {
+          "length": 4,
+          "start": 174238
+        },
+        {
+          "length": 35,
+          "start": 174243
+        },
+        {
+          "length": 784,
+          "start": 174279
+        },
+        {
+          "length": 118,
+          "start": 175064
+        },
+        {
+          "length": 206,
+          "start": 175183
+        },
+        {
+          "length": 106,
+          "start": 175390
+        },
+        {
+          "length": 52,
+          "start": 175497
+        },
+        {
+          "length": 48,
+          "start": 175550
+        },
+        {
+          "length": 691,
+          "start": 175599
+        },
+        {
+          "length": 425,
+          "start": 176291
+        },
+        {
+          "length": 506,
+          "start": 176717
+        },
+        {
+          "length": 449,
+          "start": 177224
+        },
+        {
+          "length": 82,
+          "start": 177674
+        },
+        {
+          "length": 372,
+          "start": 177757
+        },
+        {
+          "length": 77,
+          "start": 178130
+        },
+        {
+          "length": 237,
+          "start": 178208
+        },
+        {
+          "length": 269,
+          "start": 178446
+        },
+        {
+          "length": 439,
+          "start": 178716
+        },
+        {
+          "length": 425,
+          "start": 179156
+        },
+        {
+          "length": 581,
+          "start": 179582
+        },
+        {
+          "length": 93,
+          "start": 180164
+        },
+        {
+          "length": 825,
+          "start": 180258
+        },
+        {
+          "length": 1023,
+          "start": 181084
+        },
+        {
+          "length": 443,
+          "start": 182108
+        },
+        {
+          "length": 291,
+          "start": 182552
+        },
+        {
+          "length": 729,
+          "start": 182844
+        },
+        {
+          "length": 75,
+          "start": 183574
+        },
+        {
+          "length": 177,
+          "start": 183650
+        },
+        {
+          "length": 495,
+          "start": 183828
+        },
+        {
+          "length": 628,
+          "start": 184324
+        },
+        {
+          "length": 146,
+          "start": 184953
+        },
+        {
+          "length": 182,
+          "start": 185100
+        },
+        {
+          "length": 478,
+          "start": 185283
+        },
+        {
+          "length": 803,
+          "start": 185762
+        },
+        {
+          "length": 969,
+          "start": 186566
+        },
+        {
+          "length": 311,
+          "start": 187536
+        }
+      ],
+      "sound_ram_offset": 32768,
+      "sound_ram_offset_hex": "0x08000",
+      "stride": {
+        "distinct_gap_count": 2,
+        "distinct_gaps": [
+          1,
+          2
+        ],
+        "gap_max": 2,
+        "gap_min": 1,
+        "periodic": false
+      },
+      "verdict": "MISMATCH"
+    },
+    {
+      "contiguous_tail": false,
+      "cpu_address_hex": "0x25A3ACB8",
+      "differing_bytes": 21276,
+      "expected_bytes": 65169,
+      "expected_sha256": "924fe4300e6b1523c910ef2b562e55be01348922076321259ec2d77a8751c58b",
+      "first_mismatch_expected_hexdump": [
+        "00000000  00 00 01 01 01 02 ff 04 00 05 02 fb 04 fe 0f 03  |................|",
+        "00000010  ff 0b 03 f9 f4 01 00 07 0f fd 0f 2c f7 01 0a 04  |...........,....|"
+      ],
+      "first_mismatch_observed_hexdump": [
+        "00000000  37 bf 36 38 34 37 32 1c 32 84 33 e5 35 de 28 4b  |7.68472.2.3.5.(K|",
+        "00000010  2a 5c 2b af 2b 41 2a 88 29 7c 37 4f 33 19 32 08  |*\\+.+A*.)|7O3.2.|"
+      ],
+      "first_mismatch_offset": 0,
+      "first_mismatch_offset_hex": "0x00000",
+      "first_mismatch_sound_ram_hex": "0x3ACB8",
+      "last_mismatch_offset": 21319,
+      "last_mismatch_offset_hex": "0x05347",
+      "match": false,
+      "mismatch_fraction": 0.326474,
+      "observed_bytes": 65169,
+      "observed_identity_at_first_mismatch": {
+        "printable_fraction": 0.719
+      },
+      "observed_sha256": "be236685a64b651f50e7757819d34038d0e7905eb60195bda423f2e408ba2817",
+      "region": "music_sample",
+      "run_count_capped_at": 64,
+      "runs": [
+        {
+          "length": 128,
+          "start": 0
+        },
+        {
+          "length": 315,
+          "start": 129
+        },
+        {
+          "length": 16,
+          "start": 445
+        },
+        {
+          "length": 294,
+          "start": 462
+        },
+        {
+          "length": 122,
+          "start": 757
+        },
+        {
+          "length": 160,
+          "start": 880
+        },
+        {
+          "length": 104,
+          "start": 1041
+        },
+        {
+          "length": 72,
+          "start": 1146
+        },
+        {
+          "length": 193,
+          "start": 1219
+        },
+        {
+          "length": 655,
+          "start": 1413
+        },
+        {
+          "length": 166,
+          "start": 2069
+        },
+        {
+          "length": 4,
+          "start": 2236
+        },
+        {
+          "length": 670,
+          "start": 2241
+        },
+        {
+          "length": 141,
+          "start": 2912
+        },
+        {
+          "length": 117,
+          "start": 3054
+        },
+        {
+          "length": 340,
+          "start": 3172
+        },
+        {
+          "length": 974,
+          "start": 3513
+        },
+        {
+          "length": 1997,
+          "start": 4488
+        },
+        {
+          "length": 489,
+          "start": 6486
+        },
+        {
+          "length": 43,
+          "start": 6976
+        },
+        {
+          "length": 235,
+          "start": 7020
+        },
+        {
+          "length": 905,
+          "start": 7256
+        },
+        {
+          "length": 125,
+          "start": 8162
+        },
+        {
+          "length": 87,
+          "start": 8288
+        },
+        {
+          "length": 652,
+          "start": 8376
+        },
+        {
+          "length": 226,
+          "start": 9029
+        },
+        {
+          "length": 509,
+          "start": 9256
+        },
+        {
+          "length": 861,
+          "start": 9766
+        },
+        {
+          "length": 505,
+          "start": 10628
+        },
+        {
+          "length": 571,
+          "start": 11134
+        },
+        {
+          "length": 453,
+          "start": 11706
+        },
+        {
+          "length": 61,
+          "start": 12160
+        },
+        {
+          "length": 3,
+          "start": 12222
+        },
+        {
+          "length": 1094,
+          "start": 12226
+        },
+        {
+          "length": 137,
+          "start": 13321
+        },
+        {
+          "length": 654,
+          "start": 13459
+        },
+        {
+          "length": 1245,
+          "start": 14114
+        },
+        {
+          "length": 27,
+          "start": 15360
+        },
+        {
+          "length": 225,
+          "start": 15388
+        },
+        {
+          "length": 129,
+          "start": 15614
+        },
+        {
+          "length": 2341,
+          "start": 15744
+        },
+        {
+          "length": 331,
+          "start": 18086
+        },
+        {
+          "length": 1323,
+          "start": 18418
+        },
+        {
+          "length": 913,
+          "start": 19742
+        },
+        {
+          "length": 664,
+          "start": 20656
+        }
+      ],
+      "sound_ram_offset": 240824,
+      "sound_ram_offset_hex": "0x3ACB8",
+      "stride": {
+        "distinct_gap_count": 2,
+        "distinct_gaps": [
+          1,
+          2
+        ],
+        "gap_max": 2,
+        "gap_min": 1,
+        "periodic": false
+      },
+      "verdict": "MISMATCH"
+    }
+  ],
+  "scsp_slot0": {
+    "attenuation": 0,
+    "eg": 31,
+    "keys": 2099,
+    "kyonb": true,
+    "lea": 65168,
+    "lpctl": 1,
+    "lsa": 0,
+    "pan_send": 57344,
+    "pcm8b": true,
+    "pitch": 27086,
+    "release": 31,
+    "sa": 240824,
+    "sa_hex": "0x3ACB8"
+  },
+  "summary": "== staged sound RAM vs packager output ==\nsfxb_metadata    @ 0x05000 (1232 B): EXACT MATCH\npcm_bank         @ 0x08000 (273225 B): MISMATCH\n  differing bytes : 65354 (23.9195% of the region)\n  first mismatch  : region offset 0x28000 = sound RAM 0x30000\n  last mismatch   : region offset 0x37FFF\n  contiguous tail : False\n  stride analysis : {\"gap_min\": 1, \"gap_max\": 2, \"distinct_gaps\": [1, 2], \"distinct_gap_count\": 2, \"periodic\": false}\n  expected:\n    00027ff0  28 1f 22 1f 24 1f 05 21 21 2c 21 23 25 1f 20 21  |(.\".$..!!,!#%. !|\n    00028000  21 1e 18 1c 19 17 18 15 17 13 0f 0c 08 0d 0a 0c  |!...............|\n  observed:\n    00027ff0  28 1f 22 1f 24 1f 05 21 21 2c 21 23 25 1f 20 21  |(.\".$..!!,!#%. !|\n    00028000  af 57 ad ec ac 94 a9 5b a6 86 a4 c3 a3 18 a1 37  |.W.....[.......7|\n  observed identity: {\"printable_fraction\": 0.438, \"found_in_bank_blob\": 163824}\n  first runs      : [{\"start\": 163840, \"length\": 911}, {\"start\": 164752, \"length\": 521}, {\"start\": 165274, \"length\": 5}, {\"start\": 165280, \"length\": 105}, {\"start\": 165386, \"length\": 353}, {\"start\": 165740, \"length\": 429}, {\"start\": 166170, \"length\": 30}, {\"start\": 166201, \"length\": 212}]\nmusic_sample     @ 0x3ACB8 (65169 B): MISMATCH\n  differing bytes : 21276 (32.6474% of the region)\n  first mismatch  : region offset 0x00000 = sound RAM 0x3ACB8\n  last mismatch   : region offset 0x05347\n  contiguous tail : False\n  stride analysis : {\"gap_min\": 1, \"gap_max\": 2, \"distinct_gaps\": [1, 2], \"distinct_gap_count\": 2, \"periodic\": false}\n  expected:\n    00000000  00 00 01 01 01 02 ff 04 00 05 02 fb 04 fe 0f 03  |................|\n    00000010  ff 0b 03 f9 f4 01 00 07 0f fd 0f 2c f7 01 0a 04  |...........,....|\n  observed:\n    00000000  37 bf 36 38 34 37 32 1c 32 84 33 e5 35 de 28 4b  |7.68472.2.3.5.(K|\n    00000010  2a 5c 2b af 2b 41 2a 88 29 7c 37 4f 33 19 32 08  |*\\+.+A*.)|7O3.2.|\n  observed identity: {\"printable_fraction\": 0.719}\n  first runs      : [{\"start\": 0, \"length\": 128}, {\"start\": 129, \"length\": 315}, {\"start\": 445, \"length\": 16}, {\"start\": 462, \"length\": 294}, {\"start\": 757, \"length\": 122}, {\"start\": 880, \"length\": 160}, {\"start\": 1041, \"length\": 104}, {\"start\": 1146, \"length\": 72}]\n\n== 1024 bytes past the music loop end (0x4AB49) ==\nall_zero=True nonzero=0 distinct=1 first_nonzero=None\nidentity: {\"all_zero\": true, \"constant_byte\": 0, \"printable_fraction\": 0.0, \"found_in_bank_blob\": 10471, \"found_in_music_pcm\": 18041}\nsigned stats: {\"count\": 1024, \"min\": 0, \"max\": 0, \"mean\": 0.0, \"abs_mean\": 0.0}\nmusic last 64 signed stats: {\"count\": 64, \"min\": -34, \"max\": 15, \"mean\": -0.031, \"abs_mean\": 6.031}\n0004ab49  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ab59  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ab69  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ab79  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ab89  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ab99  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004aba9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004abb9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004abc9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004abd9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004abe9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004abf9  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ac09  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ac19  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ac29  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n0004ac39  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n\n== where else do the window's bytes live right now? ==\nlwram @ 0x20200000: head=miss, middle=miss, tail=miss\nhwram @ 0x26000000: head=miss, middle=miss, tail=miss\nvdp1_vram @ 0x25C00000: head=miss, middle=miss, tail=miss\nvdp1_framebuffer @ 0x25C80000: head=miss, middle=miss, tail=miss\nvdp2_vram @ 0x25E00000: head=miss, middle=miss, tail=miss",
+  "wall_seconds": 48.66,
+  "warmup_frames": 3600,
+  "window_source_search": {
+    "probe_bytes": 256,
+    "spaces": {
+      "hwram": {
+        "bytes": 1048576,
+        "cpu_base_hex": "0x26000000",
+        "hits": {
+          "head": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "middle": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "tail": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          }
+        },
+        "sha256": "db7b1f357310f85b5daf175a4b56a4921e80966652a572d879289371fecfabd6"
+      },
+      "lwram": {
+        "bytes": 1048576,
+        "cpu_base_hex": "0x20200000",
+        "hits": {
+          "head": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "middle": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "tail": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          }
+        },
+        "sha256": "02dd4b676a781c637271b0c8b567ec768c0d306cbdc050605ae3496d07eb2790"
+      },
+      "vdp1_framebuffer": {
+        "bytes": 262144,
+        "cpu_base_hex": "0x25C80000",
+        "hits": {
+          "head": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "middle": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "tail": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          }
+        },
+        "sha256": "89ab3dfd39cc43e006059e97fc11e3dd0b0c38b02c36f07c6cde725cde0ee386"
+      },
+      "vdp1_vram": {
+        "bytes": 524288,
+        "cpu_base_hex": "0x25C00000",
+        "hits": {
+          "head": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "middle": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "tail": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          }
+        },
+        "sha256": "5f2dbe07bd734e3006b2ccb778adda74b75637c0643750a65578ac07a85e8c9e"
+      },
+      "vdp2_vram": {
+        "bytes": 524288,
+        "cpu_base_hex": "0x25E00000",
+        "hits": {
+          "head": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "middle": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          },
+          "tail": {
+            "cpu_address_hex": null,
+            "found": false,
+            "offset": -1
+          }
+        },
+        "sha256": "4dc3a1053aeae95db9fe9c51675e83c31cc078acafa89b2336ba9e00812bd716"
+      }
+    }
+  }
+}

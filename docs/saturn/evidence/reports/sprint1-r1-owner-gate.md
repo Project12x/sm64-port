@@ -156,3 +156,72 @@ visuals; a linking, margin-passing, identity-bound candidate; the entire donor
 worktree preserved in git; the constitution restored; and the `0x0340` audio
 failure root-caused and fixed. Cadence is the sole remaining product gap and
 becomes Sprint 2's first objective.
+
+---
+
+## CORRECTION 2026-08-15 — the noise IS a port defect. Prior disposition RETRACTED.
+
+**The "Ymir host-audio underrun" disposition above is WRONG and is retracted.**
+A sound-RAM staging verification run found the true cause with register-level
+evidence. Report: `sprint1-r1-sound-ram-staging-verify.json`; probe:
+`tools/saturn/probe_sound_ram_verify.py`.
+
+### Measured
+
+| Region | Sound RAM | Result |
+| --- | --- | --- |
+| SFXB metadata | `0x05000` | exact match |
+| PCM bank | `0x08000` (273,225 B) | **65,354 bytes differ (23.9%)** |
+| Music sample | `0x3ACB8` (65,169 B) | **21,276 bytes differ (32.7%)** |
+
+Every differing byte lies in one contiguous 64 KiB-aligned window,
+**`0x30000`–`0x3FFFF`**, and that window is being **rewritten continuously**
+(65,164 of 65,536 bytes changed after 60 frames). Outside it, every byte
+matches — including the music tail from `0x40000` to the loop end, exact. The
+staging `memcpy` is byte-perfect and the ISO is clean.
+
+### Cause
+
+SCSP common-control register `0x402` reads **`0x0118`** → **RBP = 24, RBL = 2**,
+which decodes to the **SCSP effect DSP's reverb ring buffer** at
+24 × 0x2000 = **`0x30000`**, length 32k words = **`[0x30000, 0x40000)`** —
+both endpoints matching the corruption window exactly. `MPRO` holds a real,
+running DSP microprogram (377/1024 nonzero bytes) left over from the BIOS.
+
+**The port never programs any of this.** There is no reference to `0x402`,
+RBP, RBL, `MPRO`, `COEF`, or `MADRS` anywhere in `src/`. The SCSP's own effect
+DSP is writing its reverb ring straight over our staged samples, every sample
+period, forever.
+
+Our music sits at `0x3ACB8`, straddling the ring's top edge, so the first
+`0x40000 - 0x3ACB8` = **21,320 bytes = 2.665 s of every 8.146 s loop** is read
+out of the live DSP ring instead of the song. That is the periodic piercing
+noise. **8 distinct SFX samples also sit inside the ring** and are equally
+corrupt — which independently explains the unrecognizable SFX.
+
+Cross-checks: the window's contents appear nowhere in LWRAM, HWRAM, VDP1 VRAM,
+the VDP1 framebuffer, or VDP2 VRAM (so it is not a stray SH-2 blit), and the
+1 KB past the loop end is all zeros (so over-read is not a contributor).
+
+### Why the earlier reasoning failed
+
+Every elimination in the table above was individually correct — the control
+path *is* frozen, the registers *are* right, the data *on disk* is clean. The
+error was concluding "therefore not a port defect" from a set of eliminations
+that never included **the bytes in sound RAM at playback time**. The one
+untested link was the one that mattered. The Ymir-underrun mechanism was
+real code but unverified speculation, and it was recorded with more confidence
+than the evidence supported.
+
+### Fix (not yet implemented)
+
+Sound RAM above the bank end (`0x4AB49`) is confirmed zero and unused, so
+repointing the ring clears the bank entirely — e.g. RBP = 0x28 (`0x50000`),
+RBL = 2. Alternatively disable the effect DSP at boot; this port uses no SCSP
+effects and every slot's `EFSDL` is already 0.
+
+**Program the DSP state explicitly rather than dodging the observed window:**
+RBP/RBL/MPRO here are BIOS leftovers and may differ by BIOS revision or region.
+This joins open follow-up 1 (uninitialized slot registers `0x0E`/`0x12`/`0x14`/
+`0x18`) as the same class of bug — inherited hardware state the driver never
+initializes.
