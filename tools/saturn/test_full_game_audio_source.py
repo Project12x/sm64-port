@@ -11,11 +11,53 @@ EXTERNAL_H = ROOT / "src/audio/external.h"
 SEMANTICS_C = ROOT / "src/port/saturn/sourceboot/source_audio_semantics.c"
 STUB_C = ROOT / "src/port/saturn/sourceboot/source_audio_stub.c"
 SOURCEBOOT_MAKE = ROOT / "src/port/saturn/sourceboot/Makefile"
+MAIN_C = ROOT / "src/port/saturn/sourceboot/main.c"
 PCM_VOICE_C = ROOT / "src/port/saturn/audio68k/pcm_voice.c"
+
+INFINITE_SPIN = re.compile(r"for\s*\(\s*;\s*;\s*\)|while\s*\(\s*1\s*\)")
 
 
 def public_functions(text: str) -> set[str]:
     return set(re.findall(r"^(?:struct SPTask \*|void|u16)\s*(\w+)\s*\(", text, re.M))
+
+
+def function_body(text: str, name: str) -> str:
+    """Extract a function definition's body by brace counting.
+
+    Anchors on ``name(...)`` followed by an opening brace so the forward
+    declaration (which ends with ``;``) is skipped.
+    """
+    for match in re.finditer(rf"\b{re.escape(name)}\s*\([^;{{)]*\)", text):
+        rest = text[match.end():]
+        stripped = rest.lstrip()
+        if not stripped.startswith("{"):
+            continue
+        start = match.end() + (len(rest) - len(stripped))
+        depth = 0
+        for index in range(start, len(text)):
+            if text[index] == "{":
+                depth += 1
+            elif text[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[match.start():index + 1]
+        raise AssertionError(f"unbalanced braces after {name}")
+    raise AssertionError(f"no definition found for {name}")
+
+
+def preprocessor_block_around(text: str, anchor: str) -> str:
+    """Extract the innermost #if...#endif block containing ``anchor``."""
+    anchor_at = text.index(anchor)
+    open_at = text.rindex("#if", 0, anchor_at)
+    depth = 0
+    for match in re.finditer(r"^[ \t]*#[ \t]*(if\w*|endif)", text[open_at:], re.M):
+        if match.group(1).startswith("if"):
+            depth += 1
+        else:
+            depth -= 1
+            if depth == 0:
+                return text[open_at:open_at + match.end()]
+    raise AssertionError(f"unterminated #if block around {anchor!r}")
 
 
 class FullGameAudioSourceContract(unittest.TestCase):
@@ -63,6 +105,32 @@ class FullGameAudioSourceContract(unittest.TestCase):
                 r"SEQUENCE_ARGS\(4,\s*SEQ_LEVEL_GRASS\),\s*0U\)",
                 re.S,
             ),
+        )
+
+    def test_audio_init_failure_does_not_hang(self) -> None:
+        """Audio boot failure must mute audio only, never stall the console.
+
+        The constitution's fail-open rule forbids an infinite spin anywhere in
+        the audio init/boot path: a bad SFXB bundle or sound-CPU handshake
+        timeout must fall through to the unbound (fail-closed no-op) semantic
+        layer and continue boot.  main.c's legitimate spins (build identity,
+        cart load, render init, the main frame loop) are outside these regions
+        and stay untouched.
+        """
+        text = MAIN_C.read_text(encoding="utf-8")
+        audio_init = function_body(text, "sourceboot_audio_init")
+        self.assertNotRegex(
+            audio_init, INFINITE_SPIN,
+            "sourceboot_audio_init must report failure, not spin",
+        )
+        # The feature-gated caller block in sourceboot_game_loop that invokes
+        # sourceboot_audio_init() and starts level music.
+        caller_block = preprocessor_block_around(text, "sourceboot_audio_init()")
+        self.assertIn("SATURN_FEATURE_SEMANTIC_AUDIO", caller_block.splitlines()[0])
+        self.assertNotRegex(
+            caller_block, INFINITE_SPIN,
+            "audio boot failure must fall through to the silent no-op path, "
+            "not hang the console",
         )
 
     def test_semantic_music_runs_at_consumer_audio_cadence(self) -> None:

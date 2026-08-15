@@ -1945,6 +1945,13 @@ sourceboot_post_cart_init(void)
  * fixed HWRAM would steal the renderer's hard physical margin.  Reserve the
  * exact aligned blocks from the long-lived RIGHT side before thread5 starts;
  * neither block is a transient level allocation nor a hidden static debt. */
+#if SATURN_FEATURE_SEMANTIC_AUDIO
+/* Diagnostic breadcrumb only: .lwram_bss is not crt0-zeroed, so this is
+ * explicitly cleared before audio init.  Ymir/debugger-visible through its
+ * ELF symbol alongside the other LWRAM counters. */
+static bool sourceboot_audio_live_failed SOURCEBOOT_LWRAM_STATE;
+#endif
+
 static bool
 sourceboot_audio_init(void)
 {
@@ -1963,23 +1970,36 @@ sourceboot_audio_init(void)
         main_pool_alloc((u32)semantic_bytes, MEMORY_POOL_RIGHT);
     live_workspace = main_pool_alloc((u32)live_bytes, MEMORY_POOL_RIGHT);
     if (semantic_workspace == NULL || live_workspace == NULL ||
-        !sm64_saturn_source_audio_semantic_workspace_bind(
-            semantic_workspace, semantic_bytes) ||
         !sm64_saturn_source_audio_live_workspace_bind(live_workspace,
                                                       live_bytes)) {
         return false;
     }
+    if (!sm64_saturn_source_audio_live_boot(
+            sm64_saturn_sourceboot_pcm68k_driver,
+            (uint32_t)(sm64_saturn_sourceboot_pcm68k_driver_end -
+                       sm64_saturn_sourceboot_pcm68k_driver),
+            sm64_saturn_sourceboot_sfx_metadata,
+            (uint32_t)(sm64_saturn_sourceboot_sfx_metadata_end -
+                       sm64_saturn_sourceboot_sfx_metadata),
+            sm64_saturn_sourceboot_sfx_pcm,
+            (uint32_t)(sm64_saturn_sourceboot_sfx_pcm_end -
+                       sm64_saturn_sourceboot_sfx_pcm), 1U)) {
+        /* live_boot deactivates the mailbox on every failure path, so the
+         * bound live workspace is inert; the semantic workspace is still
+         * unbound, keeping every audio/external.h entry a fail-closed
+         * no-op. */
+        return false;
+    }
+    /* Bind the semantic workspace only as the last step of a fully
+     * successful init: there is no semantic unbind API, so any earlier
+     * failure must never leave a partially-bound semantic layer behind. */
+    if (!sm64_saturn_source_audio_semantic_workspace_bind(
+            semantic_workspace, semantic_bytes)) {
+        sm64_saturn_source_audio_live_deactivate();
+        return false;
+    }
     sound_init();
-    return sm64_saturn_source_audio_live_boot(
-        sm64_saturn_sourceboot_pcm68k_driver,
-        (uint32_t)(sm64_saturn_sourceboot_pcm68k_driver_end -
-                   sm64_saturn_sourceboot_pcm68k_driver),
-        sm64_saturn_sourceboot_sfx_metadata,
-        (uint32_t)(sm64_saturn_sourceboot_sfx_metadata_end -
-                   sm64_saturn_sourceboot_sfx_metadata),
-        sm64_saturn_sourceboot_sfx_pcm,
-        (uint32_t)(sm64_saturn_sourceboot_sfx_pcm_end -
-                   sm64_saturn_sourceboot_sfx_pcm), 1U);
+    return true;
 #else
     return true;
 #endif
@@ -1991,15 +2011,21 @@ sourceboot_game_loop(void)
     main_pool_init(sourceboot_main_pool,
                    sourceboot_main_pool + sizeof(sourceboot_main_pool));
 #if SATURN_FEATURE_SEMANTIC_AUDIO
+    sourceboot_audio_live_failed = false;
     if (!sourceboot_audio_init()) {
-        dbgio_puts("sourceboot: semantic SFX initialization failed\\n");
+        /* Fail open per the constitution: audio failure must mute audio
+         * only.  The semantic workspace is left unbound, so every
+         * audio/external.h entry stays a safe no-op, and boot continues
+         * without the sound CPU instead of spinning here. */
+        sourceboot_audio_live_failed = true;
+        dbgio_puts("sourceboot: semantic SFX init failed; audio muted\n");
         dbgio_flush();
-        for (;;) {}
     }
     /* The generic BOB path has no full-game level-update caller yet, so start
      * its real level sequence at the same semantic API boundary used by the
      * game.  This is intentionally one normal policy event, not an injected
-     * MC68000 command or object-specific renderer/audio shortcut. */
+     * MC68000 command or object-specific renderer/audio shortcut.  When audio
+     * init failed it is a safe unbound no-op. */
     play_music(SEQ_PLAYER_LEVEL, SEQUENCE_ARGS(4, SEQ_LEVEL_GRASS), 0U);
 #endif
     gEffectsMemoryPool = mem_pool_init(0x4000U, MEMORY_POOL_LEFT);

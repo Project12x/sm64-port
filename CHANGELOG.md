@@ -323,6 +323,23 @@
 
 ### Fixed
 
+- Audio-boot failure previously hung the console in an infinite `for (;;)`
+  spin at the sourceboot audio-init failure site, making a bad SFXB bundle
+  or a sound-CPU handshake timeout indistinguishable from a renderer hang.
+  It now logs over dbgio, sets an ELF-visible LWRAM breadcrumb
+  (`sourceboot_audio_live_failed`), leaves the semantic audio layer unbound
+  — every `audio/external.h` entry is a fail-closed safe no-op until its
+  workspace binds — and continues boot, satisfying the constitution's
+  audio-mutes-only rule. Root cause beyond the spin itself: the old init
+  order bound the semantic workspace before the sound-CPU boot, so a late
+  failure could have left a live semantic layer feeding a dead mailbox.
+  There is no semantic unbind API, so `sourceboot_audio_init` now binds the
+  semantic workspace only as the last step of a fully successful init (the
+  live bridge already self-deactivates on every `live_boot` failure path).
+  Guarded by `test_audio_init_failure_does_not_hang`, which brace-counts the
+  audio-init function and its feature-gated caller block so the main frame
+  loop's legitimate `for (;;)` stays exempt.
+
 - Sealed the host-only BOB material compiler after independent review. Exact
   admission now covers the evaluated command-local trace and final state for
   every recognized relevant Fast3D command, including ambient/diffuse lights
