@@ -654,7 +654,17 @@ Telemetry gate before any owner time: FPS mean ≥ 4.0; `MUSIC_STARTS >= 1`, `MU
   1. Mario, terrain, camera, input at least as good as A9A (scale, colors, shading, ordering)?
   2. BOB music playing, looping without periodic silence?
   3. One game-triggered SFX audible over the music (e.g. jump), stopping/starting correctly?
-  4. Perceived cadence in the 4–6 FPS band?
+  4. Perceived cadence (recorded, see gate note below).
+
+  **Owner gate change (2026-08-15, owner-stated):** the ≥4 FPS floor is NOT
+  a blocking gate for R1 acceptance. FPS is measured (headless capture) and
+  recorded, but a sub-4 result does not fail the candidate or trigger a
+  revert — the stage-1b LWRAM evictions (workarea + Mario emission scratch,
+  forced by 49.6 KB of committed HWRAM growth) are the expected mechanism,
+  and cadence recovery via committed-memory reduction is the first named
+  objective of the next sprint. Visuals and audio are judged on their own
+  merits. The AGENTS.md 4 FPS floor continues to apply to *retained changes*
+  in later sprints once a cadence baseline is re-established.
 
 - [ ] **Step 4: Keep or revert immediately.** On owner acceptance: update `STATE.md` + `CHANGELOG.md` + `ROADMAP.md` (R1 closed), commit, and tag:
 
