@@ -41,7 +41,35 @@ and full SFX coverage are next-sprint objectives, not R1 blockers.
   `SOUND_GENERAL_*`). With actors off, most have no live trigger — which
   explains "no recognizable SFX" independently of the noise.
 
-## Leading hypothesis for the next session
+## UPDATE — headless telemetry (commit `88f077ac`) REFUTES the SFX hypothesis
+
+The probe (`sprint1-r1-audio-probe.json`) reports `voices_started = 2` and
+`music starts = 2`, `active_voice_count = 1`, every fault/reject/malformed/
+invalid_samples counter **0**. Both started voices are accounted for by the
+two music starts — **no SFX voice fired at all** in a 3,600-frame run. The
+"noise is misrendered SFX" hypothesis below is therefore **not supported** by
+headless evidence (caveat: the owner's session had live input and may trigger
+sounds the scripted route does not).
+
+Two NEW facts that the next hypothesis must explain:
+1. **`play_music` is issued TWICE.** SEQ_START arrives twice, and our handler
+   has replace semantics — it keys the music voice off and restarts the sample
+   from its beginning. A mid-playback restart is audible. If the source game
+   re-issues the level sequence periodically (or on some state re-evaluation),
+   that cadence — NOT the 8.15 s loop — would set the artifact's period, which
+   matches the owner's "not every 8 seconds". **Check first:** instrument or
+   reason out where the second `play_music` comes from
+   (`source_audio_semantics.c` policy layer / `sourceboot_game_loop`), and
+   whether repeated identical-sequence starts should be idempotent (ignore a
+   start for the already-playing sequence) instead of restarting.
+2. Only ONE voice is ever active, so the noise is being produced by the music
+   voice itself or by the act of (re)keying it — not by voice collision.
+
+Also from telemetry: sustained cadence is ≈1.1 FPS (53 VBlanks/frame),
+dominated by scene construction (≈24.5 VBlanks) and master finalization
+(≈5.8) — the profile for Sprint 2's cadence work.
+
+## Leading hypothesis for the next session (SUPERSEDED — see UPDATE above)
 
 **The piercing noise may BE the SFX path, misrendered** — not a music defect.
 Rationale: the noise is aperiodic (owner) and the level does trigger mapped
