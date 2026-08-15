@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
-"""Pin the dual-SH2 renderer three-way work-storage split.
+"""Pin the dual-SH2 renderer work-storage placement: ALL hot scratch in HWRAM.
 
-Sprint 1 Task 10 stage 1b: the stage-1 link smoke
-(docs/saturn/evidence/reports/sprint1-stage1-link-smoke.md) measured
-49,648 B of HWRAM relief required at pool 208 -- the .bss growth is
-committed and always-on, not feature-gated as the Task 8 (3ad7cb5c)
-full-HWRAM revert assumed.  The pinned policy is therefore a split:
+Sprint 2 T2.2 un-split: T1's attribution
+(docs/saturn/evidence/reports/sprint2-t1-hwram-attribution.md) proved the
+stage-1b three-way split (49370e31) was link-pressure relief, not design;
+the peak-gated capacity shrinks (cmdt 2048->1664, GFX_POOL_SIZE 6400->4096,
+libyaul _private_pool 0xA000->0x4000 = 67,584 B) fund the full 54,080 B
+return.  T2.0's reference sweep corroborates the shape (L2: neither
+SlaveDriver nor Z-Treme places any per-frame working set in LWRAM).  The
+pinned policy:
 
   - Terrain/primitive scratch: DEMO_CPU_WORK_CACHE stays an EMPTY macro
     (32-bit HWRAM .bss).  The 16-bit LWRAM eviction (ec7b992a/91f02ffd)
     was the mechanism of the 5.29 FPS -> ~1 FPS collapse on this
     memory-bound multi-pass loop and must not silently return.
-  - Actor-path-only scratch: DEMO_ACTOR_WORK_CACHE places the five
-    actor-lane arrays (~10,304 B) in LWRAM .lwram_bss.
-  - The 43,776 B hot workarea (s_bob_hot_workarea) lives in LWRAM
-    .lwram_bss, 16-byte aligned.
+  - Actor-path-only scratch: DEMO_ACTOR_WORK_CACHE is likewise an EMPTY
+    macro (32-bit HWRAM .bss).  It remains a distinct placement class so
+    the two sets stay independently steerable, but re-evicting it requires
+    editing the macro AND this contract.
+  - The 43,776 B hot workarea (s_bob_hot_workarea) lives in HWRAM .bss,
+    16-byte aligned, with no section attribute.
+
+_sourceboot_fast3d (44,616 B, main.c) deliberately stays in LWRAM -- the
+reclamation arithmetic does not close for it; recorded in the T2.2
+evidence as the next rung (T2.0 L3 staging-window lever).
 
 Moving any symbol between these sets requires editing the macros AND this
 contract explicitly, with the fallback ladder in CHANGELOG.md.
@@ -73,12 +82,12 @@ class DualSh2WorkStorageContractTests(unittest.TestCase):
             self.assertNotIn("DEMO_ACTOR_WORK_CACHE", declaration, symbol)
             self.assertNotIn("lwram", declaration, symbol)
 
-    def test_actor_work_arrays_are_lwram_owned(self):
+    def test_actor_work_arrays_are_hwram_owned(self):
         # Actor-path-only scratch: consumed exclusively by the actor lanes
         # (demo_actor_queue_assemble_done, demo_reserve_mario_gouraud,
         # demo_emit_mario, demo_emit_mario_range), never by the terrain
-        # path.  Stage 1b evicts them to LWRAM as part of the 49,648 B
-        # HWRAM relief.
+        # path.  T2.2 returns it to HWRAM: the macro must stay EMPTY and no
+        # declaration may carry an lwram placement.
         symbols = (
             "s_actor_queue_merge_ids",
             "s_actor_slots",
@@ -86,21 +95,24 @@ class DualSh2WorkStorageContractTests(unittest.TestCase):
             "s_actor_gouraud",
             "s_actor_gouraud_addresses",
         )
-        self.assertIn(
-            '#define DEMO_ACTOR_WORK_CACHE '
-            '__attribute__((section(".lwram_bss")))', DEMO)
+        self.assertIn("\n#define DEMO_ACTOR_WORK_CACHE\n", DEMO)
+        self.assertNotIn("#define DEMO_ACTOR_WORK_CACHE __attribute__", DEMO)
         for symbol in symbols:
             declaration = self._declaration(DEMO, symbol)
             self.assertIn("DEMO_ACTOR_WORK_CACHE", declaration, symbol)
+            self.assertNotIn("DEMO_CPU_WORK_CACHE", declaration, symbol)
+            self.assertNotIn("lwram", declaration, symbol)
 
-    def test_hot_workarea_is_lwram_owned(self):
-        # The 43,776 B promoted-geometry workarea is the largest single
-        # recoverable HWRAM block; stage 1b returns it to LWRAM (the
-        # 91f02ffd placement) with its 16-byte alignment intact.
+    def test_hot_workarea_is_hwram_owned(self):
+        # The 43,776 B promoted-geometry workarea is the renderer's hottest
+        # per-frame read bank; T2.2 returns it to HWRAM .bss with its
+        # 16-byte alignment intact and no section attribute.
         declaration = self._declaration(DEMO, "s_bob_hot_workarea")
-        self.assertIn('section(".lwram_bss")', declaration)
         self.assertIn("aligned(16)", declaration)
+        self.assertNotIn("section(", declaration)
+        self.assertNotIn("lwram", declaration)
         self.assertNotIn("DEMO_CPU_WORK_CACHE", declaration)
+        self.assertNotIn("DEMO_ACTOR_WORK_CACHE", declaration)
 
     def test_scene_admission_scratch_is_phase_owned(self):
         self.assertIn("sm64_saturn_scene_admission_scratch_t", ADMISSION)

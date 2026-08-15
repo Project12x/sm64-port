@@ -4,6 +4,29 @@
 
 ### Changed
 
+- Sprint 2 T2.2 un-split: the renderer's full 54,080 B hot working set is
+  back in 32-bit HWRAM `.bss`, reverting commit `49370e31`'s placement —
+  `DEMO_ACTOR_WORK_CACHE` is an empty macro again (the five actor-lane
+  arrays, 10,304 B, kept as a distinct placement class so the sets stay
+  independently steerable) and `s_bob_hot_workarea` (43,776 B) is plain
+  `aligned(16)` with no section attribute. Why: T1 attributed the ~1.1 FPS
+  cadence to hot per-frame state reading 16-bit LWRAM (the A9A baseline
+  ran the same set in HWRAM at 5.29 FPS), and T2.0's reference sweep
+  corroborates the shape — L2: neither SlaveDriver nor Z-Treme places any
+  per-frame working set in LWRAM; Z-Treme's loader function is literally
+  named "move the vertices to high work ram" (ZT_LOADING.c:320-353). The
+  companion capacity-shrink entry below funds the return (67,584 B
+  recovered vs 54,080 B spent, ~13.5 KB to margins).
+  `test_dual_sh2_work_storage_contract.py` retargeted to pin the new
+  all-HWRAM policy at the same guard strength (4 tests; the three
+  placement mutations — workarea re-evicted, actor macro re-evicted,
+  terrain macro re-evicted — each verified KILLED). Explicitly deferred:
+  `_sourceboot_fast3d` (44,616 B, per-frame hot, `main.c`) stays in LWRAM
+  — the arithmetic does not close for it; next rung via T2.0 L3's
+  build-in-VRAM staging-window lever (~120 KB), recorded in the T2.2
+  evidence. FPS impact measured at this task's capture gate; the owner
+  look-and-listen remains the accepting gate.
+
 - Sprint 2 T2.2 capacity shrinks — the peak-cleared reclamation package,
   recovering 67,584 B of committed HWRAM to fund returning the renderer's
   hot working set (see the companion un-split entry). Every member is

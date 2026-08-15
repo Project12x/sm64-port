@@ -208,37 +208,39 @@ static sm64_saturn_visible_position_set_t s_visible_position_set;
  * the worker boundary still use the explicit cache-through records and LWRAM
  * banks declared separately.
  *
- * Placement: three-way work-storage split (Sprint 1 Task 10 stage 1b).
- * These are per-primitive inner-loop operands.  The A9A baseline (5.29 FPS)
- * kept them in 32-bit HWRAM .bss; the memory-budget relief work (ec7b992a,
- * then 91f02ffd) evicted them to 16-bit LWRAM, which is the mechanism of
- * the accepted 5.29 FPS collapsing to ~1 FPS on this memory-bound loop.
- * Task 8 (3ad7cb5c) returned everything to HWRAM assuming the R1 build
- * (COMPLETE_MARIO_ANIMATION=0, DYNAMIC_ACTOR_CLOSURE=0) freed the
- * pressure, but the stage-1 link smoke
- * (docs/saturn/evidence/reports/sprint1-stage1-link-smoke.md) proved the
- * growth is committed and always-on: at pool 208 the link needs 49,648 B
- * of HWRAM relief (41,712 overflow + 0x1F00 heap margin).  The split:
+ * Placement: the FULL hot working set lives in 32-bit HWRAM .bss again
+ * (Sprint 2 T2.2 un-split).  These are per-primitive inner-loop operands.
+ * The A9A baseline (5.29 FPS) kept them in 32-bit HWRAM .bss; the
+ * memory-budget relief work (ec7b992a, then 91f02ffd) evicted them to
+ * 16-bit LWRAM, which is the mechanism of the accepted 5.29 FPS collapsing
+ * to ~1 FPS on this memory-bound loop.  The stage-1b three-way split
+ * (49370e31) paid for the link with the actor scratch + workarea in LWRAM;
+ * T1's attribution (sprint2-t1-hwram-attribution.md) then funded the full
+ * return with peak-gated capacity shrinks (cmdt 2048->1664, GFX pool
+ * 6400->4096, libyaul _private_pool 0xA000->0x4000 = 67,584 B recovered
+ * against the 54,080 B home).  T2.0's reference sweep corroborates the
+ * shape (L2: neither SlaveDriver nor Z-Treme places ANY per-frame working
+ * set in LWRAM; Z-Treme's loader literally names "move the vertices to
+ * high work ram").
  *
- *   - Terrain/primitive scratch (DEMO_CPU_WORK_CACHE, empty macro) stays
- *     hot in 32-bit HWRAM -- it is the multi-pass working set this build
- *     actually exercises every frame.
- *   - Actor-path-only scratch (DEMO_ACTOR_WORK_CACHE below, ~10,304 B)
- *     and the 43,776 B hot workarea move to LWRAM .lwram_bss, recovering
- *     ~54,080 B total.
+ *   - Terrain/primitive scratch (DEMO_CPU_WORK_CACHE, empty macro): HWRAM.
+ *   - Actor-path-only scratch (DEMO_ACTOR_WORK_CACHE, empty macro): HWRAM.
+ *   - The 43,776 B hot workarea (s_bob_hot_workarea below): HWRAM.
  *
- * FPS impact of the actor/workarea placement is measured at the Task 11
- * gate; the fallback ladder lives in CHANGELOG.md.
+ * Still in LWRAM, deliberately and recorded as the next rung:
+ * _sourceboot_fast3d (44,616 B, main.c) -- the reclamation arithmetic
+ * does not close for it (~13.5 KB spare after the un-split); T2.0 L3's
+ * build-in-VRAM staging-window lever (~120 KB) is the unlock.
  * was: __attribute__((section(".lwram_bss"))) */
 #define DEMO_CPU_WORK_CACHE
 /* Actor-path-only scratch: every array below is read/written exclusively by
  * the actor lanes (demo_actor_queue_assemble_done, demo_reserve_mario_gouraud,
- * demo_emit_mario, demo_emit_mario_range) -- never by the terrain path.  The
- * stage-1 config builds with DYNAMIC_ACTOR_CLOSURE=0, so the generic-actor
- * queue path is dormant, and Mario's master-only emission touches these once
- * per actor primitive rather than in the terrain multi-pass loop.  Evicted to
- * LWRAM as part of the 49,648 B stage-1b relief (see the split note above). */
-#define DEMO_ACTOR_WORK_CACHE __attribute__((section(".lwram_bss")))
+ * demo_emit_mario, demo_emit_mario_range) -- never by the terrain path.
+ * Kept as a distinct placement class so the two sets stay independently
+ * steerable; T2.2 returns it to HWRAM with the rest of the hot set (empty
+ * macro, see the placement note above).
+ * was: __attribute__((section(".lwram_bss"))) */
+#define DEMO_ACTOR_WORK_CACHE
 static sm64_saturn_dual_frame_bank_t s_transform_frame_bank
     DEMO_CROSS_CPU_SHARED;
 /* Mario's bounded second phase uses the exact same release protocol as the
@@ -581,19 +583,18 @@ demo_terrain_resolved_template(uint16_t primitive_index, bool recovery,
 /* Optional Z-Treme-style hot arena. The generated bank is immutable source
  * data; this one enclosing work-area owner is populated once before the
  * frame loop and then becomes the renderer's active read-only bank.
- * Placement (stage 1b): back in LWRAM .lwram_bss.  Task 8 promoted it to
- * HWRAM assuming the R1 feature-off build freed the pressure, but the
- * stage-1 link smoke measured 49,648 B of committed HWRAM relief still
- * required at pool 208; this 43,776 B workarea is the largest single
- * recoverable block (see the DEMO_CPU_WORK_CACHE split note above).
+ * Placement (Sprint 2 T2.2): back in 32-bit HWRAM .bss -- it is the
+ * renderer's hottest per-frame read bank.  The stage-1b LWRAM eviction
+ * (49370e31) was link-pressure relief, not a design choice; T2.2's
+ * peak-gated capacity shrinks fund the return (see the
+ * DEMO_CPU_WORK_CACHE placement note above and T1's attribution).
  * One enclosing object is deliberate: Z-Treme's workarea.c pattern uses
  * compile-time offsets rather than two cursors that can collide at runtime. */
 typedef struct demo_hot_workarea {
     int32_t positions[SM64_SATURN_BOB_POSITION_COUNT][3];
     sm64_saturn_bob_primitive_t primitives[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 } demo_hot_workarea_t;
-static demo_hot_workarea_t s_bob_hot_workarea
-    __attribute__((section(".lwram_bss"), aligned(16)));
+static demo_hot_workarea_t s_bob_hot_workarea __attribute__((aligned(16)));
 _Static_assert(offsetof(demo_hot_workarea_t, positions) == 0U,
                "hot positions must be the first fixed work-area region");
 _Static_assert(offsetof(demo_hot_workarea_t, primitives) >=
