@@ -135,11 +135,58 @@ candidate `id-aa57d83c898e3af1`, commits `55449eb2`, `0a5b5ccd`:**
   profiler is the instrument; L12's master-spin measurement is the
   companion. L10 (per-BSP-leaf ordering) is explicitly NOT next.
 
-### Task T2.4+: next levers, planned on T2.2/T2.3 results
+### Task T2.4: decompose the pre-notification window — **complete (measurement)**
 
-Candidates from evidence, not yet committed to: Mario command-count diet
-(638/882 items), scene-construction hot-path profiling (24.5 VBlanks),
-master-finalization (5.8). One change → one CUE → one measurement each.
+**Status 2026-08-15 — evidence
+`docs/saturn/evidence/reports/sprint2-t2_4-prenotification-profile.md`
+(+ `.json`), diagnostic identity `id-5b28a329c1e8f9de`, commits
+`a683c48a` (instrumentation) and this one:**
+
+- Built T2.0 L14's instrument: a diagnostic-gated FRT sub-stage profiler
+  (`src/port/saturn/runtime/saturn_prenotify_profile.h`) with SlaveDriver
+  `PROFILE.C`'s shape — fixed nodes, zero allocation, nestable push/pop —
+  at φ/128 rather than its φ/32, because a 16-bit FRT at φ/32 wraps every
+  ~4.7 VBlanks. Product build proven byte-clean at object level.
+- **The window is two stages: `demo_prepare_mario()` 69.24% (11.67
+  VBlanks/frame, ~21% of the whole frame) and `demo_spatial_admit()`
+  26.42% (4.45 VBlanks/frame) — 95.7% together.** Ranks 3–15 are 4.3%;
+  ranks 6–15 total 0.15 VBlanks/frame. **Unattributed remainder 0.048%** —
+  the parts sum to the whole.
+- 798 windows over a scripted-route run (24,000 post-BIOS frames,
+  movement witnessed at 42 distinct Mario positions, zero SH-2
+  exceptions). Cross-checked against the cadence rig: 3,582 measured
+  ticks/VBlank vs 3,509 from libyaul's own NTSC-320 constants, +2.1%.
+- **L12 answered:** master spin on the slave is **zero by construction**
+  (the lifecycle returns PENDING; the only blocking spin, `dual_worker_run`,
+  sits in three functions the compiler reports dead in this tuple), and the
+  slave is **busy 1.02× its own 3.085-VBlank overlap window**. There is no
+  idle-slave slack in the split; the master simply keeps 16.85 VBlanks to
+  itself before notifying.
+- Gates green on the diagnostic build: `verify-memory-map` RESULT OK
+  (`hwram_remaining` 0x4ED8, true slack 12,248 B), painter chain, audio
+  loop 24, pcm68k, terrain bins, frame bank 4, demo-render-overlap,
+  render-overlap-integration, work-storage 4, staging relocation.
+- **Known defects in the instrument, recorded not hidden:** the RETIRED
+  marker fires on the *slave*, so the profiler's `notify_to_retire` and
+  `finalize_ticks` compare two per-CPU FRTs and are **invalid** (discarded;
+  the rig's VBlank figures stand), and that path makes the slave write
+  three bytes of cached master-owned state — move it to `__uncached`
+  before reuse. The harness exits 1 because `faults == windows` by design
+  (the NOTIFY node is closed by `end()`), which also proves zero abandoned
+  windows.
+
+### Task T2.5: attack `demo_prepare_mario()` — planned on T2.4's table
+
+Primary target, measured: **Mario actor meshlet preparation, 69.2% of the
+pre-notification window.** Sub-probe it before changing it (it has never
+been decomposed internally), then choose between reducing it (pose/view
+reuse across frames) and moving it into the job graph — the latter being
+the only credible route to the split imbalance, since the slave is already
+saturated inside its own window. Secondary: `demo_spatial_admit()` (26.4%).
+Explicitly NOT next: a ±1 master/slave rebalance (no idle-slave slack
+exists), ranks 3–15 (4.3% combined), further memory-tier work (T2.2
+disproved it), further painter ordering (T2.3 measured the remainder at a
+fraction of 1.7%). Clear the instrument debt above first.
 
 **Sprint gate:** owner-observed cadence materially above 1.1 FPS with accepted
 visuals/audio intact. The 4 FPS floor re-binds on the sprint's accepted result.
