@@ -253,3 +253,117 @@ split is pinned by the work-storage contract test.
 
 Not proved: boot, visuals, audio, input, FPS. The 4 FPS floor gate
 (Task 11) decides whether the actor/workarea LWRAM placement is retained.
+
+## Stage 2: owner music wired into the SFX bundle — R1 candidate CUE (2026-08-15)
+
+- Date: 2026-08-15 (00:03–00:35 local). Worktree `.worktrees/saturn-recovery`,
+  branch `saturn/recovery`; base HEAD `602844a8` (stage 1b evidence commit).
+- Scope: commit the host M64 renderer, wire the owner's rendered BOB theme
+  WAV into the SFX-bundle make rule, rebuild the R1 candidate. Same
+  27-variable invocation as stage 1b (pool 208), via
+  `with-msys-toolchain.ps1` → MSYS `sh --noprofile --norc -l`, sourcing
+  `../../.yaul.env` then `unset COMPILER_PATH`. **No emulator launch** —
+  Task 11 owns the owner gate; no claims about boot, visuals, audio,
+  input, or FPS.
+
+### Commits under test
+
+| SHA | Subject |
+| --- | --- |
+| `a2008f1d` | `feat(audio)`: host M64-to-WAV renderer (`tools/saturn/render_m64_wav.py`; format logic only, zero Nintendo bytes — verified by inspection) |
+| `55f1a2de` | `feat(audio)`: `SOURCEBOOT_MUSIC_WAV ?= bob_theme.us.wav` → `wav_to_pcm8.py --rate 8000` → `build/saturn/audio/bob_theme_8k.pcm8` → packager `--music-pcm/--music-rate`; parse-time warning + music-less degrade when the WAV is absent; `wav_to_pcm8.py` added to `SOURCEBOOT_GENERATOR_INPUTS` |
+
+### Attempt 1: FAILED at `source-actor-family-bundle` (00:05:31–00:10:00)
+
+`compile_actor_family_bundle.py --verify-publication` raised
+"actor family bundle publication is stale for current inputs". Root cause
+(exact, single field): the g15 report pins
+`resource_inventory/package_class_source_bytes/audio` = 234,312 —
+measured against the music-less bundle at stage-1 provisioning time. With
+music packaged, the audio class measures 299,690 (+65,378 = PCM +65,169,
+metadata +12, manifest +197). A scratch recompile against current inputs
+showed only `actor-family-bundle.json` differed; `bob-area1-actors-v3.s64f`,
+`bob-area1-actors-v3-dependency.json`, and `actor_bundle_capacity.h` were
+byte-identical.
+
+Sanctioned response (the stage-1 "stale scene-package generation"
+failure mode): deleted `build/saturn/packages/bob/1/actors-v3-g15/`,
+republished generation 15 from current inputs
+(`compile_actor_family_bundle.py` publish mode), re-verified with
+`--verify-publication` — PASS. `scene-v3-g15` was left untouched: its only
+actor reference is the byte-identical `.s64f` payload. The attempt-1
+sealed identity `id-f27956ab45266358` produced no ELF and is superseded.
+
+### Attempt 2: BUILD SUCCEEDED (00:14:39–00:33:00, 18m21s)
+
+Sealed identity **`id-b3aceeb28570230b`**
+(`build/saturn/sourceboot/e2-bob-identity-id-b3aceeb28570230b/`), config
+label `feat001-pipe4-l9-a1-route0-replay1-live1-boot600-cam0v3-diag0-cart32-stage8-hot1-clip1-bsp1-poly2-frag0-cfgb3aceeb28570`.
+Fresh identity → full ~250-object recompile. Only linker warning: the
+usual benign RWX LOAD segment note.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `obj/sm64-saturn-sourceboot-e2.elf` | `6b33c1cc19c8a50281908e98dea012d81246d63acc12ef4b31fdd0f4210dc091` |
+| `sm64-saturn-sourceboot-e2.iso` | `832d039acf48ed2a5f13b628a37594a40ce8865e51542afc69cfd31f61862a4a` |
+| `sm64-saturn-sourceboot-e2.cue` (88 B; not identity-bearing) | `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7` |
+| `obj/sm64-saturn-sourceboot-e2.map` | `299e3622b54fbcce91017c138792a237f46ffabe95b4abb86e87ab02bdc37057` |
+| `bob_sfx_metadata.bin` (1,232 B) | `b13869267e2b7af56cbfed8bb8943405ef501137dcb1378e92d1333fa84279a9` |
+| `bob_sfx_pcm.bin` (273,225 B) | `b76e6cbc913aa3aed0600848def97abf7d806d83f5c4096840ed03a049601924` |
+
+ISO grew 5,115,904 → 5,181,440 B (+65,536 = 32 sectors). Artifacts
+preserved to `releases/2026-08-15_0033/id-b3aceeb28570230b/` (stage 1b's
+were preserved to `releases/2026-08-15_0005/id-29429bb2a7b03158/` before
+building, hashes re-verified against this doc).
+
+### Margin gate output (verbatim; auto-selected THIS build's ELF)
+
+```
+verify-memory-map: checking /d/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/saturn-recovery/build/saturn/sourceboot/e2-bob-identity-id-b3aceeb28570230b/obj/sm64-saturn-sourceboot-e2.elf
+verify: D:\Code\RetroDev\sm64-saturn-port\sm64-port\.worktrees\saturn-recovery\build\saturn\sourceboot\e2-bob-identity-id-b3aceeb28570230b\obj\sm64-saturn-sourceboot-e2.elf
+  ___end          = 0x060FDF28
+  hwram_remaining = 0x20D8 bytes (required >= 0x1F00)
+  lwram_end       = 0x002F5D40
+  lwram_remaining = 0xA2C0 bytes (floor >= 0x4000)
+  RESULT          = OK
+```
+
+### Margin delta vs stage 1b (`id-29429bb2a7b03158`): ZERO
+
+Every RAM section is byte-identical in size to stage 1b — `.text`
+`0x83D08`, `.rodata` `0x1DFD`, `.data` `0x857C`, `.bss` `0x6AC90`,
+`.uncached` `0xF78`, `.lwram_bss` `0xE5D38`, `.lwram_actor_runtime`
+`0x10000`, `.lwram_geo_traversal` `0xC00`; `___end`, `hwram_remaining`
+(0x20D8), and `lwram_remaining` (0xA2C0) are unchanged. The music payload
+landed entirely in `.cart_rodata`: `0x389B40` → `0x3999D0` (+65,168 B,
+the `.incbin`-with-alignment growth of the bundle blobs). Well under the
+1 KB flag threshold for RAM deltas — nothing to flag. HWRAM slack over
+the 0x1F00 gate remains 0x1D8 (472 B), same thin-margin caveat as 1b.
+
+### Bundle music evidence (`bob_sfx_manifest.json`, regenerated in-build)
+
+- `music_sample_index` = **63** (nonzero; sample rows 0–62 are SFX,
+  row 63 is the music), `music_sample_id` = `music/looped-pcm8`.
+- Music row: `{"stable_id": "music/looped-pcm8", "offset": 240824,
+  "sample_count": 65169, "rate": 8000, "default_volume": 15,
+  "flags": 1}` — flags bit 0 is `SM64_SATURN_PCM_SAMPLE_LOOP`, the SCSP
+  gapless-loop bit.
+- Music PCM 65,169 B ≤ the 65,535 B SCSP sample cap; converted in-build
+  by the new rule (`bob_theme_8k.pcm8`, 8,000 Hz, 8.1 s, from the
+  32 kHz 8.15 s owner WAV).
+- Sound RAM: 54 SFX mappings / 63 SFX sample rows = 208,056 B of SFX PCM
+  from base 0x8000; music appended at 240,824; PCM ends at 305,993 of
+  the 524,288 B sound RAM (491,520 B usable above the driver base) —
+  218,295 B spare. `music_sequence_offset`/`bytes` = 0/0 (sequence VM
+  retired; SEQ_START keys the looped sample directly).
+- Total bundle PCM 273,225 B; metadata 1,232 B (+12 vs music-less: the
+  appended sample row).
+
+### What stage 2 proved / did not prove
+
+Proved: the music-wired bundle builds, links, and passes the margin gate
+with margins byte-identical to 1b; the packaged bundle carries the looped
+owner music row with in-cap PCM; the actor-package staleness interaction
+of a changed audio bundle is understood and its sanctioned repair
+recorded. Not proved: boot, visuals, audible music, input, FPS — the R1
+candidate CUE awaits the Task 11 Ymir observation.
