@@ -7,7 +7,7 @@
 
 int main(void)
 {
-    /* publish_boot also zeroes the music diagnostics at 0x7F00..0x7F1F, so
+    /* publish_boot also zeroes the audio diagnostics at 0x7F00..0x7F21, so
      * the model buffer must span sound RAM up to the PCM bank, not just the
      * mailbox window. */
     uint8_t sound_ram[SM64_SATURN_PCM_BANK_OFFSET];

@@ -75,6 +75,8 @@ void sm64_saturn_pcm68k_publish_boot(volatile uint8_t *sound_ram)
                             SM64_SATURN_PCM_MUSIC_CONSUME_FAIL_OFFSET, 0);
     sm64_saturn_pcm_put_be16(sound_ram,
                             SM64_SATURN_PCM_MUSIC_SCSP_FAIL_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_SFX_REFRESHES_OFFSET, 0);
 }
 
 void sm64_saturn_pcm68k_publish_tick(volatile uint8_t *sound_ram,

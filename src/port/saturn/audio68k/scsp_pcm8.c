@@ -88,6 +88,30 @@ static uint16_t pan_word(int16_t pan)
     return (uint16_t)((pan < 0 ? 0x10U : 0U) | magnitude);
 }
 
+/* The two level registers -- attenuation (TL) and the pan/send word -- are
+ * composed here and nowhere else, so the key-on path (pcm8_start) and the
+ * refresh path (pcm8_update, which must never re-key an already-playing
+ * slot) can never drift apart.  Neither register participates in the
+ * key-on sequence: both are plain slot state the SCSP samples continuously,
+ * which is exactly why a refresh may rewrite them alone. */
+static void put_level_words(volatile uint8_t *registers, uint16_t base,
+                            uint16_t volume, int16_t pan)
+{
+    static const uint8_t send_levels[16] = {
+        0U, 0U, 1U, 1U, 2U, 2U, 3U, 3U,
+        4U, 4U, 5U, 5U, 6U, 6U, 7U, 7U,
+    };
+    uint16_t send_level;
+    if (volume > 15U) {
+        volume = 15U;
+    }
+    send_level = send_levels[volume];
+    put_word(registers, (uint16_t)(base + SM64_SATURN_SCSP_SLOT_ATTENUATION),
+             0U);
+    put_word(registers, (uint16_t)(base + SM64_SATURN_SCSP_SLOT_PAN_SEND),
+             (uint16_t)((send_level << 13) | (pan_word(pan) << 8)));
+}
+
 bool sm64_saturn_scsp_pcm8_start(volatile uint8_t *registers, uint16_t slot,
                                  const sm64_saturn_pcm_sample_t *sample,
                                  uint16_t volume, int16_t pan)
@@ -95,7 +119,6 @@ bool sm64_saturn_scsp_pcm8_start(volatile uint8_t *registers, uint16_t slot,
     uint16_t pitch;
     uint16_t base;
     uint16_t keys;
-    uint16_t send_level;
     if (registers == 0 || sample == 0 || slot >= SM64_SATURN_SCSP_VOICE_COUNT ||
         ((uintptr_t)registers & 1U) != 0U || sample->sample_count == 0U ||
         sample->sound_ram_offset >= 0x100000U ||
@@ -113,26 +136,32 @@ bool sm64_saturn_scsp_pcm8_start(volatile uint8_t *registers, uint16_t slot,
              (uint16_t)(sample->sample_count - 1U));
     put_word(registers, (uint16_t)(base + SM64_SATURN_SCSP_SLOT_EG), 31U);
     put_word(registers, (uint16_t)(base + SM64_SATURN_SCSP_SLOT_RELEASE), 31U);
-    put_word(registers, (uint16_t)(base + SM64_SATURN_SCSP_SLOT_ATTENUATION), 0U);
+    put_level_words(registers, base, volume, pan);
     put_word(registers, (uint16_t)(base + SM64_SATURN_SCSP_SLOT_PITCH), pitch);
-    if (volume > 15U) {
-        volume = 15U;
-    }
-    {
-        static const uint8_t send_levels[16] = {
-            0U, 0U, 1U, 1U, 2U, 2U, 3U, 3U,
-            4U, 4U, 5U, 5U, 6U, 6U, 7U, 7U,
-        };
-        send_level = send_levels[volume];
-    }
-    put_word(registers, (uint16_t)(base + SM64_SATURN_SCSP_SLOT_PAN_SEND),
-             (uint16_t)((send_level << 13) | (pan_word(pan) << 8)));
     keys = (uint16_t)(SCSP_KEY_EXECUTE | SCSP_KEY_ON | SCSP_PCM8 |
         (uint16_t)((sample->sound_ram_offset >> 16) & 0x0FU));
     if ((sample->flags & SM64_SATURN_PCM_SAMPLE_LOOP) != 0U) {
         keys = (uint16_t)(keys | SCSP_LOOP_NORMAL);
     }
     put_word(registers, (uint16_t)(base + SM64_SATURN_SCSP_SLOT_KEYS), keys);
+    return true;
+}
+
+/* Refresh an already-playing slot's level without disturbing playback.
+ * SM64 re-asserts every continuous sound once per game-loop tick; keying the
+ * slot on again would restart the sample from offset 0 each time.  Only the
+ * attenuation and pan/send words are written -- never KEYS, SA, LSA, LEA,
+ * EG, RELEASE, or PITCH -- so the sample keeps running from where it is. */
+bool sm64_saturn_scsp_pcm8_update(volatile uint8_t *registers, uint16_t slot,
+                                  uint16_t volume, int16_t pan)
+{
+    if (registers == 0 || ((uintptr_t)registers & 1U) != 0U ||
+        slot >= SM64_SATURN_SCSP_VOICE_COUNT) {
+        return false;
+    }
+    put_level_words(registers,
+                    (uint16_t)(slot * SM64_SATURN_SCSP_SLOT_BYTES),
+                    volume, pan);
     return true;
 }
 

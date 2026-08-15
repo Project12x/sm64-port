@@ -458,6 +458,42 @@
 
 ### Fixed
 
+- Continuous SFX are no longer re-keyed on every game-loop tick — the R1
+  owner-reported "periodic piercing noise". Root cause: SM64 re-asserts every
+  *continuous* (non-discrete) sound once per tick and expects the sound driver
+  to KEEP it playing, but `sm64_saturn_pcm_play_sample()`
+  (`src/port/saturn/audio68k/pcm_voice.c`) had no already-playing check, so
+  each `PLAY_REFRESH` ran the full `sm64_saturn_scsp_pcm8_start()` sequence:
+  KEY_OFF, reprogram SA/LSA/LEA/EG/PITCH/PAN, KEY_ON — a hard restart from
+  sample offset 0. At the candidate's measured ~1.1 FPS that is a re-trigger
+  every ~0.9 s, which is both the owner's periodic burst (its period is the
+  *frame* period, not the 8.15 s music loop) and the reason SFX were
+  unrecognizable: no continuous sound ever played longer than one frame.
+  Fix: `play_sample` first scans the SFX slots (1..3 — never slot 0, the
+  pinned music slot) for a voice already carrying the same resolved sample.
+  On a hit it clamps and stores the new volume/pan, calls the new
+  `sm64_saturn_scsp_pcm8_update()`, and returns — the rotor does not advance
+  and `voices_started` does not increment, so a held sound occupies exactly
+  one slot for as long as it is held. `sm64_saturn_scsp_pcm8_update()`
+  (`scsp_pcm8.c`) writes only the attenuation (0x0C) and pan/send (0x16)
+  words; both level words are now composed by a single shared
+  `put_level_words()` helper that the key-on path also uses, so the two paths
+  cannot drift. Key-on still happens for a genuinely new sample. Consumer
+  impact: `voices_started` no longer counts held-sound refreshes — the new
+  `SM64_SATURN_PCM_SFX_REFRESHES_OFFSET` diagnostic word does. It is appended
+  after the music diagnostics at `0x7F20`, moving no existing mailbox, ring,
+  or diagnostic offset (the v2 protocol layout is frozen), and
+  `tools/saturn/probe_audio_timeseries.py` reads it. Regression tests in
+  `tools/saturn/pcm68k_model_test.c`
+  (`test_repeated_play_refresh_updates_without_rekey`,
+  `test_repeated_play_refresh_still_applies_volume_and_pan`,
+  `test_distinct_sounds_still_key_on_separately`) are mutation-verified:
+  disabling the already-playing check and dropping either level-register
+  write each fail the intended test. Two pre-existing tests replayed the same
+  sound to fill slots and were retargeted accordingly — the budget test now
+  asserts 1 start + 6 refreshes, and the slot-0 pinning test uses three
+  distinct sounds.
+
 - `tools/saturn/profiles/sourceboot-bob-demo-v1.json`: reconciled
   `release_config` to the Sprint 1 R1 tuple
   (`features.complete_mario_animation 0`,

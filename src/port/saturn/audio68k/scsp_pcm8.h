@@ -28,6 +28,10 @@ bool sm64_saturn_scsp_pcm8_pitch_word(uint16_t sample_rate,
 bool sm64_saturn_scsp_pcm8_start(volatile uint8_t *registers, uint16_t slot,
                                  const sm64_saturn_pcm_sample_t *sample,
                                  uint16_t volume, int16_t pan);
+/* Level-only refresh of a slot that is already keyed on; writes attenuation
+ * and pan/send and nothing else, so playback continues uninterrupted. */
+bool sm64_saturn_scsp_pcm8_update(volatile uint8_t *registers, uint16_t slot,
+                                  uint16_t volume, int16_t pan);
 bool sm64_saturn_scsp_pcm8_stop(volatile uint8_t *registers, uint16_t slot);
 bool sm64_saturn_scsp_set_master(volatile uint8_t *registers,
                                  uint16_t volume);

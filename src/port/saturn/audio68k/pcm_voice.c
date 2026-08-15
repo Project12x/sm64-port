@@ -230,6 +230,7 @@ void sm64_saturn_pcm_voice_state_init(sm64_saturn_pcm_voice_state_t *state)
     state->control_commands_consumed = 0U;
     state->sfx_commands_consumed = 0U;
     state->voices_started = 0U;
+    state->sfx_refreshes = 0U;
     state->keyoffs = 0U;
     state->unknown_opcodes = 0U;
     state->invalid_samples = 0U;
@@ -360,6 +361,32 @@ static void sm64_saturn_pcm_play_sample(
     uint16_t slot;
     if (sample == 0) {
         state->invalid_samples++;
+        return;
+    }
+    /* Continuous sounds are re-asserted by SM64 once per game-loop tick and
+     * the driver is expected to KEEP them playing.  If an SFX slot already
+     * carries this sample, refresh its level and return: keying on again
+     * would restart the sample from offset 0 every tick, which is heard as a
+     * periodic burst rather than the intended sound.  The rotor does not
+     * advance and no voice is started, so a held sound occupies exactly one
+     * slot for as long as it is held. */
+    for (slot = 1U; slot < SM64_SATURN_PCM_VOICE_COUNT; ++slot) {
+        sm64_saturn_pcm_voice_t *held = &state->voices[slot];
+        if (!held->active || held->sample_id != sample_id) {
+            continue;
+        }
+        held->volume = sm64_saturn_pcm_clamp_u16(volume, 15U);
+        if (pan < -31) {
+            pan = -31;
+        } else if (pan > 31) {
+            pan = 31;
+        }
+        held->pan = pan;
+        if (scsp_registers != 0) {
+            (void)sm64_saturn_scsp_pcm8_update(scsp_registers, slot,
+                                               held->volume, held->pan);
+        }
+        state->sfx_refreshes++;
         return;
     }
     /* SFX round-robin over slots 1..3 only: SM64_SATURN_PCM_MUSIC_SLOT is
@@ -621,6 +648,9 @@ static void sm64_saturn_pcm_publish_stats(
         (uint16_t)state->music_scsp_failures);
     sm64_saturn_pcm_put_be16(sound_ram,
         SM64_SATURN_PCM_MUSIC_LAST_FAILURE_OFFSET, 0U);
+    sm64_saturn_pcm_put_be16(sound_ram,
+        SM64_SATURN_PCM_SFX_REFRESHES_OFFSET,
+        (uint16_t)state->sfx_refreshes);
 }
 
 static void sm64_saturn_pcm_protocol_fault(

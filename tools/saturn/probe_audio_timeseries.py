@@ -31,7 +31,7 @@ SOUND_RAM_BASE = 0x25A00000
 MAILBOX_ADDRESS = SOUND_RAM_BASE + 0x4000
 MAILBOX_BYTES = 0x440  # status header + control ring + SFX ring + completion ring
 DIAGNOSTIC_ADDRESS = SOUND_RAM_BASE + 0x7F00
-DIAGNOSTIC_BYTES = 0x20
+DIAGNOSTIC_BYTES = 0x22
 SCSP_SLOT_ADDRESS = 0x25B00000
 # The driver only programs slots 0..3 (SM64_SATURN_SCSP_VOICE_COUNT), but the
 # probe covers the whole 32-slot file so a voice nobody in this codebase keyed
@@ -95,6 +95,8 @@ MUSIC_DIAGNOSTIC_FIELDS = (
     (26, "last_arg1"),
     (28, "last_arg0"),
     (30, "last_failure"),
+    # Appended after the music words; see SM64_SATURN_PCM_SFX_REFRESHES_OFFSET.
+    (32, "sfx_refreshes"),
 )
 
 # src/port/saturn/audio68k/scsp_pcm8.h

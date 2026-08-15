@@ -37,6 +37,10 @@ typedef struct sm64_saturn_pcm_voice_state {
     /* Since Task 6 these two blend music (slot 0) and SFX (slots 1..3)
      * voice activity -- they are not SFX-only counters. */
     uint32_t voices_started;
+    /* PLAY_REFRESH commands that landed on a slot already carrying the same
+     * sample and therefore updated its level instead of keying it on again.
+     * A held continuous sound raises this, not voices_started. */
+    uint32_t sfx_refreshes;
     uint32_t keyoffs;
     uint32_t unknown_opcodes;
     uint32_t invalid_samples;

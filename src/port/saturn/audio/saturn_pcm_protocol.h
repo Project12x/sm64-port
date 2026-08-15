@@ -124,6 +124,12 @@ enum {
         SM64_SATURN_PCM_AUDIO_DIAGNOSTIC_OFFSET + 28U,
     SM64_SATURN_PCM_MUSIC_LAST_FAILURE_OFFSET =
         SM64_SATURN_PCM_AUDIO_DIAGNOSTIC_OFFSET + 30U,
+    /* Appended after the music diagnostics, in the same still-unused reserve
+     * tail: PLAY_REFRESH commands coalesced onto an already-playing SFX slot
+     * (level update, no key-on).  Appending here moves no existing mailbox,
+     * ring, or diagnostic offset. */
+    SM64_SATURN_PCM_SFX_REFRESHES_OFFSET =
+        SM64_SATURN_PCM_AUDIO_DIAGNOSTIC_OFFSET + 32U,
     SM64_SATURN_PCM_PROTOCOL_MAGIC = 0x5036U,
     SM64_SATURN_PCM_PROTOCOL_VERSION_V1 = 1U,
     SM64_SATURN_PCM_PROTOCOL_VERSION = 2U,

@@ -209,7 +209,11 @@ static void test_consumer_drains_control_before_sfx_under_budget(void)
     assert(state.master_volume == 9U);
     assert(state.control_commands_consumed == 1U);
     assert(state.sfx_commands_consumed == 7U);
-    assert(state.voices_started == 7U);
+    /* The budget contract is about commands consumed, not voices: these are
+     * seven refreshes of the SAME proof sample, so since the R1 fix one voice
+     * is keyed on and the other six refresh it in place. */
+    assert(state.voices_started == 1U);
+    assert(state.sfx_refreshes == 6U);
     assert(sm64_saturn_pcm_get_be16(
                ram, SM64_SATURN_PCM_CONTROL_CONSUMER_OFFSET) == 1U);
     assert(sm64_saturn_pcm_get_be16(
@@ -344,6 +348,206 @@ static void publish_music_bundle(uint8_t *ram, uint16_t music_index,
     sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 6U), 11025U);
     sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 8U), 12U);
     sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 10U), music_flags);
+}
+
+/* Bundle carrying `sound_count` DISTINCT semantic-SFX mappings -- sound_bits
+ * 0x24008080 + i naming sample row i -- optionally followed by a looped music
+ * row at index `sound_count` that the trailer points at.  Every SFX row names
+ * the same PCM bytes, so only the sample id (the row index) distinguishes the
+ * sounds: that is exactly the key the already-playing check compares. */
+static void publish_distinct_sound_bundle(uint8_t *ram, uint16_t sound_count,
+                                          bool with_music)
+{
+    const uint16_t base = SM64_SATURN_PCM_SFX_BUNDLE_OFFSET;
+    const uint16_t sample_offset = (uint16_t)(
+        SM64_SATURN_PCM_SFX_BUNDLE_HEADER_BYTES +
+        sound_count * SM64_SATURN_PCM_SFX_BUNDLE_MAPPING_BYTES);
+    const uint16_t sample_count = (uint16_t)(sound_count +
+                                             (with_music ? 1U : 0U));
+    const uint16_t maps = (uint16_t)(base +
+        SM64_SATURN_PCM_SFX_BUNDLE_HEADER_BYTES);
+    const uint16_t samples = (uint16_t)(base + sample_offset);
+    uint16_t i;
+    sm64_saturn_pcm_put_be32(ram, base, SM64_SATURN_PCM_SFX_BUNDLE_MAGIC);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 4U),
+                             SM64_SATURN_PCM_SFX_BUNDLE_VERSION);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 6U),
+                             SM64_SATURN_PCM_SFX_BUNDLE_HEADER_BYTES);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 8U), 1U);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 10U), sound_count);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 12U), sample_count);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 14U),
+                             SM64_SATURN_PCM_SFX_BUNDLE_HEADER_BYTES);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 16U), sample_offset);
+    sm64_saturn_pcm_put_be16(ram, (uint16_t)(base + 18U),
+        (uint16_t)(sample_offset +
+                   sample_count * SM64_SATURN_PCM_SFX_BUNDLE_SAMPLE_BYTES));
+    sm64_saturn_pcm_put_be32(ram, (uint16_t)(base + 20U), 96U);
+    sm64_saturn_pcm_put_be16(ram,
+        (uint16_t)(base + SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SAMPLE_INDEX_FIELD),
+        with_music ? sound_count : 0U);
+    for (i = 0U; i < sound_count; ++i) {
+        const uint16_t mapping = (uint16_t)(maps +
+            i * SM64_SATURN_PCM_SFX_BUNDLE_MAPPING_BYTES);
+        const uint16_t row = (uint16_t)(samples +
+            i * SM64_SATURN_PCM_SFX_BUNDLE_SAMPLE_BYTES);
+        sm64_saturn_pcm_put_be32(ram, mapping, 0x24008080U + i);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(mapping + 4U), i);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(mapping + 6U), 1U);
+        sm64_saturn_pcm_put_be32(ram, row, SM64_SATURN_PCM_BANK_OFFSET);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(row + 4U), 32U);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(row + 6U), 16000U);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(row + 8U), 15U);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(row + 10U), 0U);
+    }
+    if (with_music) {
+        const uint16_t music_row = (uint16_t)(samples +
+            sound_count * SM64_SATURN_PCM_SFX_BUNDLE_SAMPLE_BYTES);
+        sm64_saturn_pcm_put_be32(ram, music_row,
+                                 SM64_SATURN_PCM_BANK_OFFSET + 32U);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 4U), 64U);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 6U), 11025U);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 8U), 12U);
+        sm64_saturn_pcm_put_be16(ram, (uint16_t)(music_row + 10U),
+                                 SM64_SATURN_PCM_SAMPLE_LOOP);
+    }
+}
+
+/* R1 defect regression.  SM64 re-asserts a continuous sound on every
+ * game-loop tick; the driver used to run the full key-off/reprogram/key-on
+ * sequence each time, restarting the sample from offset 0 -- at the shipped
+ * frame rate, an audible periodic burst instead of the sound.  A repeat of
+ * the same PLAY_REFRESH must instead refresh the slot in place: KEY_ON is
+ * written exactly once across both refreshes, and the voice keeps its slot. */
+static void test_repeated_play_refresh_updates_without_rekey(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t play[7] = {0x2400U, 0x8080U, 9U, 1U, 0xFF40U, 4096U, 1U};
+
+    publish_v2_header(ram);
+    publish_sfx_bundle(ram, 0x24008080U, 1U,
+                       SM64_SATURN_PCM_BANK_OFFSET, 32U, 16000U);
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_sfx(ram, 0U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, play);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 1U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.voices_started == 1U);
+    assert(state.sfx_refreshes == 0U);
+    assert(state.voices[1].active);
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_KEYS) ==
+           0x1810U);
+
+    /* Clearing the shadow makes the second refresh's register traffic
+     * visible: any key-on would rewrite KEYS, any restart would rewrite the
+     * sample address.  Both must stay clear. */
+    register_words[(1U * SM64_SATURN_SCSP_SLOT_BYTES +
+                    SM64_SATURN_SCSP_SLOT_KEYS) / 2U] = 0U;
+    register_words[(1U * SM64_SATURN_SCSP_SLOT_BYTES +
+                    SM64_SATURN_SCSP_SLOT_SA_LOW) / 2U] = 0U;
+    put_sfx(ram, 1U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, play);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 2U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_KEYS) == 0U);
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_SA_LOW) == 0U);
+    /* Nor did the refresh key the sound on somewhere else: KEY_ON was
+     * written exactly once across both refreshes, on slot 1 only. */
+    assert(slot_word(register_words, 2U, SM64_SATURN_SCSP_SLOT_KEYS) == 0U);
+    assert(slot_word(register_words, 3U, SM64_SATURN_SCSP_SLOT_KEYS) == 0U);
+    /* One key-on across both refreshes, and no second voice anywhere. */
+    assert(state.voices_started == 1U);
+    assert(state.sfx_refreshes == 1U);
+    assert(state.keyoffs == 0U);
+    assert(state.invalid_samples == 0U);
+    assert(state.voices[1].active);
+    assert(!state.voices[2].active);
+    assert(!state.voices[3].active);
+    assert(state.next_slot == 1U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_VOICES_STARTED_OFFSET) == 1U);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_SFX_REFRESHES_OFFSET) == 1U);
+}
+
+/* Holding a sound must still track its level: the refresh path writes the
+ * attenuation and pan/send words -- and only those -- with the new values. */
+static void test_repeated_play_refresh_still_applies_volume_and_pan(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    /* words[4] 0xFF40: volume 15 (send level 7), pan 0. */
+    const uint16_t loud[7] = {0x2400U, 0x8080U, 9U, 1U, 0xFF40U, 4096U, 1U};
+    /* words[4] 0x8020: volume 8 (send level 4), pan -15 (pan word 0x18). */
+    const uint16_t quiet[7] = {0x2400U, 0x8080U, 9U, 1U, 0x8020U, 4096U, 2U};
+
+    publish_v2_header(ram);
+    publish_sfx_bundle(ram, 0x24008080U, 1U,
+                       SM64_SATURN_PCM_BANK_OFFSET, 32U, 16000U);
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_sfx(ram, 0U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, loud);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 1U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.voices[1].volume == 15U);
+    assert(state.voices[1].pan == 0);
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_PAN_SEND) ==
+           0xE000U);
+
+    /* Poison both level registers so the assertions below can only pass if
+     * the refresh path actually rewrote each of them. */
+    register_words[(1U * SM64_SATURN_SCSP_SLOT_BYTES +
+                    SM64_SATURN_SCSP_SLOT_ATTENUATION) / 2U] = 0xFFFFU;
+    register_words[(1U * SM64_SATURN_SCSP_SLOT_BYTES +
+                    SM64_SATURN_SCSP_SLOT_PAN_SEND) / 2U] = 0xFFFFU;
+    register_words[(1U * SM64_SATURN_SCSP_SLOT_BYTES +
+                    SM64_SATURN_SCSP_SLOT_KEYS) / 2U] = 0U;
+    put_sfx(ram, 1U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, quiet);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 2U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.voices_started == 1U);
+    assert(state.sfx_refreshes == 1U);
+    /* New level reached the hardware... */
+    assert(state.voices[1].volume == 8U);
+    assert(state.voices[1].pan == -15);
+    assert(slot_word(register_words, 1U,
+                     SM64_SATURN_SCSP_SLOT_ATTENUATION) == 0U);
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_PAN_SEND) ==
+           0x9800U);
+    /* ...without re-keying the slot. */
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_KEYS) == 0U);
+}
+
+/* The coalescing must be per sample, not per slot: two different sounds are
+ * two voices on two slots, each keyed on once. */
+static void test_distinct_sounds_still_key_on_separately(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t first[7] = {0x2400U, 0x8080U, 9U, 1U, 0xFF40U, 4096U, 1U};
+    const uint16_t second[7] = {0x2400U, 0x8081U, 9U, 1U, 0xFF40U, 4096U, 2U};
+
+    publish_v2_header(ram);
+    publish_distinct_sound_bundle(ram, 2U, false);
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_sfx(ram, 0U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, first);
+    put_sfx(ram, 1U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, second);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 2U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 2U);
+    assert(state.voices_started == 2U);
+    assert(state.sfx_refreshes == 0U);
+    assert(state.invalid_samples == 0U);
+    assert(state.voices[1].active && state.voices[1].sample_id == 0U);
+    assert(state.voices[2].active && state.voices[2].sample_id == 1U);
+    assert(!state.voices[SM64_SATURN_PCM_MUSIC_SLOT].active);
+    assert(slot_word(register_words, 1U, SM64_SATURN_SCSP_SLOT_KEYS) ==
+           0x1810U);
+    assert(slot_word(register_words, 2U, SM64_SATURN_SCSP_SLOT_KEYS) ==
+           0x1810U);
 }
 
 static void test_consumer_drives_scsp_play_master_and_reset(void)
@@ -568,16 +772,20 @@ static void test_sfx_never_uses_slot0_while_music_plays(void)
     uint8_t *registers = (uint8_t *)register_words;
     sm64_saturn_pcm_voice_state_t state;
     const uint16_t start[7] = {0U, 34U, 0U, 0U, 0U, 0U, 0U};
-    const uint16_t play[7] = {0x2400U, 0x8080U, 9U, 1U, 0xFF40U, 4096U, 1U};
     uint16_t i;
 
     publish_v2_header(ram);
-    publish_music_bundle(ram, 1U, SM64_SATURN_PCM_SAMPLE_LOOP);
+    /* Three DISTINCT sounds: since the R1 fix a repeat of one sound refreshes
+     * its slot instead of keying on again, so filling slots 1..3 needs three
+     * different sounds.  Music is row 3, named by the trailer. */
+    publish_distinct_sound_bundle(ram, 3U, true);
     sm64_saturn_pcm_voice_state_init(&state);
     put_control(ram, 0U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, start);
     sm64_saturn_pcm_put_be16(ram,
         SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
     for (i = 0U; i < 3U; ++i) {
+        const uint16_t play[7] = {0x2400U, (uint16_t)(0x8080U + i), 9U, 1U,
+                                  0xFF40U, 4096U, (uint16_t)(i + 1U)};
         put_sfx(ram, i, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, play);
     }
     sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 3U);
@@ -729,5 +937,8 @@ int main(void)
     test_seq_start_without_music_row_is_silent_not_fault();
     test_seq_start_with_invalid_music_row_faults();
     test_sfx_slot_rotor_recovers_from_corrupt_state();
+    test_repeated_play_refresh_updates_without_rekey();
+    test_repeated_play_refresh_still_applies_volume_and_pan();
+    test_distinct_sounds_still_key_on_separately();
     return 0;
 }
