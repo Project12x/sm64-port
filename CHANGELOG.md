@@ -4,6 +4,31 @@
 
 ### Added
 
+- Sprint 2 T2.3 (step 1 of 2): a painter-chain **equivalence harness** in
+  `tools/saturn/vdp1_painter_chain_test.c`, and a host-only copy of the
+  current per-bin-rescan relink as
+  `sm64_saturn_vdp1_backend_link_depth_bins_reference()` behind
+  `SM64_SATURN_VDP1_BACKEND_LINK_REFERENCE` (defined only by that test, so
+  no Saturn image carries it — the same arrangement
+  `saturn_terrain_depth_bins.h` already uses for its predecessor merge
+  oracle). Why: T2.3 replaces the relink algorithm, and the replacement's
+  binding requirement is that it emit a **byte-identical** painter chain,
+  which needs an oracle committed before the swap. The harness cross-checks
+  three independent statements of the contract — the reference
+  implementation, the shipped implementation, and a from-first-principles
+  model that stable-sorts draw indices by descending bin and derives the
+  links that ordering implies — and asserts byte identity of the entire
+  command array, so any divergence in link value, link type, END/tail
+  handling, or an untouched field fails. Sixteen cases cover the awkward
+  inputs: empty draw range, a single command at either end of the bin
+  table, all commands in one bin (nearest, farthest, interior), bins
+  occupied only at both extremes and interleaved, one command per bin in
+  both tag orders, sparse bins with ties, pseudo-random mixtures at 500 /
+  653 (T2.1's measured peak) / 1,661 commands, the arena's full 1664-entry
+  capacity in four tag patterns, narrower 8-bin and 1-bin tables, and
+  invalid-tag atomicity at four positions. The model is mutation-verified
+  non-vacuous: inverting its bin direction makes the harness fail.
+
 - Sprint 2 T2.2 evidence: the reclamation package + un-split measured end
   to end on candidate `id-6b7c7e5d5f71e809`. **Memory objective met,
   cadence objective not met** — 67,584 B of HWRAM recovered and the full

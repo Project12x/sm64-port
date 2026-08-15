@@ -222,6 +222,75 @@ sm64_saturn_vdp1_backend_link_depth_bins(
     return true;
 }
 
+#if defined(SM64_SATURN_VDP1_BACKEND_LINK_REFERENCE)
+/* Host-only predecessor oracle for the painter relink, kept verbatim so the
+ * equivalence test can compare a candidate implementation against the exact
+ * bytes this one produces.  It is never compiled into a Saturn image: only
+ * tools/saturn/vdp1_painter_chain_test.c defines the selecting macro.  This
+ * mirrors the same arrangement saturn_terrain_depth_bins.h already uses for
+ * its predecessor merge oracle (SM64_SATURN_TERRAIN_DEPTH_BINS_COMPARE).
+ *
+ * Cost: one validation pass, one link-type strip pass, then bin_count full
+ * rescans of the live command range -- N * (2 + bin_count) record visits. */
+static inline bool
+sm64_saturn_vdp1_backend_link_depth_bins_reference(
+    sm64_saturn_vdp1_backend_t *backend, uint16_t bin_count)
+{
+    uint16_t first;
+    uint16_t end;
+    uint16_t next;
+    uint16_t bin;
+    uint16_t index;
+
+    if (backend == NULL || bin_count == 0U ||
+        backend->commands.setup_count == 0U ||
+        backend->commands.live_count == 0U ||
+        backend->commands.live_count > backend->commands.capacity ||
+        backend->list.count != backend->commands.live_count)
+        return false;
+
+    first = backend->commands.setup_count;
+    end = (uint16_t)(backend->commands.live_count - 1U);
+    if (first > end || backend->commands.cursor != end ||
+        backend->commands.previous_end != end)
+        return false;
+
+    for (index = first; index < end; index++) {
+        const vdp1_cmdt_t *const cmdt = &backend->list.cmdts[index];
+        if (cmdt->cmd_link >= bin_count)
+            return false;
+    }
+    for (index = first; index < end; index++)
+        backend->list.cmdts[index].cmd_ctrl &= 0x8FFFU;
+
+    next = end;
+    for (bin = 0U; bin < bin_count; bin++) {
+        index = end;
+        while (index > first) {
+            vdp1_cmdt_t *cmdt;
+            index--;
+            cmdt = &backend->list.cmdts[index];
+            if ((cmdt->cmd_ctrl & 0x7000U) != 0U ||
+                cmdt->cmd_link != bin)
+                continue;
+            vdp1_cmdt_jump_assign(cmdt, next);
+            next = index;
+        }
+    }
+
+    if (next == end) {
+        vdp1_cmdt_jump_next(
+            &backend->list.cmdts[backend->commands.setup_count - 1U]);
+        backend->list.cmdts[backend->commands.setup_count - 1U].cmd_link =
+            0U;
+    } else {
+        vdp1_cmdt_jump_assign(
+            &backend->list.cmdts[backend->commands.setup_count - 1U], next);
+    }
+    return true;
+}
+#endif
+
 /* Per-frame command-table upload. Two transfer paths, selected at
  * compile time by SM64_SATURN_VDP1_LWRAM_STAGING (defined by sourceboot's
  * CPU-DMAC command path; its current double buffer is HWRAM-resident after
