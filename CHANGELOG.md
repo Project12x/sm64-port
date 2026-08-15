@@ -65,6 +65,40 @@
 
 ### Changed
 
+- Sprint 2 T2.3: the VDP1 painter relink
+  (`sm64_saturn_vdp1_backend_link_depth_bins`) is now a **counting sort with
+  intrusive per-bin chains** instead of one full rescan of the live command
+  range per depth bin. Root cause of the waste: the predecessor overloaded
+  `cmd_link` as both the sort key and the output link, so it could not read a
+  command's bin after linking it and had to re-walk all ~N 32-byte records
+  once for each of the 64 bins — `N * (2 + bin_count)` record visits, every
+  one of them a 32-byte stride through a ~21 KB array that does not fit the
+  SH7604's 4 KB cache. The fix follows T2.0's L7/L8: separate the sort from
+  the link write the way SGL does (sort metadata out of band, bucket once,
+  drain once — `SGLFAQ_F.TXT:1057-1112`), reusing the stable-scatter shape
+  already proven in-tree at `saturn_terrain_depth_bins.h`. Three passes now:
+  validate (no writes, preserving the invalid-tag atomicity contract),
+  scatter backwards through the range prepending each command onto its bin's
+  chain through `cmd_link` itself (SGL's intrusive `NEXT`, so no second
+  command-sized buffer — working memory is one 128-byte stack table of chain
+  heads), then drain far-to-near writing each JUMP_ASSIGN once. Cost falls to
+  `N * 3 + bin_count * 2`: **2,087 record visits against 43,098** at T2.1's
+  measured 653-command peak (20.7x), 5,111 against 109,626 at the arena's
+  1,661-command capacity. The predecessor's separate link-type strip pass is
+  gone because `vdp1_cmdt_jump_assign()` already clears that field and every
+  live command is now assigned exactly once. Ordering is unchanged and pinned
+  byte-for-byte by the equivalence harness above — far-to-near by descending
+  bin, stable producer order within a bin, tail to END, empty range reverting
+  the prefix to JUMP_NEXT/0 — and the three required mutations were verified
+  KILLED by the harness alone (within-bin order reversed, bin direction
+  inverted, END/tail link dropped). One deliberate precondition narrowing:
+  `bin_count` above `SM64_SATURN_VDP1_BACKEND_MAX_DEPTH_BINS` (64) now fails
+  closed rather than being ordered, because the chain-head table is fixed;
+  `saturn_demo_render.c` static-asserts that its
+  `SM64_SATURN_TERRAIN_DEPTH_BIN_COUNT` stays inside that bound, and the bin
+  count and key derivation are otherwise untouched (T2.0 L9) so the output
+  stays directly comparable.
+
 - Sprint 2 T2.2 un-split: the renderer's full 54,080 B hot working set is
   back in 32-bit HWRAM `.bss`, reverting commit `49370e31`'s placement —
   `DEMO_ACTOR_WORK_CACHE` is an empty macro again (the five actor-lane

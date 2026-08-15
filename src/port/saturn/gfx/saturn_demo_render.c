@@ -535,6 +535,11 @@ _Static_assert(sizeof(int16_vec2_t) == 2U * sizeof(int16_t) &&
                    offsetof(int16_vec2_t, x) == 0U &&
                    offsetof(int16_vec2_t, y) == sizeof(int16_t),
                "terrain patch vertices require packed x/y pairs");
+/* demo_render_finalize() hands the terrain bin table straight to the painter
+ * relink, whose counting sort carries one chain head per bin on the stack. */
+_Static_assert(SM64_SATURN_TERRAIN_DEPTH_BIN_COUNT <=
+                   SM64_SATURN_VDP1_BACKEND_MAX_DEPTH_BINS,
+               "painter relink cannot order more bins than it has heads");
 
 static bool demo_terrain_template_valid(uint16_t primitive_index,
                                         demo_terrain_template_variant_t variant)

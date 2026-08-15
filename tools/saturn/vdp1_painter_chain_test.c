@@ -429,6 +429,27 @@ static void test_invalid_tag_leaves_both_implementations_inert(void)
     }
 }
 
+/* The counting sort carries one chain head per bin on the stack, so it caps
+ * the table it will order. The only caller passes 64 (static-asserted in
+ * saturn_demo_render.c); anything wider must fail closed, leaving the
+ * completed bank untouched exactly as an invalid tag does. */
+static void test_oversized_bin_table_fails_closed(void)
+{
+    sm64_saturn_vdp1_backend_t backend;
+    uint16_t draw;
+
+    for (draw = 0U; draw < 32U; draw++)
+        g_bins[draw] = draw;
+
+    equiv_build(g_pristine, &backend, 32U);
+    equiv_build(g_subject, &backend, 32U);
+    assert(!sm64_saturn_vdp1_backend_link_depth_bins(
+        &backend, SM64_SATURN_VDP1_BACKEND_MAX_DEPTH_BINS + 1U));
+    assert(memcmp(g_subject, g_pristine, sizeof(g_pristine)) == 0);
+    assert(sm64_saturn_vdp1_backend_link_depth_bins(
+        &backend, SM64_SATURN_VDP1_BACKEND_MAX_DEPTH_BINS));
+}
+
 int main(void)
 {
     test_shared_bins_link_far_to_near_with_stable_ties();
@@ -436,6 +457,7 @@ int main(void)
     test_cold_stage_repair_restores_borrowed_command_prefix();
     test_counting_sort_matches_the_rescan_reference();
     test_invalid_tag_leaves_both_implementations_inert();
+    test_oversized_bin_table_fails_closed();
     puts("vdp1 painter chain: PASS");
     return 0;
 }

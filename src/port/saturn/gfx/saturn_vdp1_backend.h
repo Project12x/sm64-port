@@ -142,6 +142,13 @@ sm64_saturn_vdp1_backend_finish(sm64_saturn_vdp1_backend_t *backend)
     backend->list.count = backend->commands.live_count;
 }
 
+/* Largest depth-bin table the painter relink can order in one pass.  The
+ * counting sort keeps one 16-bit chain head per bin, so the bound buys a
+ * fixed 128-byte stack table instead of a per-command side buffer.  The only
+ * value any caller passes is SM64_SATURN_TERRAIN_DEPTH_BIN_COUNT (64);
+ * saturn_demo_render.c static-asserts that coupling at the call site. */
+#define SM64_SATURN_VDP1_BACKEND_MAX_DEPTH_BINS 64U
+
 /* Convert the completed sequential draw range into one VDP1 painter chain.
  * Lowerers temporarily put their shared depth-bin tag in `cmd_link`; once all
  * commands have been emitted, this rewrites the same field with libyaul's
@@ -150,22 +157,55 @@ sm64_saturn_vdp1_backend_finish(sm64_saturn_vdp1_backend_t *backend)
  * leaves the completed bank available for caller quarantine rather than
  * publishing a partial chain.
  *
- * Build the links nearest-to-farthest, scanning each bin in reverse command
- * order.  Prepending each entry then yields a far-to-near execution list with
- * stable original producer ordering for equal bins.  Linked entries are
- * recognized by their non-sequential VDP1 link type, so overwriting `cmd_link`
- * never changes the classification of a later scan. */
+ * Ordering contract (unchanged, and pinned byte-for-byte by
+ * tools/saturn/vdp1_painter_chain_test.c against the predecessor
+ * implementation): far-to-near by descending bin, stable in original
+ * producer order within a bin, last entry links to the END slot, and an
+ * empty draw range reverts the prefix command to JUMP_NEXT with a zero link.
+ *
+ * Algorithm (Sprint 2 T2.3; T2.0 reference sweep lessons L7/L8/L9).  SGL
+ * never encodes draw order in CMDLINK: it keeps a Z key and a NEXT chain
+ * out of band beside the payload, buckets once, and drains once
+ * (SGLFAQ_F.TXT:1057-1112, SL_DEF.H:425-442).  The predecessor here did the
+ * opposite -- it overloaded `cmd_link` as both the sort key and the output
+ * link, which forced a full rescan of the live command range once per bin,
+ * N * (2 + bin_count) record visits.  This separates the two:
+ *
+ *   pass 1  validate every raw tag, writing nothing (atomicity);
+ *   pass 2  walk the range backwards, prepending each command onto its bin's
+ *           chain through `cmd_link` itself -- SGL's intrusive NEXT, needing
+ *           no second command-sized buffer.  Descending traversal plus
+ *           prepend leaves each chain in ascending producer order, which is
+ *           the stability requirement;
+ *   pass 3  drain bins from farthest to nearest, walking each chain forward
+ *           and JUMP_ASSIGNing the previously emitted command at this one.
+ *           Each chain link is read before it is overwritten, so the walk
+ *           and the link write share the same field safely.
+ *
+ * Cost is N * 3 + bin_count * 2 record visits against the predecessor's
+ * N * (2 + bin_count): at T2.1's measured 653-command peak, 2,087 versus
+ * 43,098.  The predecessor's separate link-type strip pass is gone because
+ * vdp1_cmdt_jump_assign() already clears the field (cmdt.h:497-521) and
+ * every live command is assigned exactly once.
+ *
+ * `end` (the END command's index) doubles as the chain terminator and the
+ * "nothing emitted yet" sentinel: every live draw index is strictly below
+ * it, so neither is ambiguous. */
 static inline bool
 sm64_saturn_vdp1_backend_link_depth_bins(
     sm64_saturn_vdp1_backend_t *backend, uint16_t bin_count)
 {
+    uint16_t heads[SM64_SATURN_VDP1_BACKEND_MAX_DEPTH_BINS];
     uint16_t first;
     uint16_t end;
-    uint16_t next;
     uint16_t bin;
     uint16_t index;
+    uint16_t walk;
+    uint16_t previous;
+    uint16_t head;
 
     if (backend == NULL || bin_count == 0U ||
+        bin_count > SM64_SATURN_VDP1_BACKEND_MAX_DEPTH_BINS ||
         backend->commands.setup_count == 0U ||
         backend->commands.live_count == 0U ||
         backend->commands.live_count > backend->commands.capacity ||
@@ -178,46 +218,58 @@ sm64_saturn_vdp1_backend_link_depth_bins(
         backend->commands.previous_end != end)
         return false;
 
-    /* Validate every freshly lowered depth-bin tag before mutating even the
-     * local-coordinate prefix.  Rebound frame-bank storage may still carry a
-     * prior JUMP_ASSIGN type, but vdp1_cmdt_jump_assign() overwrites it when
-     * this frame's raw tag selects the command. */
+    /* Pass 1.  Validate every freshly lowered depth-bin tag before mutating
+     * even the local-coordinate prefix, so bad tags leave the completed list
+     * unchanged for caller quarantine. */
     for (index = first; index < end; index++) {
         const vdp1_cmdt_t *const cmdt = &backend->list.cmdts[index];
         if (cmdt->cmd_link >= bin_count)
             return false;
     }
-    /* The raw tags are now known-valid.  Their command records can retain a
-     * previous frame's link type because lowerers intentionally overwrite
-     * only cmd_link; strip that type before JUMP_ASSIGN establishes this
-     * frame's chain.  This is after full validation, so bad tags still leave
-     * the completed list unchanged. */
-    for (index = first; index < end; index++)
-        backend->list.cmdts[index].cmd_ctrl &= 0x8FFFU;
 
-    next = end;
-    for (bin = 0U; bin < bin_count; bin++) {
-        index = end;
-        while (index > first) {
-            vdp1_cmdt_t *cmdt;
-            index--;
-            cmdt = &backend->list.cmdts[index];
-            if ((cmdt->cmd_ctrl & 0x7000U) != 0U ||
-                cmdt->cmd_link != bin)
-                continue;
-            vdp1_cmdt_jump_assign(cmdt, next);
-            next = index;
-        }
+    /* Pass 2.  Counting scatter into per-bin intrusive chains.  Reading the
+     * tag and overwriting it with the chain link in the same step is safe:
+     * the tag is consumed exactly once, and pass 3 is the only later reader
+     * of the field. */
+    for (bin = 0U; bin < bin_count; bin++)
+        heads[bin] = end;
+    for (index = end; index > first; ) {
+        vdp1_cmdt_t *cmdt;
+        index--;
+        cmdt = &backend->list.cmdts[index];
+        bin = cmdt->cmd_link;
+        cmdt->cmd_link = heads[bin];
+        heads[bin] = index;
     }
 
-    if (next == end) {
+    /* Pass 3.  Drain far-to-near.  vdp1_cmdt_jump_assign() also clears any
+     * link type a rebound frame bank carried in from a previous frame, so
+     * the predecessor's separate strip pass is unnecessary. */
+    previous = end;
+    head = end;
+    for (bin = bin_count; bin-- > 0U; ) {
+        walk = heads[bin];
+        while (walk != end) {
+            const uint16_t next = backend->list.cmdts[walk].cmd_link;
+            if (previous == end)
+                head = walk;
+            else
+                vdp1_cmdt_jump_assign(&backend->list.cmdts[previous], walk);
+            previous = walk;
+            walk = next;
+        }
+    }
+    if (previous != end)
+        vdp1_cmdt_jump_assign(&backend->list.cmdts[previous], end);
+
+    if (head == end) {
         vdp1_cmdt_jump_next(
             &backend->list.cmdts[backend->commands.setup_count - 1U]);
         backend->list.cmdts[backend->commands.setup_count - 1U].cmd_link =
             0U;
     } else {
         vdp1_cmdt_jump_assign(
-            &backend->list.cmdts[backend->commands.setup_count - 1U], next);
+            &backend->list.cmdts[backend->commands.setup_count - 1U], head);
     }
     return true;
 }
@@ -231,7 +283,12 @@ sm64_saturn_vdp1_backend_link_depth_bins(
  * its predecessor merge oracle (SM64_SATURN_TERRAIN_DEPTH_BINS_COMPARE).
  *
  * Cost: one validation pass, one link-type strip pass, then bin_count full
- * rescans of the live command range -- N * (2 + bin_count) record visits. */
+ * rescans of the live command range -- N * (2 + bin_count) record visits.
+ *
+ * One intentional domain difference: this accepts any non-zero bin_count,
+ * whereas the shipped implementation caps it at
+ * SM64_SATURN_VDP1_BACKEND_MAX_DEPTH_BINS.  Equivalence is asserted over the
+ * supported domain; the narrowed precondition has its own test. */
 static inline bool
 sm64_saturn_vdp1_backend_link_depth_bins_reference(
     sm64_saturn_vdp1_backend_t *backend, uint16_t bin_count)
