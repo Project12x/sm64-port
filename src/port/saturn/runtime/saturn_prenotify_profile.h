@@ -4,8 +4,33 @@
 #include <stdint.h>
 
 /*
- * Sprint 2 T2.4 pre-notification decomposition (docs/superpowers/plans/
+ * Sprint 2 T2.4 pre-notification decomposition, extended by T2.5 to look
+ * inside demo_prepare_mario() (docs/superpowers/plans/
  * 2026-08-15-sprint2-cadence-recovery.md).
+ *
+ * T2.5 CHANGES, and why (see sprint2-t2_4-prenotification-profile.md S7):
+ *   - Eight sub-nodes were added under PREPARE_MARIO, which T2.4 measured at
+ *     69.24% of the window and never decomposed.  The two DEPTH nodes are
+ *     pushed once per meshlet (31 per pass), never per vertex: an FRT read
+ *     is not free and a per-vertex probe would have cost more than the
+ *     thing it measured.  Per-vertex cost is derived by division against a
+ *     vertex count that is a compile-time property of the mesh (see
+ *     saturn_actor_meshlets.c actor_meshlet_live_depth_bounds).
+ *   - T2.4 defect 1/2 fixed by REMOVAL.  notify_to_retire and finalize_ticks
+ *     subtracted one SH-2's FRT from the other's (the RETIRED marker
+ *     observer runs on the slave; the FRT is a per-CPU on-chip block), so
+ *     both fields and the two mark_*() entry points are gone.  With them go
+ *     the only slave writes to master-owned state.
+ *   - T2.4 defect 2 also fixed structurally: the working state is now
+ *     __uncached, matching what the shipped cadence rig already does for
+ *     sourceboot_render_overlap_phase (sourceboot/main.c).  Belt and
+ *     braces -- after the removal above no slave path touches it at all.
+ *   - T2.4 defect 3 fixed: end() no longer counts the deliberately-pushed
+ *     NOTIFY node as a fault.  The window's expected closing depth is
+ *     exactly 1; end_depth_max publishes what was actually seen, and only
+ *     depth > 1 is a fault.  The harness's exit code now means something.
+ *   - node_calls_last[] was added so per-call cost is measured rather than
+ *     assumed.
  *
  * WHY THIS EXISTS.  The cadence rig
  * (src/port/saturn/runtime/saturn_render_overlap_phase.c) counts whole
@@ -68,8 +93,8 @@
  */
 
 #define SM64_SATURN_PRENOTIFY_PROFILE_MAGIC 0x46505246u /* 'FPRF' */
-#define SM64_SATURN_PRENOTIFY_PROFILE_VERSION 1u
-#define SM64_SATURN_PRENOTIFY_PROFILE_NODES 16u
+#define SM64_SATURN_PRENOTIFY_PROFILE_VERSION 2u
+#define SM64_SATURN_PRENOTIFY_PROFILE_NODES 24u
 #define SM64_SATURN_PRENOTIFY_PROFILE_DEPTH 8u
 
 /* Node ids.  Node 0 is the window itself; its self time is whatever the
@@ -90,6 +115,16 @@ enum {
     SM64_SATURN_PRENOTIFY_PROFILE_NODE_GRAPH_PUBLISH,
     SM64_SATURN_PRENOTIFY_PROFILE_NODE_QUEUE_CONTEXTS,
     SM64_SATURN_PRENOTIFY_PROFILE_NODE_NOTIFY,
+    /* T2.5 sub-nodes.  All nest under PREPARE_MARIO; ids 0-14 are
+     * unchanged so T2.4's ranked table remains directly comparable. */
+    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MARIO_SETUP,
+    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_PREPARE,
+    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_ADMIT,
+    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_ADMIT,
+    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_PREFIX,
+    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_EMIT,
+    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_EMIT,
+    SM64_SATURN_PRENOTIFY_PROFILE_NODE_MARIO_DRAW_ORDER,
     SM64_SATURN_PRENOTIFY_PROFILE_NODE_SPARE,
 };
 
@@ -114,22 +149,22 @@ typedef struct {
      * still open (an abandoned window).  Non-zero invalidates nothing on
      * its own but must be reported. */
     volatile uint32_t faults;
+    /* Largest closing stack depth end() ever saw.  1 is by design (the
+     * NOTIFY node is still pushed when the marker fires); anything above
+     * that is a genuine push/pop imbalance and is counted in `faults`. */
+    volatile uint32_t end_depth_max;
     volatile uint32_t node_ticks_accum[SM64_SATURN_PRENOTIFY_PROFILE_NODES];
     volatile uint32_t node_ticks_max[SM64_SATURN_PRENOTIFY_PROFILE_NODES];
     volatile uint32_t node_ticks_last[SM64_SATURN_PRENOTIFY_PROFILE_NODES];
-    /* L12 companion: the master does not spin on the render-job slave (it
-     * returns PENDING and services other frame-pipeline actions), so these
-     * measure the slave window's wall time on the master's clock rather
-     * than a spin.  notify -> retirement, then retirement -> terminal. */
-    volatile uint32_t retire_events;
-    volatile uint32_t notify_to_retire_accum;
-    volatile uint32_t notify_to_retire_last;
-    volatile uint32_t notify_to_retire_max;
-    volatile uint32_t finalize_events;
-    volatile uint32_t finalize_ticks_accum;
-    volatile uint32_t finalize_ticks_last;
-    volatile uint32_t finalize_ticks_max;
-    /* Slave-side busy time, written only by the slave SH-2 (its own FRT). */
+    /* Push count per node in the most recently closed window.  Makes
+     * per-call cost a measurement rather than a source-reading assumption. */
+    volatile uint32_t node_calls_last[SM64_SATURN_PRENOTIFY_PROFILE_NODES];
+    /* L12 companion.  T2.4's notify_to_retire/finalize_ticks fields were
+     * removed here: they differenced the master's FRT against the slave's,
+     * because the RETIRED marker observer runs on the slave.  The cadence
+     * rig's VBlank crossings already measure both intervals correctly.
+     * Slave-side busy time, written only by the slave SH-2 (its own FRT),
+     * begun and ended on the same CPU, is unaffected and stays. */
     volatile uint32_t slave_entries;
     volatile uint32_t slave_busy_accum;
     volatile uint32_t slave_busy_last;
@@ -138,8 +173,8 @@ typedef struct {
     volatile uint32_t sequence_end;
 } sm64_saturn_prenotify_profile_t;
 
-_Static_assert(sizeof(sm64_saturn_prenotify_profile_t) == 288U,
-               "frame profile ABI must remain seventy-two words");
+_Static_assert(sizeof(sm64_saturn_prenotify_profile_t) == 452U,
+               "frame profile ABI must remain one hundred thirteen words");
 
 #if defined(SATURN_DIAGNOSTIC_MODE) && SATURN_DIAGNOSTIC_MODE != 0 && \
     defined(__sh__)
@@ -157,19 +192,18 @@ typedef struct {
     uint32_t elapsed;
     uint32_t max_raw;
     uint32_t faults;
+    uint32_t end_depth_max;
+    uint16_t node_calls[SM64_SATURN_PRENOTIFY_PROFILE_NODES];
     uint16_t last16;
-    uint16_t notify16;
-    uint16_t retire16;
     uint8_t stack[SM64_SATURN_PRENOTIFY_PROFILE_DEPTH];
     uint8_t depth;
     uint8_t active;
-    uint8_t notified;
-    uint8_t retired;
 } sm64_saturn_prenotify_profile_state_t;
 
 /* Both defined in src/port/saturn/sourceboot/main.c, diagnostic builds
- * only.  The state is master-owned cached HWRAM; the record is NOLOAD
- * LWRAM reached through P2. */
+ * only.  T2.5: the state is master-owned __uncached HWRAM (the shipped
+ * cadence rig's discipline for sourceboot_render_overlap_phase) rather
+ * than cached .bss; the record is NOLOAD LWRAM reached through P2. */
 extern sm64_saturn_prenotify_profile_state_t g_sm64_saturn_prenotify_profile_state;
 extern volatile sm64_saturn_prenotify_profile_t g_sm64_saturn_prenotify_profile;
 
@@ -225,8 +259,11 @@ static inline void sm64_saturn_prenotify_profile_begin(void)
     sm64_saturn_prenotify_profile_state_t *const state =
         &g_sm64_saturn_prenotify_profile_state;
     if (state->active) state->faults++; /* previous window abandoned */
-    for (uint32_t node = 0U; node < SM64_SATURN_PRENOTIFY_PROFILE_NODES; node++)
+    for (uint32_t node = 0U; node < SM64_SATURN_PRENOTIFY_PROFILE_NODES; node++) {
         state->node_ticks[node] = 0U;
+        state->node_calls[node] = 0U;
+    }
+    state->node_calls[SM64_SATURN_PRENOTIFY_PROFILE_NODE_WINDOW] = 1U;
     state->elapsed = 0U;
     state->depth = 0U;
     state->stack[0] = (uint8_t)SM64_SATURN_PRENOTIFY_PROFILE_NODE_WINDOW;
@@ -247,6 +284,7 @@ static inline void sm64_saturn_prenotify_profile_push(uint32_t node)
     sm64_saturn_prenotify_profile_charge();
     state->depth++;
     state->stack[state->depth] = (uint8_t)node;
+    if (state->node_calls[node] != UINT16_MAX) state->node_calls[node]++;
 }
 
 static inline void sm64_saturn_prenotify_profile_pop(void)
@@ -272,11 +310,17 @@ static inline void sm64_saturn_prenotify_profile_end(void)
         &g_sm64_saturn_prenotify_profile_state;
     if (!state->active) return;
     sm64_saturn_prenotify_profile_charge();
-    if (state->depth != 0U) state->faults++;
+    /* The NOTIFY node is deliberately left pushed so that this final charge
+     * lands on it: end() is reached from inside the notify call, so there is
+     * no instant at which it could have been popped first.  Depth 1 is
+     * therefore the design, not a fault -- T2.4 counted it as one and made
+     * its own acceptance gate meaningless (faults == windows).  Only a real
+     * imbalance (depth > 1) is a fault now. */
+    if ((uint32_t)state->depth > state->end_depth_max)
+        state->end_depth_max = state->depth;
+    if (state->depth > 1U) state->faults++;
+    state->depth = 0U;
     state->active = 0U;
-    state->notify16 = state->last16;
-    state->notified = 1U;
-    state->retired = 0U;
 
     volatile sm64_saturn_prenotify_profile_t *const record =
         sm64_saturn_prenotify_profile_visible();
@@ -289,55 +333,16 @@ static inline void sm64_saturn_prenotify_profile_end(void)
         record->window_ticks_max = state->elapsed;
     record->max_raw_interval = state->max_raw;
     record->faults = state->faults;
+    record->end_depth_max = state->end_depth_max;
     for (uint32_t node = 0U; node < SM64_SATURN_PRENOTIFY_PROFILE_NODES; node++) {
         const uint32_t ticks = state->node_ticks[node];
         record->node_ticks_last[node] = ticks;
         record->node_ticks_accum[node] += ticks;
         if (ticks > record->node_ticks_max[node])
             record->node_ticks_max[node] = ticks;
+        record->node_calls_last[node] = state->node_calls[node];
     }
     record->sequence_begin = sequence;
-}
-
-/* Slave-window wall time on the master's clock (L12).  One 16-bit delta is
- * exact here because the interval is ~2.7 VBlanks against a 18.7-VBlank
- * wrap at /128. */
-static inline void sm64_saturn_prenotify_profile_mark_retired(void)
-{
-    sm64_saturn_prenotify_profile_state_t *const state =
-        &g_sm64_saturn_prenotify_profile_state;
-    if (!state->notified) return;
-    const uint16_t now = sm64_saturn_prenotify_profile_frt();
-    const uint32_t ticks = (uint16_t)(now - state->notify16);
-    state->retire16 = now;
-    state->notified = 0U;
-    state->retired = 1U;
-
-    volatile sm64_saturn_prenotify_profile_t *const record =
-        sm64_saturn_prenotify_profile_visible();
-    record->retire_events++;
-    record->notify_to_retire_last = ticks;
-    record->notify_to_retire_accum += ticks;
-    if (ticks > record->notify_to_retire_max)
-        record->notify_to_retire_max = ticks;
-}
-
-static inline void sm64_saturn_prenotify_profile_mark_terminal(void)
-{
-    sm64_saturn_prenotify_profile_state_t *const state =
-        &g_sm64_saturn_prenotify_profile_state;
-    if (!state->retired) return;
-    const uint32_t ticks =
-        (uint16_t)(sm64_saturn_prenotify_profile_frt() - state->retire16);
-    state->retired = 0U;
-
-    volatile sm64_saturn_prenotify_profile_t *const record =
-        sm64_saturn_prenotify_profile_visible();
-    record->finalize_events++;
-    record->finalize_ticks_last = ticks;
-    record->finalize_ticks_accum += ticks;
-    if (ticks > record->finalize_ticks_max)
-        record->finalize_ticks_max = ticks;
 }
 
 /* Slave-owned.  The slave SH-2 has its own FRT block, so it selects its own
@@ -369,10 +374,6 @@ static inline void sm64_saturn_prenotify_profile_slave_end(uint16_t start)
     sm64_saturn_prenotify_profile_push((uint32_t)(node))
 #define SM64_SATURN_PRENOTIFY_PROFILE_POP() sm64_saturn_prenotify_profile_pop()
 #define SM64_SATURN_PRENOTIFY_PROFILE_END() sm64_saturn_prenotify_profile_end()
-#define SM64_SATURN_PRENOTIFY_PROFILE_RETIRED() \
-    sm64_saturn_prenotify_profile_mark_retired()
-#define SM64_SATURN_PRENOTIFY_PROFILE_TERMINAL() \
-    sm64_saturn_prenotify_profile_mark_terminal()
 #define SM64_SATURN_PRENOTIFY_PROFILE_SLAVE_SCOPE_BEGIN(name) \
     uint16_t name; \
     sm64_saturn_prenotify_profile_slave_begin(&(name))
@@ -385,8 +386,6 @@ static inline void sm64_saturn_prenotify_profile_slave_end(uint16_t start)
 #define SM64_SATURN_PRENOTIFY_PROFILE_PUSH(node) ((void)0)
 #define SM64_SATURN_PRENOTIFY_PROFILE_POP() ((void)0)
 #define SM64_SATURN_PRENOTIFY_PROFILE_END() ((void)0)
-#define SM64_SATURN_PRENOTIFY_PROFILE_RETIRED() ((void)0)
-#define SM64_SATURN_PRENOTIFY_PROFILE_TERMINAL() ((void)0)
 #define SM64_SATURN_PRENOTIFY_PROFILE_SLAVE_SCOPE_BEGIN(name) ((void)0)
 #define SM64_SATURN_PRENOTIFY_PROFILE_SLAVE_SCOPE_END(name) ((void)0)
 

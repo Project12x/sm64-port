@@ -61,9 +61,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 PROFILE_SYMBOL = "g_sm64_saturn_prenotify_profile"
 PROFILE_MAGIC = 0x46505246  # 'FPRF'
-PROFILE_VERSION = 1
-PROFILE_NODES = 16
-PROFILE_WORDS = 72
+PROFILE_VERSION = 2
+PROFILE_NODES = 24
+PROFILE_WORDS = 113
 PROFILE_BYTES = PROFILE_WORDS * 4
 
 # Mirrors the enum in saturn_prenotify_profile.h, in order.  Node 0 is the
@@ -84,9 +84,41 @@ NODE_NAMES = (
     "graph_publish",
     "queue_contexts",
     "notify",
+    # T2.5 sub-nodes, all nested under prepare_mario.
+    "mario_setup",
+    "meshlet_prepare",
+    "meshlet_admit",
+    "meshlet_depth_admit",
+    "meshlet_prefix",
+    "meshlet_emit",
+    "meshlet_depth_emit",
+    "mario_draw_order",
     "spare",
 )
 assert len(NODE_NAMES) == PROFILE_NODES
+
+# Nodes whose self time nests inside prepare_mario.  Used to reconstruct the
+# stage total and to report prepare_mario's own unattributed remainder.
+PREPARE_MARIO_CHILDREN = (
+    "mario_setup",
+    "meshlet_prepare",
+    "meshlet_admit",
+    "meshlet_depth_admit",
+    "meshlet_prefix",
+    "meshlet_emit",
+    "meshlet_depth_emit",
+    "mario_draw_order",
+)
+
+# actor_meshlet_live_depth_bounds walks the whole tier-0 position span of
+# every meshlet, unconditionally, once per pass.  That span total is a
+# compile-time property of sm64_mario_meshlet_lod_position_offsets in
+# src/port/saturn/gfx/saturn_mario_actor_mesh.h, not a runtime quantity, so
+# per-vertex cost can be derived by division without a per-vertex probe.
+MARIO_TIER0_POSITION_VISITS_PER_PASS = 704
+MARIO_VERTEX_COUNT = 424
+MARIO_PRIMITIVE_COUNT = 644
+MARIO_MESHLET_COUNT = 31
 
 # FRT internal-clock select (TCR bits 1:0).
 FRT_DIVIDERS = {0: 8, 1: 32, 2: 128, 3: 0}
@@ -122,10 +154,11 @@ def decode_profile(raw: bytes) -> dict[str, Any]:
     if len(raw) != PROFILE_BYTES:
         raise ValueError(f"profile record must be {PROFILE_BYTES} bytes")
     w = be_words(raw)
-    nodes_accum = w[10:10 + PROFILE_NODES]
-    nodes_max = w[10 + PROFILE_NODES:10 + 2 * PROFILE_NODES]
-    nodes_last = w[10 + 2 * PROFILE_NODES:10 + 3 * PROFILE_NODES]
-    tail = w[10 + 3 * PROFILE_NODES:]
+    nodes_accum = w[11:11 + PROFILE_NODES]
+    nodes_max = w[11 + PROFILE_NODES:11 + 2 * PROFILE_NODES]
+    nodes_last = w[11 + 2 * PROFILE_NODES:11 + 3 * PROFILE_NODES]
+    nodes_calls = w[11 + 3 * PROFILE_NODES:11 + 4 * PROFILE_NODES]
+    tail = w[11 + 4 * PROFILE_NODES:]
     record = {
         "magic": w[0],
         "magic_valid": w[0] == PROFILE_MAGIC,
@@ -138,23 +171,17 @@ def decode_profile(raw: bytes) -> dict[str, Any]:
         "window_ticks_max": w[7],
         "max_raw_interval": w[8],
         "faults": w[9],
+        "end_depth_max": w[10],
         "node_ticks_accum": dict(zip(NODE_NAMES, nodes_accum)),
         "node_ticks_max": dict(zip(NODE_NAMES, nodes_max)),
         "node_ticks_last": dict(zip(NODE_NAMES, nodes_last)),
-        "retire_events": tail[0],
-        "notify_to_retire_accum": tail[1],
-        "notify_to_retire_last": tail[2],
-        "notify_to_retire_max": tail[3],
-        "finalize_events": tail[4],
-        "finalize_ticks_accum": tail[5],
-        "finalize_ticks_last": tail[6],
-        "finalize_ticks_max": tail[7],
-        "slave_entries": tail[8],
-        "slave_busy_accum": tail[9],
-        "slave_busy_last": tail[10],
-        "slave_busy_max": tail[11],
-        "slave_frt_tcr": tail[12],
-        "sequence_end": tail[13],
+        "node_calls_last": dict(zip(NODE_NAMES, nodes_calls)),
+        "slave_entries": tail[0],
+        "slave_busy_accum": tail[1],
+        "slave_busy_last": tail[2],
+        "slave_busy_max": tail[3],
+        "slave_frt_tcr": tail[4],
+        "sequence_end": tail[5],
     }
     record["stable"] = (
         record["magic_valid"]
@@ -293,6 +320,7 @@ def summarize(final: dict[str, Any], cadence: dict[str, Any]) -> dict[str, Any]:
             "share_of_window": mean / window_mean if window_mean else None,
             "max_ticks": final["node_ticks_max"][name],
             "max_cycles": final["node_ticks_max"][name] * cycles_per_tick,
+            "calls_last_window": final["node_calls_last"][name],
         }
 
     rows = [row(name) for name in NODE_NAMES]
@@ -301,9 +329,54 @@ def summarize(final: dict[str, Any], cadence: dict[str, Any]) -> dict[str, Any]:
         if r["node"] not in ("window_residue", "spare")
     )
     ranked = sorted(rows, key=lambda r: r["mean_ticks"], reverse=True)
+    by_name = {r["node"]: r for r in rows}
 
-    retire_events = final["retire_events"] or 0
-    finalize_events = final["finalize_events"] or 0
+    # prepare_mario is now a parent: its own row carries only self time, so
+    # the stage total is that plus every nested child.
+    prepare_children_ticks = sum(
+        by_name[c]["mean_ticks"] for c in PREPARE_MARIO_CHILDREN
+    )
+    prepare_self_ticks = by_name["prepare_mario"]["mean_ticks"]
+    prepare_total_ticks = prepare_self_ticks + prepare_children_ticks
+    depth_ticks = (
+        by_name["meshlet_depth_admit"]["mean_ticks"]
+        + by_name["meshlet_depth_emit"]["mean_ticks"]
+    )
+    # Two passes, each walking every meshlet's whole tier-0 position span.
+    depth_position_visits = 2 * MARIO_TIER0_POSITION_VISITS_PER_PASS
+    prepare_mario_stage = {
+        "self_mean_ticks": prepare_self_ticks,
+        "children_mean_ticks": prepare_children_ticks,
+        "total_mean_ticks": prepare_total_ticks,
+        "total_mean_cycles": prepare_total_ticks * cycles_per_tick,
+        "total_share_of_window": (
+            prepare_total_ticks / window_mean if window_mean else None
+        ),
+        "self_share_of_stage": (
+            prepare_self_ticks / prepare_total_ticks
+            if prepare_total_ticks else None
+        ),
+        "depth_bounds_mean_ticks": depth_ticks,
+        "depth_bounds_mean_cycles": depth_ticks * cycles_per_tick,
+        "depth_bounds_share_of_stage": (
+            depth_ticks / prepare_total_ticks if prepare_total_ticks else None
+        ),
+        "depth_bounds_position_visits": depth_position_visits,
+        "depth_bounds_cycles_per_position_visit": (
+            depth_ticks * cycles_per_tick / depth_position_visits
+        ),
+        "stage_cycles_per_mesh_vertex": (
+            prepare_total_ticks * cycles_per_tick / MARIO_VERTEX_COUNT
+        ),
+        "mesh": {
+            "vertices": MARIO_VERTEX_COUNT,
+            "primitives": MARIO_PRIMITIVE_COUNT,
+            "meshlets": MARIO_MESHLET_COUNT,
+            "tier0_position_visits_per_pass":
+                MARIO_TIER0_POSITION_VISITS_PER_PASS,
+        },
+    }
+
     slave_entries = final["slave_entries"] or 0
     slave_cycles_per_tick = slave_divider or 0
 
@@ -336,38 +409,18 @@ def summarize(final: dict[str, Any], cadence: dict[str, Any]) -> dict[str, Any]:
         "max_raw_interval": final["max_raw_interval"],
         "max_raw_interval_headroom": 65535 - final["max_raw_interval"],
         "faults": final["faults"],
+        "end_depth_max": final["end_depth_max"],
+        "prepare_mario_stage": prepare_mario_stage,
         "attributed_mean_ticks": attributed,
         "unattributed_mean_ticks": window_mean - attributed,
         "unattributed_share": (
             (window_mean - attributed) / window_mean if window_mean else None
         ),
         "ranked": ranked,
-        "master_notify_to_retire": {
-            "events": retire_events,
-            "mean_ticks": (
-                final["notify_to_retire_accum"] / retire_events
-                if retire_events else None
-            ),
-            "mean_vblank_equiv": (
-                final["notify_to_retire_accum"] / retire_events
-                / ticks_per_vblank_nominal
-                if retire_events and ticks_per_vblank_nominal else None
-            ),
-            "max_ticks": final["notify_to_retire_max"],
-        },
-        "master_finalization": {
-            "events": finalize_events,
-            "mean_ticks": (
-                final["finalize_ticks_accum"] / finalize_events
-                if finalize_events else None
-            ),
-            "mean_vblank_equiv": (
-                final["finalize_ticks_accum"] / finalize_events
-                / ticks_per_vblank_nominal
-                if finalize_events and ticks_per_vblank_nominal else None
-            ),
-            "max_ticks": final["finalize_ticks_max"],
-        },
+        # T2.4's master_notify_to_retire / master_finalization were removed:
+        # the RETIRED marker observer runs on the slave SH-2 and the FRT is a
+        # per-CPU block, so both differenced two unrelated counters.  The
+        # cadence rig above reports both intervals correctly in VBlanks.
         "slave_busy": {
             "entries": slave_entries,
             "cycles_per_tick": slave_cycles_per_tick,
@@ -409,7 +462,16 @@ def acceptance(samples: list[dict[str, Any]], failure: bool) -> dict[str, Any]:
         "frt_wrap_headroom_ok": bool(valid) and (
             valid[-1]["profile"]["max_raw_interval"] < 61440
         ),
+        # T2.4 shipped this check broken: end() counted the deliberately
+        # still-pushed NOTIFY node as a fault, so faults == windows by
+        # construction and the gate could never pass.  end() now records
+        # the closing depth instead and faults only on a real imbalance.
         "no_profiler_faults": bool(valid) and valid[-1]["profile"]["faults"] == 0,
+        # Depth 1 at end() is the design (NOTIFY is still pushed); anything
+        # above that means a push without its pop.
+        "profiler_stack_balanced": bool(valid) and (
+            valid[-1]["profile"]["end_depth_max"] <= 1
+        ),
     }
     return {**checks, "pass": all(checks.values())}
 

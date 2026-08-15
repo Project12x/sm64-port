@@ -4,6 +4,34 @@
 
 ### Added
 
+- Sprint 2 T2.5 (instrumentation): the T2.4 FRT profiler now **decomposes
+  `demo_prepare_mario()`**, the block T2.4 measured at 69.24% of the
+  pre-notification window and ~21% of the whole frame and then left opaque.
+  Eight sub-nodes were added under it —
+  `src/port/saturn/runtime/saturn_prenotify_profile.h` (node table 16 -> 24,
+  record ABI 288 -> 452 bytes, version 1 -> 2), probes in
+  `src/port/saturn/gfx/saturn_demo_render.c` and, newly instrumented,
+  `src/port/saturn/gfx/saturn_actor_meshlets.c`, plus the decoder and the
+  derived per-vertex arithmetic in
+  `tools/saturn/capture_prenotification_profile.py`. **Why the probes stop
+  where they do:** the two depth-bounds nodes are pushed once per *meshlet*
+  (31 per pass), never per vertex. An FRT read plus its charge arithmetic is
+  tens of cycles and `actor_meshlet_live_depth_bounds()` makes 704 tier-0
+  position visits per pass, so a per-vertex probe would have measured mostly
+  itself at exactly the granularity where the answer lives. Per-vertex cost
+  is instead derived by dividing by that 704, which is sound because it is a
+  compile-time property of `sm64_mario_meshlet_lod_position_offsets` and not
+  a runtime quantity — the function walks every meshlet's whole tier-0 span
+  before any cull test or LOD choice can shorten it. A new
+  `node_calls_last[]` field makes the per-call count a measurement rather
+  than a source-reading assumption (it reads 31 on target, as predicted).
+  **Consumer-facing impact: none.** The gating is unchanged
+  (`SATURN_DIAGNOSTIC_MODE != 0 && defined(__sh__)`), and all three modified
+  translation units were proven **byte-identical** at
+  `SATURN_DIAGNOSTIC_MODE=0` — stronger than T2.4, which had to except two
+  `assert` `__LINE__` literals. Diagnostic-build cost: 492 B of HWRAM and
+  160 B of LWRAM, with `verify-memory-map` still OK at 11,756 B of slack.
+
 - Sprint 2 T2.4 (instrumentation): a **diagnostic-gated FRT sub-stage
   profiler** for the pre-notification window —
   `src/port/saturn/runtime/saturn_prenotify_profile.h` (new), its state and
@@ -92,6 +120,52 @@
   (+ `sprint2-t2_2-throughput.json`).
 
 ### Fixed
+
+- Sprint 2 T2.5: the three instrument defects T2.4 recorded against itself
+  in its own evidence (`sprint2-t2_4-prenotification-profile.md` section 7).
+  1. **Two published fields were measuring nothing**, and are removed rather
+     than re-derived: `notify_to_retire` and `finalize_ticks` bracketed
+     intervals whose start was stamped on the master SH-2 and whose end was
+     stamped on the slave — `runtime_publish_retirement_marker()` is called
+     from `render_job_slave_entry`, and the FRT is a per-CPU on-chip block,
+     so the subtraction differenced two unrelated free-running counters.
+     Root cause: the marker-observer callback's CPU affinity was assumed
+     rather than traced. The cadence rig already reports both intervals
+     correctly in VBlank crossings, so nothing is lost; `slave_busy` is
+     unaffected because it is begun and ended on the same CPU, and it
+     reproduces T2.4's 11,043 ticks exactly.
+  2. **The slave no longer writes master-owned cached state.** Removing the
+     retirement/terminal marks removes the only slave writes to
+     `g_sm64_saturn_prenotify_profile_state` (T2.4's three bytes:
+     `retire16`, `notified`, `retired`, all three members deleted), and the
+     object additionally now carries `__uncached` — the discipline the
+     shipped cadence rig already applies to
+     `sourceboot_render_overlap_phase`. Verified in the linked image: the
+     symbol resolves to `0x260FA8E4`, i.e. the `.uncached` section through
+     the SH-2 P2 alias rather than cached `.bss`. T2.4 had to argue from
+     consistency that its window measurement was uncorrupted; that argument
+     is no longer load-bearing. Consumer-facing cost: each probe now does
+     uncached HWRAM accesses, raising total perturbation from 0.013% to a
+     measured 0.208% of the window — cross-checked against the unprobed
+     `spatial_admit` stage, which reproduces across two builds to five
+     significant figures.
+  3. **The acceptance gate now means something.** `end()` counted the
+     deliberately still-pushed NOTIFY node as a stack fault, so
+     `faults == windows` by construction and
+     `capture_prenotification_profile.py` exited 1 on a completely healthy
+     798-window run. The closing depth is now published as `end_depth_max`
+     (1 is the design: `end()` is reached from inside the notify call, so
+     there is no instant at which NOTIFY could have been popped first) and
+     only a real imbalance — depth > 1 — counts as a fault. A new
+     `profiler_stack_balanced` check gates on the published depth directly.
+     The capture now exits 0 with all twelve checks passing,
+     `faults = 0` and `end_depth_max = 1`.
+  T2.4's fourth recorded defect — 17% FRT wrap headroom, where the binding
+  interval *was* `prepare_mario` itself — is resolved by construction:
+  subdividing that stage shortens the longest inter-probe interval, and
+  `max_raw_interval` fell from 54,192 to 18,591 (71.6% headroom), now equal
+  to `spatial_admit`'s maximum to the tick.
+
 
 - Two stale in-tree comments corrected (comment-only, no behavior change):
   `sourceboot-cart.x` claimed the VDP1 command banks "total 0x20000 bytes"

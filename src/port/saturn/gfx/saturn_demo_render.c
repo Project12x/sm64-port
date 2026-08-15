@@ -3996,6 +3996,12 @@ static bool demo_prepare_mario(
         pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
         return false;
 
+    /* T2.5 sub-stage boundaries inside the largest measured block in the
+     * port.  Every push/pop pair below brackets a straight-line region with
+     * no return between them, so the stack cannot be left unbalanced on the
+     * healthy path; the one exception is flagged at its site. */
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_MARIO_SETUP);
     const uint32_t meshlet_generation = s_actor_publish_sequence == UINT32_MAX
         ? 1U : s_actor_publish_sequence + 1U;
     sm64_saturn_render_snapshot_t meshlet_snapshot = {0};
@@ -4019,12 +4025,15 @@ static bool demo_prepare_mario(
         .positions = s_actor_transform_refs,
         .position_capacity = SM64_MARIO_VERTEX_COUNT,
     };
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
     if (!sm64_saturn_actor_meshlets_prepare(
             &meshlet_snapshot, pose, &meshlet_view, &meshlet_output,
             SM64_MARIO_PRIMITIVE_COUNT, profile)) {
         profile->pipeline_faults++;
         return false;
     }
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_MARIO_DRAW_ORDER);
     for (uint8_t pass = 0U; pass < 2U; pass++) {
         const sm64_saturn_actor_draw_ref_t *refs = pass == 0U
             ? meshlet_output.opaque : meshlet_output.translucent;
@@ -4032,12 +4041,16 @@ static bool demo_prepare_mario(
                                             : meshlet_output.translucent_count;
         for (uint16_t i = 0U; i < count; i++) {
             const uint16_t primitive_id = refs[i].primitive_id;
-            if (primitive_id >= SM64_MARIO_PRIMITIVE_COUNT) return false;
+            if (primitive_id >= SM64_MARIO_PRIMITIVE_COUNT) {
+                SM64_SATURN_PRENOTIFY_PROFILE_POP();
+                return false;
+            }
             s_actor_draw_order[s_actor_draw_count++] =
                 (uint16_t)(i | (pass == 0U ? 0U :
                                   DEMO_ACTOR_DRAW_REF_TRANSLUCENT));
         }
     }
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
     s_actor_transform_ref_count = meshlet_output.position_count;
     *vertex_count_out = s_actor_transform_ref_count;
     return true;

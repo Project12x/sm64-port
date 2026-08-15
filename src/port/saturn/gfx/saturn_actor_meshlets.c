@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <string.h>
 
+#include "../runtime/saturn_prenotify_profile.h"
 #include "saturn_matrix_kernels.h"
 #include "saturn_mario_actor_mesh.h"
 
@@ -499,36 +500,63 @@ static bool actor_meshlet_core(
         return false;
 
     memset(position_seen, 0, source->vertex_count);
+    /* T2.5.  The depth node is pushed once per meshlet, never per vertex: an
+     * FRT read costs tens of cycles and there are 704 tier-0 position visits
+     * per pass, so a per-vertex probe would have measured mostly itself.
+     * Per-vertex cost is derived by dividing by that 704, which is a
+     * compile-time property of sm64_mario_meshlet_lod_position_offsets rather
+     * than a runtime quantity: actor_meshlet_live_depth_bounds always walks
+     * the whole tier-0 span of every meshlet, before any cull test or LOD
+     * choice can shorten it. */
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_ADMIT);
     for (uint16_t meshlet = 0U; meshlet < source->meshlet_count; meshlet++) {
         actor_meshlet_depth_bounds_t depth_bounds;
         actor_meshlet_span_t span;
+        bool bounds_ok;
         if (!atomic_output && stats != NULL)
             stats->demo_actor_meshlets_tested++;
-        if (!actor_meshlet_live_depth_bounds(source, transform, view, meshlet,
-                                             &depth_bounds))
+        SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+            SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_ADMIT);
+        bounds_ok = actor_meshlet_live_depth_bounds(source, transform, view,
+                                                    meshlet, &depth_bounds);
+        SM64_SATURN_PRENOTIFY_PROFILE_POP();
+        if (!bounds_ok) {
+            SM64_SATURN_PRENOTIFY_PROFILE_POP();
             return false;
+        }
         if (depth_bounds.furthest_q16 <= 0) {
             culled++;
             continue;
         }
         if (!actor_meshlet_span(source, meshlet,
-                                actor_lod_tier(depth_bounds.nearest_q16), &span))
+                                actor_lod_tier(depth_bounds.nearest_q16),
+                                &span)) {
+            SM64_SATURN_PRENOTIFY_PROFILE_POP();
             return false;
+        }
         if (span.primitive_count == 0U) continue;
         admitted_meshlets++;
         for (uint32_t local = 0U; local < span.position_count; local++) {
             uint16_t position;
             if (!actor_position_ref(source, span.position_offset + local,
-                                    &position))
+                                    &position)) {
+                SM64_SATURN_PRENOTIFY_PROFILE_POP();
                 return false;
+            }
             if (position_seen[position] != 0U) continue;
             if (!atomic_output) {
-                if (admitted_positions >= output->position_capacity)
+                if (admitted_positions >= output->position_capacity) {
+                    SM64_SATURN_PRENOTIFY_PROFILE_POP();
                     return false;
+                }
                 output->positions[admitted_positions] = position;
             }
             position_seen[position] = 1U;
-            if (admitted_positions == UINT16_MAX) return false;
+            if (admitted_positions == UINT16_MAX) {
+                SM64_SATURN_PRENOTIFY_PROFILE_POP();
+                return false;
+            }
             admitted_positions++;
         }
         {
@@ -537,16 +565,20 @@ static bool actor_meshlet_core(
             translucent_count += span.primitive_count;
             if (translucent_count > UINT16_MAX ||
                 span.primitive_count >
-                    (uint32_t)UINT16_MAX - translucent_bins[bin])
+                    (uint32_t)UINT16_MAX - translucent_bins[bin]) {
+                SM64_SATURN_PRENOTIFY_PROFILE_POP();
                 return false;
+            }
             translucent_bins[bin] = (uint16_t)(translucent_bins[bin] +
                                                 span.primitive_count);
             } else {
                 opaque_count += span.primitive_count;
                 if (opaque_count > UINT16_MAX ||
                     span.primitive_count >
-                        (uint32_t)UINT16_MAX - opaque_bins[bin])
+                        (uint32_t)UINT16_MAX - opaque_bins[bin]) {
+                    SM64_SATURN_PRENOTIFY_PROFILE_POP();
                     return false;
+                }
                 opaque_bins[bin] = (uint16_t)(opaque_bins[bin] +
                                                span.primitive_count);
             }
@@ -555,9 +587,11 @@ static bool actor_meshlet_core(
             if (failure_reason != NULL)
                 *failure_reason =
                     SM64_SATURN_ACTOR_MESHLET_QUARANTINE_OUTPUT_OVERFLOW;
+            SM64_SATURN_PRENOTIFY_PROFILE_POP();
             return false;
         }
     }
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
     if (admitted_positions > output->position_capacity) {
         if (failure_reason != NULL)
             *failure_reason =
@@ -575,6 +609,8 @@ static bool actor_meshlet_core(
         sm64_saturn_actor_draw_ref_t *translucent_output =
             combined_records != NULL
                 ? combined_records + opaque_count : output->translucent;
+        SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+            SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_PREFIX);
         for (int16_t bin = SM64_SATURN_ACTOR_DEPTH_BIN_COUNT - 1U;
              bin >= 0; bin--) {
             opaque_cursor[bin] = opaque_offset;
@@ -584,11 +620,19 @@ static bool actor_meshlet_core(
                 (uint16_t)(translucent_offset + translucent_bins[bin]);
         }
         memset(position_seen, 0, source->vertex_count);
+        SM64_SATURN_PRENOTIFY_PROFILE_POP();
+        /* The emission pass has no error return, so this bracket is
+         * unconditionally balanced. */
+        SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+            SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_EMIT);
         for (uint16_t meshlet = 0U; meshlet < source->meshlet_count; meshlet++) {
             actor_meshlet_depth_bounds_t depth_bounds;
             actor_meshlet_span_t span;
+            SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+                SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_EMIT);
             (void)actor_meshlet_live_depth_bounds(source, transform, view,
                                                   meshlet, &depth_bounds);
+            SM64_SATURN_PRENOTIFY_PROFILE_POP();
             if (depth_bounds.furthest_q16 <= 0) continue;
             (void)actor_meshlet_span(source, meshlet,
                 actor_lod_tier(depth_bounds.nearest_q16), &span);
@@ -626,6 +670,7 @@ static bool actor_meshlet_core(
                     opaque_output[opaque_cursor[bin]++] = ref;
             }
         }
+        SM64_SATURN_PRENOTIFY_PROFILE_POP();
         if (combined_records != NULL) {
             output->opaque = opaque_output;
             output->translucent = translucent_output;
@@ -654,12 +699,15 @@ bool sm64_saturn_actor_meshlets_prepare(
     uint8_t position_seen[SM64_MARIO_VERTEX_COUNT];
     actor_meshlet_source_t source = actor_mario_source();
     actor_meshlet_transform_t transform;
+    bool admitted;
     actor_output_reset(output);
     if (snapshot == NULL || pose == NULL || output == NULL ||
         snapshot->generation == 0U || snapshot->actor_generation == 0U ||
         snapshot->mario.valid == 0U || pose->vertices == NULL ||
         pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
         return false;
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_PREPARE);
     memset(&transform, 0, sizeof(transform));
     transform.vertices = pose->vertices;
     transform.vertex_count = pose->vertex_count;
@@ -673,9 +721,11 @@ bool sm64_saturn_actor_meshlets_prepare(
     transform.scale_q16[1] = 1 << 16;
     transform.scale_q16[2] = 1 << 16;
     transform.yaw = snapshot->mario.yaw;
-    return actor_meshlet_core(&source, &transform, view, position_seen,
-                              SM64_MARIO_VERTEX_COUNT, output, NULL, capacity,
-                              false, NULL, stats);
+    admitted = actor_meshlet_core(&source, &transform, view, position_seen,
+                                  SM64_MARIO_VERTEX_COUNT, output, NULL,
+                                  capacity, false, NULL, stats);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
+    return admitted;
 }
 
 bool sm64_saturn_actor_meshlets_prepare_bank(

@@ -172,12 +172,17 @@ volatile sm64_saturn_sourceboot_animation_sweep_t sourceboot_animation_sweep = {
 volatile sm64_saturn_peak_probe_t g_sm64_saturn_peak_probe
     __attribute__((section(".lwram_bss"), used));
 
-/* Sprint 2 T2.4 pre-notification sub-stage profiler (see
- * saturn_prenotify_profile.h).  Working state is cached HWRAM .bss so the
- * per-probe cost stays in the tens of cycles; the published record is
- * NOLOAD .lwram_bss written through P2 once per window.  Product builds
- * compile both out entirely. */
-sm64_saturn_prenotify_profile_state_t g_sm64_saturn_prenotify_profile_state;
+/* Sprint 2 T2.4 pre-notification sub-stage profiler, extended by T2.5 (see
+ * saturn_prenotify_profile.h).  T2.5 moves the working state to __uncached
+ * HWRAM, the discipline sourceboot_render_overlap_phase already uses below:
+ * T2.4 shipped it as cached .bss while a slave-executed marker observer
+ * wrote three of its bytes.  That observer is gone (its two fields
+ * differenced two CPUs' FRTs and were invalid), so no slave path touches
+ * this at all now, but the placement is corrected regardless.  The
+ * published record is NOLOAD .lwram_bss written through P2 once per
+ * window.  Product builds compile both out entirely. */
+sm64_saturn_prenotify_profile_state_t g_sm64_saturn_prenotify_profile_state
+    __uncached;
 volatile sm64_saturn_prenotify_profile_t g_sm64_saturn_prenotify_profile
     __attribute__((section(".lwram_bss"), used));
 #endif
@@ -923,20 +928,14 @@ static void sourceboot_reset_lwram_state(void)
         frame_profile->window_ticks_max = 0U;
         frame_profile->max_raw_interval = 0U;
         frame_profile->faults = 0U;
+        frame_profile->end_depth_max = 0U;
         for (uint32_t node = 0U;
              node < SM64_SATURN_PRENOTIFY_PROFILE_NODES; node++) {
             frame_profile->node_ticks_accum[node] = 0U;
             frame_profile->node_ticks_max[node] = 0U;
             frame_profile->node_ticks_last[node] = 0U;
+            frame_profile->node_calls_last[node] = 0U;
         }
-        frame_profile->retire_events = 0U;
-        frame_profile->notify_to_retire_accum = 0U;
-        frame_profile->notify_to_retire_last = 0U;
-        frame_profile->notify_to_retire_max = 0U;
-        frame_profile->finalize_events = 0U;
-        frame_profile->finalize_ticks_accum = 0U;
-        frame_profile->finalize_ticks_last = 0U;
-        frame_profile->finalize_ticks_max = 0U;
         frame_profile->slave_entries = 0U;
         frame_profile->slave_busy_accum = 0U;
         frame_profile->slave_busy_last = 0U;
@@ -1239,7 +1238,11 @@ static void sourceboot_render_runtime_marker(
         accepted = sm64_saturn_render_overlap_phase_notification_published(
             &sourceboot_render_overlap_phase, generation, marker_vblank);
     } else if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_RETIRED) {
-        SM64_SATURN_PRENOTIFY_PROFILE_RETIRED();
+        /* T2.5: T2.4 stamped the profiler here.  This observer runs on the
+         * slave SH-2 (runtime_publish_retirement_marker is called from
+         * render_job_slave_entry), and the FRT is a per-CPU on-chip block,
+         * so the interval it produced differenced two unrelated counters.
+         * The cadence rig's VBlank crossings measure this correctly. */
         accepted = sm64_saturn_render_overlap_phase_retirement_published(
             &sourceboot_render_overlap_phase, generation, marker_vblank);
     }
@@ -1257,7 +1260,6 @@ static bool sourceboot_render_overlap_terminal(uint32_t generation)
     if (sourceboot_active_render_snapshot == NULL ||
         sourceboot_active_build_bank == NULL)
         return false;
-    SM64_SATURN_PRENOTIFY_PROFILE_TERMINAL();
     return sourceboot_render_overlap_event_ok &&
         sm64_saturn_render_overlap_phase_terminal(
             &sourceboot_render_overlap_phase, generation,
