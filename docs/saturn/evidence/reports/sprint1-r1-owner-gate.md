@@ -225,3 +225,140 @@ RBP/RBL/MPRO here are BIOS leftovers and may differ by BIOS revision or region.
 This joins open follow-up 1 (uninitialized slot registers `0x0E`/`0x12`/`0x14`/
 `0x18`) as the same class of bug — inherited hardware state the driver never
 initializes.
+
+---
+
+## FIX + VERIFICATION 2026-08-15 — the DSP is programmed explicitly; sound RAM is now byte-exact
+
+Fix commit: `d3d3c8eb`
+`fix(audio): program the SCSP effect-DSP ring explicitly so it stops
+overwriting staged samples`
+
+### What is programmed, and where in the boot sequence
+
+`src/port/saturn/audio/saturn_sound_cpu.c` gains
+`sm64_saturn_sound_cpu_program_effect_dsp()`, called from
+`sm64_saturn_sound_cpu_yaul_set_512k()` immediately after the SCSP mode
+latch. That is the SCSP configuration step which already runs **after SNDOFF
+is acknowledged and before the sound-RAM clear and every driver / SFXB
+metadata / PCM bank copy** — in the boot state machine
+(`set_512k_mode` -> `clear_owned_regions` -> `copy_staged_regions`) and in
+the live cold boot (`source_audio_live.c`: `set_512k` -> `memset` -> three
+`memcpy`s). No callback was added and no boot contract changed, so the
+Task 7 audio-init failure handling and the `live_boot` -> semantic bind ->
+`sound_init` ordering are untouched.
+
+| Register | SH-2 address | Programmed | Was (BIOS leftover) |
+| --- | --- | --- | --- |
+| `MPRO` (DSP program) | `0x25B00800`-`0x25B00BFF` | all zero (1,024 B) | 377 of 1,024 B nonzero |
+| `COEF` | `0x25B00700`-`0x25B0077F` | all zero | 51 B nonzero |
+| `MADRS` | `0x25B00780`-`0x25B007BF` | all zero | 24 B nonzero |
+| `0x402` (RBP/RBL) | `0x25B00402` | `0x0128` = RBP 0x28, RBL 2 | `0x0118` = RBP 24, RBL 2 |
+
+The ring moves from `[0x30000, 0x40000)` to `[0x50000, 0x60000)` — above the
+staged bank end at `0x4AB49` (21,687 B of headroom) and 128 KiB clear of the
+top of sound RAM. Zeroing `MPRO` is the primary defence: an all-NOP
+microprogram asserts neither MWT nor MRD, so the DSP issues no sound-RAM
+access at all. Moving the ring is defence in depth.
+
+**Offsets and encodings were verified against the Ymir SCSP core, not
+assumed** (`ymir-agent/libs/ymir-core`):
+
+- `include/ymir/hw/scsp/scsp.hpp` common-register decoder:
+  `AddressInRange<0x700,0x77F>` COEF, `<0x780,0x7BF>` MADRS,
+  `<0x800,0xBFF>` MPRO.
+- `scsp.hpp` `WriteReg402`: RBP = `bit::extract<0,6>`, RBL = bits 7-8.
+- `scsp_dsp.hpp` `UpdateRBP` / `UpdateRBL`: `m_RBP = RBP << 12` and
+  `m_RBL = (0x2000 << RBL) - 1`, both in 16-bit words; `WriteWRAM()` then
+  addresses `m_readWriteAddr * sizeof(uint16)`. So RBP counts `0x2000`-byte
+  units and RBL selects `0x2000 << RBL` words. RBP 24 -> `0x30000` and
+  RBP 0x28 -> `0x50000`, matching the measured window exactly.
+- The probe constants (`probe_sound_ram_verify.py:285-290`) agree.
+
+Compile-time `_Static_assert`s pin `0x402 == 0x0128`, keep the ring at or
+above `SM64_SATURN_PCM_BANK_OFFSET`, and keep the ring end inside
+`SM64_SATURN_PCM_SOUND_RAM_BYTES`.
+
+### New candidate
+
+Identity `id-782c9c8f323a01a0`
+ELF `d3c2bcaf903598e8eaf7c96ec83bcb2fd74c64602fdb144b1fac8aab7d7f2bd4`
+ISO `62bad8a02b69530fc541278a446a5e6beb3723fb2532308ed871d4d80571f821`
+MAP `417946e53e51f5d285c1e3040acff403200e08c1947a1e2281f0824149fb4acf`
+Artifacts: `releases/2026-08-15_1020/id-782c9c8f323a01a0/`
+Build: identical 27-variable invocation to stage 1b (pool 208, R1 tuple,
+`SATURN_FEATURE_SEMANTIC_AUDIO=1`), 2026-08-15 10:04:53-10:20:20 (15m27s),
+one attempt, no repair needed — the g15 publication verified clean.
+
+`verify-memory-map` (verbatim):
+
+```
+verify-memory-map: checking /d/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/saturn-recovery/build/saturn/sourceboot/e2-bob-identity-id-782c9c8f323a01a0/obj/sm64-saturn-sourceboot-e2.elf
+verify: D:\Code\RetroDev\sm64-saturn-port\sm64-port\.worktrees\saturn-recovery\build\saturn\sourceboot\e2-bob-identity-id-782c9c8f323a01a0\obj\sm64-saturn-sourceboot-e2.elf
+  ___end          = 0x060FDF08
+  hwram_remaining = 0x20F8 bytes (required >= 0x1F00)
+  lwram_end       = 0x002F5D40
+  lwram_remaining = 0xA2C0 bytes (floor >= 0x4000)
+  RESULT          = OK
+```
+
+Margin delta vs the R1 baseline `hwram_remaining = 0x20F8`: **0 bytes.**
+The fix is `.text` only — no HWRAM, LWRAM or sound-RAM budget moved.
+
+### DECISIVE VERIFICATION — same probe, new candidate
+
+`tools/saturn/probe_sound_ram_verify.py` against `id-782c9c8f323a01a0` on
+Ymir headless `build-agent2`, USA BIOS, `--resample-frames 60`. Report:
+`docs/saturn/evidence/reports/sprint1-r2-sound-ram-staging-verify.json`.
+Gameplay confirmed at frame 5100 (music voice live), 47.7 s wall.
+
+| Region | Sound RAM | Bytes | Before | After |
+| --- | --- | --- | --- | --- |
+| SFXB metadata | `0x05000` | 1,232 | 0 differing | **0 differing — EXACT MATCH** |
+| PCM bank | `0x08000` | 273,225 | **65,354 differing** | **0 differing — EXACT MATCH** |
+| Music sample | `0x3ACB8` | 65,169 | **21,276 differing** | **0 differing — EXACT MATCH** |
+
+Register readback on target:
+
+```
+[verify] SCSP reg402=0x0128 RBP=40 RBL=2 ring=65536B base(x0x2000)=0x50000 MPRO nonzero=0
+reg400=0x020C MEM4MB=True MVOL=12
+DSP program bytes nonzero: 0 of 1024 (all_zero=True), COEF nonzero 0, MADRS nonzero 0
+```
+
+`0x402` now reads the programmed `0x0128` instead of the BIOS value `0x0118`.
+There is no corrupt window left to resample: the liveness check that
+previously reported 65,164 of 65,536 bytes changing every 60 frames has no
+mismatch region to sample. Slot 0 is unchanged and correct (`SA=0x3ACB8`,
+`LSA=0`, `LEA=65168`, `PCM8B`, `LPCTL=1`), and the 1 KiB past the loop end is
+still all zeros.
+
+**The staged music and the whole SFX bank are now byte-identical to what the
+packager built, at playback time, on target.**
+
+### Tests
+
+- `tools/saturn/test_full_game_audio_source.py` — 11 tests OK, including the
+  new `test_effect_dsp_is_programmed_before_any_sound_ram_staging` (register
+  writes, RBP/RBL decode clearing the staged bank and not landing back on
+  `0x30000`, and quiesce-before-copy ordering in both the boot state machine
+  and `source_audio_live.c`). Mutation-verified: 6 of 6 mutations killed
+  (drop the call; RBP back to `0x18`; stop zeroing MPRO; stop writing
+  `0x402`; pack RBL at bit 8; stage PCM before the DSP step).
+- `tools/saturn/test_sourceboot_cold_stage_return.py` — 4 OK.
+- `tools/saturn/test_sound_cpu_command_ownership.py` — 2 OK.
+- `verify-pcm68k-model` — OK.
+- `verify-audio-sound-cpu-boot` — the C test compiles clean under
+  `-std=c11 -pedantic -Wall -Wextra -Werror` and its binary exits 0 when run
+  directly, but the make recipe itself fails: it hands the Windows venv
+  Python an MSYS-style `/d/...` path via `subprocess.run`, raising
+  `FileNotFoundError`. Pre-existing infrastructure defect in that recipe,
+  independent of this change (the path is built the same way regardless of
+  source content); `verify-pcm68k-model` runs its binary through the shell
+  and is unaffected.
+
+### Remaining gate
+
+Owner listening session on `id-782c9c8f323a01a0`. Everything above is
+register- and byte-level measurement; whether the audible artifact is gone is
+an owner observation, and cadence (~1-2 FPS) is unchanged by this fix.
