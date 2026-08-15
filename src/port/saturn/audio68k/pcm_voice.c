@@ -155,6 +155,8 @@ sm64_saturn_pcm_sfx_bundle_view(const volatile uint8_t *sound_ram,
             sound_ram, (uint16_t)(row + 10U));
         if ((offset & 1U) != 0U || offset < SM64_SATURN_PCM_BANK_OFFSET ||
             count == 0U || rate == 0U || rate > 44100U || volume > 15U ||
+            /* SM64_SATURN_PCM_SAMPLE_LOOP is the one legal flag bit:
+             * scsp_pcm8.c keys the SCSP hardware LOOP_NORMAL from it. */
             (flags & (uint16_t)~SM64_SATURN_PCM_SAMPLE_LOOP) != 0U ||
             offset + count < offset ||
             offset + count > SM64_SATURN_PCM_BANK_OFFSET + pcm_bytes ||

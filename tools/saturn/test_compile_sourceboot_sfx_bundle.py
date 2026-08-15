@@ -39,14 +39,16 @@ class MusicPcmTrailerTest(unittest.TestCase):
     def test_music_pcm_is_final_looped_row_with_zero_m64_trailer(self) -> None:
         mappings, rows, pcm = _sfx_fixture()
         music = bytes((i * 7) & 0xFF for i in range(100))
-        bundle = _finalize_bundle(7, mappings, rows, pcm, music, 8000)
+        # 11025 deliberately differs from MUSIC_DEFAULT_RATE so a packager
+        # that hardcodes the default instead of honoring --music-rate fails.
+        bundle = _finalize_bundle(7, mappings, rows, pcm, music, 11025)
 
         self.assertEqual(bundle.sample_count, 2)
         self.assertEqual(bundle.music_sample_index, 1)
         self.assertEqual(bundle.music_sample_id, MUSIC_SAMPLE_ID)
         music_row = bundle.samples[-1]
         self.assertEqual(music_row.flags, SAMPLE_FLAG_LOOP)
-        self.assertEqual(music_row.rate, 8000)
+        self.assertEqual(music_row.rate, 11025)
         self.assertEqual(music_row.sample_count, len(music))
         self.assertEqual(music_row.offset % 2, 0)
         self.assertGreaterEqual(music_row.offset, 0x8000)
@@ -66,7 +68,7 @@ class MusicPcmTrailerTest(unittest.TestCase):
         self.assertEqual(int.from_bytes(bundle.metadata[row + 4:row + 6], "big"),
                          len(music))
         self.assertEqual(int.from_bytes(bundle.metadata[row + 6:row + 8], "big"),
-                         8000)
+                         11025)
         self.assertEqual(int.from_bytes(bundle.metadata[row + 10:row + 12], "big"),
                          SAMPLE_FLAG_LOOP)
 

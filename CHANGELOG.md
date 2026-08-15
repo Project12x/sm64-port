@@ -21,10 +21,15 @@
 
 - `tools/saturn/wav_to_pcm8.py`: converts an owner-provided WAV (any 8/16-bit
   mono/stereo source) to the raw signed 8-bit mono PCM the SCSP plays —
-  linear resample to `--rate` (default 8000 Hz) and a `--max-seconds`
-  duration trim (default 28 s) so one song fits the sound-RAM bank. The
-  source WAV is ROM-derived and must never be committed; `.gitignore` now
-  covers `bob_theme.us.wav` and `*.pcm8`.
+  linear resample to `--rate` (default 8000 Hz) plus a duration trim.
+  Looped music is one SCSP sample, so the real gate is the 65,535-byte cap
+  set by the SFXB row's u16 sample count and the SCSP's 16-bit loop-end
+  addressing — not the sound-RAM bank: the default trim is
+  min(28 s, 65535 / rate), about 8.19 s at 8000 Hz, and an explicit
+  `--max-seconds` above the cap warns and still clamps so the tool can
+  never emit output the packager must reject. The source WAV is
+  ROM-derived and must never be committed; `.gitignore` now covers
+  `bob_theme.us.wav` and `*.pcm8`.
 
 ### Changed
 

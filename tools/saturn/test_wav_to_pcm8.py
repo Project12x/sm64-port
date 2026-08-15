@@ -14,7 +14,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "saturn"))
 
-from wav_to_pcm8 import load_wav_mono_float, resample_linear  # noqa: E402
+from wav_to_pcm8 import (  # noqa: E402
+    MAX_MUSIC_BYTES,
+    effective_limit_samples,
+    load_wav_mono_float,
+    resample_linear,
+)
 
 
 def _quantize(samples: list[float]) -> bytes:
@@ -56,6 +61,31 @@ class WavToPcm8Test(unittest.TestCase):
         # near +/-(0.8 * 127) rather than collapsing to silence or clipping.
         self.assertGreater(max(signed), 96)
         self.assertLess(min(signed), -96)
+
+    def test_default_limit_never_exceeds_the_music_byte_cap(self) -> None:
+        # The packager's music row is one SCSP sample: u16 count / 16-bit
+        # loop end cap it at 65,535 bytes.  The tool's default trim must
+        # respect that at every rate instead of the old flat 28 s.
+        self.assertEqual(effective_limit_samples(8000, None), MAX_MUSIC_BYTES)
+        self.assertEqual(effective_limit_samples(11025, None), MAX_MUSIC_BYTES)
+        # At a rate low enough for 28 s to fit, the 28 s default still wins.
+        self.assertEqual(effective_limit_samples(2000, None), 2000 * 28)
+        self.assertLessEqual(effective_limit_samples(44100, None),
+                             MAX_MUSIC_BYTES)
+
+    def test_explicit_max_seconds_above_cap_warns_and_clamps(self) -> None:
+        import contextlib
+        import io
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            limit = effective_limit_samples(8000, 28.0)
+        self.assertEqual(limit, MAX_MUSIC_BYTES)
+        self.assertIn("music cap", stderr.getvalue())
+        # An explicit request under the cap is honored exactly, silently.
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(effective_limit_samples(8000, 2.0), 16000)
+        self.assertEqual(stderr.getvalue(), "")
 
     def test_trim_limit_bounds_output_like_max_seconds(self) -> None:
         mono = [0.25] * 4000
