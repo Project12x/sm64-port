@@ -19,6 +19,23 @@
   (`docs/superpowers/plans/2026-08-14-sprint1-recovery-baseline-audio.md`)
   for the curation and verification record.
 
+- `verify-memory-map` gate (`Makefile.saturn.mk` + a new `verify` subcommand
+  on `tools/saturn/verify_sourceboot_memory_map.py`): the HWRAM/LWRAM link
+  margin becomes a build output instead of a ledger note. Rationale: the last
+  full-feature link closed with 24 bytes of HWRAM slack and nothing in the
+  build loop would have said so. The `verify` mode inspects ONE built ELF
+  (`--elf`, `--required-final-margin`, default 0x1F00) and prints `___end`,
+  HWRAM remaining vs required, and the LWRAM floor, exiting nonzero on any
+  violation; it binds camera route and cart stage from the sealed identity
+  spec (`generated/saturn_build_identity_spec.json`) rather than trusting
+  path tags, and runs the full existing `validate_layout` region checks. The
+  make target defaults `SOURCEBOOT_CANDIDATE_ELF` to the newest
+  `e2-bob-identity-*/obj/*.elf` (same location pattern as
+  `verify-sourceboot-hud-target`) and accepts an explicit override. The
+  tool's toolchain paths are now environment-derived (`YAUL_INSTALL_ROOT`,
+  `MSYS2_ROOT`) with the old developer-machine literals kept as warned
+  fallbacks so existing phase-chain invocations keep working unchanged.
+
 - `tools/saturn/wav_to_pcm8.py`: converts an owner-provided WAV (any 8/16-bit
   mono/stereo source) to the raw signed 8-bit mono PCM the SCSP plays —
   linear resample to `--rate` (default 8000 Hz) plus a duration trim.
@@ -32,6 +49,21 @@
   `bob_theme.us.wav` and `*.pcm8`.
 
 ### Changed
+
+- `tools/saturn/probe_audio_mailbox.py` is parameterized from its donor-
+  scratch form: argparse CLI (`--ymir`, `--ipl`, `--cue`, `--output`,
+  `--frames`, `--timeout`, `--sfx-metadata`) with a `main()` guard replaces
+  module-level execution, hardcoded absolute Ymir/BIOS paths, the stale
+  `e2-bob-identity-id-7deb747eb230b595` artifact pin, and a broken
+  `sys.path` insert left over from the script's repo-root origin (its
+  `ROOT`-relative SFXB metadata path silently pointed inside `tools/saturn/`
+  after promotion). No behavior change to the mailbox/SCSP peek or decode
+  logic — addresses, sizes, field decoding, and the sorted-JSON report shape
+  are byte-identical; defaults (3600 frames, 300 s timeout, stdout report)
+  match the old constants. `tools/saturn/test_probe_audio_mailbox.py` pins
+  the pure `peek` payload normalization (list / nested dict / hex-string)
+  and `be16` decoding. Live exercise happens in Task 11; a 600-frame smoke
+  run against the donor CUE produced a well-formed report.
 
 - The demo-path renderer's hot working set returns to 32-bit HWRAM,
   reverting the 16-bit LWRAM eviction from the 2026-08-07 memory-budget

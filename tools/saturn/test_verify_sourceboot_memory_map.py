@@ -2,6 +2,8 @@
 """CLI-level tests for the hash-bound sourceboot memory-map gate."""
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -279,6 +281,44 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
                         elf=Path("fixed"), phase=phase, stage_sectors=stage,
                         previous_report=previous, required_final_margin=0x1B00,
                     )
+
+    def test_verify_cli_reports_margins_and_gates_on_required_floor(self) -> None:
+        layout = image("verify-target", end=0x060F9000, stage=8, scc=False)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            elf = root / "sourceboot" / "identity" / "obj" / "target.elf"
+            spec_dir = root / "sourceboot" / "generated"
+            spec_dir.mkdir(parents=True)
+            (spec_dir / "saturn_build_identity_spec.json").write_text(
+                json.dumps({"camera_route": 0, "cart_stage_sectors": 8}),
+                encoding="utf-8")
+            with mock.patch("verify_sourceboot_memory_map.inspect_elf",
+                            return_value=layout):
+                passing = io.StringIO()
+                with contextlib.redirect_stdout(passing):
+                    status = verify.main(["verify", "--elf", str(elf),
+                                          "--required-final-margin", "0x1B00"])
+                self.assertEqual(status, 0)
+                self.assertIn("hwram_remaining = 0x7000 bytes", passing.getvalue())
+                self.assertIn("RESULT          = OK", passing.getvalue())
+                failing = io.StringIO()
+                with contextlib.redirect_stdout(failing):
+                    status = verify.main(["verify", "--elf", str(elf),
+                                          "--required-final-margin", "0x10000"])
+                self.assertEqual(status, 1)
+                self.assertIn("below required final floor", failing.getvalue())
+
+    def test_verify_cli_fails_closed_without_identity_spec(self) -> None:
+        layout = image("verify-target", end=0x060F9000, stage=8, scc=False)
+        with tempfile.TemporaryDirectory() as temporary:
+            elf = Path(temporary) / "sourceboot" / "identity" / "obj" / "target.elf"
+            with mock.patch("verify_sourceboot_memory_map.inspect_elf",
+                            return_value=layout):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    status = verify.main(["verify", "--elf", str(elf)])
+                self.assertEqual(status, 1)
+                self.assertIn("identity spec", output.getvalue())
 
     def test_cli_writes_hash_bound_fixture_and_report(self) -> None:
         layouts = [

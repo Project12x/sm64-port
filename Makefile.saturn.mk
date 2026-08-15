@@ -301,6 +301,26 @@ verify-sourceboot-feature-identity:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_gen_build_identity.py"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_sourceboot_feature_identity.py"
 
+# HWRAM/LWRAM margin gate: the final link margin must be a build output, not a
+# ledger note (the last full-feature link closed with 24 bytes of HWRAM slack).
+# SOURCEBOOT_CANDIDATE_ELF defaults to the most recently built sealed-identity
+# ELF, located the same way verify-sourceboot-hud-target locates its .cue.
+SOURCEBOOT_REQUIRED_FINAL_MARGIN ?= 0x1F00
+.PHONY: verify-memory-map
+verify-memory-map:
+	@elf="$(SOURCEBOOT_CANDIDATE_ELF)"; \
+	if [ -z "$$elf" ]; then \
+	  elf="$$(ls -t "$(SATURN_REPO_ROOT)"/build/saturn/sourceboot/e2-bob-identity-*/obj/*.elf 2>/dev/null | head -1)"; \
+	fi; \
+	if [ -z "$$elf" ]; then \
+	  echo "verify-memory-map: no built ELF under build/saturn/sourceboot/e2-bob-identity-*/obj/;" \
+	    "build sourceboot first or set SOURCEBOOT_CANDIDATE_ELF=<path>" >&2; \
+	  exit 1; \
+	fi; \
+	echo "verify-memory-map: checking $$elf"; \
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/verify_sourceboot_memory_map.py" verify \
+	  --elf "$$elf" --required-final-margin $(SOURCEBOOT_REQUIRED_FINAL_MARGIN)
+
 vdp2probe: check-libyaul check-sdk
 	$(MAKE) -C "$(VDP2_PROBE_DIR)"
 

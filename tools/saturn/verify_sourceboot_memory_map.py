@@ -8,13 +8,40 @@ import json
 import os
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-YAUL_BIN = Path("D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin")
-READELF = YAUL_BIN / "sh-elf-readelf.exe"
-NM = YAUL_BIN / "sh-elf-nm.exe"
+# Historical developer-machine literals, kept as fallbacks so existing
+# invocations that never exported the environment variables keep working.
+YAUL_BIN_FALLBACK = Path("D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin")
+MSYS_USR_BIN_FALLBACK = Path(r"C:\msys64\usr\bin")
+_FALLBACK_WARNINGS: set[str] = set()
+
+
+def _warn_fallback(variable: str, fallback: Path) -> None:
+    if variable in _FALLBACK_WARNINGS:
+        return
+    _FALLBACK_WARNINGS.add(variable)
+    print(f"warning: {variable} is unset; falling back to {fallback}",
+          file=sys.stderr)
+
+
+def _toolchain_bin() -> Path:
+    root = os.environ.get("YAUL_INSTALL_ROOT", "").strip()
+    if root:
+        return Path(root) / "bin"
+    _warn_fallback("YAUL_INSTALL_ROOT", YAUL_BIN_FALLBACK)
+    return YAUL_BIN_FALLBACK
+
+
+def _msys_usr_bin() -> Path:
+    root = os.environ.get("MSYS2_ROOT", "").strip()
+    if root:
+        return Path(root) / "usr" / "bin"
+    _warn_fallback("MSYS2_ROOT", MSYS_USR_BIN_FALLBACK)
+    return MSYS_USR_BIN_FALLBACK
 HWRAM_TOP = 0x06100000
 HWRAM_BASE = 0x06000000
 LWRAM_TOP = 0x00300000
@@ -73,7 +100,7 @@ class ElfLayout:
 
 def _tool_environment() -> dict[str, str]:
     environment = os.environ.copy()
-    environment["PATH"] = r"C:\msys64\usr\bin" + os.pathsep + environment.get("PATH", "")
+    environment["PATH"] = str(_msys_usr_bin()) + os.pathsep + environment.get("PATH", "")
     return environment
 
 
@@ -97,8 +124,9 @@ def _sha256(path: Path) -> str:
 
 def inspect_elf(path: Path) -> ElfLayout:
     path = path.resolve()
-    section_output = _run(READELF, "-SW", str(path))
-    symbol_output = _run(NM, "-S", "--defined-only", str(path))
+    toolchain = _toolchain_bin()
+    section_output = _run(toolchain / "sh-elf-readelf.exe", "-SW", str(path))
+    symbol_output = _run(toolchain / "sh-elf-nm.exe", "-S", "--defined-only", str(path))
     sections: dict[str, Section] = {}
     section_re = re.compile(
         r"\[\s*\d+\]\s+(\S+)\s+(\S+)\s+([0-9a-fA-F]+)\s+"
@@ -370,6 +398,55 @@ def check_phase(
     }
 
 
+def _identity_spec_for(elf: Path) -> dict[str, Any] | None:
+    """Read the sealed identity spec adjacent to a built identity ELF.
+
+    Identity ELFs live at <build>/e2-bob-identity-*/obj/<name>.elf and the
+    frozen spec at <build>/generated/saturn_build_identity_spec.json -- the
+    same file `_tag_gate` binds short-hash identity directories to.
+    """
+    try:
+        spec = elf.resolve().parents[2] / "generated" / "saturn_build_identity_spec.json"
+        return json.loads(spec.read_text(encoding="utf-8"))
+    except (OSError, IndexError, json.JSONDecodeError):
+        return None
+
+
+def run_verify(*, elf: Path, required_final_margin: int) -> int:
+    """Verify one built ELF's HWRAM/LWRAM margins as a build output."""
+    layout = inspect_elf(elf)
+    print(f"verify: {layout.path}")
+    end = layout.symbols.get("___end")
+    if end is None:
+        print("  ___end          = MISSING")
+    else:
+        remaining = HWRAM_TOP - end.address
+        print(f"  ___end          = 0x{end.address:08X}")
+        print(f"  hwram_remaining = 0x{remaining:X} bytes "
+              f"(required >= 0x{required_final_margin:X})")
+    spec = _identity_spec_for(elf)
+    if spec is None or not isinstance(spec.get("camera_route"), int) or \
+            not isinstance(spec.get("cart_stage_sectors"), int):
+        print("  RESULT          = FAIL: sealed identity spec "
+              "(generated/saturn_build_identity_spec.json) is unavailable "
+              "next to the ELF; cannot bind camera route and cart stage")
+        return 1
+    try:
+        report = validate_layout(
+            layout, route=spec["camera_route"],
+            stage_sectors=spec["cart_stage_sectors"],
+            required_final_margin=required_final_margin,
+        )
+    except ValueError as error:
+        print(f"  RESULT          = FAIL: {error}")
+        return 1
+    print(f"  lwram_end       = 0x{report['lwram_end']:08X}")
+    print(f"  lwram_remaining = 0x{report['lwram_margin']:X} bytes "
+          f"(floor >= 0x{MINIMUM_LWRAM_MARGIN:X})")
+    print("  RESULT          = OK")
+    return 0
+
+
 def _integer(value: str) -> int:
     return int(value, 0)
 
@@ -399,7 +476,14 @@ def main(argv: list[str] | None = None) -> int:
     phase.add_argument("--previous-report", type=Path, required=True)
     phase.add_argument("--required-final-margin", type=_integer, required=True)
     phase.add_argument("--output", type=Path, required=True)
+    single = commands.add_parser(
+        "verify", help="verify one built ELF's HWRAM/LWRAM margins")
+    single.add_argument("--elf", type=Path, required=True)
+    single.add_argument("--required-final-margin", type=_integer, default=0x1F00)
     args = parser.parse_args(argv)
+    if args.command == "verify":
+        return run_verify(elf=args.elf,
+                          required_final_margin=args.required_final_margin)
     if args.command == "select-transport":
         fixture, report = select_transport(
             baseline_elf=args.baseline_elf, stage8_elf=args.stage8_elf,
