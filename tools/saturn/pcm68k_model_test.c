@@ -133,6 +133,10 @@ static void test_seq_start_is_consumed_and_keys_music_off(void)
     put_control(ram, 0U, SM64_SATURN_AUDIO_OPCODE_SEQ_START, start);
     sm64_saturn_pcm_put_be16(ram,
         SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET, 1U);
+    /* Pre-set the activity flag so the key-off assertion below discriminates
+     * "SEQ_START keyed music off" from "SEQ_START did nothing": state_init
+     * already leaves music_active at 0. */
+    state.music_active = 1U;
     assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
     assert(state.unknown_opcodes == 0U);
     assert(state.protocol_faults == 0U);

@@ -107,7 +107,6 @@ void pcm68k_main(void)
     sm64_saturn_pcm_voice_state_init(&s_voice_state);
 
     for (;;) {
-        (void)sound_ram;
         (void)sm64_saturn_pcm68k_consume_mapped_zero(scsp_registers,
                                                      &s_voice_state);
         sm64_saturn_pcm68k_publish_tick(sound_ram, &heartbeat);
