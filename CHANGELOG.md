@@ -4,6 +4,45 @@
 
 ### Added
 
+- Sprint 2 T2.4 (instrumentation): a **diagnostic-gated FRT sub-stage
+  profiler** for the pre-notification window —
+  `src/port/saturn/runtime/saturn_prenotify_profile.h` (new), its state and
+  NOLOAD `.lwram_bss` record in `src/port/saturn/sourceboot/main.c`, stage
+  probes in `src/port/saturn/gfx/saturn_demo_render.c`, a slave-busy scope
+  in `src/port/saturn/gfx/saturn_render_job_runtime.c`, and the host
+  harness `tools/saturn/capture_prenotification_profile.py`. **Why:** T2.3
+  left the pre-notification window (dispatch → slave NOTIFIED marker) as
+  the largest block in the frame at 18.92 of the 55.22 VBlanks/frame, and
+  the existing cadence rig counts whole VBlank crossings, so it is
+  structurally incapable of decomposing a block measured in VBlanks. The
+  new instrument reads the SH-2 free-running timer directly, which is the
+  shape T2.0's lesson **L14** extracted from SlaveDriver's `PROFILE.C`
+  (fixed node table, zero allocation, nestable push/pop that charges the
+  elapsed interval to the node on top of the stack at every transition).
+  **Divergences from the reference, and why:** nodes are keyed by a
+  compile-time id rather than SlaveDriver's runtime string-pointer tree,
+  because the nesting here is static; and the internal clock is selected
+  as φ/128 rather than SlaveDriver's φ/32, because a 16-bit FRT at φ/32
+  wraps every ~4.7 VBlanks while sub-stages here can plausibly reach ten.
+  Totals are extended to 32 bits by summing `(uint16_t)(now - last)` per
+  probe and re-seeding at every window begin, and the largest single
+  inter-probe interval is published as the wrap-safety witness — a value
+  near 0xFFFF invalidates the totals, and the harness gates on it.
+  **Consumer-facing impact: none.** Every declaration that can emit code
+  or data sits behind `SATURN_DIAGNOSTIC_MODE != 0 && defined(__sh__)`,
+  mirroring T2.1's `saturn_peak_probe.h`; a `SATURN_DIAGNOSTIC_MODE=0`
+  translation unit differs from its predecessor only by an enum, a
+  typedef, and a `_Static_assert`, none of which emit a byte. **New
+  prerequisite for readers of the diagnostic build's other FRT
+  telemetry:** `sim_frt_ticks_*` / `render_frt_ticks_*` /
+  `dma_wait_ticks_*` are φ/128 units in a diagnostic build and φ/8 units
+  in a product build, because the profiler retunes the shared FRT divider.
+  Those fields are telemetry only — nothing in the port makes a decision
+  from an FRT count — but the unit change is real and is why the published
+  record carries the read-back TCR. Mode 2, not mode 1: mode 1 also
+  compiles the animation sweep, whose Mario-animation override would
+  perturb the route being measured (T2.1's established choice).
+
 - Sprint 2 T2.3 (step 1 of 2): a painter-chain **equivalence harness** in
   `tools/saturn/vdp1_painter_chain_test.c`, and a host-only copy of the
   current per-bin-rescan relink as

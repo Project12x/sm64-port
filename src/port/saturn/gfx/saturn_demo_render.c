@@ -38,6 +38,7 @@
 #include "saturn_render_job_runtime.h"
 #include "saturn_render_lifecycle.h"
 #include "saturn_render_output_bank.h"
+#include "../runtime/saturn_prenotify_profile.h"
 #include "saturn_render_payload_bank.h"
 #include "saturn_scene_admission.h"
 #include "saturn_terrain_command_template.h"
@@ -4407,14 +4408,25 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
     const uint32_t transform_generation = generation;
     vdp1_vram_partitions_get(&transaction->partitions);
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_SPATIAL_ADMIT);
     demo_spatial_admit(&terrain_job.camera, profile, transform_generation);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
 #endif
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_WORK_ORDER);
     demo_prepare_render_work_order(
         &terrain_job.camera, profile, transform_generation);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_POSITION_SET);
     const uint16_t required_positions = demo_build_visible_position_set(
         profile, transform_generation);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
     transaction->transform_generation = transform_generation;
     transaction->required_positions = required_positions;
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_FRAME_RESET);
     memset(s_position_valid, 0, sizeof(s_position_valid));
     sm64_saturn_dual_frame_reset(&s_transform_frame_bank);
     s_transform_phase_failed = 0U;
@@ -4425,6 +4437,7 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
            sizeof(s_primitive_lod_suppressed));
     memset(s_primitive_lod_texture_downgraded, 0,
            sizeof(s_primitive_lod_texture_downgraded));
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
     demo_classify_context_t classify = {
         .primitives = s_bob_primitives_active,
         .work_order = s_render_work_order,
@@ -4439,23 +4452,36 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
     s_terrain_publish_sequence =
         sm64_saturn_render_generation_next(s_terrain_publish_sequence);
     uint16_t actor_vertex_count = 0U;
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_PREPARE_MARIO);
     const bool actor_prepare_ok =
         demo_prepare_mario(snapshot, pose, &actor_job, profile,
                            &actor_vertex_count);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
-    if (!demo_generic_actor_prepare(transaction, generation)) return false;
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_ACTOR_CLOSURE);
+    if (!demo_generic_actor_prepare(transaction, generation)) {
+        SM64_SATURN_PRENOTIFY_PROFILE_POP();
+        return false;
+    }
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
 #endif
     if (actor_prepare_ok)
         s_actor_publish_sequence =
             sm64_saturn_render_generation_next(s_actor_publish_sequence);
     bool queue_ok = s_render_job_runtime_active != 0U && actor_prepare_ok;
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(SM64_SATURN_PRENOTIFY_PROFILE_NODE_MARIO_CTX);
     if (queue_ok && actor_vertex_count != 0U) {
         queue_ok = demo_snapshot_mario_transform_context(
             &s_mario_transform_context, &actor_job, snapshot, pose);
         if (queue_ok)
             s_mario_transform_context.sequence = s_actor_publish_sequence;
     }
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(SM64_SATURN_PRENOTIFY_PROFILE_NODE_QUEUE_RESET);
     queue_ok = queue_ok && demo_render_queue_reset_frame_banks();
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
     /* A fully culled/offscreen actor is an ordinary scene result. Keep the
      * terrain chain contiguous so that generation can publish without
      * manufacturing a zero-length actor descriptor (which the queue rejects
@@ -4493,12 +4519,18 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
     const uint16_t frame_job_count = actor_vertex_count != 0U ? 4U : 2U;
     transaction->actor_vertex_count = actor_vertex_count;
     transaction->frame_job_count = frame_job_count;
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_GRAPH_PUBLISH);
     queue_ok = queue_ok && sm64_saturn_render_job_graph_publish(
         &s_render_job_graph, transform_generation, frame_jobs,
         frame_dependencies, frame_job_count);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_QUEUE_CONTEXTS);
     queue_ok = queue_ok &&
         demo_render_queue_prepare_contexts(&classify,
                                            s_terrain_publish_sequence);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
     if (!queue_ok) {
         /* The lifecycle controller owns the one failure transition. It calls
          * demo_render_quarantine() after this returns, including when graph
@@ -4508,6 +4540,12 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
 
     profile->master_worker_started++;
     profile->slave_worker_started++;
+    /* Left open deliberately: the matching charge happens inside
+     * SM64_SATURN_PRENOTIFY_PROFILE_END(), which the NOTIFIED marker observer
+     * calls.  Everything between here and the marker -- the lifecycle
+     * controller's own notify call and the runtime's publish path -- is
+     * therefore attributed to NOTIFY rather than to the window residue. */
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(SM64_SATURN_PRENOTIFY_PROFILE_NODE_NOTIFY);
     return true;
 }
 

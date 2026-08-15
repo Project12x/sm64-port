@@ -1,5 +1,7 @@
 #include "saturn_render_job_runtime.h"
 
+#include "../runtime/saturn_prenotify_profile.h"
+
 #if defined(__sh__)
 #include <yaul.h>
 #endif
@@ -123,7 +125,12 @@ static void render_job_slave_entry(void)
 {
     const uint32_t notified = s_runtime.notify_sequence;
     const uint32_t generation = s_runtime.telemetry.notified_generation;
+    /* T2.4/L12: the slave's own busy time, measured on the slave's own FRT
+     * block (the FRT is CPU-local).  Compared against the master's
+     * notify->retire wall time this is what quantifies the split. */
+    SM64_SATURN_PRENOTIFY_PROFILE_SLAVE_SCOPE_BEGIN(slave_busy_start);
     (void)sm64_saturn_render_job_runtime_poll_slave();
+    SM64_SATURN_PRENOTIFY_PROFILE_SLAVE_SCOPE_END(slave_busy_start);
     runtime_fence();
     telemetry_retire(generation, notified);
     runtime_fence();

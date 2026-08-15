@@ -35,6 +35,7 @@
 #include "saturn_build_identity.h"
 #include "saturn_object_pool_probe.h"
 #include "saturn_peak_probe.h"
+#include "saturn_prenotify_profile.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
 #include "source_camera_idle_probe.h"
@@ -169,6 +170,15 @@ volatile sm64_saturn_sourceboot_animation_sweep_t sourceboot_animation_sweep = {
  * highwater fields are run-long maxima.  Product builds compile this out
  * entirely. */
 volatile sm64_saturn_peak_probe_t g_sm64_saturn_peak_probe
+    __attribute__((section(".lwram_bss"), used));
+
+/* Sprint 2 T2.4 pre-notification sub-stage profiler (see
+ * saturn_prenotify_profile.h).  Working state is cached HWRAM .bss so the
+ * per-probe cost stays in the tens of cycles; the published record is
+ * NOLOAD .lwram_bss written through P2 once per window.  Product builds
+ * compile both out entirely. */
+sm64_saturn_prenotify_profile_state_t g_sm64_saturn_prenotify_profile_state;
+volatile sm64_saturn_prenotify_profile_t g_sm64_saturn_prenotify_profile
     __attribute__((section(".lwram_bss"), used));
 #endif
 
@@ -894,6 +904,48 @@ static void sourceboot_reset_lwram_state(void)
         peak_probe->vdp1_gouraud_highwater = 0U;
         peak_probe->magic = SM64_SATURN_PEAK_PROBE_MAGIC;
     }
+    {
+        /* T2.4: same field-wise P2 discipline.  Selecting the master FRT's
+         * /128 internal clock here (not at every probe) is what makes the
+         * 16-bit inter-probe extension exact for stages up to ~18.7
+         * VBlanks; the read-back TCR is published so the host can convert
+         * ticks to cycles without assuming the divider took. */
+        volatile sm64_saturn_prenotify_profile_t *const frame_profile =
+            sm64_saturn_prenotify_profile_visible();
+        g_sm64_saturn_prenotify_profile_state =
+            (sm64_saturn_prenotify_profile_state_t){0};
+        frame_profile->version = SM64_SATURN_PRENOTIFY_PROFILE_VERSION;
+        frame_profile->sequence_begin = 0U;
+        frame_profile->sequence_end = 0U;
+        frame_profile->windows = 0U;
+        frame_profile->window_ticks_last = 0U;
+        frame_profile->window_ticks_accum = 0U;
+        frame_profile->window_ticks_max = 0U;
+        frame_profile->max_raw_interval = 0U;
+        frame_profile->faults = 0U;
+        for (uint32_t node = 0U;
+             node < SM64_SATURN_PRENOTIFY_PROFILE_NODES; node++) {
+            frame_profile->node_ticks_accum[node] = 0U;
+            frame_profile->node_ticks_max[node] = 0U;
+            frame_profile->node_ticks_last[node] = 0U;
+        }
+        frame_profile->retire_events = 0U;
+        frame_profile->notify_to_retire_accum = 0U;
+        frame_profile->notify_to_retire_last = 0U;
+        frame_profile->notify_to_retire_max = 0U;
+        frame_profile->finalize_events = 0U;
+        frame_profile->finalize_ticks_accum = 0U;
+        frame_profile->finalize_ticks_last = 0U;
+        frame_profile->finalize_ticks_max = 0U;
+        frame_profile->slave_entries = 0U;
+        frame_profile->slave_busy_accum = 0U;
+        frame_profile->slave_busy_last = 0U;
+        frame_profile->slave_busy_max = 0U;
+        frame_profile->slave_frt_tcr = 0U;
+        frame_profile->frt_tcr =
+            0x100u | (uint32_t)sm64_saturn_prenotify_profile_select_clock();
+        frame_profile->magic = SM64_SATURN_PRENOTIFY_PROFILE_MAGIC;
+    }
 #endif
     sourceboot_sim_ticks_accum = 0U;
     sourceboot_sim_tick_count = 0U;
@@ -1179,12 +1231,18 @@ static void sourceboot_render_runtime_marker(
     (void)context;
     (void)sequence;
     bool accepted = false;
-    if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_NOTIFIED)
+    if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_NOTIFIED) {
+        /* T2.4: close the sub-stage window at exactly the marker the
+         * cadence rig stamps notification_vblank from, so the FRT total and
+         * the VBlank-crossing total describe the same interval. */
+        SM64_SATURN_PRENOTIFY_PROFILE_END();
         accepted = sm64_saturn_render_overlap_phase_notification_published(
             &sourceboot_render_overlap_phase, generation, marker_vblank);
-    else if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_RETIRED)
+    } else if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_RETIRED) {
+        SM64_SATURN_PRENOTIFY_PROFILE_RETIRED();
         accepted = sm64_saturn_render_overlap_phase_retirement_published(
             &sourceboot_render_overlap_phase, generation, marker_vblank);
+    }
     sourceboot_render_overlap_event_ok =
         sourceboot_render_overlap_event_ok && accepted;
 }
@@ -1199,6 +1257,7 @@ static bool sourceboot_render_overlap_terminal(uint32_t generation)
     if (sourceboot_active_render_snapshot == NULL ||
         sourceboot_active_build_bank == NULL)
         return false;
+    SM64_SATURN_PRENOTIFY_PROFILE_TERMINAL();
     return sourceboot_render_overlap_event_ok &&
         sm64_saturn_render_overlap_phase_terminal(
             &sourceboot_render_overlap_phase, generation,
@@ -1250,15 +1309,23 @@ static void sourceboot_frame_service_render(uint32_t generation)
                 &sourceboot_render_overlap_phase, generation,
                 sourceboot_vblank_out_count))
             goto failed;
+        /* T2.4: the sub-stage window opens on the same statement that sets
+         * construction_begin_vblank. */
+        SM64_SATURN_PRENOTIFY_PROFILE_BEGIN();
 #endif
 
+        SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+            SM64_SATURN_PRENOTIFY_PROFILE_NODE_SNAPSHOT_ACQUIRE);
         sourceboot_active_render_snapshot =
             sm64_saturn_render_snapshot_acquire_ready(
                 &sourceboot_render_snapshots, generation);
+        SM64_SATURN_PRENOTIFY_PROFILE_POP();
         if (sourceboot_active_render_snapshot == NULL ||
             sourceboot_active_render_snapshot->generation != generation)
             goto failed;
 
+        SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+            SM64_SATURN_PRENOTIFY_PROFILE_NODE_ACTOR_POSE);
         sourceboot_mario_snapshot = sourceboot_active_render_snapshot->mario;
 #if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
         (void)sm64_saturn_mario_actor_pose_from_selector(
@@ -1272,7 +1339,10 @@ static void sourceboot_frame_service_render(uint32_t generation)
             sourceboot_mario_snapshot.valid;
         sourceboot_fast3d.profile.demo_actor_pose_vertices =
             sourceboot_mario_pose.vertex_count;
+        SM64_SATURN_PRENOTIFY_PROFILE_POP();
 
+        SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+            SM64_SATURN_PRENOTIFY_PROFILE_NODE_BANK_OPEN);
         if (vdp1_sync_busy()) sourceboot_vdp1_bank_late_dma++;
         render_complete = sm64_saturn_vdp1_frame_bank_begin_build(
             &sourceboot_vdp1_frame_banks, generation,
@@ -1304,6 +1374,7 @@ static void sourceboot_frame_service_render(uint32_t generation)
         if (!render_complete) goto failed;
         sm64_saturn_vdp1_backend_bind_frame_bank(&sourceboot_vdp1_backend,
                                                  sourceboot_active_build_bank);
+        SM64_SATURN_PRENOTIFY_PROFILE_POP();
 #if SATURN_DEMO_PATH
         render_complete = sm64_saturn_demo_render_start_frame(
             &sourceboot_vdp1_backend,
