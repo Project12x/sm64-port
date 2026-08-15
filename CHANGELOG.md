@@ -54,6 +54,45 @@
 
 ### Changed
 
+- Three-way work-storage split in `saturn_demo_render.c` (Sprint 1
+  Task 10 stage 1b), partially reverting the Task 8 full-HWRAM promotion
+  below. Root cause: Task 8 assumed the R1 feature-off build
+  (`COMPLETE_MARIO_ANIMATION=0 DYNAMIC_ACTOR_CLOSURE=0`) freed the HWRAM
+  pressure that had forced the 2026-08-07 LWRAM eviction, but the stage-1
+  link smoke (`docs/saturn/evidence/reports/sprint1-stage1-link-smoke.md`)
+  proved the `.bss` growth is committed and always-on: at pool 208 the
+  link still overflowed HWRAM by 41,712 bytes, i.e. 49,648 bytes of
+  relief were required including the 0x1F00 heap-margin gate. This was
+  the ladder's rung (b), refined per review into a split rather than a
+  blanket re-eviction:
+  - Terrain/primitive scratch (18 arrays, `DEMO_CPU_WORK_CACHE` still an
+    empty macro) **stays in 32-bit HWRAM** — it is the multi-pass
+    inner-loop working set this build exercises every frame, and its
+    16-bit LWRAM placement was the mechanism of the 5.29 FPS → ~1 FPS
+    collapse.
+  - Actor-path-only scratch moves to LWRAM via the new
+    `DEMO_ACTOR_WORK_CACHE __attribute__((section(".lwram_bss")))` macro:
+    `s_actor_queue_merge_ids` (2,576 B), `s_actor_slots` (1,288 B),
+    `s_actor_texture_slots` (1,288 B), `s_actor_gouraud` (2,576 B),
+    `s_actor_gouraud_addresses` (2,576 B) — 10,304 B. Each was verified
+    actor-path-only by reading every use: they are touched exclusively in
+    `demo_actor_queue_assemble_done` (dormant A5.8 actor queue),
+    `demo_reserve_mario_gouraud`, `demo_emit_mario`, and
+    `demo_emit_mario_range`, never in the terrain path. With
+    `DYNAMIC_ACTOR_CLOSURE=0` the queue path is dead weight; the Mario
+    emission arrays are touched once per actor primitive on the master
+    only, not in the terrain multi-pass loop.
+  - `s_bob_hot_workarea` (43,776 B) returns to LWRAM `.lwram_bss`
+    (the `91f02ffd` placement, 16-byte alignment kept).
+  Total HWRAM relief 54,080 B against the 49,648 B requirement (~4.4 KB
+  slack). Tradeoff: Mario/actor emission and hot-promotion population now
+  read/write 16-bit LWRAM; FPS impact is measured at the Task 11 gate
+  (the 4 FPS floor still blocks retention). The dual-SH2 work-storage
+  contract test is retargeted to pin the split (terrain set: empty macro,
+  `lwram` forbidden; actor set: `DEMO_ACTOR_WORK_CACHE` required;
+  workarea: `.lwram_bss` + `aligned(16)` required), so no symbol can
+  change sets silently.
+
 - `tools/saturn/probe_audio_mailbox.py` is parameterized from its donor-
   scratch form: argparse CLI (`--ymir`, `--ipl`, `--cue`, `--output`,
   `--frames`, `--timeout`, `--sfx-metadata`) with a `main()` guard replaces

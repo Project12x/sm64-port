@@ -208,17 +208,37 @@ static sm64_saturn_visible_position_set_t s_visible_position_set;
  * the worker boundary still use the explicit cache-through records and LWRAM
  * banks declared separately.
  *
- * Placement: these are per-primitive inner-loop operands touched for every
- * visible primitive every frame.  The A9A baseline (5.29 FPS) kept them in
- * 32-bit HWRAM .bss; the memory-budget relief work (ec7b992a, then 91f02ffd)
- * evicted them to 16-bit LWRAM, which is the mechanism of the accepted
- * 5.29 FPS collapsing to ~1 FPS on this memory-bound loop.  The R1 build
- * (COMPLETE_MARIO_ANIMATION=0, DYNAMIC_ACTOR_CLOSURE=0) frees the HWRAM
- * pressure that forced the eviction, so the working set returns to HWRAM.
- * Validated by the SH-2 link + margin gate and the FPS capture; the
- * fallback ladder lives in CHANGELOG.md.
+ * Placement: three-way work-storage split (Sprint 1 Task 10 stage 1b).
+ * These are per-primitive inner-loop operands.  The A9A baseline (5.29 FPS)
+ * kept them in 32-bit HWRAM .bss; the memory-budget relief work (ec7b992a,
+ * then 91f02ffd) evicted them to 16-bit LWRAM, which is the mechanism of
+ * the accepted 5.29 FPS collapsing to ~1 FPS on this memory-bound loop.
+ * Task 8 (3ad7cb5c) returned everything to HWRAM assuming the R1 build
+ * (COMPLETE_MARIO_ANIMATION=0, DYNAMIC_ACTOR_CLOSURE=0) freed the
+ * pressure, but the stage-1 link smoke
+ * (docs/saturn/evidence/reports/sprint1-stage1-link-smoke.md) proved the
+ * growth is committed and always-on: at pool 208 the link needs 49,648 B
+ * of HWRAM relief (41,712 overflow + 0x1F00 heap margin).  The split:
+ *
+ *   - Terrain/primitive scratch (DEMO_CPU_WORK_CACHE, empty macro) stays
+ *     hot in 32-bit HWRAM -- it is the multi-pass working set this build
+ *     actually exercises every frame.
+ *   - Actor-path-only scratch (DEMO_ACTOR_WORK_CACHE below, ~10,304 B)
+ *     and the 43,776 B hot workarea move to LWRAM .lwram_bss, recovering
+ *     ~54,080 B total.
+ *
+ * FPS impact of the actor/workarea placement is measured at the Task 11
+ * gate; the fallback ladder lives in CHANGELOG.md.
  * was: __attribute__((section(".lwram_bss"))) */
 #define DEMO_CPU_WORK_CACHE
+/* Actor-path-only scratch: every array below is read/written exclusively by
+ * the actor lanes (demo_actor_queue_assemble_done, demo_reserve_mario_gouraud,
+ * demo_emit_mario, demo_emit_mario_range) -- never by the terrain path.  The
+ * stage-1 config builds with DYNAMIC_ACTOR_CLOSURE=0, so the generic-actor
+ * queue path is dormant, and Mario's master-only emission touches these once
+ * per actor primitive rather than in the terrain multi-pass loop.  Evicted to
+ * LWRAM as part of the 49,648 B stage-1b relief (see the split note above). */
+#define DEMO_ACTOR_WORK_CACHE __attribute__((section(".lwram_bss")))
 static sm64_saturn_dual_frame_bank_t s_transform_frame_bank
     DEMO_CROSS_CPU_SHARED;
 /* Mario's bounded second phase uses the exact same release protocol as the
@@ -433,7 +453,7 @@ static demo_actor_queue_metadata_t s_actor_admit_metadata[
 static demo_actor_queue_metadata_t s_actor_result_metadata[
     SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_render_job_result_identity_t s_actor_queue_merge_ids[
-    SM64_MARIO_PRIMITIVE_COUNT] DEMO_CPU_WORK_CACHE;
+    SM64_MARIO_PRIMITIVE_COUNT] DEMO_ACTOR_WORK_CACHE;
 static uint16_t s_actor_draw_order[SM64_MARIO_PRIMITIVE_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint16_t s_actor_transform_refs[SM64_MARIO_VERTEX_COUNT]
@@ -443,9 +463,9 @@ static sm64_saturn_actor_draw_ref_t s_actor_opaque_refs[
 static sm64_saturn_actor_draw_ref_t s_actor_translucent_refs[
     SM64_MARIO_PRIMITIVE_COUNT] DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT]
-    DEMO_CPU_WORK_CACHE;
+    DEMO_ACTOR_WORK_CACHE;
 static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT]
-    DEMO_CPU_WORK_CACHE;
+    DEMO_ACTOR_WORK_CACHE;
 
 static const sm64_saturn_render_job_callback_table_t *
 demo_render_job_callbacks(void);
@@ -454,9 +474,9 @@ static uint8_t s_render_job_runtime_active;
 static uint16_t s_actor_texture_count;
 static uint16_t s_actor_command_count;
 static sm64_saturn_gouraud_table_t *s_actor_gouraud[
-    SM64_MARIO_PRIMITIVE_COUNT] DEMO_CPU_WORK_CACHE;
+    SM64_MARIO_PRIMITIVE_COUNT] DEMO_ACTOR_WORK_CACHE;
 static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT]
-    DEMO_CPU_WORK_CACHE;
+    DEMO_ACTOR_WORK_CACHE;
 static uint16_t s_actor_draw_count;
 
 /* The meshlet core already owns Mario's painter-sorted opaque/translucent
@@ -560,17 +580,20 @@ demo_terrain_resolved_template(uint16_t primitive_index, bool recovery,
 #if SATURN_DEMO_HOT_PROMOTION
 /* Optional Z-Treme-style hot arena. The generated bank is immutable source
  * data; this one enclosing work-area owner is populated once before the
- * frame loop and then becomes the renderer's active read-only bank.  It is
- * the renderer's hottest per-frame read bank, so it lives in 32-bit HWRAM
- * with the rest of the demo-path working set (see DEMO_CPU_WORK_CACHE
- * above); the 91f02ffd LWRAM eviction reverts with the R1 memory relief.
+ * frame loop and then becomes the renderer's active read-only bank.
+ * Placement (stage 1b): back in LWRAM .lwram_bss.  Task 8 promoted it to
+ * HWRAM assuming the R1 feature-off build freed the pressure, but the
+ * stage-1 link smoke measured 49,648 B of committed HWRAM relief still
+ * required at pool 208; this 43,776 B workarea is the largest single
+ * recoverable block (see the DEMO_CPU_WORK_CACHE split note above).
  * One enclosing object is deliberate: Z-Treme's workarea.c pattern uses
  * compile-time offsets rather than two cursors that can collide at runtime. */
 typedef struct demo_hot_workarea {
     int32_t positions[SM64_SATURN_BOB_POSITION_COUNT][3];
     sm64_saturn_bob_primitive_t primitives[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 } demo_hot_workarea_t;
-static demo_hot_workarea_t s_bob_hot_workarea __attribute__((aligned(16)));
+static demo_hot_workarea_t s_bob_hot_workarea
+    __attribute__((section(".lwram_bss"), aligned(16)));
 _Static_assert(offsetof(demo_hot_workarea_t, positions) == 0U,
                "hot positions must be the first fixed work-area region");
 _Static_assert(offsetof(demo_hot_workarea_t, primitives) >=
