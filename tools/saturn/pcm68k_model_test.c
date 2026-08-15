@@ -351,6 +351,45 @@ static void test_semantic_sfx_uses_validated_sound_ram_bundle(void)
     assert(state.invalid_samples == 1U);
 }
 
+/* Task 5 packager change: the looped-music row publishes
+ * SM64_SATURN_PCM_SAMPLE_LOOP in its sample-row flags word.  The bundle
+ * validator accepts exactly that bit -- which must reach the SCSP keys word
+ * as LOOP_NORMAL -- and keeps failing closed on any unknown flag bit. */
+static void test_bundle_accepts_loop_flag_and_rejects_unknown_flags(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t play[7] = {0x2400U, 0x8080U, 9U, 1U, 0xFF40U, 4096U, 1U};
+    const uint16_t flags_offset = (uint16_t)(
+        SM64_SATURN_PCM_SFX_BUNDLE_OFFSET +
+        SM64_SATURN_PCM_SFX_BUNDLE_HEADER_BYTES +
+        SM64_SATURN_PCM_SFX_BUNDLE_MAPPING_BYTES + 10U);
+
+    publish_v2_header(ram);
+    publish_sfx_bundle(ram, 0x24008080U, 1U,
+                       SM64_SATURN_PCM_BANK_OFFSET, 32U, 16000U);
+    sm64_saturn_pcm_put_be16(ram, flags_offset, SM64_SATURN_PCM_SAMPLE_LOOP);
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_sfx(ram, 0U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, play);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 1U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.voices_started == 1U);
+    assert(state.invalid_samples == 0U);
+    /* KEY_EXECUTE | KEY_ON | PCM8 | LOOP_NORMAL for a bank-offset sample. */
+    assert(register_word(register_words, SM64_SATURN_SCSP_SLOT_KEYS) ==
+           0x1830U);
+
+    /* Any flag bit other than the loop bit stays an invalid bundle. */
+    sm64_saturn_pcm_put_be16(ram, flags_offset, 2U);
+    put_sfx(ram, 1U, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, play);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_SFX_PRODUCER_OFFSET, 2U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(state.voices_started == 1U);
+    assert(state.invalid_samples == 1U);
+}
+
 static void test_voice_state_fits_reserved_stack(void)
 {
     /* linker.ld reserves 0x3C00..0x3FFC (1,020 bytes). The state no longer
@@ -369,5 +408,6 @@ int main(void)
     test_version_and_either_corrupt_ring_fail_before_consumption();
     test_consumer_drives_scsp_play_master_and_reset();
     test_semantic_sfx_uses_validated_sound_ram_bundle();
+    test_bundle_accepts_loop_flag_and_rejects_unknown_flags();
     return 0;
 }

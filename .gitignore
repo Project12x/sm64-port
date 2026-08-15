@@ -86,3 +86,7 @@ sm64config.txt
 # commit. A repository .gitignore outranks the global one, so re-include the
 # directory here and let the entries above govern what inside it is ignored.
 !/third_party/
+
+# owner-provided ROM-derived audio, never committed
+bob_theme.us.wav
+*.pcm8

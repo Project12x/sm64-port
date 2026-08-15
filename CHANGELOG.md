@@ -19,7 +19,36 @@
   (`docs/superpowers/plans/2026-08-14-sprint1-recovery-baseline-audio.md`)
   for the curation and verification record.
 
+- `tools/saturn/wav_to_pcm8.py`: converts an owner-provided WAV (any 8/16-bit
+  mono/stereo source) to the raw signed 8-bit mono PCM the SCSP plays —
+  linear resample to `--rate` (default 8000 Hz) and a `--max-seconds`
+  duration trim (default 28 s) so one song fits the sound-RAM bank. The
+  source WAV is ROM-derived and must never be committed; `.gitignore` now
+  covers `bob_theme.us.wav` and `*.pcm8`.
+
 ### Changed
+
+- Music is now packaged as one looped SFXB sample instead of an m64 sequence
+  trailer. Why: the Task 4 driver diet removed the sequence VM (the trailer's
+  only consumer), and the old fallback plan assumed a 240 Hz retrigger timer
+  that does not exist — the SCSP's hardware gapless loop, which the driver
+  already keys from a sample-row flag (`scsp_pcm8.c` sets `LOOP_NORMAL` when
+  `SM64_SATURN_PCM_SAMPLE_LOOP` is set), replaces both. What changed:
+  `compile_sourceboot_sfx_bundle.py` gained `--music-pcm <raw-pcm8>` and
+  `--music-rate` (default 8000) options that append the owner-supplied PCM
+  as the final sample row carrying exactly the loop flag; the bank-22
+  instrument row and the raw m64 append are deleted, so the SFXB header's
+  music sequence offset/byte words are now always zero and the music word at
+  +30 holds only the looped row's index (without `--music-pcm` every trailer
+  word is zero). The MC68000 bundle validator (`pcm_voice.c`) now accepts
+  exactly the loop bit in sample-row flags — any other bit still fails the
+  bundle closed. Budget failures name the fix (`wav_to_pcm8.py
+  --max-seconds` or a lower `--music-rate`); the sound-RAM budgets are
+  unchanged. Consumer impact: Task 6 rewrites `SEQ_START` to key the
+  trailer-indexed looped row (it currently keys music off); existing
+  packager invocations without the new options keep producing SFX-only
+  bundles the relaxed validator accepts, and the owner's WAV/PCM8 files stay
+  uncommitted.
 
 - Removed the M64 sequence VM, its 20-voice software allocator, and the
   software envelope engine from the linked MC68000 driver image and moved the

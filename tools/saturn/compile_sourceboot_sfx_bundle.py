@@ -25,7 +25,6 @@ from saturn_audio_package import (
     _load_sequences,
     _decimate_sfx_sample,
     parse_aiff,
-    _sequence_payload,
 )
 
 
@@ -38,6 +37,13 @@ SOUND_RAM_RESERVE_OFFSET = 0x5000
 SOUND_RAM_PCM_OFFSET = 0x8000
 SOUND_RAM_BYTES = 0x80000
 SOUND_RAM_RESERVE_BYTES = SOUND_RAM_PCM_OFFSET - SOUND_RAM_RESERVE_OFFSET
+# Mirrors SM64_SATURN_PCM_SAMPLE_LOOP (src/port/saturn/audio68k/pcm_voice.h):
+# the only sample-row flag bit the MC68000 bundle validator accepts.  The
+# SCSP keys its hardware gapless loop from this bit (scsp_pcm8.c).
+SAMPLE_FLAG_LOOP = 0x0001
+MUSIC_SAMPLE_ID = "music/looped-pcm8"
+MUSIC_DEFAULT_VOLUME = 15
+MUSIC_DEFAULT_RATE = 8000
 
 
 class SourcebootSfxBundleError(ValueError):
@@ -173,7 +179,9 @@ def _sample_path(root: Path, stable_id: str) -> Path:
 
 
 def build_bob_sfx_bundle(root: Path, closure_path: Path,
-                         sequences_bin: Path) -> SourcebootSfxBundle:
+                         sequences_bin: Path,
+                         music_pcm: Path | None = None,
+                         music_rate: int = MUSIC_DEFAULT_RATE) -> SourcebootSfxBundle:
     """Build immutable metadata and PCM bytes from the selected BOB closure."""
     root = root.resolve()
     closure = _load_closure(closure_path)
@@ -248,7 +256,8 @@ def build_bob_sfx_bundle(root: Path, closure_path: Path,
         raise SourcebootSfxBundleError("resolved SFX sample set is not closure-selected")
 
     # The generic BOB SFX path deliberately does not reserve source-selected
-    # music PCM. The MC68000 sequence player remains a later capability. This
+    # music PCM. Music is the optional owner-provided looped PCM8 row appended
+    # by _finalize_bundle (--music-pcm), not a packaged instrument. This
     # leaves the source closure authoritative for reachability while keeping
     # this first live consumer to actual semantic SFX only.
     sfx_sample_ids = [stable_id for stable_id in closure_ids
@@ -286,59 +295,6 @@ def build_bob_sfx_bundle(root: Path, closure_path: Path,
         physical_rows[stable_id] = BundleSample(stable_id, offset,
                                                 sample.frames, sample.rate)
         pcm.extend(sample.pcm8)
-    # The BOB closure's real level sequence uses bank 22.  Retain one
-    # closure-selected instrument sample for the semantic sequence player;
-    # the 68K VM supplies the note/pitch while the existing SFX rows remain
-    # unchanged.  This is an extension of the SFXB payload, not a second
-    # wire format: the optional trailer is described by the three previously
-    # reserved header words.
-    music_sequence = next((sequence for sequence in sequences
-                           if int(sequence["id"]) == 3), None)
-    if music_sequence is None:
-        raise SourcebootSfxBundleError("BOB closure lacks level-grass sequence 03")
-    music_bank = bank_by_name.get("22")
-    if not isinstance(music_bank, dict):
-        raise SourcebootSfxBundleError("BOB closure lacks music bank 22")
-    music_metadata = music_bank.get("metadata")
-    instruments = (music_metadata.get("instruments")
-                   if isinstance(music_metadata, dict) else None)
-    if not isinstance(instruments, dict) or not isinstance(instruments.get("inst0"), dict):
-        raise SourcebootSfxBundleError("music bank 22 lacks inst0")
-    music_sound = instruments["inst0"].get("sound")
-    if not isinstance(music_sound, str) or not music_sound:
-        raise SourcebootSfxBundleError("music bank 22 inst0 lacks a sample")
-    music_sample_id = f"{music_bank.get('sample_bank')}/{music_sound}"
-    if music_sample_id not in closure_ids:
-        raise SourcebootSfxBundleError(
-            f"music sample is not closure-selected: {music_sample_id}")
-    try:
-        music_sample = parse_aiff(_sample_path(root, music_sample_id))
-    except AudioPackageError as error:
-        raise SourcebootSfxBundleError(str(error)) from error
-    if music_sample.frames != len(music_sample.pcm8) or music_sample.frames == 0:
-        raise SourcebootSfxBundleError("music sample has invalid PCM frame count")
-    if music_sample.frames > 0xFFFF or not 0 < music_sample.rate <= 44100:
-        raise SourcebootSfxBundleError("music sample is SCSP-incompatible")
-    music_sample_offset = SOUND_RAM_PCM_OFFSET + len(pcm)
-    if music_sample_offset & 1:
-        pcm.append(0)
-        music_sample_offset += 1
-    if music_sample_offset + music_sample.frames > SOUND_RAM_BYTES:
-        raise SourcebootSfxBundleError("music sample does not fit sound RAM")
-    music_sample_index = len(sample_rows) if "sample_rows" in locals() else 0
-    physical_rows[music_sample_id] = BundleSample(
-        music_sample_id, music_sample_offset, music_sample.frames,
-        music_sample.rate)
-    pcm.extend(music_sample.pcm8)
-    music_sequence_offset = SOUND_RAM_PCM_OFFSET + len(pcm)
-    music_sequence_payload = _sequence_payload(root, music_sequence)
-    if len(music_sequence_payload) > 0xFFFF:
-        raise SourcebootSfxBundleError("music sequence exceeds sourceboot trailer limit")
-    if music_sequence_offset + len(music_sequence_payload) > SOUND_RAM_BYTES:
-        raise SourcebootSfxBundleError("music sequence does not fit sound RAM")
-    pcm.extend(music_sequence_payload)
-    if not pcm or len(pcm) > SOUND_RAM_BYTES - SOUND_RAM_PCM_OFFSET:
-        raise SourcebootSfxBundleError("selected PCM payload exceeds the sound-RAM bank")
     # The 68K consumes an interval of compact descriptor rows for each SFX.
     # Repeat a descriptor where necessary, never PCM bytes; that preserves
     # chained/layered sound effects without allocating a second PCM bank.
@@ -351,11 +307,64 @@ def build_bob_sfx_bundle(root: Path, closure_path: Path,
             sample_rows.append(physical_rows[stable_id])
         mapping_rows.append(BundleMapping(sound_id, sound_bits[sound_id], first,
                                           len(ids)))
-    # The music row is not a semantic SFX mapping, but it shares the existing
-    # descriptor table so the 68K sequence consumer can use the same checked
-    # sample validation path.
-    music_sample_index = len(sample_rows)
-    sample_rows.append(physical_rows[music_sample_id])
+    music_pcm_bytes: bytes | None = None
+    if music_pcm is not None:
+        try:
+            music_pcm_bytes = Path(music_pcm).read_bytes()
+        except OSError as error:
+            raise SourcebootSfxBundleError(
+                f"unreadable music PCM {music_pcm}: {error}") from error
+    return _finalize_bundle(int(closure["generation"]), mapping_rows,
+                            sample_rows, pcm, music_pcm_bytes, music_rate)
+
+
+def _finalize_bundle(generation: int, mapping_rows: list[BundleMapping],
+                     sample_rows: list[BundleSample], pcm: bytearray,
+                     music_pcm: bytes | None,
+                     music_rate: int) -> SourcebootSfxBundle:
+    """Append the optional looped-music row and emit the final wire bytes.
+
+    Music is one owner-provided raw signed PCM8 span (wav_to_pcm8.py output)
+    played through the SCSP's hardware gapless loop; the SEQ_START handler
+    keys the row whose index the header trailer carries.  The former m64
+    trailer left with the removed sequence VM: the music sequence offset and
+    byte words are now always zero, and without --music-pcm every trailer
+    word is zero.
+    """
+    sample_rows = list(sample_rows)
+    pcm = bytearray(pcm)
+    music_sample_index = 0
+    music_sample_id = ""
+    if music_pcm is not None:
+        if not music_pcm:
+            raise SourcebootSfxBundleError("music PCM payload is empty")
+        if len(music_pcm) > 0xFFFF:
+            raise SourcebootSfxBundleError(
+                "music PCM exceeds the 65535-byte SCSP sample limit; trim it "
+                "with wav_to_pcm8.py --max-seconds or lower --music-rate")
+        if not 0 < music_rate <= 44100:
+            raise SourcebootSfxBundleError(
+                f"SCSP-incompatible music rate: {music_rate}")
+        music_sample_offset = SOUND_RAM_PCM_OFFSET + len(pcm)
+        if music_sample_offset & 1:
+            pcm.append(0)
+            music_sample_offset += 1
+        if music_sample_offset + len(music_pcm) > SOUND_RAM_BYTES:
+            raise SourcebootSfxBundleError(
+                "music PCM does not fit sound RAM; trim it with "
+                "wav_to_pcm8.py --max-seconds or lower --music-rate")
+        music_sample_index = len(sample_rows)
+        music_sample_id = MUSIC_SAMPLE_ID
+        sample_rows.append(BundleSample(MUSIC_SAMPLE_ID, music_sample_offset,
+                                        len(music_pcm), music_rate,
+                                        MUSIC_DEFAULT_VOLUME,
+                                        SAMPLE_FLAG_LOOP))
+        pcm.extend(music_pcm)
+    if not pcm or len(pcm) > SOUND_RAM_BYTES - SOUND_RAM_PCM_OFFSET:
+        hint = ("; trim the music with wav_to_pcm8.py --max-seconds or lower "
+                "--music-rate" if music_pcm is not None else "")
+        raise SourcebootSfxBundleError(
+            "selected PCM payload exceeds the sound-RAM bank" + hint)
 
     metadata_bytes = BUNDLE_HEADER_BYTES + len(mapping_rows) * BUNDLE_MAPPING_BYTES + len(sample_rows) * BUNDLE_SAMPLE_BYTES
     if metadata_bytes > SOUND_RAM_RESERVE_BYTES:
@@ -364,15 +373,15 @@ def build_bob_sfx_bundle(root: Path, closure_path: Path,
     metadata[0:4] = _u32(BUNDLE_MAGIC)
     metadata[4:6] = _u16(BUNDLE_VERSION)
     metadata[6:8] = _u16(BUNDLE_HEADER_BYTES)
-    metadata[8:10] = _u16(int(closure["generation"]))
+    metadata[8:10] = _u16(generation)
     metadata[10:12] = _u16(len(mapping_rows))
     metadata[12:14] = _u16(len(sample_rows))
     metadata[14:16] = _u16(BUNDLE_HEADER_BYTES)
     metadata[16:18] = _u16(BUNDLE_HEADER_BYTES + len(mapping_rows) * BUNDLE_MAPPING_BYTES)
     metadata[18:20] = _u16(metadata_bytes)
     metadata[20:24] = _u32(len(pcm))
-    metadata[24:28] = _u32(music_sequence_offset)
-    metadata[28:30] = _u16(len(music_sequence_payload))
+    metadata[24:28] = _u32(0)  # m64 music-sequence offset: retired with the VM
+    metadata[28:30] = _u16(0)  # m64 music-sequence bytes: retired with the VM
     metadata[30:32] = _u16(music_sample_index)
     cursor = BUNDLE_HEADER_BYTES
     for mapping in mapping_rows:
@@ -387,11 +396,9 @@ def build_bob_sfx_bundle(root: Path, closure_path: Path,
         metadata[cursor + 8:cursor + 10] = _u16(sample.default_volume)
         metadata[cursor + 10:cursor + 12] = _u16(sample.flags)
         cursor += BUNDLE_SAMPLE_BYTES
-    return SourcebootSfxBundle(int(closure["generation"]), bytes(metadata),
-                               bytes(pcm), tuple(sample_rows),
-                               tuple(mapping_rows), music_sequence_offset,
-                               len(music_sequence_payload), music_sample_index,
-                               music_sample_id)
+    return SourcebootSfxBundle(generation, bytes(metadata), bytes(pcm),
+                               tuple(sample_rows), tuple(mapping_rows),
+                               0, 0, music_sample_index, music_sample_id)
 
 
 def _manifest(bundle: SourcebootSfxBundle) -> dict[str, object]:
@@ -421,8 +428,15 @@ def main() -> None:
     parser.add_argument("--metadata-output", type=Path, required=True)
     parser.add_argument("--pcm-output", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--music-pcm", type=Path, default=None,
+                        help="raw signed 8-bit mono PCM (wav_to_pcm8.py "
+                             "output) packaged as the looped music sample")
+    parser.add_argument("--music-rate", type=int, default=MUSIC_DEFAULT_RATE,
+                        help="playback rate in Hz for --music-pcm")
     args = parser.parse_args()
-    bundle = build_bob_sfx_bundle(args.root, args.closure, args.sequences_bin)
+    bundle = build_bob_sfx_bundle(args.root, args.closure, args.sequences_bin,
+                                  music_pcm=args.music_pcm,
+                                  music_rate=args.music_rate)
     for path, data in ((args.metadata_output, bundle.metadata),
                        (args.pcm_output, bundle.pcm)):
         path.parent.mkdir(parents=True, exist_ok=True)
