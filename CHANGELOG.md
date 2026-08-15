@@ -28,7 +28,11 @@
   HWRAM remaining vs required, and the LWRAM floor, exiting nonzero on any
   violation; it binds camera route and cart stage from the sealed identity
   spec (`generated/saturn_build_identity_spec.json`) rather than trusting
-  path tags, and runs the full existing `validate_layout` region checks. The
+  path tags, and runs the full existing `validate_layout` region checks.
+  Infrastructure failures (missing ELF, missing toolchain binary, nonzero
+  readelf/nm) also emit the `RESULT          = FAIL: ...` contract line and
+  exit 1 instead of raising an uncaught traceback, so downstream grep
+  consumers see a uniform failure shape for every failure class. The
   make target defaults `SOURCEBOOT_CANDIDATE_ELF` to the newest
   `e2-bob-identity-*/obj/*.elf` (same location pattern as
   `verify-sourceboot-hud-target`) and accepts an explicit override. The

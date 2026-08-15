@@ -308,6 +308,15 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
                 self.assertEqual(status, 1)
                 self.assertIn("below required final floor", failing.getvalue())
 
+    def test_verify_cli_emits_result_fail_for_inspection_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            elf = Path(temporary) / "sourceboot" / "identity" / "obj" / "missing.elf"
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                status = verify.main(["verify", "--elf", str(elf)])
+            self.assertEqual(status, 1)
+            self.assertIn("RESULT          = FAIL", output.getvalue())
+
     def test_verify_cli_fails_closed_without_identity_spec(self) -> None:
         layout = image("verify-target", end=0x060F9000, stage=8, scc=False)
         with tempfile.TemporaryDirectory() as temporary:

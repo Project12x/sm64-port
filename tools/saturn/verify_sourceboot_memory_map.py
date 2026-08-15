@@ -414,7 +414,14 @@ def _identity_spec_for(elf: Path) -> dict[str, Any] | None:
 
 def run_verify(*, elf: Path, required_final_margin: int) -> int:
     """Verify one built ELF's HWRAM/LWRAM margins as a build output."""
-    layout = inspect_elf(elf)
+    try:
+        layout = inspect_elf(elf)
+    except (ValueError, OSError) as error:
+        # Infrastructure failures (missing ELF, missing toolchain, nonzero
+        # readelf/nm) must honor the same RESULT contract as layout failures.
+        print(f"verify: {elf}")
+        print(f"  RESULT          = FAIL: {error}")
+        return 1
     print(f"verify: {layout.path}")
     end = layout.symbols.get("___end")
     if end is None:
