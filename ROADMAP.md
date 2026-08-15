@@ -14,17 +14,26 @@ Measured starting point (candidate `id-86d3880727ed1d10`): ~1.1 FPS sustained,
 ~53 VBlanks per presented frame, dominated by scene construction (~24.5
 VBlanks) and master finalization (~5.8).
 
-Known levers, in evidence order:
+Known levers, in evidence order (**updated after T2.2's measured result**):
 
-- **Committed HWRAM reduction.** Sprint 1 measured 49,648 B of always-on
-  growth since A9A, which forced the 43,776 B promoted-geometry workarea and
-  Mario's emission scratch into 16-bit LWRAM. Recovering that budget lets the
-  renderer's hot working set return to 32-bit HWRAM — the single mechanism
-  most directly implicated in the cadence collapse.
-- The painter relink is O(bins x commands) per frame (64 x ~1,800); a
-  counting-sort scatter would cut it to one pass.
+- ~~Committed HWRAM reduction~~ — **DONE and DISPROVED as the lever.** T2.2
+  recovered 67,584 B and returned the entire 54,080 B hot working set to
+  32-bit HWRAM; cadence moved 1.071 → 1.068 FPS, i.e. not at all. Banked
+  wins: slack 472 B → 13,944 B, and a silent `gGfxPool` overflow corruption
+  fixed. Do not spend further effort here on this evidence.
+- **The painter relink is O(bins x commands) per frame** (64 x ~1,800 ≈
+  115,200 steps). A counting-sort scatter cuts it to ~1,864. Design pinned by
+  the reference sweep (T2.0 L7-L9): sort out-of-band 8-byte references like
+  SGL rather than overloading `cmd_link`, reusing the stable radix scatter
+  already in `saturn_terrain_depth_bins.h`. **This is the active lever.**
+- Scene construction is 24.72 VBlanks of a 56-VBlank frame (44%) — the
+  counting sort attacks part of it; the remainder needs its own profiling.
 - Mario dominates the command stream (638 of 882 visible items; 50 source
   triangles expanding to ~200 VDP1 commands).
+- Structural, deferred: SlaveDriver keeps both VDP1 command banks in VRAM
+  behind a 10,240 B staging window (T2.0 L3). Adopting it would return
+  ~96,256 B of our 106,496 B staging — enough to rehome `_sourceboot_fast3d`
+  — but it changes the transport contract and needs its own CUE and gate.
 
 **Gate:** owner-observed cadence improvement with music, audio, and visuals
 still accepted. The >=4 FPS floor becomes binding again once a cadence

@@ -5,13 +5,19 @@
 **Active plan:**
 [`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
 **Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
-**Sprint 2:** T2.0 reference sweep and T2.1 instrumented peak capture done
-(2026-08-15): all four capacity-shrink gates measured over the scripted
-route — cmdt 1664 SAFE (peak 653), `_private_pool` 0x4000 SAFE (extent
-8,276 B), `GFX_POOL_SIZE` 4096 SAFE (peak 443), SMPC 14→2 NEEDS-MARGIN
-(exactly 2 ever used; take 14→4). Evidence:
-`docs/saturn/evidence/reports/sprint2-t2_1-peak-capture.md`. T2.2
-(reclamation package) is unblocked.
+**Sprint 2 (cadence recovery):** T2.0 reference sweep, T2.1 peak capture, and
+T2.2 reclamation+un-split all COMPLETE (2026-08-15). **T2.2's result is the
+load-bearing one: recovering 67,584 B of HWRAM and returning the full
+54,080 B hot working set to 32-bit memory did NOT move cadence** (1.068 FPS
+vs the R1 baseline's comparable 1.071). Memory objective met — true slack
+over the floor went 472 B → 13,944 B, and a real latent `gGfxPool` overflow
+corruption was fixed en route. Cadence objective not met. The memory-tier
+hypothesis is narrowed, not refuted (`_sourceboot_fast3d`, 44,616 B, is still
+in LWRAM; its unlock is the T2.0 L3 staging-window architecture, which needs
+its own CUE). **Evidence now points at the algorithmic levers — construction
+is 24.72 VBlanks of a 56-VBlank frame (44%) — so T2.3's painter counting sort
+is next.** Open: owner look-and-listen on candidate `id-6b7c7e5d5f71e809`.
+Evidence: `docs/saturn/evidence/reports/sprint2-t2_2-reclaim-unsplit.md`.
 
 ## Product truth
 
