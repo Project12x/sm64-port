@@ -386,6 +386,30 @@
 
 ### Fixed
 
+- `tools/saturn/profiles/sourceboot-bob-demo-v1.json`: reconciled
+  `release_config` to the Sprint 1 R1 tuple
+  (`features.complete_mario_animation 0`,
+  `features.dynamic_actor_closure 0`; pool 208 and semantic audio 1 were
+  already correct). Root cause: a plan defect — the transplanted profile
+  still pinned the donor's all-features crunch tuple, and
+  `bootstrap_sourceboot_identity_spec.py` requires the Make-provided
+  config to exactly equal `release_config`, so the sprint plan's mandated
+  stage-1 variable set was unbuildable as-committed. Sprint tasks 1–9
+  never owned this reconciliation; the plan overlooked the equality gate.
+  Discovered and reconciled during the Task 10 stage-1 link smoke
+  (`docs/saturn/evidence/reports/sprint1-stage1-link-smoke.md`).
+
+- `tools/saturn/manifests/sourceboot-bob-demo/audio-sourceboot-sfx-v1.json`
+  is now committed. Root cause: a transplant gap — the tracked profile's
+  `package_descriptors` list references this audio package descriptor, but
+  the file was never committed in the donor worktree (it sat untracked
+  there), so the recovery branch could not self-build its SFX bundle. The
+  descriptor carries only metadata (input paths under
+  `build/saturn/audio68k/` and `build/saturn/audio/generated/
+  sourceboot-sfx/`); no sample data is embedded, and the path is not
+  gitignored (`git check-ignore` clean), so this was purely a missing
+  commit.
+
 - Extended the fail-open audio-boot fix to real hardware: the fallback's
   fail-closed contract relied on the modules' workspace pointers reading
   `NULL` when unbound, but both `s_state` statics (and the public
