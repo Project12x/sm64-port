@@ -133,13 +133,33 @@ class FullGameAudioSourceContract(unittest.TestCase):
             "not hang the console",
         )
 
-    def test_semantic_music_runs_at_consumer_audio_cadence(self) -> None:
+    def test_music_is_hardware_looped_not_serviced(self) -> None:
+        """Music is one hardware-looped SCSP sample, not a serviced cadence.
+
+        Tasks 4-6 removed the sequence-VM era's retrigger/cadence machinery
+        (music_service, music_fallback_period, the MUSIC_POLLS_PER_TICK
+        divider) along with the MUSIC_DIRECT_FALLBACK define.  What replaces
+        the cadence is the SM64_SATURN_PCM_SAMPLE_LOOP flag reaching the SCSP
+        voice start: a non-looped row is a music fault, never a retrigger
+        schedule.
+        """
         pcm_voice = PCM_VOICE_C.read_text(encoding="utf-8")
-        self.assertRegex(
-            pcm_voice,
-            r"SM64_SATURN_PCM_MUSIC_POLLS_PER_TICK\s*=\s*1U",
-            "a multi-second music poll divider is silent on the live 240 Hz consumer",
+        for removed in (
+            "music_service",
+            "music_fallback_period",
+            "SM64_SATURN_PCM_MUSIC_POLLS_PER_TICK",
+            "MUSIC_DIRECT_FALLBACK",
+        ):
+            self.assertNotIn(
+                removed, pcm_voice,
+                f"{removed} belongs to the removed sequence-VM era",
+            )
+        music_start = function_body(pcm_voice, "sm64_saturn_pcm_music_start")
+        self.assertIn(
+            "SM64_SATURN_PCM_SAMPLE_LOOP", music_start,
+            "the loop flag gating the SCSP start is the music contract",
         )
+        self.assertIn("sm64_saturn_pcm_start_voice", music_start)
 
     def test_m68k_mapped_zero_audio_ram_is_not_rejected_as_null(self) -> None:
         makefile = (ROOT / "src/port/saturn/audio68k/Makefile").read_text(
@@ -150,13 +170,32 @@ class FullGameAudioSourceContract(unittest.TestCase):
         self.assertIn("!defined(SM64_SATURN_PCM_MAPPED_ZERO)", pcm_voice)
         self.assertIn("sm64_saturn_pcm68k_consume_mapped_zero", pcm_voice)
 
-    def test_normal_music_has_a_target_safe_packaged_sample_fallback(self) -> None:
+    def test_music_starts_from_bundle_trailer_row_on_slot0(self) -> None:
+        """Music comes from the SFXB trailer row, started on the pinned slot.
+
+        The looped trailer-row path IS the target-safe packaged-sample music
+        (there is no fallback define): sm64_saturn_pcm_music_start reads the
+        trailer's music_sample_index field and starts that row on the pinned
+        music slot.  Presence discrimination: a zero index means the bundle
+        carries no music -- silence, not a fault.
+        """
         pcm_voice = PCM_VOICE_C.read_text(encoding="utf-8")
-        self.assertIn("SM64_SATURN_PCM_MUSIC_DIRECT_FALLBACK", pcm_voice)
-        self.assertIn("sm64_saturn_pcm_play_sample(state, sample_index", pcm_voice)
+        music_start = function_body(pcm_voice, "sm64_saturn_pcm_music_start")
         self.assertIn(
-            "diagnostic-only when the target scalar ABI rejects",
-            pcm_voice,
+            "SM64_SATURN_PCM_SFX_BUNDLE_MUSIC_SAMPLE_INDEX_FIELD",
+            music_start,
+            "music must be named by the bundle trailer's sample-index field",
+        )
+        self.assertRegex(
+            music_start,
+            r"sm64_saturn_pcm_start_voice\(\s*state,\s*"
+            r"SM64_SATURN_PCM_MUSIC_SLOT\b",
+            "the trailer row must start on the pinned music slot",
+        )
+        self.assertRegex(
+            music_start,
+            r"if\s*\(\s*music_index\s*==\s*0U?\s*\)",
+            "a music-less bundle must be silent, not a fault",
         )
 
 
