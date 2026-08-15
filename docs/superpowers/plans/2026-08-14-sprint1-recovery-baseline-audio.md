@@ -10,7 +10,7 @@
 
 **Governing docs:** program charter `2026-08-14-saturn-shaped-port-program.md`; constitution rules in `docs/saturn/PRODUCT_RECOVERY_HANDOFF_2026-08-14.md` §"Operating contract". **Stop rule: two implementation attempts or two hours without a new live result → revert, bypass, or smaller transplant. Never a new abstraction.**
 
-**Owner inputs required before Task 10 (Tasks 1–9 do not need it):** a WAV render of the BOB theme (SM64 seq 3, "SEQ_LEVEL_GRASS"), any sample rate, from the owner's own ROM-derived audio (emulator recording is fine). Place at `<recovery-worktree>/bob_theme.us.wav`. It is gitignored like `baserom.us.z64` and never committed. Target: a loopable section ≤28 seconds (fits sound RAM at 8 kHz).
+**Owner inputs required before Task 10 (Tasks 1–9 do not need it):** a WAV render of the BOB theme (SM64 seq 3, "SEQ_LEVEL_GRASS"), any sample rate, from the owner's own ROM-derived audio (emulator recording is fine). Place at `<recovery-worktree>/bob_theme.us.wav`. It is gitignored like `baserom.us.z64` and never committed. Target: a SHORT loopable motif — the SCSP's 16-bit loop-end addressing caps a looped PCM8 sample at 65,535 bytes, i.e. **~8.2 s at 8 kHz** (~10.9 s at 6 kHz). Supply any length; `wav_to_pcm8.py` trims to the cap automatically — but a section composed to loop at that length will sound far better than an arbitrary cut. Full-length music arrives with CD-DA in Phase S3.
 
 **Paths used throughout:**
 - `DONOR` = `D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge`
@@ -583,10 +583,10 @@ git commit -m "feat(build): plain verify --elf mode for the memory-map gate; mar
 - [ ] **Step 1: Produce the music PCM**
 
 ```bash
-"$REC/.venv-saturn-tools/Scripts/python.exe" tools/saturn/wav_to_pcm8.py bob_theme.us.wav build/saturn/audio/bob_theme_8k.pcm8 --rate 8000 --max-seconds 28
+"$REC/.venv-saturn-tools/Scripts/python.exe" tools/saturn/wav_to_pcm8.py bob_theme.us.wav build/saturn/audio/bob_theme_8k.pcm8 --rate 8000
 ```
 
-Expected: ≤224,000 bytes. Wire it into the SFX-bundle make rule's packager invocation (`--music-pcm build/saturn/audio/bob_theme_8k.pcm8 --music-rate 8000`); if the bundle overflows sound RAM, retry at `--rate 6000` before trimming SFX.
+Expected: ≤65,535 bytes (the tool's rate-aware default trims to the u16/SCSP loop cap). Wire it into the SFX-bundle make rule's packager invocation (`--music-pcm build/saturn/audio/bob_theme_8k.pcm8 --music-rate 8000`); for a longer loop at lower fidelity, retry at `--rate 6000` (~10.9 s cap).
 
 - [ ] **Step 2: Build** (one command; all variables mandatory — the profile JSON is not read back into Make):
 
