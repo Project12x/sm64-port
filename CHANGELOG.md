@@ -66,6 +66,25 @@
   20 notes parse rather than emit garbage. Stdlib only; runs on Python
   3.12+ (parses AIFF with `struct`, not the removed `aifc` module).
 
+- Owner music is now wired into the sourceboot SFX-bundle build
+  (`src/port/saturn/sourceboot/Makefile`). `SOURCEBOOT_MUSIC_WAV ?=
+  bob_theme.us.wav` (worktree-root relative; ROM-derived and gitignored,
+  rendered by `render_m64_wav.py`) is converted to
+  `build/saturn/audio/bob_theme_8k.pcm8` by `wav_to_pcm8.py` at
+  `SOURCEBOOT_MUSIC_RATE` (8000 Hz; the tool's rate-aware default caps the
+  payload at the 65,535-byte SCSP sample limit), and the packager is
+  invoked with `--music-pcm`/`--music-rate` so the looped music row is
+  appended after the SFX PCM in sound RAM. Rebuild chain: the pcm8 rule
+  depends on the WAV and the converter, and the bundle rule depends on the
+  pcm8, so a changed WAV reflows into the packaged bundle. Graceful
+  degrade: when the WAV is absent, a parse-time `$(warning)` announces
+  "music WAV absent; building music-less bundle" and the music flags are
+  omitted — the music-less bundle contract remains valid (SEQ_START finds
+  `music_sample_index` 0 and stays silent by design), so clean checkouts
+  without the owner's WAV still build. `wav_to_pcm8.py` joins
+  `SOURCEBOOT_GENERATOR_INPUTS` so the hermetic closure attests the
+  converter alongside the other bundle generators.
+
 ### Changed
 
 - Three-way work-storage split in `saturn_demo_render.c` (Sprint 1

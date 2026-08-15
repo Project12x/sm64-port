@@ -100,6 +100,22 @@ SOURCEBOOT_SFX_METADATA := $(SOURCEBOOT_SFX_DIR)/bob_sfx_metadata.bin
 SOURCEBOOT_SFX_PCM := $(SOURCEBOOT_SFX_DIR)/bob_sfx_pcm.bin
 SOURCEBOOT_SFX_MANIFEST := $(SOURCEBOOT_SFX_DIR)/bob_sfx_manifest.json
 SOURCEBOOT_SFX_ASM := $(SOURCEBOOT_GENERATED)/sourceboot_sfx_bundle.sx
+# Owner-provided music WAV (worktree-root relative, ROM-derived, gitignored;
+# see tools/saturn/render_m64_wav.py).  When present it is converted to raw
+# signed 8-bit mono PCM at the SCSP music rate and packaged as the bundle's
+# looped music row.  When absent the bundle is built music-less -- a valid
+# contract: SEQ_START finds music_sample_index 0 and stays silent by design.
+SOURCEBOOT_MUSIC_WAV ?= bob_theme.us.wav
+SOURCEBOOT_MUSIC_RATE ?= 8000
+SOURCEBOOT_MUSIC_PCM8 := $(ROOT)/build/saturn/audio/bob_theme_8k.pcm8
+ifneq ($(wildcard $(ROOT)/$(SOURCEBOOT_MUSIC_WAV)),)
+SOURCEBOOT_SFX_MUSIC_DEP := $(SOURCEBOOT_MUSIC_PCM8)
+SOURCEBOOT_SFX_MUSIC_ARGS := --music-pcm "$(SOURCEBOOT_MUSIC_PCM8)" --music-rate $(SOURCEBOOT_MUSIC_RATE)
+else
+SOURCEBOOT_SFX_MUSIC_DEP :=
+SOURCEBOOT_SFX_MUSIC_ARGS :=
+$(warning sourceboot: music WAV absent; building music-less bundle ($(ROOT)/$(SOURCEBOOT_MUSIC_WAV) not found))
+endif
 SOURCEBOOT_PONESOUND_ROOT := $(firstword $(realpath \
   $(ROOT)/work/upstream/SCSP_poneSound \
   $(ROOT)/../../work/upstream/SCSP_poneSound))
@@ -1115,8 +1131,17 @@ sourceboot-audio-sfx-inputs:
 	  SATURN_AUDIO_SCENE_CLOSURE="$(SOURCEBOOT_ACTOR_CLOSURE)" \
 	  pcm68k-image compile-saturn-audio
 
+ifneq ($(SOURCEBOOT_SFX_MUSIC_DEP),)
+$(SOURCEBOOT_MUSIC_PCM8): $(ROOT)/$(SOURCEBOOT_MUSIC_WAV) \
+    $(ROOT)/tools/saturn/wav_to_pcm8.py
+	@mkdir -p "$(dir $@)"
+	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/wav_to_pcm8.py" \
+	  "$(ROOT)/$(SOURCEBOOT_MUSIC_WAV)" "$@" --rate $(SOURCEBOOT_MUSIC_RATE)
+endif
+
 $(SOURCEBOOT_SFX_METADATA) $(SOURCEBOOT_SFX_PCM) $(SOURCEBOOT_SFX_MANIFEST) &: \
     sourceboot-audio-sfx-inputs \
+    $(SOURCEBOOT_SFX_MUSIC_DEP) \
     $(ROOT)/tools/saturn/compile_sourceboot_sfx_bundle.py \
     $(ROOT)/tools/saturn/saturn_audio_package.py \
     $(ROOT)/tools/saturn/gen_sequence_bank.py \
@@ -1128,7 +1153,8 @@ $(SOURCEBOOT_SFX_METADATA) $(SOURCEBOOT_SFX_PCM) $(SOURCEBOOT_SFX_MANIFEST) &: \
 	  --sequences-bin "$(SOURCEBOOT_AUDIO_GENERATED)/sequences.bin" \
 	  --metadata-output "$(SOURCEBOOT_SFX_METADATA)" \
 	  --pcm-output "$(SOURCEBOOT_SFX_PCM)" \
-	  --manifest "$(SOURCEBOOT_SFX_MANIFEST)"
+	  --manifest "$(SOURCEBOOT_SFX_MANIFEST)" \
+	  $(SOURCEBOOT_SFX_MUSIC_ARGS)
 
 $(SOURCEBOOT_PCM68K_BIN): sourceboot-audio-sfx-inputs
 	@test -s "$@"
@@ -1228,6 +1254,7 @@ SOURCEBOOT_GENERATOR_INPUTS := $(sort \
   $(ROOT)/tools/saturn/saturn_audio_package.py \
   $(ROOT)/tools/saturn/gen_sequence_bank.py \
   $(ROOT)/tools/saturn/m64_decode_walk.py \
+  $(ROOT)/tools/saturn/wav_to_pcm8.py \
   $(ROOT)/tools/saturn/gen_actor_identity_registry.py \
   $(ROOT)/tools/saturn/compile_actor_bank.py \
   $(ROOT)/tools/saturn/collect_scene_closure.py \
