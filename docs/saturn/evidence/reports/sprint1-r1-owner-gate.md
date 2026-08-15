@@ -93,3 +93,66 @@ Discriminating evidence to gather first (cheap, no rebuild):
 
 Do **not** re-patch the music path before that discrimination — the loop seam
 and LEA math are already cleared.
+
+---
+
+## R1 ACCEPTED — owner verdict 2026-08-15
+
+Accepted candidate: **`id-86d3880727ed1d10`**
+ELF `b8754557bbf36ee853c08ac229800c43d513964761fec0ef33abe2e7f3e8b501`
+ISO `d952aea402d5bb5710e0dbff88083f7cfd8eeffdd05a630b1c9266e38954521a`
+Artifacts: `releases/2026-08-15_0705/id-86d3880727ed1d10/`
+
+The owner accepted R1 on the evidence that matters: **the source game's own
+`play_music` call produces audible, looping music through the emulated SCSP —
+the first game audio in this project's history — with visuals accepted as
+non-regressed against A9A.** Cadence measured ~1.1-2 FPS, recorded and
+explicitly non-blocking per the 2026-08-15 gate change (`0ad5fb31`).
+
+### Disposition of the piercing-noise defect: NOT A PORT DEFECT
+
+Closed as an **emulator/host-performance artifact**, not a port bug, on the
+following chain of eliminations — every one evidence-based:
+
+| Suspect | How it was eliminated |
+| --- | --- |
+| M64 render / source WAV | Owner auditioned an anti-aliased render: clean |
+| Downsample aliasing | Owner auditioned the **exact disc audio**: clean |
+| Loop seam / loop-end math | PCM discontinuity measured 0; `LEA = count-1` correct |
+| SFX re-key per frame | Fixed (`207f5972`); noise persisted |
+| Duplicate `play_music` | Fixed (`7da1ebca`); noise persisted |
+| Periodic control traffic | Measured frozen: 4 commands total, registers static 119 s |
+| SCSP slot config | `SA=0x3ACB8` correct, `PITCH=0x69CE`≈8 kHz, LFO `0x12=0`, MDL `0x0E=0` |
+| Sign convention | Ymir casts `sint8` — matches our signed PCM8 |
+| 64 KB page crossing | Ymir uses full 32-bit address math (`scsp.cpp:1232`) |
+| Input-driven anything | **Owner confirmed the noise occurs with zero controller input** |
+
+**Mechanism identified in Ymir's own host audio path.**
+`apps/ymir-sdl3/src/app/audio_system.cpp`, `ProcessAudioCallback`: the SDL
+callback drains `sampleCount` samples at real-time 44.1 kHz and advances
+`m_readPos` **unconditionally — there is no underrun detection.** If the
+emulator's producer side falls behind real time, the read pointer laps the
+write pointer and SDL replays stale ring-buffer contents: a harsh repeating
+artifact whose period is the buffer wrap, unrelated to the 8.15 s music loop
+or the frame period.
+
+This build is the pathological producer: ~53 VBlanks of emulated SH-2 work per
+presented frame. It is also the first build in project history to emit any
+audio, which is why the artifact has never been observed before.
+
+**Consequence:** the artifact is expected to diminish and disappear as cadence
+improves, making Sprint 2's optimization work the real test. On hardware the
+SCSP is dedicated silicon clocking 44.1 kHz independent of game-logic speed,
+so this failure mode cannot occur there.
+
+**Confidence:** high on mechanism, not closed by direct measurement of Ymir's
+emulation speed. If the noise survives a materially faster build, reopen and
+measure host emulation speed first.
+
+### Net Sprint 1 outcome
+
+Audible looping music from the game's own semantic call; owner-accepted
+visuals; a linking, margin-passing, identity-bound candidate; the entire donor
+worktree preserved in git; the constitution restored; and the `0x0340` audio
+failure root-caused and fixed. Cadence is the sole remaining product gap and
+becomes Sprint 2's first objective.
