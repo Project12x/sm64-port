@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Milestone
+
+- **Sprint 1 (R0+R1) accepted by the owner on 2026-08-15 with candidate
+  `id-86d3880727ed1d10`.** For the first time in the project's history the
+  source game's own `play_music` call produces audible, looping music through
+  the semantic API, the MC68000/SCSP driver, and the SCSP's hardware loop —
+  with owner-accepted visuals. Measured cadence ~1.1-2 FPS was recorded and
+  ruled non-blocking for this milestone by owner instruction; it becomes the
+  next sprint's first objective. The one owner-observed artifact (a periodic
+  piercing noise) was investigated to mechanism and dispositioned as a Ymir
+  host-audio underrun rather than a port defect, after the owner confirmed it
+  occurs with zero controller input and the audio control path was measured
+  frozen. Evidence:
+  `docs/saturn/evidence/reports/sprint1-r1-owner-gate.md`.
+
 ### Added
 
 - Recovery branch `saturn/recovery` (forked from `sh2/native-math-purge` @
