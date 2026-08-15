@@ -974,6 +974,7 @@ verify-render-job-runtime:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_job_runtime_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
