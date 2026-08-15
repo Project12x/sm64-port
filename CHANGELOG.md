@@ -4,6 +4,18 @@
 
 ### Added
 
+- Sprint 2 T2.1 evidence: instrumented peak capture over the scripted BOB
+  route (three reproducible runs, identical peaks) with a per-candidate
+  shrink verdict table — cmdt capacity 2048→1664 SAFE (observed bank peak
+  653), libyaul `_private_pool` 0xA000→0x4000 SAFE (historical extent
+  8,276 B, boot-time allocations only), `GFX_POOL_SIZE` 6400→4096 SAFE
+  (observed peak 443), SMPC pool 14→2 NEEDS-MARGIN (exactly 2 blocks ever
+  allocated — zero headroom for any connect event; 14→4 is the safe
+  variant). Why it matters: T2.2's reclamation package (a) is now gated on
+  measured, not borrowed, peaks; verdicts are scoped to the measured route
+  (600 replay ticks + idle; no owner free-roam, no object interactions).
+  Evidence: `docs/saturn/evidence/reports/sprint2-t2_1-peak-capture.md`
+  (+ 3 JSON captures beside it).
 - Sprint 2 T2.1 diagnostic peak instrumentation, **diagnostic-gated —
   the product build is unaffected** (every definition, store, and the
   probe symbol itself sit behind `SATURN_DIAGNOSTIC_MODE == 1`; a
