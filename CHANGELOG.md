@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- `make verify-audio-loop-contracts`: wires the four previously-orphaned
+  regression suites from the Sprint 1 defect loop (24 tests) into a runnable
+  target — the DSP-quiesce-before-staging ordering, the single-owner music
+  start, the HWRAM/LWRAM work-storage split, the music-bundle degrade
+  contract, and the wav-to-pcm8 loop cap. Post-gate review found these
+  hardware-safety pins existed but were referenced by no make target, so a
+  future regression would have passed every documented suite silently.
+
 ### Milestone
 
 - **Sprint 1 (R0+R1) accepted by the owner on 2026-08-15 with candidate

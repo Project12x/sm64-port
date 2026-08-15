@@ -1282,6 +1282,14 @@ verify-actor-material: check-host-tools
 	  "build/saturn/host-tests/actor-bank-v2-textured.bin" \
 	  "build/saturn/host-tests/actor-bank-v2-rgb1555.bin"
 
+# Regression contracts from the Sprint 1 audio/memory defect loop: DSP-quiesce
+# ordering, single-owner music start, the HWRAM/LWRAM work-storage split, the
+# music-bundle degrade contract, and the wav->pcm8 cap. These pin
+# hardware-safety behavior; run them before accepting any build.
+.PHONY: verify-audio-loop-contracts
+verify-audio-loop-contracts: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -m unittest 	  tools.saturn.test_full_game_audio_source 	  tools.saturn.test_dual_sh2_work_storage_contract 	  tools.saturn.test_compile_sourceboot_sfx_bundle 	  tools.saturn.test_wav_to_pcm8 -v
+
 verify-actor-variant-bank: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" -m unittest \
 	  tools.saturn.test_actor_variant_bank tools.saturn.test_actor_source -v
