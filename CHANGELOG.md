@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Sprint 2 T2.6 follow-up: T2.6's own doc comments broke
+  `tools/saturn/test_render_snapshot_source.py`. **Root cause:** its
+  `function_body(text, name)` helper locates a C function with
+  `text.index(f"{name}(")` and takes the first `{` after that offset, so *any*
+  earlier mention of the name followed by a parenthesis wins — including one
+  inside a comment. T2.6's comments referred to `actor_meshlet_core()` and
+  `sm64_saturn_actor_meshlets_prepare()` with call parentheses above their
+  definitions, so the extractor read the new depth-carry typedef instead of the
+  function body and `test_opaque_actor_meshlets_use_depth_bins` failed against
+  correct code. The comments are reworded and the constraint is recorded in
+  `src/port/saturn/gfx/saturn_actor_meshlets.c`. The suite now aborts at
+  `test_vdp1_painter_chain_uses_all_existing_master_depth_tags`, the
+  pre-existing failure T2.1–T2.5 all recorded. **Consumer-facing impact: none**
+  — comment text only, and proven so: the translation unit compiled at
+  `SATURN_DIAGNOSTIC_MODE=0` with `-g0` on the product build's own command line
+  is **byte-identical** before and after (16,500 B, `f423caa8…50cdd`), so the
+  T2.6 measurements describe this tree. Rewording comments is a workaround; the
+  extractor's fragility is filed separately.
+
 ### Changed
 
 - Sprint 2 T2.6 step 2 (performance): the actor depth walk **no longer

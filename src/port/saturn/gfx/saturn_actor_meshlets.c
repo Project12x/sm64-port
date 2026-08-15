@@ -51,9 +51,9 @@ typedef struct actor_meshlet_depth_bounds {
     int32_t furthest_q16;
 } actor_meshlet_depth_bounds_t;
 
-/* T2.6 step 1.  actor_meshlet_core() walks every meshlet twice -- once to
+/* T2.6 step 1.  The meshlet core walks every meshlet twice -- once to
  * admit and bin, once to emit -- and before this change the emission pass
- * recomputed actor_meshlet_live_depth_bounds() from scratch for every meshlet.
+ * recomputed the live depth bounds from scratch for every meshlet.
  * T2.5 measured the two walks at 20,491.7 and 20,491.9 FRT ticks, 0.001%
  * apart: an exact, unconditional recomputation worth 5.72 VBlanks/frame.
  *
@@ -64,10 +64,15 @@ typedef struct actor_meshlet_depth_bounds {
  * result into pass 2 is therefore a memoisation of identical inputs, not a
  * numeric change.
  *
- * The stamp is belt-and-braces rather than load-bearing: nothing inside one
- * actor_meshlet_core() call can invalidate it, so a mismatch means an
- * invariant this code does not control has been broken, and the answer is to
- * recompute rather than serve stale bounds. */
+ * The stamp is belt-and-braces rather than load-bearing: nothing inside a
+ * single core call can invalidate it, so a mismatch means an invariant this
+ * code does not control has been broken, and the answer is to recompute
+ * rather than serve stale bounds.
+ *
+ * NOTE: do not write a function name followed by "(" anywhere in a comment
+ * above its definition in this file.  tools/saturn/test_render_snapshot_source.py
+ * extracts function bodies with text.index("<name>(") and would then read the
+ * comment instead of the code. */
 #define ACTOR_MESHLET_DEPTH_CARRY_CAPACITY 64U
 
 typedef struct actor_meshlet_depth_carry {
@@ -78,7 +83,7 @@ typedef struct actor_meshlet_depth_carry {
     actor_meshlet_depth_bounds_t bounds[ACTOR_MESHLET_DEPTH_CARRY_CAPACITY];
 } actor_meshlet_depth_carry_t;
 
-/* Master-only.  Bound solely by sm64_saturn_actor_meshlets_prepare(), which
+/* Master-only.  Bound solely by the Mario prepare entry point, which
  * runs on the master SH-2 inside the pre-notification window alongside the
  * rest of saturn_demo_render.c's file-scope frame state.  The bank entry point
  * is dispatched on either CPU (saturn_demo_render.c:3129 picks a workspace
