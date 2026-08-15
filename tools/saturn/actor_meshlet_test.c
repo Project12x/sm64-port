@@ -6,6 +6,7 @@
 #include "saturn_actor_batch.h"
 #include "saturn_actor_meshlets.h"
 #include "saturn_mario_actor_mesh.h"
+#include "saturn_matrix_kernels.h"
 
 static sm64_saturn_actor_runtime_storage_t runtime_storage;
 
@@ -571,6 +572,360 @@ cleanup:
     return result;
 }
 
+/* ---------------------------------------------------------------------------
+ * T2.6 -- depth-arithmetic equivalence oracle.
+ *
+ * sprint2-t2_5-prepare-mario-audit.md measured actor_meshlet_live_depth_bounds()
+ * at 20.7% of the whole frame and traced it to actor_saturating_mul_i64(),
+ * which checks overflow by DIVIDING.  Replacing that arithmetic can change
+ * numbers, and the numbers feed actor_lod_tier() and actor_depth_bin() -- i.e.
+ * what gets drawn.  So the contract is pinned here BEFORE the swap, exactly as
+ * T2.3 did for the painter chain.
+ *
+ * Three independent statements of the same quantity are cross-checked:
+ *   1. `reference` -- the pre-T2.6 per-vertex arithmetic, lifted verbatim into
+ *      actor_depth_reference() and reached through the test-only probe.
+ *   2. `candidate` -- whatever saturn_actor_meshlets.c actually ships today.
+ *   3. `model`     -- written here from the algebraic identity, not from either
+ *      implementation.  The reference computes
+ *          depth(v) = SUM_a floor( (world_a - cam_a) * F_a / 2^16 )
+ *      with world_a = P_a + (q_a << 16) and q_a the integer-quantised rotated,
+ *      scaled vertex component.  Because q_a * F_a is an exact integer it pulls
+ *      straight out of the floor:
+ *          depth(v) = SUM_a floor( (P_a - C_a) * F_a / 2^16 ) + SUM_a q_a * F_a
+ *                     \______ per-actor constant ______/       \_ per-vertex _/
+ *      That pull-out is the entire basis of the per-actor hoist, so the model
+ *      evaluates BOTH sides and requires them to agree.  It constrains the
+ *      identity rather than restating one side of it.
+ *
+ * The sweep deliberately spends most of its cases OUTSIDE the domain where the
+ * hoist is legal -- INT64/INT32 extremes on both signs, zero and negative
+ * scales, saturating positions -- because that is what the divide-based
+ * overflow check existed to handle, and the shipped path must still agree with
+ * the reference there (by falling back to it).
+ * ------------------------------------------------------------------------- */
+
+/* Provided by src/port/saturn/gfx/saturn_actor_meshlets.c under
+ * -DSM64_SATURN_ACTOR_MESHLET_DEPTH_REFERENCE, which only this test defines. */
+void sm64_saturn_actor_meshlet_depth_probe(
+    const int16_t vertex[3], const int32_t scale_q16[3], int16_t yaw,
+    const int64_t position_q16[3], const int32_t camera_position_q16[3],
+    const int32_t forward_q16[3], int64_t *reference_depth,
+    int64_t *candidate_depth, uint8_t *fast_taken);
+
+/* Must mirror saturn_actor_meshlets.c's ACTOR_DEPTH_FAST_* preconditions.  The
+ * probe reports which path the shipped code actually took, and the sweep
+ * asserts the shipped code is never more permissive than this mirror, so drift
+ * between them is a test failure rather than a silent widening. */
+#define DEPTH_FAST_UNIT_SCALE_Q16 INT32_C(65536)
+#define DEPTH_FAST_POSITION_LIMIT INT64_C(0x10000000000) /* 2^40 */
+#define DEPTH_FAST_FORWARD_LIMIT  INT32_C(0x100000)      /* 2^20 */
+
+static int depth_in_fast_domain(const int32_t scale_q16[3],
+                                const int64_t position_q16[3],
+                                const int32_t forward_q16[3], int16_t yaw)
+{
+    const int32_t sine = sm64_saturn_sins_q16(yaw);
+    const int32_t cosine = sm64_saturn_coss_q16(yaw);
+    if (sine > 65536 || sine < -65536 || cosine > 65536 || cosine < -65536)
+        return 0;
+    for (int axis = 0; axis < 3; axis++) {
+        if (scale_q16[axis] != DEPTH_FAST_UNIT_SCALE_Q16) return 0;
+        if (position_q16[axis] > DEPTH_FAST_POSITION_LIMIT ||
+            position_q16[axis] < -DEPTH_FAST_POSITION_LIMIT) return 0;
+        if (forward_q16[axis] > DEPTH_FAST_FORWARD_LIMIT ||
+            forward_q16[axis] < -DEPTH_FAST_FORWARD_LIMIT) return 0;
+    }
+    return 1;
+}
+
+/* Only ever called on fast-domain cases, where every intermediate below is
+ * proved to stay inside int64 -- so this model is free of the saturating
+ * helpers AND free of undefined overflow. */
+static void depth_model(const int16_t vertex[3], const int32_t scale_q16[3],
+                        int16_t yaw, const int64_t position_q16[3],
+                        const int32_t camera_position_q16[3],
+                        const int32_t forward_q16[3], int64_t *direct,
+                        int64_t *hoisted)
+{
+    const int64_t sine = sm64_saturn_sins_q16(yaw);
+    const int64_t cosine = sm64_saturn_coss_q16(yaw);
+    const int64_t scaled_x = (int64_t)vertex[0] * scale_q16[0];
+    const int64_t scaled_y = (int64_t)vertex[1] * scale_q16[1];
+    const int64_t scaled_z = (int64_t)vertex[2] * scale_q16[2];
+    const int64_t quantised[3] = {
+        (scaled_x * cosine + scaled_z * sine) >> 32,
+        scaled_y >> 16,
+        (scaled_z * cosine - scaled_x * sine) >> 32,
+    };
+    *direct = 0;
+    *hoisted = 0;
+    for (int axis = 0; axis < 3; axis++) {
+        const int64_t forward = forward_q16[axis];
+        const int64_t base =
+            position_q16[axis] - (int64_t)camera_position_q16[axis];
+        *direct += ((base + (quantised[axis] << 16)) * forward) >> 16;
+        *hoisted += ((base * forward) >> 16) + quantised[axis] * forward;
+    }
+}
+
+/* actor_clamp_i64_i32 / actor_lod_tier / actor_depth_bin are file-private to
+ * saturn_actor_meshlets.c.  Restated here so a divergence can be reported in
+ * the units that are actually visible on screen -- an LOD tier or a painter
+ * bin -- rather than only as a raw Q16 delta. */
+static int32_t depth_clamp_i32(int64_t value)
+{
+    return value > INT32_MAX ? INT32_MAX :
+        value < INT32_MIN ? INT32_MIN : (int32_t)value;
+}
+
+static uint8_t depth_tier_of(int32_t depth_q16)
+{
+    const uint32_t depth = depth_q16 > 0 ? (uint32_t)depth_q16 >> 16 : 0U;
+    if (depth >= 4096U) return 2U;
+    if (depth >= 2048U) return 1U;
+    return 0U;
+}
+
+static uint8_t depth_bin_of(int32_t depth_q16)
+{
+    uint32_t bin;
+    if (depth_q16 <= 0) return 0U;
+    bin = ((uint32_t)depth_q16 >> 16) >> 7U;
+    return (uint8_t)(bin >= 64U ? 63U : bin);
+}
+
+static uint64_t depth_rng(uint64_t *state)
+{
+    uint64_t z = (*state += UINT64_C(0x9E3779B97F4A7C15));
+    z = (z ^ (z >> 30)) * UINT64_C(0xBF58476D1CE4E5B9);
+    z = (z ^ (z >> 27)) * UINT64_C(0x94D049BB133111EB);
+    return z ^ (z >> 31);
+}
+
+typedef struct depth_sweep_tally {
+    uint64_t cases;
+    uint64_t fast_cases;
+    uint64_t fallback_cases;
+    uint64_t model_cases;
+    uint64_t value_mismatches;
+    uint64_t tier_mismatches;
+    uint64_t bin_mismatches;
+    uint64_t model_mismatches;
+    uint64_t domain_mismatches;
+    int64_t worst_delta;
+} depth_sweep_tally_t;
+
+static void depth_check_case(const int16_t vertex[3],
+                             const int32_t scale_q16[3], int16_t yaw,
+                             const int64_t position_q16[3],
+                             const int32_t camera_position_q16[3],
+                             const int32_t forward_q16[3],
+                             depth_sweep_tally_t *tally)
+{
+    int64_t reference = 0, candidate = 0;
+    uint8_t fast_taken = 0U;
+    const int expected_fast = depth_in_fast_domain(scale_q16, position_q16,
+                                                   forward_q16, yaw);
+    sm64_saturn_actor_meshlet_depth_probe(
+        vertex, scale_q16, yaw, position_q16, camera_position_q16, forward_q16,
+        &reference, &candidate, &fast_taken);
+    tally->cases++;
+    if (fast_taken != 0U) tally->fast_cases++; else tally->fallback_cases++;
+    /* The shipped code may legitimately be more conservative than this mirror
+     * (it can decline the fast path for a reason the mirror does not model),
+     * but it must never be more permissive. */
+    if (fast_taken != 0U && expected_fast == 0) tally->domain_mismatches++;
+    if (reference != candidate) {
+        const int64_t delta = reference > candidate
+            ? reference - candidate : candidate - reference;
+        int32_t reference_q16, candidate_q16;
+        tally->value_mismatches++;
+        if (delta > tally->worst_delta) tally->worst_delta = delta;
+        reference_q16 = depth_clamp_i32(reference);
+        candidate_q16 = depth_clamp_i32(candidate);
+        if (depth_tier_of(reference_q16) != depth_tier_of(candidate_q16))
+            tally->tier_mismatches++;
+        if (depth_bin_of(reference_q16) != depth_bin_of(candidate_q16))
+            tally->bin_mismatches++;
+    }
+    if (expected_fast != 0) {
+        int64_t direct = 0, hoisted = 0;
+        depth_model(vertex, scale_q16, yaw, position_q16, camera_position_q16,
+                    forward_q16, &direct, &hoisted);
+        tally->model_cases++;
+        if (direct != hoisted || direct != reference) tally->model_mismatches++;
+    }
+}
+
+static const int16_t depth_sweep_vertices[][3] = {
+    {0, 0, 0},
+    {1, 0, 0},
+    {0, 1, 0},
+    {0, 0, 1},
+    {-1, -1, -1},
+    {32767, 32767, 32767},
+    {-32768, -32768, -32768},
+    {32767, -32768, 0},
+    {-32768, 32767, 0},
+    {0, 32767, -32768},
+    {100, -250, 700},
+    {-1523, 811, -2044},
+};
+
+static const int32_t depth_sweep_scales[][3] = {
+    {65536, 65536, 65536},
+    {0, 0, 0},
+    {1, 1, 1},
+    {65535, 65535, 65535},
+    {131072, 65536, 32768},
+    {INT32_MAX, INT32_MAX, INT32_MAX},
+    {INT32_MIN, INT32_MIN, INT32_MIN},
+    {-65536, 65536, -65536},
+};
+
+static const int16_t depth_sweep_yaws[] = {
+    0, 1, 0x1000, 0x2000, 0x3FFF, 0x4000, 0x7FFF, INT16_MIN,
+};
+
+static const int64_t depth_sweep_positions[][3] = {
+    {0, 0, 0},
+    {INT64_C(512) << 16, 0, -(INT64_C(900) << 16)},
+    {-(INT64_C(1) << 20), INT64_C(1) << 20, INT64_C(1) << 20},
+    {INT64_MAX, INT64_MAX, INT64_MAX},
+    {INT64_MIN, INT64_MIN, INT64_MIN},
+    {INT64_MAX / 2, INT64_MIN / 2, 0},
+    {INT64_C(1) << 40, -(INT64_C(1) << 40), 0},
+    {(INT64_C(1) << 40) + 1, 0, 0},
+    {(int64_t)INT32_MAX * 65536, (int64_t)INT32_MIN * 65536, 0},
+};
+
+static const int32_t depth_sweep_cameras[][3] = {
+    {0, 0, 0},
+    {0, 100 << 16, -(300 << 16)},
+    {INT32_MAX, INT32_MAX, INT32_MAX},
+    {INT32_MIN, INT32_MIN, INT32_MIN},
+    {INT32_MAX, INT32_MIN, 0},
+    {-1, -1, -1},
+    {1, 1, 1},
+};
+
+static const int32_t depth_sweep_forwards[][3] = {
+    {0, 0, 65536},
+    {0, 0, -65536},
+    {65536, 0, 0},
+    {0, 65536, 0},
+    {46341, 0, 46341},
+    {-46341, -46341, -46341},
+    {INT32_MAX, 0, 0},
+    {INT32_MIN, 0, 0},
+    {0x100000, 0x100000, 0x100000},
+};
+
+static int depth_equivalence_sweep(void)
+{
+    depth_sweep_tally_t tally;
+    uint64_t state = UINT64_C(0x5A7175726E543236);
+    memset(&tally, 0, sizeof(tally));
+
+    for (size_t v = 0U; v < sizeof(depth_sweep_vertices) /
+             sizeof(depth_sweep_vertices[0]); v++)
+    for (size_t s = 0U; s < sizeof(depth_sweep_scales) /
+             sizeof(depth_sweep_scales[0]); s++)
+    for (size_t y = 0U; y < sizeof(depth_sweep_yaws) /
+             sizeof(depth_sweep_yaws[0]); y++)
+    for (size_t p = 0U; p < sizeof(depth_sweep_positions) /
+             sizeof(depth_sweep_positions[0]); p++)
+    for (size_t c = 0U; c < sizeof(depth_sweep_cameras) /
+             sizeof(depth_sweep_cameras[0]); c++)
+    for (size_t f = 0U; f < sizeof(depth_sweep_forwards) /
+             sizeof(depth_sweep_forwards[0]); f++)
+        depth_check_case(depth_sweep_vertices[v], depth_sweep_scales[s],
+                         depth_sweep_yaws[y], depth_sweep_positions[p],
+                         depth_sweep_cameras[c], depth_sweep_forwards[f],
+                         &tally);
+
+    /* The domain that actually ships: real Mario pose vertices, unit scale,
+     * BOB-scale world and camera coordinates, and a Q16 forward taken from the
+     * same sine table the runtime uses. */
+    for (uint32_t iteration = 0U; iteration < 250000U; iteration++) {
+        const int32_t unit_scale[3] = {65536, 65536, 65536};
+        const uint64_t draw = depth_rng(&state);
+        const uint16_t index = (uint16_t)(draw % SM64_MARIO_VERTEX_COUNT);
+        const int16_t *vertex = (draw & (UINT64_C(1) << 40)) != 0U
+            ? sm64_mario_walking_animation_vertices[
+                  (draw >> 20) % SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT][index]
+            : sm64_mario_animation_vertices[
+                  (draw >> 20) % SM64_MARIO_ANIMATION_FRAME_COUNT][index];
+        const int16_t yaw = (int16_t)(depth_rng(&state) & 0xFFFFU);
+        const int16_t pitch = (int16_t)(depth_rng(&state) & 0xFFFFU);
+        const int64_t position_q16[3] = {
+            ((int64_t)(depth_rng(&state) % 16384U) - 8192) << 16,
+            ((int64_t)(depth_rng(&state) % 16384U) - 8192) << 16,
+            ((int64_t)(depth_rng(&state) % 16384U) - 8192) << 16,
+        };
+        const int32_t camera_position_q16[3] = {
+            (int32_t)(((int64_t)(depth_rng(&state) % 16384U) - 8192) << 16),
+            (int32_t)(((int64_t)(depth_rng(&state) % 16384U) - 8192) << 16),
+            (int32_t)(((int64_t)(depth_rng(&state) % 16384U) - 8192) << 16),
+        };
+        const int32_t forward_q16[3] = {
+            sm64_saturn_sins_q16(yaw),
+            sm64_saturn_sins_q16(pitch),
+            sm64_saturn_coss_q16(yaw),
+        };
+        depth_check_case(vertex, unit_scale, yaw, position_q16,
+                         camera_position_q16, forward_q16, &tally);
+    }
+
+    if (tally.value_mismatches != 0U) {
+        fprintf(stderr,
+                "depth equivalence: %llu/%llu cases differ from the reference "
+                "(worst |delta| %lld Q16, %llu cross an LOD tier, %llu cross a "
+                "painter bin)\n",
+                (unsigned long long)tally.value_mismatches,
+                (unsigned long long)tally.cases,
+                (long long)tally.worst_delta,
+                (unsigned long long)tally.tier_mismatches,
+                (unsigned long long)tally.bin_mismatches);
+        return 0;
+    }
+    if (tally.model_mismatches != 0U) {
+        fprintf(stderr,
+                "depth equivalence: %llu/%llu in-domain cases break the "
+                "per-actor hoist identity\n",
+                (unsigned long long)tally.model_mismatches,
+                (unsigned long long)tally.model_cases);
+        return 0;
+    }
+    if (tally.domain_mismatches != 0U) {
+        fprintf(stderr,
+                "depth equivalence: %llu cases took the fast kernel outside "
+                "its declared precondition domain\n",
+                (unsigned long long)tally.domain_mismatches);
+        return 0;
+    }
+    /* Non-vacuity: the sweep must really exercise both the hoisted domain and
+     * the saturating fallback, or an all-fallback sweep would pass while
+     * proving nothing about the replacement. */
+    if (tally.model_cases < 250000U) {
+        fprintf(stderr, "depth equivalence: only %llu in-domain cases swept\n",
+                (unsigned long long)tally.model_cases);
+        return 0;
+    }
+    if (tally.fallback_cases < 100000U) {
+        fprintf(stderr, "depth equivalence: only %llu fallback cases swept\n",
+                (unsigned long long)tally.fallback_cases);
+        return 0;
+    }
+    printf("depth equivalence: %llu cases, %llu hoist-domain, %llu saturating "
+           "fallback, 0 divergences\n",
+           (unsigned long long)tally.cases,
+           (unsigned long long)tally.model_cases,
+           (unsigned long long)tally.fallback_cases);
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
     sm64_saturn_actor_draw_ref_t opaque[SM64_MARIO_PRIMITIVE_COUNT];
@@ -591,6 +946,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "legacy Mario output/object bytes changed\n");
         return 1;
     }
+    if (!depth_equivalence_sweep()) return 1;
     if (argc > 2 || (argc == 2 && !bank_driven_cases(argv[1]))) return 1;
 
     if (!sm64_saturn_actor_meshlets_prepare(

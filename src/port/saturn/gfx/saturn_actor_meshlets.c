@@ -404,6 +404,48 @@ static bool actor_position_ref(const actor_meshlet_source_t *source,
     return *position < source->vertex_count;
 }
 
+/* T2.6 step 0.  The per-vertex arithmetic of the depth walk, lifted verbatim
+ * out of the pre-T2.6 loop body.  Nothing about the computation changed in the
+ * extraction: the same helper calls happen in the same order on the same
+ * operands, so this function IS the pre-T2.6 semantics rather than a model of
+ * them.  Extracting it gives the equivalence oracle a name to pin and gives a
+ * later fast kernel a definition to be proved equal to. */
+static int64_t actor_depth_reference(const int16_t vertex[3],
+                                     const actor_meshlet_transform_t *transform,
+                                     const sm64_saturn_render_view_t *view,
+                                     int32_t sine, int32_t cosine)
+{
+    int64_t scaled_x, scaled_y, scaled_z;
+    int64_t rotated_x, rotated_z;
+    int64_t world[3], depth = 0;
+    scaled_x = (int64_t)vertex[0] * transform->scale_q16[0];
+    scaled_y = (int64_t)vertex[1] * transform->scale_q16[1];
+    scaled_z = (int64_t)vertex[2] * transform->scale_q16[2];
+    rotated_x = actor_saturating_add_i64(
+        actor_saturating_mul_i64(scaled_x, cosine),
+        actor_saturating_mul_i64(scaled_z, sine)) >> 16;
+    rotated_z = actor_saturating_add_i64(
+        actor_saturating_mul_i64(-scaled_x, sine),
+        actor_saturating_mul_i64(scaled_z, cosine)) >> 16;
+    world[0] = actor_saturating_add_i64(
+        transform->position_q16[0],
+        actor_saturating_mul_i64(rotated_x >> 16, 65536));
+    world[1] = actor_saturating_add_i64(
+        transform->position_q16[1],
+        actor_saturating_mul_i64(scaled_y >> 16, 65536));
+    world[2] = actor_saturating_add_i64(
+        transform->position_q16[2],
+        actor_saturating_mul_i64(rotated_z >> 16, 65536));
+    for (uint16_t axis = 0U; axis < 3U; axis++) {
+        const int64_t relative = actor_saturating_add_i64(
+            world[axis], -(int64_t)view->camera_position_q16[axis]);
+        const int64_t term = actor_saturating_mul_i64(
+            relative, view->view_forward_q16[axis]) >> 16;
+        depth = actor_saturating_add_i64(depth, term);
+    }
+    return depth;
+}
+
 /* Admission reads the selected live pose. Furthest depth rejects only wholly
  * behind meshlets and orders translucent bins; nearest depth chooses a
  * conservative LOD for any visible extent. Rotation is quantized to integer
@@ -425,40 +467,12 @@ static bool actor_meshlet_live_depth_bounds(
     cosine = sm64_saturn_coss_q16(transform->yaw);
     for (uint32_t local = 0U; local < tier_zero.position_count; local++) {
         uint16_t vertex;
-        int64_t scaled_x, scaled_y, scaled_z;
-        int64_t rotated_x, rotated_z;
-        int64_t world[3], depth = 0;
+        int64_t depth;
         if (!actor_position_ref(source, tier_zero.position_offset + local,
                                 &vertex) || vertex >= transform->vertex_count)
             return false;
-        scaled_x = (int64_t)transform->vertices[vertex][0] *
-                   transform->scale_q16[0];
-        scaled_y = (int64_t)transform->vertices[vertex][1] *
-                   transform->scale_q16[1];
-        scaled_z = (int64_t)transform->vertices[vertex][2] *
-                   transform->scale_q16[2];
-        rotated_x = actor_saturating_add_i64(
-            actor_saturating_mul_i64(scaled_x, cosine),
-            actor_saturating_mul_i64(scaled_z, sine)) >> 16;
-        rotated_z = actor_saturating_add_i64(
-            actor_saturating_mul_i64(-scaled_x, sine),
-            actor_saturating_mul_i64(scaled_z, cosine)) >> 16;
-        world[0] = actor_saturating_add_i64(
-            transform->position_q16[0],
-            actor_saturating_mul_i64(rotated_x >> 16, 65536));
-        world[1] = actor_saturating_add_i64(
-            transform->position_q16[1],
-            actor_saturating_mul_i64(scaled_y >> 16, 65536));
-        world[2] = actor_saturating_add_i64(
-            transform->position_q16[2],
-            actor_saturating_mul_i64(rotated_z >> 16, 65536));
-        for (uint16_t axis = 0U; axis < 3U; axis++) {
-            const int64_t relative = actor_saturating_add_i64(
-                world[axis], -(int64_t)view->camera_position_q16[axis]);
-            const int64_t term = actor_saturating_mul_i64(
-                relative, view->view_forward_q16[axis]) >> 16;
-            depth = actor_saturating_add_i64(depth, term);
-        }
+        depth = actor_depth_reference(transform->vertices[vertex], transform,
+                                      view, sine, cosine);
         if (depth < nearest) nearest = depth;
         if (depth > furthest) furthest = depth;
     }
@@ -802,3 +816,47 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
         SM64_SATURN_ACTOR_MESHLET_QUARANTINE_NONE;
     return true;
 }
+
+#if defined(SM64_SATURN_ACTOR_MESHLET_DEPTH_REFERENCE)
+/* T2.6 equivalence probe.  Test-only: no Saturn image defines this macro, so
+ * this entry point exists only in tools/saturn/actor_meshlet_test.c's link.
+ * It reaches the two file-private per-vertex depth implementations through
+ * plain scalars so the oracle does not need the private transform/source
+ * types.  Same in-tree convention as the T2.3 painter-chain reference and
+ * saturn_terrain_depth_bins.h's merge oracle. */
+void sm64_saturn_actor_meshlet_depth_probe(
+    const int16_t vertex[3], const int32_t scale_q16[3], int16_t yaw,
+    const int64_t position_q16[3], const int32_t camera_position_q16[3],
+    const int32_t forward_q16[3], int64_t *reference_depth,
+    int64_t *candidate_depth, uint8_t *fast_taken);
+
+void sm64_saturn_actor_meshlet_depth_probe(
+    const int16_t vertex[3], const int32_t scale_q16[3], int16_t yaw,
+    const int64_t position_q16[3], const int32_t camera_position_q16[3],
+    const int32_t forward_q16[3], int64_t *reference_depth,
+    int64_t *candidate_depth, uint8_t *fast_taken)
+{
+    actor_meshlet_transform_t transform;
+    sm64_saturn_render_view_t view;
+    int32_t sine, cosine;
+    memset(&transform, 0, sizeof(transform));
+    memset(&view, 0, sizeof(view));
+    for (uint16_t axis = 0U; axis < 3U; axis++) {
+        transform.position_q16[axis] = position_q16[axis];
+        transform.scale_q16[axis] = scale_q16[axis];
+        view.camera_position_q16[axis] = camera_position_q16[axis];
+        view.view_forward_q16[axis] = forward_q16[axis];
+    }
+    transform.yaw = yaw;
+    view.generation = 1U;
+    sine = sm64_saturn_sins_q16(yaw);
+    cosine = sm64_saturn_coss_q16(yaw);
+    if (reference_depth != NULL)
+        *reference_depth =
+            actor_depth_reference(vertex, &transform, &view, sine, cosine);
+    if (fast_taken != NULL) *fast_taken = 0U;
+    if (candidate_depth != NULL)
+        *candidate_depth =
+            actor_depth_reference(vertex, &transform, &view, sine, cosine);
+}
+#endif

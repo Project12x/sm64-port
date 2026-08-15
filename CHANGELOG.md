@@ -4,6 +4,35 @@
 
 ### Added
 
+- Sprint 2 T2.6 (oracle, landed before any behaviour change): a **host
+  equivalence harness for the actor depth arithmetic**, in
+  `tools/saturn/actor_meshlet_test.c` with a test-only probe in
+  `src/port/saturn/gfx/saturn_actor_meshlets.c` behind
+  `SM64_SATURN_ACTOR_MESHLET_DEPTH_REFERENCE` (defined only by
+  `verify-actor-meshlets`, so no Saturn image carries it). **Why:** T2.5
+  named `actor_meshlet_live_depth_bounds()` as 20.7% of the frame and
+  `actor_saturating_mul_i64()`'s divide-based overflow check as the
+  mechanism. Replacing that arithmetic can change numbers, and the numbers
+  feed `actor_lod_tier()` and `actor_depth_bin()` — i.e. what is drawn — so
+  the contract is pinned before the swap, the same sequencing T2.3 used for
+  the painter chain. The per-vertex body was lifted verbatim into
+  `actor_depth_reference()`; **this commit changes no arithmetic**, which the
+  file's pre-existing pinned output hashes confirm. Three independent
+  statements are cross-checked per case: the reference, whatever the file
+  currently ships, and a model written here from the algebraic identity
+  `depth(v) = SUM_a floor((P_a - C_a)*F_a / 2^16) + SUM_a q_a*F_a` — the
+  floor pull-out that any per-actor hoist depends on, evaluated on both sides
+  so the model constrains the identity rather than restating it. **685,456
+  cases**, 268,816 of them inside the hoist domain (real Mario pose vertices,
+  BOB-scale coordinates) and the rest deliberately outside it (INT64/INT32
+  extremes both signs, zero and negative scales, saturating positions —
+  exactly what the divide-based check existed to handle). Divergences are
+  reported in LOD-tier and painter-bin units, not just raw Q16 deltas.
+  Mutation-verified non-vacuous: perturbing the reference shift, the model's
+  quantisation shift, and the model's floor pull-out each kill the harness.
+  **Consumer-facing impact: none** — test-only code plus a refactor with
+  identical behaviour.
+
 - Sprint 2 T2.5 (instrumentation): the T2.4 FRT profiler now **decomposes
   `demo_prepare_mario()`**, the block T2.4 measured at 69.24% of the
   pre-notification window and ~21% of the whole frame and then left opaque.
