@@ -175,18 +175,118 @@ candidate `id-aa57d83c898e3af1`, commits `55449eb2`, `0a5b5ccd`:**
   (the NOTIFY node is closed by `end()`), which also proves zero abandoned
   windows.
 
-### Task T2.5: attack `demo_prepare_mario()` — planned on T2.4's table
+### Task T2.5: sub-probe `demo_prepare_mario()` — **complete (measurement + audit)**
 
-Primary target, measured: **Mario actor meshlet preparation, 69.2% of the
-pre-notification window.** Sub-probe it before changing it (it has never
-been decomposed internally), then choose between reducing it (pose/view
-reuse across frames) and moving it into the job graph — the latter being
-the only credible route to the split imbalance, since the slave is already
-saturated inside its own window. Secondary: `demo_spatial_admit()` (26.4%).
-Explicitly NOT next: a ±1 master/slave rebalance (no idle-slave slack
-exists), ranks 3–15 (4.3% combined), further memory-tier work (T2.2
-disproved it), further painter ordering (T2.3 measured the remainder at a
-fraction of 1.7%). Clear the instrument debt above first.
+**Status 2026-08-15 — evidence
+`docs/saturn/evidence/reports/sprint2-t2_5-prepare-mario-audit.md`
+(+ `.json`), diagnostic identity `id-4d501e08f75df139`, commits
+`b7eea788` (instrumentation) and `053ee24c` (evidence):**
+
+- **The stage is one function.** `actor_meshlet_live_depth_bounds()`
+  (`src/port/saturn/gfx/saturn_actor_meshlets.c:411-477`) is **97.82% of
+  `demo_prepare_mario()`** — 40,984 ticks / 5,245,905 cycles / 11.43
+  VBlanks/frame / **20.7% of the whole frame**. The stage total (41,895
+  ticks, 5,362,617 cycles, 69.28% of the window) reproduces T2.4's to
+  within 0.27%, and `demo_prepare_mario`'s own self time is 5.6 ticks —
+  0.013% of the stage.
+- **Root cause, confirmed at instruction level:** `actor_saturating_mul_i64()`
+  (`:95-110`) checks overflow by *dividing*, so every call emits libgcc's
+  620-byte `___divdi3`. Ten calls per position visit × 1,408 visits/frame =
+  **~14,080 64-bit software divisions per frame**, and a whole-image
+  census shows this is **the only 64-bit-division caller on any hot path**.
+  Measured 3,725.8 cycles per position visit, 12,647.7 per mesh vertex.
+- **The work is done twice.** Pass 2 of `actor_meshlet_core()` recomputes
+  every meshlet's depth bounds and span (`:634`), discarding the return
+  value. The two instrumented passes measure **20,491.7 and 20,491.9
+  ticks — 0.001% apart**.
+- **Mesh confirmed:** 424 vertices / 644 primitives / 31 meshlets. But the
+  governing count is **704 tier-0 position visits per pass**, walked twice,
+  independent of camera/pose/LOD.
+- **Mesh-reduction verdict: NO.** Halving the mesh leaves 5.72
+  VBlanks/frame; fixing the arithmetic at *full* detail leaves ~0.2. The
+  fix is ~30x better and costs no fidelity. Poly count is a linear factor
+  on a constant that is ~25–37x too large.
+- **No float and no other integer-division helper is reachable on this
+  path** (checked in the linked image, not the source). The port's native-Q16
+  premise holds here. `-Os` confirmed for the TU; no `noinline` anywhere.
+- **T2.4's instrument debt is cleared.** The two cross-CPU FRT fields and
+  both `mark_*()` entry points are **removed** (the RETIRED observer runs on
+  the slave); with them go the only slave writes to master-owned state,
+  which is additionally now `__uncached` (verified at `0x260FA8E4`, the P2
+  alias). The fault accounting is fixed — `end_depth_max` is published and
+  only depth > 1 is a fault — so **the harness now exits 0 with all twelve
+  acceptance checks passing** (`faults = 0`, `end_depth_max = 1`). T2.4's
+  wrap-headroom defect is resolved by construction: `max_raw_interval` fell
+  from 54,192 to **18,591 (71.6% headroom)**, now equal to
+  `spatial_admit`'s maximum to the tick.
+- **Instrument honesty:** perturbation rose from 0.013% to a measured
+  0.208% (164 probe events, `__uncached` state), cross-checked against
+  `spatial_admit` — an unprobed 26%-of-window stage that reproduces across
+  two independent builds and runs at 15,943 vs 15,942.8 ticks. 89% of the
+  added cost lands inside the stage that received the probes.
+- 798 windows, 26,181 emulated frames, movement witnessed at 42 distinct
+  Mario positions, zero SH-2 exceptions, identity MATCH. Composition is
+  stable across the route (depth share of stage 98.31% / 98.00% / 97.54% at
+  three points spanning the run).
+- Gates green on the diagnostic build: `verify-memory-map` RESULT OK
+  (`hwram_remaining` 0x4CEC, true slack 11,756 B), painter chain, audio
+  loop, pcm68k, terrain bins, frame bank, demo-render-overlap,
+  render-overlap-integration, **verify-actor-meshlets** (the file most
+  heavily instrumented, mutation fixture included), **verify-render-job-runtime**
+  (the recipe T2.4 found broken; base HEAD `6b8cbe77` fixed it),
+  work-storage, staging relocation, render-job-runtime source.
+  `test_render_snapshot_source.py` still fails — **pre-existing**,
+  reproduced by stashing the whole changeset.
+- Product build **byte-identical** at object level for all three modified
+  translation units — stronger than T2.4, which had to except two `assert`
+  `__LINE__` literals.
+- **Nothing was optimised.** T2.6 implements.
+
+### Task T2.6: fix the depth-bounds walk — ranked on T2.5's table
+
+Ordered by risk-adjusted value; full detail, gates and confidence in
+`sprint2-t2_5-prepare-mario-audit.md` section 9.
+
+1. **Carry pass 1's depth bounds and span into pass 2.** Saving **5.72
+   VBlanks/frame (10.4% of the frame)** — a directly measured node, not an
+   estimate. Cost: one `static` 31-entry array (620–868 B). **Bit-identical
+   by construction** — it reuses values pass 1 already computed. Do this
+   first even though item 2 subsumes most of it: it is free, safe, and it
+   halves the surface item 2 must be validated against.
+2. **Replace the depth loop's saturating `int64` arithmetic with per-actor
+   algebra.** `depth(v) = dot(actor_pos − camera, forward) + dot(S⊙v,
+   R_yawᵀ·forward)` — both leading terms are per-actor constants; per vertex
+   it is three `dmuls.l` into an `int64` accumulator, the pattern
+   `matrix_apply()` (`saturn_actor_pose.c:31-56`) already uses in-repo.
+   Combined with item 1: **~11.2–11.3 VBlanks/frame, ~20.4% of the frame**;
+   `demo_prepare_mario` drops from 11.69 VBlanks to ~0.4. **Not additive
+   with item 1** — item 2 alone recovers ~11.05. Risk is numeric, not
+   structural: `depth_bounds` feeds `actor_lod_tier()` and
+   `actor_depth_bin()`, so a value change can shift an LOD tier or a painter
+   bin and therefore change what is drawn. **Commit the equivalence oracle
+   before the swap (T2.3's proven pattern), and a bin/tier shift is a visual
+   regression that only the owner can clear.**
+3. **Re-measure before choosing a third target.** After 1–2,
+   `demo_spatial_admit()` (~4.45 VBlanks) becomes the largest block and the
+   whole ranking changes. The rig is ready: 71.6% wrap headroom.
+4. **Stage the two hot cart arrays into HWRAM** — only if 1–2 land.
+   `sm64_mario_animation_vertices` and `sm64_mario_meshlet_lod_position_list`
+   are in `.cart_rodata` at `0x22400000`, the SH-2 cache-through partition,
+   so the loop makes ~5,632 uncached A-bus reads per frame. Worth ~1–2%
+   today but a large share of what *remains* after 1–2. ~3,952 B of HWRAM
+   against 13,848 B of product slack; needs the memory/ownership record
+   first. Do not do this speculatively — T2.2 disproved the bulk version.
+5. **Bake `demo_spatial_admit_node()`'s AABB centres** (static geometry
+   recomputed per node per frame, `saturn_demo_render.c:800-808`) — later,
+   after item 3 re-ranks.
+
+**Explicitly NOT next:** mesh reduction (see the verdict above);
+`always_inline` on the saturating helpers (items 1–2 delete the call sites);
+any ±1 master/slave rebalance (the slave is still busy 1.02× its own
+window — unchanged from T2.4); ranks 6–23 of T2.5's table (under 1% of the
+window combined); further memory-tier work beyond item 4 (T2.2 disproved
+it); further painter ordering (T2.3 measured the remainder at a fraction of
+1.7%).
 
 **Sprint gate:** owner-observed cadence materially above 1.1 FPS with accepted
 visuals/audio intact. The 4 FPS floor re-binds on the sprint's accepted result.

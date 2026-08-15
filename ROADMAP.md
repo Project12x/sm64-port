@@ -31,15 +31,33 @@ Known levers, in evidence order (**updated after T2.2's measured result**):
   master finalization (5.80 -> 4.83 VBlanks/frame) with every other phase
   counter bit-identical. L8's "115,200 steps" assumed ~1,800 live commands;
   T2.1 measured 653, so the stage was only ~4% of construction.
-- **Scene construction is now 23.75 VBlanks/frame, and 18.92 of it is the
-  unmeasured pre-notification window** (dispatch -> slave notification),
-  which T2.3 left bit-identical. **This is the active lever.** T2.0 **L14**
-  names the instrument: SlaveDriver's `PROFILE.C` FRT tree profiler — fixed
-  tables, no allocation, FRT reads rather than VBlank counts, so it can
-  resolve below one VBlank where the current rig cannot. T2.0 **L12**'s
-  master-spin measurement is the companion, given that
-  `slave_work_vblank_crossings` has now been identical (164/60 frames)
-  across three builds.
+- ~~The unmeasured pre-notification window~~ — **MEASURED, twice, and the
+  bottleneck is now named.** T2.4 built T2.0 **L14**'s FRT sub-stage
+  profiler and decomposed the window into two stages: `demo_prepare_mario()`
+  69.2% and `demo_spatial_admit()` 26.4%, 95.7% together, unattributed
+  remainder 0.048%. T2.5 then sub-probed the first and found **97.8% of it
+  is `actor_meshlet_live_depth_bounds()`** — 5,245,905 cycles/frame, 11.43
+  VBlanks, **20.7% of the entire frame** — because
+  `actor_saturating_mul_i64()` checks overflow by *dividing*, emitting
+  ~14,080 libgcc `___divdi3` calls per frame, and because the whole walk
+  runs twice per frame. T2.0 **L12** is also answered: master spin on the
+  slave is zero by construction and the slave is busy 1.02x its own overlap
+  window, so there is no idle-slave slack to rebalance.
+- **T2.6 is the active lever: fix the depth-bounds walk.** (1) Carry pass
+  1's bounds and span into pass 2 — **5.72 VBlanks/frame (10.4% of the
+  frame)**, bit-identical by construction, one 620–868 B static array.
+  (2) Replace the loop's saturating `int64` arithmetic with per-actor
+  algebra (`depth(v) = dot(pos−cam, fwd) + dot(S⊙v, R_yawᵀ·fwd)`) —
+  **~11.2 VBlanks combined, ~20% of the frame**; risk is numeric, since
+  `depth_bounds` feeds `actor_lod_tier()` and `actor_depth_bin()`, so it
+  needs an equivalence oracle committed before the swap (T2.3's pattern)
+  and owner sign-off on Mario's appearance. Then re-measure:
+  `demo_spatial_admit()` becomes the largest block.
+- **Mesh reduction is NOT the lever, with numbers.** Halving Mario's mesh
+  leaves the stage at 5.72 VBlanks/frame; fixing the arithmetic at *full*
+  424-vertex detail leaves ~0.2. Poly count is a linear factor on a constant
+  that is ~25–37x too large. Revisit only for VDP1 fill rate or the
+  post-notification emit stage, neither of which has been profiled.
 - Not the next step: T2.0 **L10**'s coarser per-BSP-leaf ordering unit. It
   would attack a stage that now costs 2,078 record visits per frame.
 - Mario dominates the command stream (638 of 882 visible items; 50 source

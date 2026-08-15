@@ -23,13 +23,38 @@ moved 1.0682 -> 1.0866 FPS (+1.72%), a real but small gain.** The saving is
 5.80 -> 4.83 while the pre-notification window (18.92), slave overlap (2.73)
 and simulation (6.07) counters are bit-identical. Honest read: the rescan
 was ~4% of construction, not the bulk of it — T2.0 L8's "115,200 steps"
-assumed ~1,800 live commands, but T2.1 measured 653. **The next unmeasured
-block is the pre-notification window, 18.92 of construction's 23.75
-VBlanks/frame; T2.0 L14's FRT tree profiler is the instrument.** Open: owner
+assumed ~1,800 live commands, but T2.1 measured 653.
+**T2.4 and T2.5 COMPLETE (2026-08-15, measurement only — nothing
+optimised): the pre-notification window has been decomposed twice, and the
+bottleneck is now named, located and explained.** T2.4 built T2.0 L14's FRT
+sub-stage profiler and found the window is two stages —
+`demo_prepare_mario()` 69.2% and `demo_spatial_admit()` 26.4%, 95.7%
+together, with the parts summing to 99.95% of the whole. T2.5 sub-probed
+the first: **97.8% of `demo_prepare_mario()` is one function,
+`actor_meshlet_live_depth_bounds()`, at 5,245,905 cycles/frame = 11.43
+VBlanks = 20.7% of the entire frame.** Root cause confirmed at instruction
+level: `actor_saturating_mul_i64()` checks overflow *by dividing*, so every
+call emits libgcc's `___divdi3` — **~14,080 64-bit software divisions per
+frame**, and it is the only 64-bit-division caller on any hot path in the
+image. The walk also runs **twice** per frame (the two instrumented passes
+measure 0.001% apart). Measured cost: 3,725.8 cycles per position visit,
+12,647.7 per mesh vertex, against a defensible ~100–150. **Mesh reduction
+is NOT the lever** — halving the mesh leaves 5.72 VBlanks/frame; fixing the
+arithmetic at full detail leaves ~0.2. **T2.6 implements**, ranked in the
+plan: (1) carry pass 1's bounds into pass 2 — 5.72 VBlanks, bit-identical
+by construction; (2) replace the saturating `int64` arithmetic with
+per-actor algebra — ~11.2 VBlanks combined, ~20% of the frame, but it can
+shift an LOD tier or painter bin so it needs an equivalence oracle and
+owner sign-off. T2.5 also cleared T2.4's recorded instrument debt: the two
+cross-CPU FRT fields are removed, the profiler state is `__uncached`, the
+fault accounting is fixed (the harness now exits 0 with all twelve checks
+passing), and FRT wrap headroom went 17% -> 71.6%. Open: owner
 look-and-listen on `id-6b7c7e5d5f71e809` (T2.2's capacity cuts, inherited by
 this build). Evidence:
 `docs/saturn/evidence/reports/sprint2-t2_2-reclaim-unsplit.md`,
-`sprint2-t2_3-painter-counting-sort.md`.
+`sprint2-t2_3-painter-counting-sort.md`,
+`sprint2-t2_4-prenotification-profile.md`,
+`sprint2-t2_5-prepare-mario-audit.md`.
 
 ## Product truth
 
