@@ -203,13 +203,22 @@ static sm64_saturn_visible_position_set_t s_visible_position_set;
  * an uncached release record plus cache-through peer reads; tools/saturn/
  * verify_dual_cpu_coherency.py pins these placements at build time. */
 #define DEMO_CROSS_CPU_SHARED __attribute__((section(".uncached")))
-/* CPU-only renderer state is not a VDP1/SCU transport object.  Keep it in
- * the LWRAM work partition so enabling the textured demo path cannot consume
- * the HWRAM margin needed by the dual-SH2 release records and command staging.
- * The arrays below are either master-owned or disjoint lane-owned; payloads
- * that cross the worker boundary still use the explicit cache-through records
- * and LWRAM banks declared separately. */
-#define DEMO_CPU_WORK_CACHE __attribute__((section(".lwram_bss")))
+/* CPU-only renderer state is not a VDP1/SCU transport object.  The arrays
+ * below are either master-owned or disjoint lane-owned; payloads that cross
+ * the worker boundary still use the explicit cache-through records and LWRAM
+ * banks declared separately.
+ *
+ * Placement: these are per-primitive inner-loop operands touched for every
+ * visible primitive every frame.  The A9A baseline (5.29 FPS) kept them in
+ * 32-bit HWRAM .bss; the memory-budget relief work (ec7b992a, then 91f02ffd)
+ * evicted them to 16-bit LWRAM, which is the mechanism of the accepted
+ * 5.29 FPS collapsing to ~1 FPS on this memory-bound loop.  The R1 build
+ * (COMPLETE_MARIO_ANIMATION=0, DYNAMIC_ACTOR_CLOSURE=0) frees the HWRAM
+ * pressure that forced the eviction, so the working set returns to HWRAM.
+ * Validated by the SH-2 link + margin gate and the FPS capture; the
+ * fallback ladder lives in CHANGELOG.md.
+ * was: __attribute__((section(".lwram_bss"))) */
+#define DEMO_CPU_WORK_CACHE
 static sm64_saturn_dual_frame_bank_t s_transform_frame_bank
     DEMO_CROSS_CPU_SHARED;
 /* Mario's bounded second phase uses the exact same release protocol as the
@@ -464,7 +473,7 @@ demo_actor_draw_ref_from_order(uint16_t order)
 static uint16_t s_actor_transform_ref_count;
 #if !SATURN_DEMO_HOT_PROMOTION
 /* Hot mode reads the generated immutable bank directly and promotes it into
- * its single LWRAM work-area owner below.  Keeping a second resident copy in
+ * its single HWRAM work-area owner below.  Keeping a second resident copy in
  * hot mode would spend the same 43,776 bytes twice for no semantic benefit.
  * The non-hot build retains the explicit LWRAM resident copy so that the
  * feature remains independently switchable. */
@@ -550,18 +559,18 @@ demo_terrain_resolved_template(uint16_t primitive_index, bool recovery,
 }
 #if SATURN_DEMO_HOT_PROMOTION
 /* Optional Z-Treme-style hot arena. The generated bank is immutable source
- * data; this one enclosing LWRAM work-area owner is populated once before the
- * frame loop and then becomes the renderer's active read-only bank. Keeping
- * the source and promoted copies in separate memories would duplicate the
- * entire 43,776-byte BOB geometry bank and overrun the current HWRAM contract.
+ * data; this one enclosing work-area owner is populated once before the
+ * frame loop and then becomes the renderer's active read-only bank.  It is
+ * the renderer's hottest per-frame read bank, so it lives in 32-bit HWRAM
+ * with the rest of the demo-path working set (see DEMO_CPU_WORK_CACHE
+ * above); the 91f02ffd LWRAM eviction reverts with the R1 memory relief.
  * One enclosing object is deliberate: Z-Treme's workarea.c pattern uses
  * compile-time offsets rather than two cursors that can collide at runtime. */
 typedef struct demo_hot_workarea {
     int32_t positions[SM64_SATURN_BOB_POSITION_COUNT][3];
     sm64_saturn_bob_primitive_t primitives[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 } demo_hot_workarea_t;
-static demo_hot_workarea_t s_bob_hot_workarea
-    __attribute__((section(".lwram_bss"), aligned(16)));
+static demo_hot_workarea_t s_bob_hot_workarea __attribute__((aligned(16)));
 _Static_assert(offsetof(demo_hot_workarea_t, positions) == 0U,
                "hot positions must be the first fixed work-area region");
 _Static_assert(offsetof(demo_hot_workarea_t, primitives) >=

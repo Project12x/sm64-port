@@ -33,6 +33,33 @@
 
 ### Changed
 
+- The demo-path renderer's hot working set returns to 32-bit HWRAM,
+  reverting the 16-bit LWRAM eviction from the 2026-08-07 memory-budget
+  relief (`ec7b992a` introduced the `DEMO_CPU_WORK_CACHE` `.lwram_bss`
+  macro over 23 per-primitive scratch arrays; `91f02ffd` moved the
+  43,776-byte promoted-geometry work area `s_bob_hot_workarea`). These are
+  inner-loop operands touched per visible primitive per frame on a
+  memory-bound render loop; 16-bit LWRAM vs 32-bit HWRAM is the mechanism
+  behind the accepted A9A 5.29 FPS collapsing to ~1 FPS. The eviction was
+  forced by HWRAM pressure from feature work (VDP2 HUD, 64 KiB actor
+  arena, geo-walk storage); the R1 build runs with
+  `COMPLETE_MARIO_ANIMATION=0 DYNAMIC_ACTOR_CLOSURE=0`, which frees that
+  pressure, so the placement reverts. Honesty note: there is no host test
+  that can validate SH-2 section placement, and the SH-2 link happens at
+  Task 10 — this change is validated by (a) being provably placement-only
+  (attribute/comment hunks, zero logic), and (b) Task 10's link, margin
+  gate, and FPS capture. Fallback ladder if Task 10's link fails on HWRAM:
+  (1) drop `OBJECT_POOL_CAPACITY` to 208; (2) return only the
+  per-primitive scratch arrays to HWRAM and leave `s_bob_hot_workarea` in
+  LWRAM; (3) revert this commit entirely and record the margins. The
+  `tools/saturn/test_dual_sh2_work_storage_contract.py` placement pin —
+  which asserted the exact `.lwram_bss` macro string — is retargeted in
+  the same commit to pin the new HWRAM policy (empty macro, same 23-symbol
+  list, `lwram` now forbidden on those declarations), so re-eviction can
+  never happen silently. Placements that were already LWRAM at A9A
+  (terrain result/command banks, actor queue payload banks, LOD storage,
+  resident copies, templates, transform cache) are untouched.
+
 - `SEQ_START` on the MC68000 driver now starts the SFXB bundle's looped
   music sample on SCSP slot 0, which is pinned to music; SFX round-robin is
   confined to slots 1-3 and can never evict the music voice. Replace
