@@ -48,6 +48,9 @@ extern Gfx *gDisplayListEndInChunk;
 #else
 extern Gfx *gDisplayListHead;
 extern u8 *gGfxPoolEnd;
+/* Sprint 2 T2.2 (T2.0 L5) master-DL overflow guard; see game_init.c. */
+extern u8 gGfxPoolOverrun;
+extern u32 gGfxPoolOverrunFrames;
 #endif
 extern struct GfxPool *gGfxPool;
 extern u8 gControllerBits;

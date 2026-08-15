@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Master display-list pool overflow now degrades instead of corrupting
+  (Sprint 2 T2.2, T2.0 lesson L5 prerequisite for the `GFX_POOL_SIZE`
+  shrink). Root cause: stock SM64's `gGfxPool` is a two-sided shared arena
+  — `gDisplayListHead++` grows up with no bounds check while
+  `alloc_display_list()` carves matrices/viewports down from `gGfxPoolEnd`
+  and returns an unchecked NULL on exhaustion. On overflow the head writes
+  cross into live top-down allocations (garbage matrices), then past the
+  pool object into `spTask`/adjacent `.bss` (memory corruption); NULL
+  allocations are dereferenced by ~90 call sites. Every reference engine
+  clamps this class (SlaveDriver `SPR.C:142-143,430-441`; SGL halts —
+  T2.0 L5), so shrinking capacity without a clamp would convert a capacity
+  cut into a correctness risk. Fix: `gGfxPoolOverrun` latches on either
+  failure side (refused `alloc_display_list`, or head/end crossing checked
+  at the presentation boundary); `display_and_vsync()` then skips only that
+  frame's `exec_display_list` — the previously complete VDP1 frame stays
+  presented and the VBlank wait keeps pacing (constitution: degrade at the
+  smallest safe unit). `gGfxPoolOverrunFrames` (u32, nm-locatable) counts
+  dropped frames for host probes. Limitation recorded honestly: detection
+  is at frame end, so a pathological single-frame overrun larger than the
+  remaining pool runway can still write past the pool object before being
+  caught; the guard converts the realistic incremental-growth class into a
+  detected, presented-frame-preserving degrade.
+
 ### Added
 
 - Sprint 2 T2.1 evidence: instrumented peak capture over the scripted BOB

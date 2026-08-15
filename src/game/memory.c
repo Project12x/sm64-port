@@ -755,6 +755,11 @@ void *alloc_display_list(u32 size) {
         gGfxPoolEnd -= size;
         ptr = gGfxPoolEnd;
     } else {
+        /* Sprint 2 T2.2 (T2.0 L5): callers widely dereference this NULL
+         * unchecked, so a refused allocation means the frame is already
+         * degraded.  Latch the overrun so display_and_vsync() drops only
+         * this frame's task submission (game_init.c). */
+        gGfxPoolOverrun = TRUE;
     }
     return ptr;
 }

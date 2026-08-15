@@ -39,6 +39,20 @@ Gfx *gDisplayListEndInChunk;
 #else
 Gfx *gDisplayListHead;
 u8 *gGfxPoolEnd;
+/* Sprint 2 T2.2 (T2.0 lesson L5): the master display list has no write-side
+ * clamp -- gDisplayListHead++ writes are unchecked, and alloc_display_list()
+ * returns an unchecked NULL when the shared pool is exhausted.  Every
+ * reference engine capacity limit degrades gracefully (SlaveDriver SPR.C
+ * clamps the flush; SGL halts processing); before shrinking GFX_POOL_SIZE
+ * the overflow must be a detected, degraded frame rather than silent
+ * corruption.  gGfxPoolOverrun latches when either side of the shared pool
+ * fails (set in alloc_display_list and by the head/end crossing check in
+ * display_and_vsync); the frame's task submission is then skipped so the
+ * previously complete frame remains presented (constitution: degrade at the
+ * smallest safe unit).  gGfxPoolOverrunFrames counts dropped frames for
+ * host-side probes (sh-elf-nm locatable). */
+u8 gGfxPoolOverrun;
+u32 gGfxPoolOverrunFrames;
 #endif
 struct GfxPool *gGfxPool;
 
@@ -417,6 +431,7 @@ void select_gfx_pool(void) {
 #else
     gDisplayListHead = gGfxPool->buffer;
     gGfxPoolEnd = (u8 *) (gGfxPool->buffer + GFX_POOL_SIZE);
+    gGfxPoolOverrun = FALSE;
 #endif
 }
 
@@ -434,8 +449,19 @@ void display_and_vsync(void) {
      * front end, then the platform owns the presentation VBlank. */
     const bool display_suppressed =
         sm64_saturn_source_runtime_display_suppressed();
+    /* Sprint 2 T2.2 (T2.0 L5): detect master-DL pool exhaustion at the
+     * presentation boundary.  The bottom-up gDisplayListHead writes carry no
+     * clamp, and alloc_display_list() latches gGfxPoolOverrun when its
+     * top-down side refuses.  A crossed frame's pool contents are not a
+     * coherent display list, so drop only this frame's task submission --
+     * the previously complete frame stays presented -- and keep the VBlank
+     * wait so pacing is unchanged. */
+    const bool gfx_pool_overrun = gGfxPoolOverrun ||
+        (u8 *) gDisplayListHead > gGfxPoolEnd;
+    if (gfx_pool_overrun)
+        gGfxPoolOverrunFrames++;
     profiler_log_thread5_time(BEFORE_DISPLAY_LISTS);
-    if (!display_suppressed)
+    if (!display_suppressed && !gfx_pool_overrun)
         exec_display_list(&gGfxPool->spTask);
     profiler_log_thread5_time(AFTER_DISPLAY_LISTS);
     /* Catch-up ticks remain authoritative source updates, but are not
