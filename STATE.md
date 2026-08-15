@@ -5,6 +5,13 @@
 **Active plan:**
 [`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
 **Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
+**Sprint 2:** T2.0 reference sweep and T2.1 instrumented peak capture done
+(2026-08-15): all four capacity-shrink gates measured over the scripted
+route — cmdt 1664 SAFE (peak 653), `_private_pool` 0x4000 SAFE (extent
+8,276 B), `GFX_POOL_SIZE` 4096 SAFE (peak 443), SMPC 14→2 NEEDS-MARGIN
+(exactly 2 ever used; take 14→4). Evidence:
+`docs/saturn/evidence/reports/sprint2-t2_1-peak-capture.md`. T2.2
+(reclamation package) is unblocked.
 
 ## Product truth
 
