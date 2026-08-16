@@ -50,39 +50,104 @@ def build_render_clusters(mesh: dict[str, object],
     return clusters
 
 
+SCENE_ADMISSION_LEAF_MAX = 8
+
+
+def _admission_axis_bounds(clusters: list[dict[str, object]],
+                           order: list[int], lo: int, hi: int) -> tuple[list[int], list[int]]:
+    minimum = [min(int(clusters[order[i]]["bounds"]["min"][axis])
+                   for i in range(lo, hi)) for axis in range(3)]
+    maximum = [max(int(clusters[order[i]]["bounds"]["max"][axis])
+                   for i in range(lo, hi)) for axis in range(3)]
+    return minimum, maximum
+
+
+def build_admission_hierarchy(
+    clusters: list[dict[str, object]],
+    leaf_max: int = SCENE_ADMISSION_LEAF_MAX,
+) -> tuple[list[dict[str, object]], list[int]]:
+    """Median-split binary hierarchy over cluster bounds.
+
+    Sprint 2 T2.12. The runtime prunes an OUTSIDE subtree and admits an INSIDE
+    subtree without testing it, which is only equivalent to the flat pass if a
+    node's bounds bound its whole subtree; every node's bounds are therefore
+    the exact union of the cluster bounds it owns, and a child's set is a
+    subset of its parent's, so containment holds by construction and
+    metadata_valid() re-proves it at bind time.
+
+    Node indices are assigned breadth-first, so every child index is strictly
+    greater than its parent's -- the acyclicity property the validator
+    enforces. Each leaf owns a contiguous run of the cluster-ref array, and the
+    runs partition it, so every cluster is referenced exactly once and the
+    coverage check still holds.
+
+    Leaf size 8 was chosen by measurement, not taste:
+    tools/saturn/admission_hierarchy_test.c reports total frustum tests per
+    pose over 964 poses x 5 frustum templates for leaf sizes 1..128, and 8 is
+    the minimum (31.6% of the flat pass, against 36.0% at 4 and 33.2% at 16).
+    """
+    order = list(range(len(clusters)))
+    nodes: list[dict[str, object]] = [{}]
+    queue: list[tuple[int, int, int]] = [(0, 0, len(clusters))]
+    head = 0
+    while head < len(queue):
+        node_index, lo, hi = queue[head]
+        head += 1
+        minimum, maximum = _admission_axis_bounds(clusters, order, lo, hi)
+        node = {
+            "bounds_min": minimum,
+            "bounds_max": maximum,
+            "cluster_ref_first": 0,
+            "cluster_ref_count": 0,
+            "portal_ref_first": 0,
+            "portal_ref_count": 0,
+            "child_first": 0,
+            "child_count": 0,
+        }
+        nodes[node_index] = node
+        span = hi - lo
+        if span <= leaf_max:
+            node["cluster_ref_first"] = lo
+            node["cluster_ref_count"] = span
+            continue
+        axis = max(range(3), key=lambda a: (maximum[a] - minimum[a], -a))
+        order[lo:hi] = sorted(
+            order[lo:hi],
+            key=lambda index: (int(clusters[index]["bounds"]["min"][axis]) +
+                               int(clusters[index]["bounds"]["max"][axis]), index))
+        node["child_first"] = len(nodes)
+        node["child_count"] = 2
+        nodes.extend([{}, {}])
+        middle = lo + span // 2
+        queue.append((node["child_first"], lo, middle))
+        queue.append((node["child_first"] + 1, middle, hi))
+    return nodes, order
+
+
 def build_scene_admission_metadata(
     clusters: list[dict[str, object]],
     bsp: dict[str, object],
 ) -> dict[str, object]:
     """Adapt any validated cluster bank to the generic admission view.
 
-    BOB currently publishes only compact node spans.  Until the S64P portal
-    section grows node bounds, one conservative root node is emitted; callers
-    can replace it with validated node/portal arrays without changing the
-    runtime API.  The fallback bounds are the outward union of cluster bounds.
+    BOB publishes no portal windows, so the spatial index is the median-split
+    hierarchy built above rather than a portal graph.  Callers can still
+    replace it with validated node/portal arrays without changing the runtime
+    API.
     """
     if not clusters:
         raise ValueError("scene admission requires at least one cluster")
-    refs = list(range(len(clusters)))
-    minimum = [min(int(cluster["bounds"]["min"][axis])
-                   for cluster in clusters) for axis in range(3)]
-    maximum = [max(int(cluster["bounds"]["max"][axis])
-                   for cluster in clusters) for axis in range(3)]
     node_spans = bsp.get("node_spans", {})
     if not isinstance(node_spans, dict):
         raise ValueError("BSP node spans are malformed")
+    nodes, refs = build_admission_hierarchy(clusters)
+    if sorted(refs) != list(range(len(clusters))):
+        raise ValueError("admission hierarchy must reference every cluster once")
     return {
         "schema": "sm64-saturn-scene-admission-v1",
         "metadata_valid": True,
         "root_node": 0,
-        "nodes": [{
-            "bounds_min": minimum,
-            "bounds_max": maximum,
-            "cluster_ref_first": 0,
-            "cluster_ref_count": len(refs),
-            "portal_ref_first": 0,
-            "portal_ref_count": 0,
-        }],
+        "nodes": nodes,
         "cluster_refs": refs,
         "portals": [],
         "portal_refs": [],

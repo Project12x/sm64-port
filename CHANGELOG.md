@@ -4,6 +4,26 @@
 
 ### Added
 
+- Sprint 2 T2.12 (`spatial_admit`, T2.9 item 4 half a): `emit_bob_scene.py`
+  bakes a real spatial index. `SM64_SATURN_BOB_ADMISSION_NODE_COUNT` goes from
+  **1 to 255** -- 128 leaves, depth 7 -- over the same 867 cluster refs.
+  Before this, BOB's 'hierarchy' was a single node holding every cluster: a
+  flat list with a tree's type signature, which is why T2.9 measured
+  `clusters_tested` at 867 with min = max = 867 in every one of 1,330 frames
+  while only 230-353 were admitted, and why the stage's cost did not fall when
+  less was visible. **Shape:** median split on the widest axis of the node's
+  bounds, leaves capped at 8 clusters, node bounds the exact union of the
+  cluster bounds owned, node indices assigned breadth-first so every child
+  index exceeds its parent's. Those three properties are exactly what
+  `metadata_valid()` re-proves at bind time -- the baker is not trusted.
+  **Leaf size 8 is measured, not chosen by taste:**
+  `verify-admission-hierarchy` reports total frustum tests per pose for leaf
+  sizes 1 through 128 over 964 poses x 5 frustum templates, and 8 is the
+  minimum at 31.6% of the flat pass (36.0% at 4, 33.2% at 16, 67.8% at 1 where
+  node tests swamp the saving). **Consumer impact:** the node array grows from
+  36 to 9,180 bytes of `.cart_rodata` -- cartridge, not work RAM -- and no
+  admitted cluster moves: the generated tree is compared against the flat pass
+  over the whole corpus with zero divergences.
 - Sprint 2 T2.12 (`spatial_admit`, T2.9 item 4 half b): admission traversal is
   hierarchical. `sm64_saturn_scene_admission_node_t` gains
   `child_first`/`child_count` in place of its `reserved` word -- children are a
