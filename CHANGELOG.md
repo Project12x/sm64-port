@@ -4,6 +4,40 @@
 
 ### Added
 
+- Sprint 2 T2.14 (diagnostics): `tools/saturn/capture_route_counters.py`, which
+  peeks the shipped ELF's live counter blocks over a running Ymir session --
+  no rebuild, no instrumentation, no diagnostic tuple, ~50 s end to end. It
+  reads three globals that already existed and had **never once been
+  captured**: `sourceboot_fast3d.profile` (the per-triangle funnel and every
+  `reject_*` bucket), `sState` (`submitted_tasks`/`unhandled_tasks`/
+  `scene_graph_walks`, i.e. whether the source display list is submitted at all
+  and whether the geo walk ran), and `gNumCalls` (the engine's own exact
+  `find_floor`/`find_ceil`/`find_wall` tally).
+
+  **Root cause of the long-standing gap this closes.** The evidence tree has
+  carried the funnel counters as "wired but never captured" since they were
+  added, and the reason was never diagnosed: the publisher that copies them
+  into `sourceboot_route_checkpoint` sits behind
+  `#if SATURN_SOURCEBOOT_ROUTE_REPLAY && !SATURN_SOURCEBOOT_LIVE_INPUT`
+  (`src/port/saturn/sourceboot/main.c:599`), and the shipped profile sets
+  `live_input_mode: 1`. `sourceboot_route_checkpoint` is therefore **not even
+  present in the product ELF's symbol table**, so every tool that went looking
+  for it found nothing. The underlying struct is live regardless, so this tool
+  reads it directly and sidesteps the publisher entirely.
+
+  Two consequences are baked into the tool rather than left for the next reader
+  to rediscover: the counters are **cumulative, not per-frame**, because the
+  per-frame `memset` lives in `sm64_saturn_fast3d_frontend_submit` which never
+  runs under `SATURN_DEMO_PATH=1` -- so rates are reported as deltas per unit
+  of `frame_serial`; and `gNumCalls` is three `s16`, so its deltas are
+  wrap-corrected. Struct offsets are pinned in the module from `offsetof()` on
+  a host compile of `saturn_fast3d_frontend.h`, and addresses are passed
+  explicitly so a report always names the build it measured.
+
+  Consumer-facing: this makes "does this code path execute, and how much
+  geometry does each stage actually kill" answerable against a **product**
+  build. No behaviour change, no target source touched.
+
 - Sprint 2 T2.13 (gates): `verify-shadow-trig` and
   `verify-shadow-trig-mutation`, the error-bounded oracle for the shadow trig
   substitution, both wired into `verify-all`. **This is the first oracle in
