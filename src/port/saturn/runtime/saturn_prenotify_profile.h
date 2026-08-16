@@ -93,9 +93,15 @@
  */
 
 #define SM64_SATURN_PRENOTIFY_PROFILE_MAGIC 0x46505246u /* 'FPRF' */
-#define SM64_SATURN_PRENOTIFY_PROFILE_VERSION 2u
+#define SM64_SATURN_PRENOTIFY_PROFILE_VERSION 3u
 #define SM64_SATURN_PRENOTIFY_PROFILE_NODES 24u
 #define SM64_SATURN_PRENOTIFY_PROFILE_DEPTH 8u
+/* T2.8: the corrected frame is ~15 VBlanks (sprint2-t2_7-a9a-regression-
+ * attribution.md S1.2; the 41-VBlank figure quoted elsewhere came from a
+ * hand-derived FPS that included the pre-gameplay ramp).  A 32-entry ring of
+ * per-VBlank VDP1 COPR samples therefore spans about two whole frames.
+ * Power of two so the ISR index advance is a mask, not a modulo. */
+#define SM64_SATURN_PRENOTIFY_PROFILE_COPR_RING 32u
 
 /* Node ids.  Node 0 is the window itself; its self time is whatever the
  * named stages did not account for, i.e. the unattributed remainder. */
@@ -170,11 +176,94 @@ typedef struct {
     volatile uint32_t slave_busy_last;
     volatile uint32_t slave_busy_max;
     volatile uint32_t slave_frt_tcr;
+    /* ---------------------------------------------------------------- *
+     * T2.8 present path and VDP1 draw fence.
+     *
+     * WHY THESE LIVE HERE AND NOT IN A SECOND RIG.  The pre-notification
+     * window closes at the NOTIFIED marker (sourceboot/main.c), so the
+     * present path is entirely outside node accounting.  Rather than stand
+     * up a second published record with its own magic, sequence discipline,
+     * P2 alias and host decoder, the present path reuses this one: same
+     * master ownership, same NOLOAD .lwram_bss storage, same cache-through
+     * publication, same capture tool.  These fields are written by
+     * sourceboot_present_generation / sourceboot_frame_poll_transfers and
+     * by the VBlank-OUT handler; none of them participates in the node
+     * stack, so they cannot perturb the T2.4/T2.5/T2.6 numbers.
+     *
+     * WRAP.  Every span here is accumulated from per-iteration or
+     * per-call-site 16-bit FRT differences, never one delta across a whole
+     * blocking wait, because at phi/128 a 16-bit FRT wraps at ~312 ms ~=
+     * 18.8 VBlanks and a stalled frame can exceed that even though the
+     * healthy frame is ~15.  vdp1_fence_max_raw publishes the
+     * largest single inter-probe interval the fence ever saw; a value well
+     * below 0xFFFF is the positive evidence that nothing aliased.
+     * ---------------------------------------------------------------- */
+    /* Completed sourceboot_present_generation calls. */
+    volatile uint32_t present_windows;
+    volatile uint32_t present_ticks_last;
+    volatile uint32_t present_ticks_accum;
+    volatile uint32_t present_ticks_max;
+    /* vdp1_sync_render(): spins on VDP1_FLAG_LIST_XFERRED, then starts the
+     * plot (libyaul vdp_sync.c vdp1_sync_render / _vdp1_mode_variable_
+     * sync_render). */
+    volatile uint32_t vdp1_render_ticks_last;
+    volatile uint32_t vdp1_render_ticks_accum;
+    volatile uint32_t vdp1_render_ticks_max;
+    /* vdp1_sync(): sets SYNC_FLAG_VDP1_SYNC and returns.  Published to
+     * prove it does not block, which the sprint-2 gap study assumed it
+     * did. */
+    volatile uint32_t vdp1_sync_ticks_last;
+    volatile uint32_t vdp1_sync_ticks_accum;
+    /* sm64_saturn_vdp2_frame_begin + _commit, i.e. HUD text build and the
+     * VDP2 shadow-register queue. */
+    volatile uint32_t vdp2_commit_ticks_last;
+    volatile uint32_t vdp2_commit_ticks_accum;
+    /* The real VDP1 draw-end fence: vdp1_sync_wait() in
+     * sourceboot_frame_poll_transfers.  SYNC_FLAG_VDP1_SYNC is cleared only
+     * in _vdp1_mode_variable_vblank_out, which requires the VBlank-IN
+     * handler to have seen EDSR.CEF, so this wait ends at draw-end plus the
+     * frame-buffer change. */
+    volatile uint32_t vdp1_fence_events;      /* guard reached */
+    volatile uint32_t vdp1_fence_waits;       /* guard actually blocked */
+    volatile uint32_t vdp1_fence_ticks_last;
+    volatile uint32_t vdp1_fence_ticks_accum;
+    volatile uint32_t vdp1_fence_ticks_max;
+    volatile uint32_t vdp1_fence_iterations_last;
+    volatile uint32_t vdp1_fence_iterations_accum;
+    volatile uint32_t vdp1_fence_max_raw;
+    /* VDP1 status at the fence.  EDSR bit 1 is CEF (draw end). */
+    volatile uint32_t vdp1_edsr_entry_last;
+    volatile uint32_t vdp1_edsr_cef_entry_count;
+    volatile uint32_t vdp1_copr_entry_last;
+    volatile uint32_t vdp1_copr_exit_last;
+    volatile uint32_t vdp1_lopr_last;
+    /* Per-VBlank VDP1 progress, sampled in the VBlank-OUT handler.  COPR is
+     * the current command-table address in 8-byte units, so COPR/4 is the
+     * command index VDP1 is plotting -- libyaul derives the same value as
+     * copr >> 2 in vdp1/cmdt.h vdp1_cmdt_current_get().  vdp1_vblank_cef_count over
+     * vdp1_vblank_samples is the fraction of the run's VBlanks at which
+     * VDP1 had already finished -- the single number that decides
+     * fill-bound versus CPU-bound. */
+    volatile uint32_t vdp1_vblank_samples;
+    volatile uint32_t vdp1_vblank_cef_count;
+    volatile uint32_t vdp1_copr_retired_accum;
+    volatile uint32_t vdp1_copr_retired_intervals;
+    volatile uint32_t vdp1_copr_retired_max;
+    volatile uint32_t vdp1_copr_vblank_ring[
+        SM64_SATURN_PRENOTIFY_PROFILE_COPR_RING];
+    volatile uint32_t vdp1_copr_vblank_ring_cursor;
+    /* Command-source split.  total is the published bank's command_count
+     * (per present, and summed); actor and texture are the demo renderer's
+     * own run-long counters, which no instrument published before. */
+    volatile uint32_t commands_total_last;
+    volatile uint32_t commands_total_accum;
+    volatile uint32_t commands_actor_accum;
+    volatile uint32_t commands_texture_accum;
     volatile uint32_t sequence_end;
 } sm64_saturn_prenotify_profile_t;
 
-_Static_assert(sizeof(sm64_saturn_prenotify_profile_t) == 452U,
-               "frame profile ABI must remain one hundred thirteen words");
+_Static_assert(sizeof(sm64_saturn_prenotify_profile_t) == 716U,
+               "frame profile ABI must remain one hundred seventy-nine words");
 
 #if defined(SATURN_DIAGNOSTIC_MODE) && SATURN_DIAGNOSTIC_MODE != 0 && \
     defined(__sh__)

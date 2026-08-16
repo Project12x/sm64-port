@@ -4,6 +4,54 @@
 
 ### Fixed
 
+- Sprint 2 T2.8 (diagnostics): the VDP1 draw fence is now measurable, and the
+  VDP2 HUD stops reporting a fiction. **Root cause, three separate defects:**
+  (a) `sourceboot_vdp1_wait_ticks_accum` was declared, zeroed and read but
+  never incremented; (b) `vdp1_terminal_fence_wait_ticks_last/_accum` were
+  hard-assigned `0U` immediately after the fence and then printed on the HUD as
+  `VDP1W`, so every reader saw a zero and concluded there was no VDP1 wait; and
+  (c) the one live fence counter, `vdp1_overwrite_wait_ticks_last`, was a
+  single `sourceboot_frt_delta()` span truncated to `uint16_t`, so at phi/128 a
+  wait past ~18.8 VBlanks aliased silently. Diagnostic builds now accumulate
+  one 16-bit FRT difference **per spin iteration** into a 32-bit total, which is
+  exact for any wait length, and publish `vdp1_fence_max_raw` as the wrap
+  witness. **Consumer-facing impact: none** — every addition is behind
+  `SATURN_DIAGNOSTIC_MODE != 0`, and the product path is preserved verbatim in
+  the `#else` arms. Proven at object level: `main.o`, `saturn_demo_render.o`,
+  `saturn_actor_meshlets.o` and `saturn_render_job_runtime.o` compiled at
+  `SATURN_DIAGNOSTIC_MODE=0` with `-g0` on the product build's own command line
+  are **byte-identical** to the same objects built from a path-identical
+  `git show HEAD:` mirror (660,904 / 723,168 / 16,500 / 5,356 B;
+  `saturn_actor_meshlets.o` reproduces T2.6's recorded `f423caa8...50cdd`).
+- Sprint 2 T2.8: an out-of-bounds write introduced and fixed within the same
+  task. The new VBlank-OUT sampler read its ring cursor back from NOLOAD
+  `.lwram_bss` and used it **unmasked** as an array index. `.lwram_bss` is not
+  crt0-cleared and the handler is registered in `user_init()`, before
+  `sourceboot_reset_lwram_state()` zeroes the record, so on any boot where
+  LWRAM is not already zero (real hardware; Ymir happens to zero-fill) that
+  wrote past the ring into neighbouring LWRAM state. The cursor is now masked
+  on read as well as on write.
+
+### Changed
+
+- Sprint 2 T2.8 (diagnostics): `sm64_saturn_prenotify_profile_t` ABI version
+  2 -> 3, 452 -> 716 bytes (113 -> 179 words). The T2.5/T2.6 FRT rig is
+  **reused** rather than duplicated: the present path and the VDP1 draw fence
+  publish into the same master-owned NOLOAD LWRAM record, through the same P2
+  cache-through alias, decoded by the same capture tool. New fields cover the
+  fence (ticks/iterations/max-raw), `EDSR` and `COPR`/`LOPR` on both sides of
+  it, a 32-entry per-VBlank `COPR` progress ring plus an `EDSR.CEF` hit count
+  sampled in the VBlank-OUT handler, the present path decomposed
+  (`vdp1_sync_render`, `vdp1_sync`, VDP2 commit, total), and the actor/texture
+  vs total command split that the profile already computed and no instrument
+  ever published. **Prerequisite for consumers:**
+  `tools/saturn/capture_prenotification_profile.py` must be at
+  `PROFILE_VERSION = 3` / `PROFILE_WORDS = 179` to decode a T2.8-or-later
+  image; it is updated in the same commit and emits a new `present` summary
+  block. None of the new fields participates in the profiler's node stack, so
+  T2.4/T2.5/T2.6 node numbers are unperturbed.
+
+
 - Sprint 2 T2.6 follow-up: T2.6's own doc comments broke
   `tools/saturn/test_render_snapshot_source.py`. **Root cause:** its
   `function_body(text, name)` helper locates a C function with

@@ -863,8 +863,134 @@ static sm64_saturn_gouraud_bank_t sourceboot_gouraud_banks[2]
  * only Saturn target that consumes controller state through the real game
  * loop, and the boot worked without it because the BIOS sequence uses the
  * BIOS's own pad handling. */
+#if SATURN_DIAGNOSTIC_MODE != 0
+/* ------------------------------------------------------------------ *
+ * Sprint 2 T2.8 -- make the VDP1 draw fence measurable.
+ *
+ * WHAT WAS BROKEN.  sourceboot_vdp1_wait_ticks_accum was declared, zeroed
+ * and read but never incremented, and vdp1_terminal_fence_wait_ticks_* was
+ * hard-assigned 0 immediately after the fence, so the VDP2 HUD's VDP1W cell
+ * printed a zero that a reader could only read as "there is no VDP1 wait".
+ *
+ * WHERE THE FENCE ACTUALLY IS.  Not where the sprint-2 gap study placed it.
+ * In vendored libyaul, vdp1_sync() only sets SYNC_FLAG_VDP1_SYNC and returns
+ * (third_party/libyaul/libyaul/scu/bus/b/vdp/vdp_sync.c, vdp1_sync), and
+ * vdp1_sync_render() spins only on VDP1_FLAG_LIST_XFERRED, i.e. the command
+ * DMA, not the plot.  The blocking draw-end fence is vdp1_sync_wait(): the
+ * flag it spins on is cleared in _vdp1_mode_variable_vblank_out, which is
+ * only reached after the VBlank-IN handler observed EDSR.CEF (draw end) and
+ * requested the frame-buffer change.  sourceboot reaches that call in
+ * exactly one place -- the overwrite guard at the top of
+ * sourceboot_frame_poll_transfers.  All three functions are bracketed below
+ * so the measurement, not the assumption, decides.
+ *
+ * WRAP.  The pre-existing bracket on the overwrite guard used one
+ * sourceboot_frt_delta() across the whole wait and returned uint16_t, so any
+ * wait past ~18.8 VBlanks aliased silently into a small number.  The fence
+ * bracket below instead charges one 16-bit difference per spin iteration: an
+ * iteration is a few tens of SH-2 cycles, four orders of magnitude below a
+ * wrap, so the 32-bit total is exact.  vdp1_fence_max_raw publishes the
+ * largest single inter-probe interval as the witness. */
+#define SOURCEBOOT_VDP1_EDSR_CEF 0x0002u
+
+static volatile vdp1_ioregs_t *sourceboot_vdp1_ioregs(void)
+{
+    return (volatile vdp1_ioregs_t *)VDP1_IOREG_BASE;
+}
+
+/* COPR is the VDP1 current-command-address register (vdp1/map.h).  It counts
+ * in 8-byte units of the command area and a command table is 32 bytes, so
+ * the command index being plotted is COPR/4.  Published raw so the host can
+ * re-derive it without trusting this comment. */
+static uint32_t sourceboot_vdp1_copr(void)
+{
+    return (uint32_t)sourceboot_vdp1_ioregs()->copr;
+}
+
+static uint32_t sourceboot_vdp1_edsr(void)
+{
+    return (uint32_t)sourceboot_vdp1_ioregs()->edsr;
+}
+
+/* Per-VBlank VDP1 progress sample.  Two 16-bit I/O reads plus a handful of
+ * ALU ops inside the VBlank-OUT ISR, once per field. */
+static void sourceboot_vdp1_vblank_sample(void)
+{
+    volatile sm64_saturn_prenotify_profile_t *const record =
+        sm64_saturn_prenotify_profile_visible();
+    const uint32_t copr = sourceboot_vdp1_copr();
+    const uint32_t edsr = sourceboot_vdp1_edsr();
+    /* The cursor lives in NOLOAD .lwram_bss, which crt0 does not clear, and
+     * this handler is registered in user_init() -- before
+     * sourceboot_reset_lwram_state() zeroes the record.  Mask the value read
+     * back rather than trusting it: an unmasked index would write outside the
+     * ring and into neighbouring LWRAM state on any boot where LWRAM is not
+     * already zero (real hardware; Ymir happens to zero-fill). */
+    const uint32_t cursor = record->vdp1_copr_vblank_ring_cursor &
+        (SM64_SATURN_PRENOTIFY_PROFILE_COPR_RING - 1U);
+    const uint32_t previous = record->vdp1_copr_vblank_ring[
+        (cursor + SM64_SATURN_PRENOTIFY_PROFILE_COPR_RING - 1U) &
+        (SM64_SATURN_PRENOTIFY_PROFILE_COPR_RING - 1U)];
+    record->vdp1_copr_vblank_ring[cursor] = copr;
+    record->vdp1_copr_vblank_ring_cursor =
+        (cursor + 1U) & (SM64_SATURN_PRENOTIFY_PROFILE_COPR_RING - 1U);
+    record->vdp1_vblank_samples++;
+    if ((edsr & SOURCEBOOT_VDP1_EDSR_CEF) != 0U)
+        record->vdp1_vblank_cef_count++;
+    /* Only forward progress is a retirement; COPR restarts at the list head
+     * on every new plot, and that backward step is not commands retired. */
+    if (record->vdp1_vblank_samples > 1U && copr >= previous) {
+        const uint32_t retired = copr - previous;
+        record->vdp1_copr_retired_accum += retired;
+        record->vdp1_copr_retired_intervals++;
+        if (retired > record->vdp1_copr_retired_max)
+            record->vdp1_copr_retired_max = retired;
+    }
+}
+
+/* Charge one FRT interval per spin iteration.  Returns accumulated ticks and
+ * publishes the iteration count so the probe's own cost is measurable rather
+ * than assumed. */
+static uint32_t sourceboot_vdp1_fence_spin(uint32_t *iterations_out,
+                                           uint32_t *max_raw_out)
+{
+    uint32_t ticks = 0U;
+    uint32_t iterations = 0U;
+    uint32_t max_raw = 0U;
+    /* Mirror vdp1_sync_wait()'s interrupt discipline exactly (libyaul
+     * vdp_sync.c).  SYNC_FLAG_VDP1_SYNC is cleared by the VBLANK-OUT
+     * handler, so a spin that inherited a masked SR would never terminate;
+     * vdp1_sync_wait() unmasks for the duration of its loop for that
+     * reason and so must this replacement. */
+    const uint32_t sr_mask = cpu_intc_mask_get();
+    cpu_intc_mask_set(0);
+    uint16_t last = cpu_frt_count_get();
+    while (vdp1_sync_busy()) {
+        const uint16_t now = cpu_frt_count_get();
+        const uint16_t raw = (uint16_t)(now - last);
+        last = now;
+        ticks += raw;
+        if ((uint32_t)raw > max_raw) max_raw = raw;
+        iterations++;
+    }
+    {
+        const uint16_t now = cpu_frt_count_get();
+        const uint16_t raw = (uint16_t)(now - last);
+        ticks += raw;
+        if ((uint32_t)raw > max_raw) max_raw = raw;
+    }
+    cpu_intc_mask_set(sr_mask);
+    *iterations_out = iterations;
+    *max_raw_out = max_raw;
+    return ticks;
+}
+#endif /* SATURN_DIAGNOSTIC_MODE != 0 */
+
 static void sourceboot_vblank_out_handler(void *work __unused) {
     sourceboot_vblank_out_count++;
+#if SATURN_DIAGNOSTIC_MODE != 0
+    sourceboot_vdp1_vblank_sample();
+#endif
     smpc_peripheral_intback_issue();
 }
 
@@ -941,6 +1067,44 @@ static void sourceboot_reset_lwram_state(void)
         frame_profile->slave_busy_last = 0U;
         frame_profile->slave_busy_max = 0U;
         frame_profile->slave_frt_tcr = 0U;
+        /* T2.8 present-path section.  Same field-wise P2 discipline. */
+        frame_profile->present_windows = 0U;
+        frame_profile->present_ticks_last = 0U;
+        frame_profile->present_ticks_accum = 0U;
+        frame_profile->present_ticks_max = 0U;
+        frame_profile->vdp1_render_ticks_last = 0U;
+        frame_profile->vdp1_render_ticks_accum = 0U;
+        frame_profile->vdp1_render_ticks_max = 0U;
+        frame_profile->vdp1_sync_ticks_last = 0U;
+        frame_profile->vdp1_sync_ticks_accum = 0U;
+        frame_profile->vdp2_commit_ticks_last = 0U;
+        frame_profile->vdp2_commit_ticks_accum = 0U;
+        frame_profile->vdp1_fence_events = 0U;
+        frame_profile->vdp1_fence_waits = 0U;
+        frame_profile->vdp1_fence_ticks_last = 0U;
+        frame_profile->vdp1_fence_ticks_accum = 0U;
+        frame_profile->vdp1_fence_ticks_max = 0U;
+        frame_profile->vdp1_fence_iterations_last = 0U;
+        frame_profile->vdp1_fence_iterations_accum = 0U;
+        frame_profile->vdp1_fence_max_raw = 0U;
+        frame_profile->vdp1_edsr_entry_last = 0U;
+        frame_profile->vdp1_edsr_cef_entry_count = 0U;
+        frame_profile->vdp1_copr_entry_last = 0U;
+        frame_profile->vdp1_copr_exit_last = 0U;
+        frame_profile->vdp1_lopr_last = 0U;
+        frame_profile->vdp1_vblank_samples = 0U;
+        frame_profile->vdp1_vblank_cef_count = 0U;
+        frame_profile->vdp1_copr_retired_accum = 0U;
+        frame_profile->vdp1_copr_retired_intervals = 0U;
+        frame_profile->vdp1_copr_retired_max = 0U;
+        for (uint32_t slot = 0U;
+             slot < SM64_SATURN_PRENOTIFY_PROFILE_COPR_RING; slot++)
+            frame_profile->vdp1_copr_vblank_ring[slot] = 0U;
+        frame_profile->vdp1_copr_vblank_ring_cursor = 0U;
+        frame_profile->commands_total_last = 0U;
+        frame_profile->commands_total_accum = 0U;
+        frame_profile->commands_actor_accum = 0U;
+        frame_profile->commands_texture_accum = 0U;
         frame_profile->frt_tcr =
             0x100u | (uint32_t)sm64_saturn_prenotify_profile_select_clock();
         frame_profile->magic = SM64_SATURN_PRENOTIFY_PROFILE_MAGIC;
@@ -1153,19 +1317,51 @@ static void sourceboot_present_generation(
     const sm64_saturn_vdp1_frame_bank_t *bank)
 {
     const uint32_t presentation_generation = bank->snapshot_generation;
+#if SATURN_DIAGNOSTIC_MODE != 0
+    const uint16_t present_start = cpu_frt_count_get();
+    uint16_t present_probe = present_start;
+#endif
     sourceboot_boot_trace_write(
         SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_RENDER_BEFORE,
         presentation_generation);
     vdp1_sync_render();
+#if SATURN_DIAGNOSTIC_MODE != 0
+    const uint16_t present_after_render = cpu_frt_count_get();
+    const uint32_t vdp1_render_ticks =
+        sourceboot_frt_delta(present_probe, present_after_render);
+    present_probe = present_after_render;
+#endif
     sourceboot_boot_trace_write(
         SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_RENDER_AFTER,
         presentation_generation);
     sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_SYNC_BEFORE,
                                 presentation_generation);
     vdp1_sync();
+#if SATURN_DIAGNOSTIC_MODE != 0
+    const uint16_t present_after_sync = cpu_frt_count_get();
+    const uint32_t vdp1_sync_ticks =
+        sourceboot_frt_delta(present_probe, present_after_sync);
+    present_probe = present_after_sync;
+#endif
     sourceboot_trace_vdp1_presentation_generation = presentation_generation;
     sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_SYNC_AFTER,
                                 presentation_generation);
+#if SATURN_DIAGNOSTIC_MODE != 0
+    /* T2.8: these two fields were hard-assigned zero here and printed on the
+     * HUD as VDP1W, which is why every reader concluded there was no VDP1
+     * wait.  Publish the real fence total measured in
+     * sourceboot_frame_poll_transfers instead; the terminal fields carry the
+     * per-present vdp1_sync_render + vdp1_sync cost, which is what this call
+     * site actually spends. */
+    sourceboot_fast3d.profile.vdp1_wait_ticks_last =
+        sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last;
+    sourceboot_fast3d.profile.vdp1_wait_ticks_accum =
+        sourceboot_vdp1_wait_ticks_accum;
+    sourceboot_fast3d.profile.vdp1_terminal_fence_wait_ticks_last =
+        vdp1_render_ticks + vdp1_sync_ticks;
+    sourceboot_fast3d.profile.vdp1_terminal_fence_wait_ticks_accum +=
+        vdp1_render_ticks + vdp1_sync_ticks;
+#else
     sourceboot_fast3d.profile.vdp1_wait_ticks_last = 0U;
     sourceboot_fast3d.profile.vdp1_wait_ticks_accum =
         sourceboot_vdp1_wait_ticks_accum;
@@ -1173,6 +1369,7 @@ static void sourceboot_present_generation(
         0U;
     sourceboot_fast3d.profile.vdp1_terminal_fence_wait_ticks_accum =
         0U;
+#endif
     const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
         sourceboot_vdp2_camera_snapshot(bank);
     sm64_saturn_hud_publish(&bank->hud);
@@ -1198,6 +1395,41 @@ static void sourceboot_present_generation(
         presentation_generation;
     sourceboot_fast3d.profile.sim_vblank_credit_dropped =
         sourceboot_sim_vblank_credit_dropped;
+#if SATURN_DIAGNOSTIC_MODE != 0
+    {
+        volatile sm64_saturn_prenotify_profile_t *const record =
+            sm64_saturn_prenotify_profile_visible();
+        const uint16_t present_end = cpu_frt_count_get();
+        const uint32_t vdp2_ticks =
+            sourceboot_frt_delta(present_probe, present_end);
+        const uint32_t present_ticks =
+            sourceboot_frt_delta(present_start, present_end);
+        record->present_windows++;
+        record->present_ticks_last = present_ticks;
+        record->present_ticks_accum += present_ticks;
+        if (present_ticks > record->present_ticks_max)
+            record->present_ticks_max = present_ticks;
+        record->vdp1_render_ticks_last = vdp1_render_ticks;
+        record->vdp1_render_ticks_accum += vdp1_render_ticks;
+        if (vdp1_render_ticks > record->vdp1_render_ticks_max)
+            record->vdp1_render_ticks_max = vdp1_render_ticks;
+        record->vdp1_sync_ticks_last = vdp1_sync_ticks;
+        record->vdp1_sync_ticks_accum += vdp1_sync_ticks;
+        record->vdp2_commit_ticks_last = vdp2_ticks;
+        record->vdp2_commit_ticks_accum += vdp2_ticks;
+        /* T2.8 gap item: the per-source command split the profile already
+         * computes and no instrument ever published.  bank->command_count is
+         * per present; the demo renderer's actor and texture counters are
+         * run-long, so the split is reported as a ratio against
+         * commands_total_accum. */
+        record->commands_total_last = bank->command_count;
+        record->commands_total_accum += bank->command_count;
+        record->commands_actor_accum =
+            sourceboot_fast3d.profile.demo_actor_primitives_emitted;
+        record->commands_texture_accum =
+            sourceboot_fast3d.profile.texture_commands;
+    }
+#endif
 }
 
 static void sourceboot_frame_run_sim_tick(uint32_t generation)
@@ -1497,6 +1729,50 @@ static void sourceboot_frame_poll_transfers(uint32_t generation)
             goto finish;
         }
         const bool overwrite_waited = vdp1_sync_busy();
+#if SATURN_DIAGNOSTIC_MODE != 0
+        /* T2.8.  This is sourceboot's only blocking VDP1 draw-end fence
+         * (see the block comment on sourceboot_vdp1_fence_spin).  Diagnostic
+         * builds replace the single-span uint16 bracket with a spin that
+         * charges one FRT difference per iteration, so a wait longer than
+         * one 16-bit wrap (~18.8 VBlanks) is measured rather than aliased,
+         * and sample EDSR/COPR on both sides so "we waited" becomes "we
+         * waited while VDP1 was still plotting command N". */
+        {
+            volatile sm64_saturn_prenotify_profile_t *const record =
+                sm64_saturn_prenotify_profile_visible();
+            const uint32_t edsr_entry = sourceboot_vdp1_edsr();
+            uint32_t fence_iterations = 0U;
+            uint32_t fence_max_raw = 0U;
+            const uint32_t fence_ticks =
+                sourceboot_vdp1_fence_spin(&fence_iterations, &fence_max_raw);
+            record->vdp1_fence_events++;
+            if (overwrite_waited) record->vdp1_fence_waits++;
+            record->vdp1_edsr_entry_last = edsr_entry;
+            if ((edsr_entry & SOURCEBOOT_VDP1_EDSR_CEF) != 0U)
+                record->vdp1_edsr_cef_entry_count++;
+            record->vdp1_copr_entry_last = sourceboot_vdp1_copr();
+            record->vdp1_fence_ticks_last = fence_ticks;
+            record->vdp1_fence_ticks_accum += fence_ticks;
+            if (fence_ticks > record->vdp1_fence_ticks_max)
+                record->vdp1_fence_ticks_max = fence_ticks;
+            record->vdp1_fence_iterations_last = fence_iterations;
+            record->vdp1_fence_iterations_accum += fence_iterations;
+            if (fence_max_raw > record->vdp1_fence_max_raw)
+                record->vdp1_fence_max_raw = fence_max_raw;
+            record->vdp1_copr_exit_last = sourceboot_vdp1_copr();
+            record->vdp1_lopr_last =
+                (uint32_t)sourceboot_vdp1_ioregs()->lopr;
+            /* Keep the shipped fields honest too: the HUD's VDP1W cell and
+             * the fast3d profile decoder now carry the real fence cost
+             * instead of a truncated span. */
+            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last =
+                fence_ticks;
+            sourceboot_vdp1_overwrite_wait_ticks_accum += fence_ticks;
+            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_accum =
+                sourceboot_vdp1_overwrite_wait_ticks_accum;
+            sourceboot_vdp1_wait_ticks_accum += fence_ticks;
+        }
+#else
         const uint16_t overwrite_wait_start = cpu_frt_count_get();
         if (overwrite_waited) vdp1_sync_wait();
         sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last =
@@ -1508,6 +1784,7 @@ static void sourceboot_frame_poll_transfers(uint32_t generation)
             sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last;
         sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_accum =
             sourceboot_vdp1_overwrite_wait_ticks_accum;
+#endif
         if (!sm64_saturn_vdp1_frame_bank_submit_transfers(
                 bank, &sourceboot_vdp1_transfer_targets)) {
             /* Submission can fail after queue ownership changes. Treat the

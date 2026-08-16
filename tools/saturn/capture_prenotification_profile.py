@@ -61,9 +61,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 PROFILE_SYMBOL = "g_sm64_saturn_prenotify_profile"
 PROFILE_MAGIC = 0x46505246  # 'FPRF'
-PROFILE_VERSION = 2
+PROFILE_VERSION = 3
 PROFILE_NODES = 24
-PROFILE_WORDS = 113
+# T2.8 appended a 66-word present-path / VDP1-fence section.
+PROFILE_COPR_RING = 32
+PROFILE_WORDS = 179
 PROFILE_BYTES = PROFILE_WORDS * 4
 
 # Mirrors the enum in saturn_prenotify_profile.h, in order.  Node 0 is the
@@ -181,7 +183,43 @@ def decode_profile(raw: bytes) -> dict[str, Any]:
         "slave_busy_last": tail[2],
         "slave_busy_max": tail[3],
         "slave_frt_tcr": tail[4],
-        "sequence_end": tail[5],
+        # --- T2.8 present path / VDP1 draw fence -----------------------
+        "present_windows": tail[5],
+        "present_ticks_last": tail[6],
+        "present_ticks_accum": tail[7],
+        "present_ticks_max": tail[8],
+        "vdp1_render_ticks_last": tail[9],
+        "vdp1_render_ticks_accum": tail[10],
+        "vdp1_render_ticks_max": tail[11],
+        "vdp1_sync_ticks_last": tail[12],
+        "vdp1_sync_ticks_accum": tail[13],
+        "vdp2_commit_ticks_last": tail[14],
+        "vdp2_commit_ticks_accum": tail[15],
+        "vdp1_fence_events": tail[16],
+        "vdp1_fence_waits": tail[17],
+        "vdp1_fence_ticks_last": tail[18],
+        "vdp1_fence_ticks_accum": tail[19],
+        "vdp1_fence_ticks_max": tail[20],
+        "vdp1_fence_iterations_last": tail[21],
+        "vdp1_fence_iterations_accum": tail[22],
+        "vdp1_fence_max_raw": tail[23],
+        "vdp1_edsr_entry_last": tail[24],
+        "vdp1_edsr_cef_entry_count": tail[25],
+        "vdp1_copr_entry_last": tail[26],
+        "vdp1_copr_exit_last": tail[27],
+        "vdp1_lopr_last": tail[28],
+        "vdp1_vblank_samples": tail[29],
+        "vdp1_vblank_cef_count": tail[30],
+        "vdp1_copr_retired_accum": tail[31],
+        "vdp1_copr_retired_intervals": tail[32],
+        "vdp1_copr_retired_max": tail[33],
+        "vdp1_copr_vblank_ring": list(tail[34:34 + PROFILE_COPR_RING]),
+        "vdp1_copr_vblank_ring_cursor": tail[34 + PROFILE_COPR_RING],
+        "commands_total_last": tail[35 + PROFILE_COPR_RING],
+        "commands_total_accum": tail[36 + PROFILE_COPR_RING],
+        "commands_actor_accum": tail[37 + PROFILE_COPR_RING],
+        "commands_texture_accum": tail[38 + PROFILE_COPR_RING],
+        "sequence_end": tail[39 + PROFILE_COPR_RING],
     }
     record["stable"] = (
         record["magic_valid"]
@@ -256,6 +294,118 @@ def read_sample(client: YmirClient, addresses: dict[str, int]) -> dict[str, Any]
         ),
         "boot": decode_boot_trace(smoke_raw["sourceboot_boot_trace"]),
         "cadence": cadence,
+    }
+
+
+def present_summary(
+    final: dict[str, Any],
+    ticks_per_vblank_nominal: float | None,
+    cycles_per_tick: int,
+) -> dict[str, Any]:
+    """T2.8: the present path and the VDP1 draw fence.
+
+    The fence total is accumulated one FRT difference per spin iteration on
+    the target, so unlike the shipped single-span bracket it cannot alias
+    across a 16-bit wrap.  ``vdp1_fence_max_raw`` is the witness: it is the
+    largest single inter-probe interval the fence ever saw, and a value far
+    below 65,535 is positive evidence that nothing wrapped.
+
+    ``vdp1_vblank_cef_share`` is the decisive number.  EDSR.CEF is VDP1's
+    draw-end flag; sampled once per VBlank across the whole run it is the
+    fraction of fields at which VDP1 had already finished plotting.  Near 1
+    means VDP1 is idle almost all the time and the frame is CPU-bound; near 0
+    means VDP1 is plotting continuously and the frame is fill-bound.
+    """
+    presents = final["present_windows"]
+    fence_events = final["vdp1_fence_events"]
+    vblank_samples = final["vdp1_vblank_samples"]
+
+    def vb(ticks: float | None) -> float | None:
+        if ticks is None or not ticks_per_vblank_nominal:
+            return None
+        return ticks / ticks_per_vblank_nominal
+
+    def per_present(field: str) -> float | None:
+        return final[field] / presents if presents else None
+
+    fence_mean = final["vdp1_fence_ticks_accum"] / fence_events if fence_events else None
+    retired_intervals = final["vdp1_copr_retired_intervals"]
+    # COPR counts VDP1 VRAM in 8-byte units; a command table is 32 bytes.
+    copr_units_per_command = 4
+    return {
+        "present_windows": presents,
+        "present_mean_ticks": per_present("present_ticks_accum"),
+        "present_mean_vblank_equiv": vb(per_present("present_ticks_accum")),
+        "present_max_ticks": final["present_ticks_max"],
+        "vdp1_sync_render_mean_ticks": per_present("vdp1_render_ticks_accum"),
+        "vdp1_sync_render_mean_vblank_equiv":
+            vb(per_present("vdp1_render_ticks_accum")),
+        "vdp1_sync_render_max_ticks": final["vdp1_render_ticks_max"],
+        "vdp1_sync_mean_ticks": per_present("vdp1_sync_ticks_accum"),
+        "vdp2_commit_mean_ticks": per_present("vdp2_commit_ticks_accum"),
+        "vdp2_commit_mean_vblank_equiv":
+            vb(per_present("vdp2_commit_ticks_accum")),
+        "fence": {
+            "events": fence_events,
+            "waits": final["vdp1_fence_waits"],
+            "wait_share_of_events": (
+                final["vdp1_fence_waits"] / fence_events if fence_events else None
+            ),
+            "mean_ticks": fence_mean,
+            "mean_cycles": fence_mean * cycles_per_tick if fence_mean else None,
+            "mean_vblank_equiv": vb(fence_mean),
+            "max_ticks": final["vdp1_fence_ticks_max"],
+            "max_vblank_equiv": vb(final["vdp1_fence_ticks_max"]),
+            "mean_iterations": (
+                final["vdp1_fence_iterations_accum"] / fence_events
+                if fence_events else None
+            ),
+            "max_raw_interval": final["vdp1_fence_max_raw"],
+            "max_raw_interval_headroom": 65535 - final["vdp1_fence_max_raw"],
+            "edsr_entry_last": final["vdp1_edsr_entry_last"],
+            "edsr_cef_entry_count": final["vdp1_edsr_cef_entry_count"],
+            "edsr_cef_entry_share": (
+                final["vdp1_edsr_cef_entry_count"] / fence_events
+                if fence_events else None
+            ),
+            "copr_entry_last": final["vdp1_copr_entry_last"],
+            "copr_exit_last": final["vdp1_copr_exit_last"],
+            "lopr_last": final["vdp1_lopr_last"],
+        },
+        "vdp1_vblank_samples": vblank_samples,
+        "vdp1_vblank_cef_count": final["vdp1_vblank_cef_count"],
+        "vdp1_vblank_cef_share": (
+            final["vdp1_vblank_cef_count"] / vblank_samples
+            if vblank_samples else None
+        ),
+        "copr_retired_intervals": retired_intervals,
+        "copr_retired_mean_units_per_vblank": (
+            final["vdp1_copr_retired_accum"] / retired_intervals
+            if retired_intervals else None
+        ),
+        "copr_retired_mean_commands_per_vblank": (
+            final["vdp1_copr_retired_accum"]
+            / retired_intervals / copr_units_per_command
+            if retired_intervals else None
+        ),
+        "copr_retired_max_units": final["vdp1_copr_retired_max"],
+        "copr_retired_max_commands":
+            final["vdp1_copr_retired_max"] / copr_units_per_command,
+        "copr_vblank_ring": final["vdp1_copr_vblank_ring"],
+        "copr_vblank_ring_cursor": final["vdp1_copr_vblank_ring_cursor"],
+        "commands": {
+            "total_last": final["commands_total_last"],
+            "total_accum": final["commands_total_accum"],
+            "total_mean_per_present": per_present("commands_total_accum"),
+            "actor_accum": final["commands_actor_accum"],
+            "texture_accum": final["commands_texture_accum"],
+            "actor_mean_per_present": per_present("commands_actor_accum"),
+            "texture_mean_per_present": per_present("commands_texture_accum"),
+            "actor_share_of_total": (
+                final["commands_actor_accum"] / final["commands_total_accum"]
+                if final["commands_total_accum"] else None
+            ),
+        },
     }
 
 
@@ -421,6 +571,8 @@ def summarize(final: dict[str, Any], cadence: dict[str, Any]) -> dict[str, Any]:
         # the RETIRED marker observer runs on the slave SH-2 and the FRT is a
         # per-CPU block, so both differenced two unrelated counters.  The
         # cadence rig above reports both intervals correctly in VBlanks.
+        "present": present_summary(final, ticks_per_vblank_nominal,
+                                   cycles_per_tick),
         "slave_busy": {
             "entries": slave_entries,
             "cycles_per_tick": slave_cycles_per_tick,
