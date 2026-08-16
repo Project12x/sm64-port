@@ -742,6 +742,7 @@ verify-render-clusters:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_cluster_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-cluster-test$(HOST_EXEEXT)"

@@ -4,6 +4,18 @@
 
 ### Added
 
+- Sprint 2 (gate repair): `verify-render-clusters` compiles again. Its
+  recipe passed only `-I src/port/saturn/gfx`, but `1ec76248` gave
+  `ztreme_hot_promotion.c` an include of
+  `port/saturn/platform/saturn_cart_code.h`, which is `src`-relative --
+  so the gate had been failing at the preprocessor since that commit and
+  was verifying nothing. Adding `-I src` is load-bearing and was checked
+  both ways: without it the compile is a fatal error, with it the seven
+  generation tests and the C test both pass. Same class as the 22
+  Makefile recipes still carrying the MSYS path defect T2.10 repaired in
+  three of them; a green-by-accident gate is worse than a missing one,
+  because it reports success.
+
 - Sprint 2 T2.12 (coverage): `verify-scene-admission` gains negative cases for
   the five hierarchy checks `metadata_valid()` grew. Without them the checks
   were exercised only by valid trees, which is how a fail-closed guard becomes
