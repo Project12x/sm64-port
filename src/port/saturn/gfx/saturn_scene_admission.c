@@ -128,36 +128,29 @@ static sm64_saturn_ztreme_frustum_result_t test_bounds(
     return sm64_saturn_ztreme_frustum_aabb(frustum, minimum, maximum);
 }
 
-static bool output_has_cluster(const sm64_saturn_scene_admission_output_t *output,
-                               uint16_t cluster)
-{
-    uint16_t index;
-    for (index = 0U; index < output->cluster_count; index++)
-        if (output->cluster_indices[index] == cluster) return true;
-    return false;
-}
-
-#if SM64_SATURN_ADMIT_DIAG
-/* The same linear scan output_has_cluster() performs, returning how many
- * output slots it read.  The count is taken from the loop's own induction
- * variable rather than from a counter inside the loop: an increment in the
- * innermost body would have added roughly 15% to the very loop under
- * measurement.  Loop header and body are identical to output_has_cluster();
- * only the exit paths differ. */
-static uint16_t output_cluster_scan(
-    const sm64_saturn_scene_admission_output_t *output, uint16_t cluster,
-    bool *found)
-{
-    uint16_t index;
-    for (index = 0U; index < output->cluster_count; index++)
-        if (output->cluster_indices[index] == cluster) {
-            *found = true;
-            return (uint16_t)(index + 1U);
-        }
-    *found = false;
-    return index;
-}
-#endif
+/* Cluster membership in the admission output is an O(1) bit test against
+ * s_admission_cluster_seen[], not a scan of the output list.
+ *
+ * T2.9 measured the scan this replaces at 27.7% of demo_spatial_admit() --
+ * exactly K(K-1)/2 = 39,903 uint16 comparisons per frame for K = 283 admitted
+ * clusters -- plus a further 6.6% for the 96 embedded scans the trailing
+ * mandatory sweep performed, and it found zero duplicates in 1,330 frames.
+ * The membership array was already allocated in the traversal scratch for
+ * metadata_valid()'s coverage sweep and is dead for the rest of the call, so
+ * this costs no memory.
+ *
+ * The invariant is that s_admission_cluster_seen[c] is non-zero exactly when
+ * c already appears in output->cluster_indices[0 .. cluster_count). It is
+ * established by clearing the array in the same place output->cluster_count
+ * is known to be zero, and maintained by setting the byte at each of the two
+ * append sites and nowhere else. Every index reaching it is below
+ * scene->cluster_count, which metadata_valid() bounds by
+ * SM64_SATURN_SCENE_ADMISSION_MAX_REFS -- the array's own size.
+ *
+ * Note that metadata_valid()'s own memset is NOT the clear this invariant
+ * needs: that sweep leaves the array marked 1 for every referenced cluster.
+ * The clear below is a separate statement in the admission path, which is
+ * also what keeps the invariant true once metadata_valid() is memoised. */
 
 static bool output_has_portal(const sm64_saturn_scene_admission_output_t *output,
                               uint16_t portal)
@@ -356,6 +349,7 @@ bool sm64_saturn_scene_admit_with_scratch(
 #endif
     memset(s_admission_visited, 0, sizeof(s_admission_visited));
     memset(s_admission_queued, 0, sizeof(s_admission_queued));
+    memset(s_admission_cluster_seen, 0, scene->cluster_count);
 #if SM64_SATURN_ADMIT_DIAG
     admit_cursor = sm64_saturn_prenotify_profile_span(
         admit_cursor, &admit.scratch_ticks, &admit.max_raw);
@@ -411,29 +405,27 @@ bool sm64_saturn_scene_admit_with_scratch(
                 stats->clusters_rejected_frustum++;
                 continue;
             }
+            const bool admit_duplicate =
+                s_admission_cluster_seen[cluster_index] != 0U;
 #if SM64_SATURN_ADMIT_DIAG
-            bool admit_duplicate = false;
-            admit.dedup_compares +=
-                output_cluster_scan(output, cluster_index, &admit_duplicate);
+            /* dedup_compares stays zero by construction now; the T2.9 rig
+             * publishes it, so the on-target witness for this change is that
+             * counter falling from 39,903 to 0 while output_count holds. */
             admit.dedup_calls++;
             admit_cursor = sm64_saturn_prenotify_profile_span(
                 admit_cursor, &admit.cluster_dedup_ticks, &admit.max_raw);
+#endif
             if (admit_duplicate) {
                 stats->duplicate_clusters++;
                 continue;
             }
-#else
-            if (output_has_cluster(output, cluster_index)) {
-                stats->duplicate_clusters++;
-                continue;
-            }
-#endif
             if (output->cluster_count >= output->cluster_capacity) {
                 stats->output_exhausted = 1U;
                 success = false;
                 continue;
             }
             output->cluster_indices[output->cluster_count++] = cluster_index;
+            s_admission_cluster_seen[cluster_index] = 1U;
             stats->clusters_admitted++;
             if (cluster->mandatory != 0U &&
                 cluster_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE)
@@ -492,7 +484,7 @@ bool sm64_saturn_scene_admit_with_scratch(
      * retained even when their owning node is outside the current frustum. */
     for (index = 0U; index < scene->cluster_count; index++) {
         const sm64_saturn_render_cluster_t *cluster = &scene->clusters[index];
-        if (cluster->mandatory == 0U || output_has_cluster(output, index))
+        if (cluster->mandatory == 0U || s_admission_cluster_seen[index] != 0U)
             continue;
         if (output->cluster_count >= output->cluster_capacity) {
             stats->output_exhausted = 1U;
@@ -500,6 +492,11 @@ bool sm64_saturn_scene_admit_with_scratch(
             continue;
         }
         output->cluster_indices[output->cluster_count++] = index;
+        /* Not observable -- this sweep visits each index once and nothing
+         * reads the array afterwards -- but it keeps the invariant above true
+         * to the end of the call rather than leaving a reader to discover it
+         * silently stops holding here. No mutation can kill this line. */
+        s_admission_cluster_seen[index] = 1U;
         stats->clusters_admitted++;
         stats->mandatory_clusters_admitted++;
     }

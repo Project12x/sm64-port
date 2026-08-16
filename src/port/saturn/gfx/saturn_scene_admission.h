@@ -93,6 +93,10 @@ typedef struct sm64_saturn_scene_admission_scratch {
     uint8_t visited[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
     uint8_t queued[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
     uint16_t queue[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+    /* Serves two disjoint phases of one admission call: metadata_valid()'s
+     * coverage sweep, and then the O(1) duplicate test the traversal and the
+     * mandatory sweep share. The admission path clears it for itself; do not
+     * rely on the coverage sweep's memset, which leaves it marked. */
     uint8_t cluster_seen[SM64_SATURN_SCENE_ADMISSION_MAX_REFS];
 } sm64_saturn_scene_admission_scratch_t;
 

@@ -510,6 +510,21 @@ static void build_scene(oracle_scene_t *scene, bool duplicate_refs)
 static unsigned long g_poses;
 static unsigned long g_admitted_total;
 static unsigned long g_set_divergences;
+/* FNV-1a over every admitted index sequence, in pose order. Printed rather
+ * than pinned: a golden constant here would have to be re-blessed whenever the
+ * corpus moves, which is how a pinned hash quietly stops meaning anything.
+ * Printing it lets any change that claims not to move the admitted set be
+ * checked by building this fixture against both revisions and comparing one
+ * line of output. */
+static uint64_t g_admitted_digest = 0xCBF29CE484222325ULL;
+
+static void digest_u16(uint16_t value)
+{
+    g_admitted_digest ^= (uint64_t)(value & 0xFFU);
+    g_admitted_digest *= 0x100000001B3ULL;
+    g_admitted_digest ^= (uint64_t)(value >> 8);
+    g_admitted_digest *= 0x100000001B3ULL;
+}
 
 static void compare_admitted_set(
     const sm64_saturn_scene_admission_view_t *view,
@@ -537,6 +552,9 @@ static void compare_admitted_set(
 
     g_poses++;
     g_admitted_total += shipped_output.cluster_count;
+    digest_u16(shipped_output.cluster_count);
+    for (uint16_t slot = 0U; slot < shipped_output.cluster_count; slot++)
+        digest_u16(shipped_indices[slot]);
     if (shipped_ok != reference_ok ||
         shipped_output.cluster_count != reference_output.cluster_count ||
         memcmp(shipped_indices, reference_indices,
@@ -606,6 +624,8 @@ int main(void)
     printf("admitted-set equivalence: %lu poses, %lu cluster admissions, "
            "%lu divergences\n",
            g_poses, g_admitted_total, g_set_divergences);
+    printf("admitted-set digest: %016llx\n",
+           (unsigned long long)g_admitted_digest);
 
     /* Non-vacuity. A sweep that classified everything the same way, or never
      * entered the cross-multiply domain, or never left it, or admitted

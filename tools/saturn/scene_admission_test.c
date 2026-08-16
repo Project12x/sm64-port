@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "saturn_scene_admission.h"
@@ -198,5 +199,62 @@ int main(void)
     camera.view_projection_q16[1][2] = -46341;
     output.cluster_count = output.portal_count = 0U;
     assert(sm64_saturn_scene_admit(&scene, &camera, &output, &stats));
+
+    /* A cluster reachable from two nodes must be emitted once. The rest of
+     * this fixture -- and BOB itself, where cluster_ref_count equals
+     * cluster_count and every cluster is referenced exactly once -- never
+     * produces a duplicate, so without this case the duplicate test is dead
+     * code in every gate that covers this module. */
+    {
+        sm64_saturn_render_cluster_t shared_clusters[3];
+        sm64_saturn_scene_admission_node_t shared_nodes[3];
+        sm64_saturn_scene_admission_portal_window_t shared_portals[2];
+        uint16_t shared_refs[4], shared_portal_refs[4];
+        uint16_t shared_admitted[8], shared_admitted_portals[4];
+        sm64_saturn_scene_admission_view_t shared_scene;
+        sm64_saturn_scene_admission_output_t shared_output = {
+            shared_admitted, 8U, 0U, shared_admitted_portals, 4U, 0U};
+        sm64_saturn_scene_admission_stats_t shared_stats;
+        sm64_saturn_render_view_t shared_camera = view();
+
+        setup_scene(&shared_scene, shared_clusters, shared_nodes, shared_refs,
+                    shared_portals, shared_portal_refs);
+        /* refs become {0, 1, 1, 2}: node 0 owns clusters 0 and 1, node 1 owns
+         * cluster 1 as well, node 2 owns cluster 2. Coverage still holds. */
+        shared_refs[0] = 0U;
+        shared_refs[1] = 1U;
+        shared_refs[2] = 1U;
+        shared_refs[3] = 2U;
+        shared_scene.cluster_ref_count = 4U;
+        shared_nodes[0].cluster_ref_first = 0U;
+        shared_nodes[0].cluster_ref_count = 2U;
+        shared_nodes[1].cluster_ref_first = 2U;
+        shared_nodes[1].cluster_ref_count = 1U;
+        shared_nodes[2].cluster_ref_first = 3U;
+        shared_nodes[2].cluster_ref_count = 1U;
+        assert(sm64_saturn_scene_admit(&shared_scene, &shared_camera,
+                                       &shared_output, &shared_stats));
+        assert(shared_output.cluster_count == 2U);
+        assert(shared_output.cluster_indices[0] == 0U &&
+               shared_output.cluster_indices[1] == 1U);
+        assert(shared_stats.duplicate_clusters == 1U);
+        assert(shared_stats.clusters_admitted == 2U);
+
+        /* The same cluster, made mandatory and moved behind the camera, is
+         * still emitted once: the trailing mandatory sweep must see the
+         * traversal's own emission. */
+        shared_clusters[1].mandatory = 1U;
+        shared_clusters[1].bounds_min_q16[2] = -40 * 65536;
+        shared_clusters[1].bounds_max_q16[2] = -30 * 65536;
+        shared_nodes[0].bounds_min_q16[2] = -40 * 65536;
+        shared_nodes[1].bounds_min_q16[2] = -40 * 65536;
+        shared_output.cluster_count = shared_output.portal_count = 0U;
+        assert(sm64_saturn_scene_admit(&shared_scene, &shared_camera,
+                                       &shared_output, &shared_stats));
+        assert(shared_output.cluster_count == 2U);
+        assert(shared_stats.duplicate_clusters == 1U);
+    }
+
+    printf("scene admission fixture: PASS\n");
     return 0;
 }

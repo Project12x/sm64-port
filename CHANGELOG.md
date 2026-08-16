@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Sprint 2 T2.10 item 1 (perf): scene admission's duplicate test is O(1)
+  instead of a linear scan of the output list. **Root cause of the cost:**
+  `output_has_cluster()` walked `output->cluster_indices[0 .. cluster_count)`
+  once per cluster that survived the frustum test, so K admitted clusters cost
+  K(K-1)/2 comparisons. T2.9 measured that at 39,903 comparisons per frame for
+  K = 283 -- 27.7% of `demo_spatial_admit()`, 567,198 cycles -- plus a further
+  6.6% (135,720 cycles) for the 96 scans the trailing mandatory sweep embedded,
+  **and it found zero duplicates in 1,330 frames.** For BOB it cannot find one:
+  `metadata_valid()` proves every cluster is referenced and
+  `cluster_ref_count == cluster_count == 867` forces a bijection. **Fix:** test
+  and set a byte in `s_admission_cluster_seen[]`, which was already allocated
+  in the traversal scratch for `metadata_valid()`'s coverage sweep and dead for
+  the rest of the call. Zero new memory. **Correction to T2.9's Finding D,
+  which matters:** that array is *not* already clear when the traversal starts
+  -- the coverage sweep leaves it marked `1` for every referenced cluster -- so
+  this change adds an explicit `memset` of `scene->cluster_count` bytes in the
+  admission path (867 bytes for BOB, roughly 360 cycles against the ~700,000
+  removed). Putting the clear there rather than inside `metadata_valid()` is
+  also what keeps the invariant true once that function is memoised.
+  **Consumer-facing impact: none by construction** -- the emitted index
+  *sequence* is unchanged, because the decision is identical and the append
+  order is untouched. Witnessed: the equivalence fixture's admitted-set digest
+  over 1,024 camera poses and 28,461 admissions is `a6be5aa07ddca26c` when
+  built against HEAD's admission unit and `a6be5aa07ddca26c` when built against
+  this one. On-target witness for the next diagnostic capture: `dedup_compares`
+  falls from 39,903 to 0 while `output_count` holds. **New coverage:**
+  `verify-scene-admission` now includes a scene where one cluster is reachable
+  from two nodes, because neither the previous fixture nor BOB itself ever
+  produced a duplicate, which left the duplicate branch untested.
+
 ### Added
 
 - Sprint 2 T2.10 (test): an equivalence oracle for the frustum classification,
