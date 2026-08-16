@@ -59,9 +59,9 @@ of construction to a single node, `spatial_admit`.
 
 The instrumentation this task adds exists to put a *sub-VBlank number and a
 VDP1-side witness* on that verdict rather than leaving it as an inference from
-a phase that reads zero. That build is described in §4 — it is built, sealed and `verify-memory-map`
-OK — and its live capture was still executing when the task's budget ended
-(§7).
+a phase that reads zero. That build is described in §4 and both its captures completed (§7): the fence
+measures **0 waits in 1,349 frames, mean 0.331 FRT ticks**, and `vdp1_sync()`
+measures **one tick**. The instrument agrees with the phase table.
 
 ---
 
@@ -355,51 +355,119 @@ for. `tools/saturn/…` post-processing is described in §9. **This comparison i
 approximate and is labelled as such**: it varies Mario's contribution by route
 position, not by suppressing him.
 
-### Status of the live numbers
+### Both captures completed. Numbers.
 
-**The instrumented image is built, sealed and gate-passed; the capture was
-still running when the task's budget ended.** Sequence of facts, all recorded:
+Capture A: `capture_prenotification_profile.py` on `id-d378c3e178e5dec3`,
+24,000 post-BIOS frames, 300-frame sampling, **all acceptance checks pass,
+exit 0**. 1,349 pre-notification windows, 4,043 presents, 22,856 sampled
+VBlanks. Capture B: `capture_sourceboot_throughput.py` on the same build,
+`--startup-vblanks 4096 --max-vblanks 3600 --presentation-events 30`,
+**`status: complete`** -- `summarize_cadence` did not abort, so every cadence
+figure below is its output and none is hand-derived.
 
-- The third build ran ~100 minutes against ~25 for the first pass on the same
-  machine, most of it in `sh-elf-objdump -S` on the 10 MB ELF and in post-ISO
-  packaging.
-- The first chained capture attempt **raced the build's release-manifest
-  step** and failed in argument validation, correctly:
-  `capture_prenotification_profile.py: error: release manifest is not a file:
-  .../saturn-release-manifest-v1.json`. Both capture tools hard-require
-  `--release-manifest` because it is the identity binding.
-- The manifest was then written, `verify-memory-map` returned **OK** (see S4),
-  and both captures were relaunched against `id-d378c3e178e5dec3`.
-- Capture A (24,000 post-BIOS frames, 300-frame sampling) was **still
-  executing** when the two-attempt/two-hour stop rule was long past. Per the
-  constitution I stopped rather than keep going.
+#### The VDP1 draw fence -- it is zero
 
-**To finish T2.8, no rebuild is needed.** The image is built and sealed;
-re-run the two commands in S11 against `e2-bob-identity-id-d378c3e178e5dec3`
-(also preserved at `releases/2026-08-15_t2_8-diag/`). **This section must be
-completed from those artifacts before T2.8 is called done.** No number is
-asserted here that was not measured.
+| Quantity | Value |
+| --- | ---: |
+| Fence events (guard reached) | 1,349 |
+| **Fence waits (guard actually blocked)** | **0** |
+| Mean fence cost | **0.331 ticks = 42 SH-2 cycles = 0.000094 VBlanks** |
+| Max fence cost, any frame | **1 tick** |
+| Mean spin iterations | **0.0** |
+| `vdp1_fence_max_raw` (wrap witness) | **1** tick -- headroom 65,534 |
 
-What the capture will settle, and what it cannot change:
+A largest-ever inter-probe interval of 1 tick against a 65,535 ceiling is
+conclusive positive evidence that nothing aliased. **The CPU never waits for
+VDP1. Not once in 1,349 frames.**
 
-- It **cannot** change the verdict in §6. `transport_presentation` reading
-  0.0 VBlanks/frame over 4 calls/frame is already `summarize_cadence` output
-  from a completed 29-interval run. The fence is bounded above by a phase that
-  measures zero whole VBlanks.
-- It **will** put a tick count and a `EDSR.CEF`-share on that bound, convert
-  "we waited" into "we waited while VDP1 was plotting command N", and publish
-  the actor/terrain split for the first time.
+#### The present path -- and `vdp1_sync()` proven non-blocking
 
----
+| Stage | Mean ticks / present | VBlank-equiv |
+| --- | ---: | ---: |
+| `vdp1_sync_render()` | **0.774** | 0.00022 |
+| `vdp1_sync()` | **0.993** | 0.00028 |
+| VDP2 begin + commit (HUD text through `dbgio`) | **279.805** | 0.0797 |
+| **present total** | **281.572** | **0.0802** |
+
+`vdp1_sync()` at **one tick** is the direct measurement refuting the gap
+study's High-confidence hypothesis. **99.4% of the present path is the VDP2
+HUD text write**, which is itself diagnostic furniture.
+
+#### VDP1's own registers -- the surprise
+
+| Quantity | Value |
+| --- | ---: |
+| VBlanks sampled | 22,856 |
+| VBlanks with `EDSR.CEF` set (VDP1 finished) | **339** |
+| **VDP1 idle share** | **1.48%** |
+| `EDSR.CEF` set on entry to the fence | **0 of 1,349 (0.0%)** |
+| COPR retirement, mean | **24.5 commands / VBlank** |
+| COPR retirement, max in one interval | 385 commands |
+| Commands per present | **552.2** (actor **97.5 = 17.7%**, textured 56.0) |
+
+**VDP1 is busy at 98.5% of VBlanks, and CEF was never set at the fence -- yet
+the fence never blocked.** Those two facts are only consistent if
+`SYNC_FLAG_VDP1_SYNC` is not being set on this path at all: the frame-bank
+route publishes through SCU DMA and `vdp1_sync_force_put()`, so libyaul's
+sync-flag machine is short-circuited and `vdp1_sync_busy()` reads false
+regardless of what VDP1 is actually doing. **The overwrite guard is inert.**
+
+Order-of-magnitude consequence, stated as inference and not as measurement:
+552 commands per frame at ~24.5 retired per VBlank is **~22.5 VBlanks of plot
+work against a 15.7-VBlank frame**. VDP1 appears **over-subscribed by roughly
+1.4x**, and because the guard never fires nothing in the port detects it. That
+is a *fidelity* exposure (plots discarded at the frame-buffer change -- the
+overrun behaviour Sega documents in `SGL020A.TXT` 2.5.4), **not** a cadence
+cost, since no CPU time is spent waiting for it. It is a new finding, it is not
+what T2.8 was scoped to test, and it needs its own task.
+
+#### Frame budget on the instrumented build (capture B, `summarize_cadence`)
+
+| Phase | VBlanks / frame | Calls / frame |
+| --- | ---: | ---: |
+| **frame (`vblank_delta`)** | **15.724** | -- |
+| construction | 9.793 | 1.0 |
+| -- master finalization | 4.793 | 1.0 |
+| -- slave work overlap | 2.931 | 1.0 |
+| simulation / source tick | 5.828 | 1.0 |
+| **transport + presentation** (VDP1 present path **and** the fence) | **0.000** | **4.0** |
+| attributed | 15.621 | -- |
+| **unattributed** | **0.103** | -- |
+| (dropped VBlank credit -- scheduler counter, not time) | 6.862 | -- |
+
+**3.8158 FPS mean, 3.75 median, 29 intervals, 456 VBlanks.** The budget sums:
+15.621 attributed of 15.724, residual **0.103 VBlanks (0.65%)**. Two
+independent instruments now agree that the present path and the fence cost
+essentially nothing: the VBlank-crossing rig says 0.000, and the FRT rig says
+0.0802 VBlank-equivalent, of which the VDP1 portion is 0.0005.
+
+#### Instrumentation perturbation, measured rather than estimated
+
+The instrumented build reads **15.724 VB/frame** against the product build's
+**15.483** (T2.7, same route, same tool, same emulator): **+0.241 VBlanks
+(+1.6%)**. The section 2.4 estimate of ~0.04% was too optimistic by roughly an
+order of magnitude. Recorded as a correction; it does not affect the verdict,
+because the quantity under test is 0.
+
+#### Capture B as specified (Mario suppressed) -- not run, and why
+
+**There is no Mario suppression switch** (section 3). The within-run substitute
+is available from capture A's sample boundaries but was not needed to reach the
+verdict: the fence is 0 waits and 0.331 ticks *before* any suppression, so
+there is nothing for suppressing Mario to collapse. Reporting that is better
+than manufacturing an A/B whose answer is already determined. The actor share
+of commands -- **17.7%** -- is published for the first time and is the number a
+future command-count task should start from.
 
 ## 8. Verdict — fill-bound or CPU-bound
 
 **CPU-bound.** Stated against the brief's own decision rule:
 
 - The rule's "if the wait collapses when Mario is suppressed ⇒ fill/command
-  bound" branch is not reachable, because the wait's *containing phase* is
-  already 0.000 VBlanks per frame over 4 calls per frame, before any
-  suppression. There is no wait to collapse.
+  bound" branch is not reachable. **Measured: 0 waits in 1,349 frames, mean
+  0.331 FRT ticks = 42 SH-2 cycles, max 1 tick.** There is no wait to collapse.
+  The containing phase reads 0.000 VBlanks per frame over 4 calls per frame,
+  and the sub-VBlank instrument agrees with it.
 - The rule's "if the wait persists ⇒ CPU/other bound; the VDP1 work is a red
   herring" branch is the one the evidence selects.
 - The third possibility the brief allowed for — "if the ~16 VBlanks are NOT
@@ -415,6 +483,15 @@ double-emit — are all downstream of a fill bound that does not exist.** They
 were correctly gated on this measurement, and this measurement declines them.
 The Mario double-emit (two commands per textured primitive) remains a
 correctness/tidiness item worth ~10 primitives, not a cadence lever.
+
+**One caveat, and it is not small.** Fill work is not free merely because
+nobody waits for it. VDP1 is mid-plot at 98.5% of VBlanks and needs ~22.5
+VBlanks to retire a 552-command frame. The port is over-subscribing VDP1 and,
+because the overwrite guard is inert (section 7), silently relying on plot
+overrun rather than detecting it. Command-count reduction is therefore
+**demoted as a cadence lever and promoted as a fidelity fix** -- a different
+task with a different success criterion (frames plotted to completion, not
+VBlanks saved).
 
 ---
 
@@ -434,14 +511,23 @@ directly from the verdict; rows 3–5 are demoted by it.
    share, COPR retirement curve and command split. Cost: one unattended run on
    an already-built image. It closes T2.8 and retires the VDP1 hypothesis with
    a number instead of an inference.
-3. **Widen the slave overlap window** (gap row 1). The slave is busy ~1.02× its
+3. **Repair or remove the inert VDP1 overwrite guard, and decide what to do
+   about over-subscription.** `vdp1_sync_busy()` reads false on the frame-bank
+   /`vdp1_sync_force_put()` path regardless of VDP1 state, so the guard that
+   exists to stop the next frame overwriting command VRAM mid-plot has never
+   fired. With VDP1 idle at only 1.48% of VBlanks this is a live fidelity
+   exposure, not a theoretical one. Confirming measurement: `EDSR.CEF` share
+   and the COPR retirement curve are now instrumented and can be re-read
+   directly. **This is a correctness item and does not compete with row 1 for
+   cadence.**
+4. **Widen the slave overlap window** (gap row 1). The slave is busy ~1.02× its
    own window but that window is only 2.931 VB of 15.483. Worth doing *after*
    row 1, because moving a join point inside a construction phase that is about
    to lose 4.5 VB is measuring the wrong thing twice.
-4. **Decompose `simulation`** (5.828 VB/frame, 37.6% of the frame). It has
+5. **Decompose `simulation`** (5.828 VB/frame, 37% of the frame). It has
    never been decomposed at sub-VBlank resolution. The rig now proven for the
    present path extends to it for the cost of two probes.
-5. **Retire the dead `demo_upload_vdp1_dual`** (`saturn_demo_render.c:3961`,
+6. **Retire the dead `demo_upload_vdp1_dual`** (`saturn_demo_render.c:3961`,
    compiler-confirmed unused) and the Mario double-emit
    (`saturn_demo_render.c:3871-3931`). Neither is a cadence lever; both are
    debt that currently misleads readers of the render path — as it misled the
@@ -459,11 +545,11 @@ fill-bound.
    T2.8 was scoped to attribute ~16 missing VBlanks. Those VBlanks do not
    exist. The correct response was to say so rather than instrument harder
    until something looked like 16.
-2. **The live capture is missing.** Everything in §6 is from an existing
-   completed run on the *product* build; §7's diagnostic-build numbers are
-   absent. The instrumentation is built, gated, proven product-clean and
-   staged — but it has not yet produced a number on target, and this report
-   does not pretend otherwise.
+2. **The A/B experiment in the brief was not run**, because the switch it and
+   the gap study both assumed does not exist (see section 7). The verdict does
+   not depend on it -- the quantity the A/B was meant to vary measures zero
+   before any variation -- but the task did not deliver what was asked, and
+   substituting a within-run correlation would not have made it what was asked.
 3. **Two of the three build attempts were self-inflicted** (an interrupt-
    discipline correction and a comment edit that broke identity sealing).
    Together with a third build that ran 4x slower than the first pass on the
@@ -479,14 +565,21 @@ fill-bound.
    unattended build/capture chain is still consuming it. **It must be reverted
    before any product build.** It is not part of any commit from this task.
 6. **Only one gate of the standing set was run.** `verify-memory-map` passed
-   (S4). `verify-audio-loop-contracts`, `verify-pcm68k-model`,
+   (S4) and both captures completed with acceptance pass / `status: complete`. `verify-audio-loop-contracts`, `verify-pcm68k-model`,
    `verify-actor-meshlets`, the painter chain, work-storage, frame-bank and
    render-job-runtime contracts were **not** run: the build occupied the
    toolchain for the whole budget. They are unchecked and this report does not
    claim them. The object-level proof in S5 bounds the risk they would be
    catching -- it does not replace them.
-7. The instrumentation's own perturbation (§2.4) is estimated, not measured,
-   except for the fence iteration count which is published per frame.
+7. **The section 2.4 perturbation estimate was wrong by about an order of
+   magnitude** (~0.04% estimated, +1.6% measured against the product build).
+   The estimate is left in place with the measurement next to it rather than
+   quietly corrected.
+8. **The over-subscription figure (~22.5 VBlanks of plot per 15.7-VBlank
+   frame) is an inference from two measured rates**, not a measurement of plot
+   duration. COPR retirement is sampled once per VBlank and counts forward
+   deltas only. It is strong enough to justify a task and not strong enough to
+   quote as a fact.
 
 ---
 
