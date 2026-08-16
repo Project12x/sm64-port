@@ -4,6 +4,39 @@
 
 ### Changed
 
+- Sprint 2 T2.10 item 3 (perf): the frustum AABB classification derives its
+  lateral limits by cross-multiplication instead of by division, and the result
+  is **bit-identical**. **Root cause of the cost:** `scaled_limit()` was called
+  four times per AABB test and each call launched an SH-2 64/32 hardware
+  division. T2.9 Finding E counted **3,472 divisions per frame** and confirmed
+  them in the linked image -- four `jsr` to `_scaled_limit`, which writes
+  DVSR/DVDNTH/DVDNTL and reads DVCR at `0xFFFFFF00/08/10/14`. **Fix:** comparing
+  `v` against `trunc(N/focal)` is comparing `v*focal` against `N`, exactly, when
+  `N >= 0` and `focal > 0`; each comparison becomes one `dmuls.l` pair.
+  **`N >= 0` is load-bearing, not decorative:** the divided form truncates
+  toward zero, so for `N = -5`, `focal = 2`, `a = -2` the two forms disagree.
+  The shipped guard therefore requires a positive focal length, non-negative
+  half extents and depths, operands that fit `int32` so no product leaves
+  `int64`, and each numerator at or below `INT32_MAX * focal` -- because the
+  divided form *clamps* a limit that will not fit `int32`, and where that clamp
+  is active the two forms genuinely differ. Outside the guard the divided form
+  runs unchanged, which is what makes the change bit-identical **for every
+  input**, not merely for inputs BOB produces. **Equivalence result:** 516,090
+  classifier cases (269,968 in the cross-multiply domain, 246,122 outside it),
+  **0 divergences against the pinned pre-T2.10 body and 0 against the exact
+  128-bit model**; the cross-multiplied path was taken on **269,968 of 269,968**
+  domain cases, so the shipped guard and the independently computed domain agree
+  in both directions. Driving the real `sm64_saturn_scene_admit()` with the
+  classifier switched underneath it over 1,024 camera poses and 29,109
+  admissions produced **byte-equal cluster index arrays**. **Consumer-facing
+  impact: none.** No admitted cluster moves, so no LOD tier and no painter bin
+  moves, and there is no visual-risk item for the owner to adjudicate.
+  **Tradeoff accepted:** the guard costs roughly sixteen 64-bit comparisons and
+  one extra multiply per test, against four hardware divisions plus four call
+  frames removed; the saving is therefore smaller than T2.9's ~0.55 VBlank
+  estimate implied, which assumed the divisions were replaced by two multiplies
+  and nothing else.
+
 - Sprint 2 T2.10 item 2 (perf): scene admission validates package metadata once
   per binding instead of once per frame. **Root cause of the cost:**
   `metadata_valid()` was called unconditionally on entry and re-proved

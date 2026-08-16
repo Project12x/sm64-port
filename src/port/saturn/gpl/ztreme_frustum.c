@@ -49,6 +49,28 @@ static int32_t scaled_limit(int64_t depth, int32_t extent, int32_t focal_length)
     return result;
 }
 
+static bool fits_i32(int64_t value)
+{
+    return value >= INT32_MIN && value <= INT32_MAX;
+}
+
+/* int32 x int32 -> int64, so GCC emits a single SH-2 dmuls.l instead of
+ * promoting both operands to int64 and calling __muldi3. This is the same
+ * primitive saturn_q16_sh2.h's sm64_saturn_q16_mul_sh2 is built on, and the
+ * pattern T2.6 used for the meshlet depth kernel. */
+static int64_t widen_mul(int32_t left, int32_t right)
+{
+    return (int64_t)left * right;
+}
+
+#if defined(SM64_SATURN_ZTREME_FRUSTUM_REFERENCE)
+/* Test-only: how many calls took the cross-multiplied branch. The oracle
+ * asserts this equals the size of the domain it computes independently, so the
+ * shipped guard cannot quietly drift away from the predicate the equivalence
+ * argument is written against. */
+unsigned long sm64_saturn_ztreme_frustum_crossed_cases;
+#endif
+
 sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
     const sm64_saturn_ztreme_frustum_t *frustum,
     const int32_t minimum[3], const int32_t maximum[3])
@@ -88,14 +110,86 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
         ? z + z_radius : near_limit;
     const int64_t near_z = z - z_radius > near_limit
         ? z - z_radius : near_limit;
-    const int32_t far_width = scaled_limit(far_z, frustum->half_width,
-                                           frustum->focal_length);
-    const int32_t far_height = scaled_limit(far_z, frustum->half_height,
-                                            frustum->focal_length);
-    const int32_t near_width = scaled_limit(near_z, frustum->half_width,
-                                            frustum->focal_length);
-    const int32_t near_height = scaled_limit(near_z, frustum->half_height,
-                                             frustum->focal_length);
+    const int32_t focal = frustum->focal_length;
+    const int32_t half_width = frustum->half_width;
+    const int32_t half_height = frustum->half_height;
+    const int64_t x_low = x - x_radius;
+    const int64_t x_high = x + x_radius;
+    const int64_t y_low = y - y_radius;
+    const int64_t y_high = y + y_radius;
+    /* Cross-multiplied lateral limits (Sprint 2 T2.10 item 3; T2.9 Finding E
+     * counted four SH-2 hardware 64/32 divisions per call here, 3,472 per
+     * frame, and confirmed them in the linked image as four jsr to
+     * _scaled_limit driving DVSR/DVDNTH/DVDNTL). Comparing v against
+     * trunc(N/focal) is comparing v*focal against N, exactly, provided
+     * N >= 0 and focal > 0:
+     *
+     *     a >  trunc(N/focal)  <=>  a*focal >  N
+     *     a <  -trunc(N/focal) <=>  a*focal <  -N
+     *
+     * and likewise for >= and <=. N >= 0 is what makes trunc equal floor and
+     * is load-bearing: for N = -5, focal = 2, a = -2 the divided form says
+     * false and the multiplied form says true.
+     *
+     * The guard below is the domain on which that holds AND on which no
+     * intermediate leaves int64:
+     *
+     *   focal > 0, half extents >= 0, near_z >= 0 and far_z >= 0  -- N >= 0;
+     *   near_z, far_z and the four lateral sums fit int32         -- every
+     *     product is then at most 2^31 * 2^31 = 2^62;
+     *   each numerator <= INT32_MAX * focal                       -- the
+     *     divided form clamps a limit that will not fit int32 to INT32_MAX,
+     *     and where that clamp is active the two forms genuinely differ.
+     *
+     * Outside the guard the divided form runs unchanged, so the classification
+     * is bit-identical to the pre-T2.10 body for every input, not merely for
+     * inputs this scene produces. */
+    bool crossed = focal > 0 && half_width >= 0 && half_height >= 0 &&
+                   near_z >= 0 && far_z >= 0 && fits_i32(near_z) &&
+                   fits_i32(far_z) && fits_i32(x_low) && fits_i32(x_high) &&
+                   fits_i32(y_low) && fits_i32(y_high);
+#if defined(SM64_SATURN_ZTREME_FRUSTUM_REFERENCE)
+    if (sm64_saturn_ztreme_frustum_force_reference) crossed = false;
+#endif
+    if (crossed) {
+        const int64_t clamp_bound = widen_mul(INT32_MAX, focal);
+        const int64_t far_width_scaled = widen_mul((int32_t)far_z, half_width);
+        const int64_t far_height_scaled = widen_mul((int32_t)far_z, half_height);
+        const int64_t near_width_scaled = widen_mul((int32_t)near_z, half_width);
+        const int64_t near_height_scaled =
+            widen_mul((int32_t)near_z, half_height);
+        if (far_width_scaled <= clamp_bound &&
+            far_height_scaled <= clamp_bound &&
+            near_width_scaled <= clamp_bound &&
+            near_height_scaled <= clamp_bound) {
+            const int64_t x_low_scaled = widen_mul((int32_t)x_low, focal);
+            const int64_t x_high_scaled = widen_mul((int32_t)x_high, focal);
+            const int64_t y_low_scaled = widen_mul((int32_t)y_low, focal);
+            const int64_t y_high_scaled = widen_mul((int32_t)y_high, focal);
+#if defined(SM64_SATURN_ZTREME_FRUSTUM_REFERENCE)
+            sm64_saturn_ztreme_frustum_crossed_cases++;
+#endif
+            if (interval_outside(z, z_radius, near_limit, far_limit) ||
+                x_high_scaled < -far_width_scaled ||
+                x_low_scaled > far_width_scaled ||
+                y_high_scaled < -far_height_scaled ||
+                y_low_scaled > far_height_scaled) {
+                return SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE;
+            }
+            if (interval_inside(z, z_radius, near_limit, far_limit) &&
+                x_low_scaled >= -near_width_scaled &&
+                x_high_scaled <= near_width_scaled &&
+                y_low_scaled >= -near_height_scaled &&
+                y_high_scaled <= near_height_scaled) {
+                return SM64_SATURN_ZTREME_FRUSTUM_INSIDE;
+            }
+            return SM64_SATURN_ZTREME_FRUSTUM_INTERSECTS;
+        }
+    }
+    const int32_t far_width = scaled_limit(far_z, half_width, focal);
+    const int32_t far_height = scaled_limit(far_z, half_height, focal);
+    const int32_t near_width = scaled_limit(near_z, half_width, focal);
+    const int32_t near_height = scaled_limit(near_z, half_height, focal);
     if (interval_outside(z, z_radius, near_limit, far_limit) ||
         interval_outside(x, x_radius, -far_width, far_width) ||
         interval_outside(y, y_radius, -far_height, far_height)) {

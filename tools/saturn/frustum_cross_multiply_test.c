@@ -279,6 +279,11 @@ static const limit_case_t k_limits[] = {
     {128, 8192, 1, INT32_MAX, 1},      /* clamp active on height only */
     {128, 8192, 160, 112, INT32_MAX},  /* limits collapse to zero */
     {128, 8192, 160, 112, 0},          /* division would fail */
+    /* Zero focal AND zero lateral extent. Both numerators are then zero, so
+     * every clamp check passes and only the focal > 0 guard keeps this off the
+     * cross-multiplied path -- which is what makes that guard killable rather
+     * than merely subsumed by the clamp checks. */
+    {128, 8192, 0, 0, 0},
     {128, 8192, 160, 112, -256},       /* negative focal length */
     {-4096, 8192, 160, 112, 256},      /* near plane behind the camera */
     {128, 8192, 0, 0, 256},            /* zero lateral extent */
@@ -392,6 +397,7 @@ static void compare_case(const sm64_saturn_ztreme_frustum_t *frustum,
 
 static void sweep_classifier(void)
 {
+    sm64_saturn_ztreme_frustum_crossed_cases = 0UL;
     const size_t limit_count = sizeof(k_limits) / sizeof(k_limits[0]);
     const size_t basis_count = sizeof(k_bases) / sizeof(k_bases[0]);
     const size_t position_count = sizeof(k_positions) / sizeof(k_positions[0]);
@@ -609,6 +615,7 @@ static void sweep_admitted_sets(void)
 int main(void)
 {
     sweep_classifier();
+    const unsigned long crossed_cases = sm64_saturn_ztreme_frustum_crossed_cases;
     sweep_admitted_sets();
 
     printf("frustum equivalence: %lu cases, %lu in cross-multiply domain, "
@@ -621,6 +628,8 @@ int main(void)
     printf("frustum divergences: shipped vs reference %lu, "
            "shipped vs model %lu\n",
            g_shipped_vs_reference, g_shipped_vs_model);
+    printf("frustum cross-multiply path taken: %lu of %lu domain cases\n",
+           crossed_cases, g_domain_cases);
     printf("admitted-set equivalence: %lu poses, %lu cluster admissions, "
            "%lu divergences\n",
            g_poses, g_admitted_total, g_set_divergences);
@@ -638,6 +647,15 @@ int main(void)
     assert(g_verdicts[SM64_SATURN_ZTREME_FRUSTUM_INSIDE] > 100UL);
     assert(g_poses == 1024UL);
     assert(g_admitted_total > 1000UL);
+
+    /* The shipped guard and the domain this fixture computes independently
+     * must agree in BOTH directions. A shipped guard that narrowed would fall
+     * back to the divided form and still pass the divergence checks while
+     * quietly delivering none of the saving; a shipped guard that widened
+     * would leave cases un-modelled. Neither is allowed to pass silently.
+     * Zero would also mean the sweep proved nothing about the new path. */
+    assert(crossed_cases == g_domain_cases);
+    assert(crossed_cases > 1000UL);
 
     assert(g_shipped_vs_reference == 0UL);
     assert(g_shipped_vs_model == 0UL);

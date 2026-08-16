@@ -36,6 +36,7 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
  * classifier, plus a switch that routes the shipped entry point through it so
  * a fixture can compare whole admitted sets across the two forms. */
 extern int sm64_saturn_ztreme_frustum_force_reference;
+extern unsigned long sm64_saturn_ztreme_frustum_crossed_cases;
 
 sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb_reference(
     const sm64_saturn_ztreme_frustum_t *frustum,
