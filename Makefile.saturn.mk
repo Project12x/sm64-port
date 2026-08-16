@@ -718,7 +718,7 @@ verify-ztreme-frustum:
 	  "$(SATURN_REPO_ROOT)/tools/saturn/ztreme_frustum_smoke.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_frustum.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/ztreme-frustum-smoke$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/ztreme-frustum-smoke$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/ztreme-frustum-smoke$(HOST_EXEEXT)"
 
 verify-bob-bsp-header: compile-bob-scene
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
@@ -756,7 +756,7 @@ verify-scene-admission: check-host-tools
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_scene_admission.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_frustum.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-admission-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-admission-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-admission-test$(HOST_EXEEXT)"
 
 verify-portal-windows: check-host-tools
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
@@ -767,7 +767,7 @@ verify-portal-windows: check-host-tools
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_scene_admission.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_frustum.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/portal-window-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/portal-window-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/portal-window-test$(HOST_EXEEXT)"
 
 verify-render-snapshot-bank:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"

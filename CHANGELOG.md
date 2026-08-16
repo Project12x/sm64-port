@@ -40,6 +40,25 @@
 
 ### Fixed
 
+- Sprint 2 T2.10 (build): `verify-scene-admission`, `verify-portal-windows`
+  and `verify-ztreme-frustum` can run again. **Root cause:** both recipes compiled their fixture and then
+  launched it through the Saturn venv Python with
+  `subprocess.run([r'$(SATURN_REPO_ROOT)/...'])`. Under the repository's own
+  MSYS2 GNU Make, `$(SATURN_REPO_ROOT)` is an MSYS path (`/d/Code/...`) that
+  the *native* Windows `python.exe` cannot resolve, so every invocation died
+  with `FileNotFoundError: [WinError 2]` **after** a clean compile — the
+  fixtures themselves were always passing. **Fix:** run the built fixture
+  directly through the recipe shell, which is the pattern the working sibling
+  targets in this same file already use (`verify-terrain-depth-bins`,
+  `verify-actor-meshlets`, `verify-terrain-clip`); MSYS `sh` resolves the MSYS
+  path natively and the exit code still reaches Make. **Consumer-facing
+  impact:** the two standing gates that cover `saturn_scene_admission.c` are
+  green rather than red, which is a prerequisite for verifying any change to
+  that module. **Not fixed here:** 23 other recipes in `Makefile.saturn.mk`
+  still launch their fixture through the same `python -c subprocess.run`
+  indirection and carry the same latent defect; they are out of scope for
+  T2.10 and are flagged for a dedicated pass.
+
 - Sprint 2 T2.8 (diagnostics): the VDP1 draw fence is now measurable, and the
   VDP2 HUD stops reporting a fiction. **Root cause, three separate defects:**
   (a) `sourceboot_vdp1_wait_ticks_accum` was declared, zeroed and read but
