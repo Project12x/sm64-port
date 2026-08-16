@@ -637,59 +637,14 @@ sed -n '234,249p' third_party/libyaul/libyaul/scu/bus/b/vdp/vdp1/cmdt.h
 
 ---
 
-## Section 7 (completed) — capture delivered, `id-d378c3e178e5dec3`
+## Note on a superseded append
 
-The capture that was still executing at the task's stop point completed and
-wrote `sprint2-t2_8-vdp1-fence-attribution.json` (936 KB, 26,181 emulated
-frames, 300-frame sample interval, 1,349 fence events). Numbers below are read
-directly from its final sample; no figure here is hand-computed.
-
-### The fence never waited — not once
-
-| Counter | Value | Meaning |
-| --- | ---: | --- |
-| `vdp1_fence_waits` | **0** | across 1,349 fence events |
-| `vdp1_fence_iterations_accum` | **0** | zero spin iterations, ever |
-| `vdp1_fence_ticks_accum` | 446 | 0.33 ticks/event — measurement overhead |
-| `vdp1_fence_ticks_max` | 1 | single tick worst case |
-| `vdp1_fence_max_raw` | 1 | wrap witness never approached |
-| `vdp1_edsr_cef_entry_count` | **0** | VDP1 was never still drawing at fence entry |
-
-VDP1 finishes plotting well before the CPU asks for it. **There is no fill-rate
-pressure on this scene at this cadence**, and no wait to collapse — the
-Mario-suppression comparison the task specified is moot, which is why it was not
-needed to reach the verdict.
-
-### Command volume (per present window)
-
-| Counter | Per-window | Note |
-| --- | ---: | --- |
-| `commands_total_last` | 548 | against the 1,664 arena capacity |
-| `vdp1_copr_retired_max` | 1,540 | peak commands retired |
-| actor commands | ~97 | `commands_actor_accum` / 4,043 windows |
-| texture commands | ~56 | `commands_texture_accum` / 4,043 windows |
-
-Actor + texture together are ~28% of emitted commands; terrain carries the rest.
-Capacity headroom is ~3x — consistent with T2.1's measured peak of 653 and with
-the T2.2 shrink to 1,664 being safe.
-
-### Cadence rig, same capture
-
-| Phase | Crossings | Per frame |
-| --- | ---: | ---: |
-| construction | 13,833 | **10.25** |
-| — pre-notification | 7,181 | 5.32 |
-| — master finalization | 6,652 | 4.93 |
-| frames (`construction_count`) | 1,349 | — |
-
-Construction is **~66% of the ~15.5-VBlank frame**. Presentation
-(`present_ticks_accum` / `present_windows`) averages 282 FRT ticks
-per window — a rounding error beside construction.
-
-### Verdict (unchanged, now measured rather than inferred)
-
-**CPU-bound. Construction-dominated. VDP1 idle-waits at zero.** Every fill-rate
-lever — user clipping, command-count LOD, HSS, the Mario double-emit — is
-downstream of a bound that does not exist and stays demoted. The recoverable
-gap remains `spatial_admit` at 4.565 VBlanks/frame (~29% of frame), which
-A9A never executed.
+An earlier session appended a second "Section 7 (completed)" block here
+from the raw capture accumulators while this task's own capture was still
+in flight. It has been removed: section 7 above is authoritative, and the
+removed block derived cadence from raw per-phase accumulators
+(construction 10.25 VB/frame) rather than from `summarize_cadence`
+(9.793 VB/frame) — the exact derivation T2.7 identified as the source of
+the contaminated 1.0-1.5 FPS figures. Its fence numbers agreed with
+section 7 (0 waits / 0 spin iterations across 1,349 events); only the
+cadence basis differed, and the summarizer is the correct basis.
