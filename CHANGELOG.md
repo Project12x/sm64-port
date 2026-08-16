@@ -4,6 +4,21 @@
 
 ### Added
 
+- Sprint 2 T2.12 (coverage): `verify-scene-admission` gains negative cases for
+  the five hierarchy checks `metadata_valid()` grew. Without them the checks
+  were exercised only by valid trees, which is how a fail-closed guard becomes
+  silently dead. Cases: a child index at or below its parent's, a child range
+  past the node count, a leaf with a non-zero `child_first`, child bounds not
+  contained in the parent's, and one node claimed by two parents — plus a
+  positive case binding the fixture's three nodes as a hierarchy and asserting
+  the admitted count does not move. Two cases had to be constructed so that
+  the check under test is the *only* one that rejects them; as first written,
+  containment rejected them first and the mutations survived.
+  **Mutation result: four of the five checks killed.** The child-range check
+  survives and cannot be killed from C — removing it makes the fixture read
+  one node past the array, so what rejects the case is undefined-behaviour
+  garbage rather than the guard. Test-only: no product code changes, so the
+  measured build is unaffected.
 - Sprint 2 T2.12 (`spatial_admit`, T2.9 item 4 half a): `emit_bob_scene.py`
   bakes a real spatial index. `SM64_SATURN_BOB_ADMISSION_NODE_COUNT` goes from
   **1 to 255** -- 128 leaves, depth 7 -- over the same 867 cluster refs.

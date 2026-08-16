@@ -344,6 +344,117 @@ int main(void)
         assert(memo_output.cluster_count == first_count);
     }
 
+    /* Hierarchy metadata (Sprint 2 T2.12). The traversal prunes an OUTSIDE
+     * subtree and admits an INSIDE one without testing it, so every structural
+     * property that argument rests on has to fail closed rather than be
+     * assumed of the baker. Without these cases the five new checks in
+     * metadata_valid() would be untested by any gate. */
+    {
+        sm64_saturn_render_cluster_t tree_clusters[3];
+        sm64_saturn_scene_admission_node_t tree_nodes[3];
+        sm64_saturn_scene_admission_portal_window_t tree_portals[2];
+        uint16_t tree_refs[3], tree_portal_refs[4];
+        uint16_t tree_admitted[8], tree_admitted_portals[4];
+        sm64_saturn_scene_admission_view_t tree_scene;
+        sm64_saturn_scene_admission_output_t tree_output = {
+            tree_admitted, 8U, 0U, tree_admitted_portals, 4U, 0U};
+        sm64_saturn_scene_admission_stats_t tree_stats;
+        sm64_saturn_render_view_t tree_camera = view();
+        uint16_t flat_count;
+
+        /* Baseline: the flat arrangement this fixture has used throughout. */
+        setup_scene(&tree_scene, tree_clusters, tree_nodes, tree_refs,
+                    tree_portals, tree_portal_refs);
+        assert(sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                       &tree_stats));
+        flat_count = tree_output.cluster_count;
+
+        /* The same three nodes as a hierarchy: node 0 is the parent of 1 and
+         * 2, whose bounds are already inside its own. Portal edges stay, so
+         * this also covers a node reachable both as a child and through a
+         * window. The admitted set must not move. */
+        tree_nodes[0].child_first = 1U;
+        tree_nodes[0].child_count = 2U;
+        tree_output.cluster_count = tree_output.portal_count = 0U;
+        assert(sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                       &tree_stats));
+        assert(tree_output.cluster_count == flat_count);
+        assert(tree_stats.nodes_tested >= 3U);
+
+        /* A child index at or below its parent's would let the descent
+         * revisit an ancestor. Node 2 is given node 1 as a child, with node 2
+         * widened to contain it, so this case is rejected by the ordering
+         * rule alone and not by containment or by the forest rule. */
+        tree_nodes[0].child_first = 0U;
+        tree_nodes[0].child_count = 0U;
+        tree_nodes[2].bounds_min_q16[0] = 20 * 65536;
+        tree_nodes[2].bounds_min_q16[2] = 20 * 65536;
+        tree_nodes[2].child_first = 1U;
+        tree_nodes[2].child_count = 1U;
+        assert(!sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                        &tree_stats));
+        assert(tree_stats.malformed_metadata != 0U);
+        tree_nodes[2].bounds_min_q16[0] = 390 * 65536;
+        tree_nodes[2].bounds_min_q16[2] = 120 * 65536;
+        tree_nodes[2].child_first = 0U;
+        tree_nodes[2].child_count = 0U;
+        tree_nodes[0].child_first = 1U;
+        tree_nodes[0].child_count = 2U;
+
+        /* A child range past the node count. */
+        tree_nodes[0].child_first = 2U;
+        tree_nodes[0].child_count = 2U;
+        assert(!sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                        &tree_stats));
+
+        /* A leaf must publish a zero child_first: this is the word that used
+         * to be `reserved`, and a stale value must not read as a child. */
+        tree_nodes[0].child_first = 1U;
+        tree_nodes[0].child_count = 0U;
+        assert(!sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                        &tree_stats));
+
+        /* Child bounds must be contained in the parent's. This is the
+         * property that makes a node's bounds a bound on its subtree, and
+         * therefore the property the OUTSIDE prune rests on. */
+        tree_nodes[0].child_first = 1U;
+        tree_nodes[0].child_count = 2U;
+        tree_nodes[1].bounds_max_q16[0] = 900 * 65536;
+        assert(!sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                        &tree_stats));
+        tree_nodes[1].bounds_max_q16[0] = 80 * 65536;
+
+        /* Two parents claiming one child would make the admitted set depend
+         * on which edge the queue reached first. Node 1 is widened to contain
+         * node 2 so that the double claim, and not containment, is what this
+         * case rejects. */
+        tree_nodes[1].bounds_max_q16[0] = 430 * 65536;
+        tree_nodes[1].bounds_max_q16[2] = 190 * 65536;
+        tree_nodes[1].child_first = 2U;
+        tree_nodes[1].child_count = 1U;
+        assert(!sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                        &tree_stats));
+        assert(tree_stats.malformed_metadata != 0U);
+        tree_nodes[1].bounds_max_q16[0] = 80 * 65536;
+        tree_nodes[1].bounds_max_q16[2] = 80 * 65536;
+        tree_nodes[1].child_first = 0U;
+        tree_nodes[1].child_count = 0U;
+
+        /* And the root may not be anyone's child. */
+        tree_nodes[2].child_first = 0U;
+        tree_nodes[2].child_count = 1U;
+        assert(!sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                        &tree_stats));
+        tree_nodes[2].child_first = 0U;
+        tree_nodes[2].child_count = 0U;
+
+        /* Back to the valid hierarchy, which must still work. */
+        tree_output.cluster_count = tree_output.portal_count = 0U;
+        assert(sm64_saturn_scene_admit(&tree_scene, &tree_camera, &tree_output,
+                                       &tree_stats));
+        assert(tree_output.cluster_count == flat_count);
+    }
+
     printf("scene admission fixture: PASS\n");
     return 0;
 }
