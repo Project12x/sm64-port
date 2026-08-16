@@ -4,6 +4,23 @@
 
 ### Added
 
+- Sprint 2 T2.13 (measurement): `tools/saturn/capture_softfloat_profile.py`,
+  a cycle-attributed statistical profiler for the running target that needs no
+  rebuild and no instrumentation. `ymir-headless`'s `exec.stepi` already
+  returns `pc_before`, `pc_after` and `cycles_advanced` per executed
+  instruction, which is a complete profile sample; the tool advances at full
+  speed for a VBlank, single-steps a short burst, and repeats, on both SH-2s.
+  It exists because the arithmetic census (`sprint2-arithmetic-census.md`) is
+  *static reachability* and its 1,827 soft-float call sites say nothing about
+  per-frame frequency -- and the dynamic ranking turns out to disagree with the
+  static one sharply. `_find_wall_collisions_from_list`, the census's largest
+  static float caller at 110 sites, is near the bottom of the measured profile;
+  `_calculate_vertex_xyz` is the top one. Symbol attribution comes from
+  `sh-elf-nm -S`, and entries are attributed to their caller from the
+  `pc_before` of the transferring instruction. Also reports an explicit idle
+  class, because `___slave_polling_entry` plus the master's VBlank wait are
+  70% of raw cycles on this route and silently deflate every other share.
+
 - Sprint 2 (gate repair): `verify-render-clusters` compiles again. Its
   recipe passed only `-I src/port/saturn/gfx`, but `1ec76248` gave
   `ztreme_hot_promotion.c` an include of
