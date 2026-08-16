@@ -18,11 +18,13 @@ same basis: 3.8753 (`id-6eca5970628d581d`) -> 4.3176 (`id-b46f60d0a6d129dd`,
 owner-accepted at 4-5 FPS by eye) -> 4.9432 (`id-05046d9d5d8a5593`) -> 5.3538 --
 **+38.2% across the sprint.**
 
-**The ranking below is now partly superseded by measurement.** T2.13 built a
+**The ranking below is substantially superseded by measurement.** T2.13 built a
 cycle profiler (`exec.stepi`, 240,000 samples on the shipped ELF, no rebuild)
-and found that **70.21% of sampled SH-2 cycles are idle** (`___slave_polling_entry`
-41.4%, master VBlank wait 28.8%), that all float is 7.50% of sampled cycles,
-and that all integer divide is 0.12% with `___sdivsi3` never appearing at all.
+and T2.14 added the route counters. Together they establish: **73.33% of sampled
+SH-2 cycles are idle**; all float is 7.50%; all integer divide is 0.12% with
+`___sdivsi3` never appearing; and **the interpreted F3D frontend is not wired
+on this route at all** (`main.c:2151` passes `NULL, NULL` under `SATURN_DEMO_PATH`),
+so every per-triangle cull stage in `saturn_fast3d_frontend.c` is dead code here.
 **Treat static call-site counts as leads, not as a cost ranking** -- six of the
 census's top nine float targets never execute on this route.
 
@@ -60,6 +62,24 @@ again after T2.12 closed `spatial_admit` out**):
   oracle declaring zero indirect edges, which now declares 115; the project had
   already pinned v3/v4 at 700 and excluded the v2 gate from releases on
   2026-08-10.
+- **The geo walk builds a display list nobody reads — THE NEW LEVER (T2.14).**
+  Under `SATURN_DEMO_PATH=1` display submission is suppressed around the whole
+  of `game_loop_one_iteration()`; the screen is built entirely by
+  `saturn_demo_render.c`. The walk itself must stay (it owns animation,
+  camera and matrix state) but the display-list construction inside it is pure
+  waste, at roughly **10x the entire shadow path**. `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1`
+  already exists to bound the prize in one build.
+- ~~Shadows as a cadence item~~ — **CLOSED by T2.14: worth +0.01 to +0.03 FPS,
+  below run-to-run spread.** Not several FPS: T2.13 had already banked the
+  expensive part. Shadows are now a *fidelity direction*, not a performance one --
+  the owner has chosen a generic painted sprite that does not follow light cues.
+  **T2.14 shows the sprite beats deletion outright**: Mario's shadow issues 11
+  `find_floor` calls/frame (>=25.3% of all floor collision work) while its
+  construction is 0.03%, and a sprite reading `gMarioState->floorHeight` needs
+  **zero** floor queries — capturing 100% of deletion's saving while keeping the
+  platforming depth cue. SlaveDriver's `COMPO_SHADOW` sprite is emitted immediately
+  before its character, which is also the ordering answer this renderer needs
+  (it has no depth bias anywhere).
 - **Master/slave handoff — THE ACTIVE LEVER (promoted by measurement).** 70.21%
   of sampled SH-2 cycles are idle. The slave carries ~7% of frame work because
   it is given a ~3-VB window across four blocking fork-joins; SlaveDriver

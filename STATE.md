@@ -73,6 +73,48 @@ What the sprint established, in order:
   `min(simulation, master_finalization)`, an upper bound on that double count
   read from the same trace, and is unchanged (zero allowance) for v1 traces.
   Control reproduces T2.7 to every digit.
+- **T2.14 (diagnostic)** — **shadows are computed and discarded, and so is
+  everything else the source display list contains.** Under `SATURN_DEMO_PATH=1`
+  (the shipped profile) display submission is suppressed around the whole of
+  `game_loop_one_iteration()`, so `src/game/game_init.c:464` never calls
+  `exec_display_list`. What reaches the screen is built entirely by
+  `saturn_demo_render.c`, which contains **zero occurrences of `shadow`**.
+  Three runtime witnesses over one 50 s product capture: `submitted_tasks`
+  **0.000/frame** (it increments on every entry, so zero means never entered),
+  `command_count` **0.000/frame**, `scene_graph_walks` **1.000/frame** -- the geo
+  walk runs, so the shadow really is built, and then thrown away.
+- **T2.14 corrected a premise this project had been carrying**: `sourceboot/main.c:2153`
+  is the `#else` arm. The live line is **`main.c:2151` -- `sm64_saturn_source_runtime_configure(NULL, NULL)`**. The interpreted F3D
+  frontend is linked but **not wired on this route**, deliberately (submitting
+  both doubled the render work). Every per-triangle cull stage in
+  `saturn_fast3d_frontend.c` -- backface, offscreen, span, near/far -- therefore
+  **does not run**. All real culling is upstream and uncounted: `scene_admit`
+  2.241%, `actor_meshlet_live_depth_bounds` 1.943%, arena eviction.
+- **T2.14: gating shadows is worth +0.01 to +0.03 FPS (0.2-0.5%)** against 5.3538 --
+  **below the run-to-run spread**, and emphatically not the several FPS hoped for.
+  T2.13 had already banked the expensive part (+8.31%); this is the remainder.
+  Each of the top five non-idle symbols is 9-13x the whole shadow path.
+  **But the floor-query lead was right and is where nearly all the remainder
+  lives:** Mario's shadow issues **11 `find_floor` calls/frame** (1 + 1 + 9
+  per-vertex) against a measured 43.471 total -- **>=25.3% of all floor collision
+  work** -- while its construction is 0.03%. Two of the 11 duplicate a query
+  `mario.c:1322` already made, and `gMarioState->floorHeight` is free.
+  **A sprite reading it needs ZERO floor queries: it captures 100% of what
+  deletion would, and keeps the depth cue. There is no performance argument for
+  deleting over replacing.** SlaveDriver emits a single `COMPO_SHADOW` sprite
+  immediately before its own character -- the ordering answer this renderer needs,
+  since it has **no depth bias anywhere**; Z-Treme uses a fixed-scale billboard
+  with a deliberately cheap floor query.
+- **T2.14's real find, worth its own task: the geo walk builds a display list
+  nobody reads.** The walk must stay -- it owns animation, camera and matrix
+  state -- but the display-list *construction* inside it is pure waste at roughly
+  **10x the entire shadow path**. `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1` already
+  exists to bound that prize in a single build.
+- **T2.14 also explained why nobody had ever read the route counters**: they are
+  unconditional in the product build, but their *publisher* sits behind
+  `#if ... && !SATURN_SOURCEBOOT_LIVE_INPUT` and the profile sets
+  `live_input_mode: 1`, so `sourceboot_route_checkpoint` is not in the ELF symbol
+  table at all. New tool: `tools/saturn/capture_route_counters.py`.
 - **T2.13** — **the soft-float purge, measured before it was cut: 5.3538 FPS /
   11.2069 VB, +8.31% and −0.9310 VB** against `id-05046d9d5d8a5593`, and the
   first build past A9A on both numbers. The measurement came first and
@@ -113,17 +155,19 @@ What the sprint established, in order:
   correct short-circuit is unobservable in output, which is why the prune and
   descent mutations are the real guards.
 
-**Next: the target moved, and T2.13's profile is why.** **70.21% of sampled
-SH-2 cycles are idle** (`___slave_polling_entry` 41.4%, master VBlank wait
-28.8%), so the master/slave handoff -- four blocking fork-joins giving the slave
-a ~3-VB window, where SlaveDriver dispatches once and joins after simulation --
-is now the largest single lever. Behind it: `_actor_meshlet_live_depth_bounds` at
-**3.662% of sampled cycles, the largest non-idle symbol in the profile and not
-floating-point at all** (no census item names it); then the remaining soft-float
+**Next: T2.14 moved the target again, and by more than T2.13 did.** **73.33% of
+sampled SH-2 cycles are idle**, so the master/slave handoff remains the largest
+single lever. Newly ranked ahead of everything arithmetic: **the geo walk builds
+a display list that nothing reads** (~10x the shadow path; bounded in one build
+by `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1`). Then
+`_actor_meshlet_live_depth_bounds` at 3.662% of sampled cycles -- the largest
+non-idle symbol, and not floating-point at all -- then the remaining soft-float
 at ~4.6%, led by `_saturn_geo_enter_object`, which has a fully-Q16 sibling
-(`_saturn_geo_enter_camera`) beside it as the template. Also open: the Mario
-double-emit, and T2.9's items 5-8. **Census items 2 and 5 should be
-deprioritised -- they are static phantoms on this route.** The BOB bypass stays
+(`_saturn_geo_enter_camera`) beside it as the template. **Shadows are settled
+direction, not a cadence item:** the owner has chosen a generic painted sprite
+that does not follow light cues, and T2.14 shows the sprite is strictly better
+than deletion. **Census items 2 and 5 stay deprioritised -- static phantoms.**
+The Mario double-emit and T2.9's items 5-8 remain open. The BOB bypass stays
 demoted to diagnostic value only.
 
 **Owner gate CLOSED 2026-08-16.** `id-b46f60d0a6d129dd` was look-and-listened
