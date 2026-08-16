@@ -1,0 +1,1891 @@
+{
+  "schema": "sm64-saturn-softfloat-profile-v1",
+  "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.elf",
+  "elf_sha256": "bc49eafa8bc9695ec708a7ffa24884be7084be10b0ad7a1bd1ca87bdbe6ccbad",
+  "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.cue",
+  "identity": {
+    "address": 574619648,
+    "size": 16,
+    "expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "observed_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "match": true,
+    "startup_vblanks_waited": 681,
+    "startup_identity_attempts": 681
+  },
+  "sampling": {
+    "bursts": 800,
+    "burst_steps": 400,
+    "gap_vblanks": 1,
+    "targets": [
+      "sh2.master",
+      "sh2.slave"
+    ],
+    "startup_vblanks": 4096,
+    "warmup_vblanks": 0,
+    "phases": 1,
+    "phase_vblanks": 1800
+  },
+  "raw": {
+    "wall_seconds": 40.14,
+    "total_cycles": 807307,
+    "total_samples": 320000,
+    "unmapped_cycles": 0,
+    "unmapped_samples": 0,
+    "per_target": {
+      "sh2.master": {
+        "cycles": 404426,
+        "samples": 160000
+      },
+      "sh2.slave": {
+        "cycles": 402881,
+        "samples": 160000
+      }
+    }
+  },
+  "summary": {
+    "clock_hz": 26846590.91,
+    "idle_cycles": 591973,
+    "working_cycles": 215334,
+    "float_cycles": 31849,
+    "float_share_of_total": 0.039451,
+    "float_share_of_working": 0.147905,
+    "callers": {
+      "___ashlsi3_r0": {
+        "_saturn_mtxq_refresh_float_mirror": 61,
+        "_sm64_saturn_float_to_q16": 23,
+        "___addsf3": 21,
+        "_demo_terrain_resolved_template": 20,
+        "___mulsf3": 15,
+        "___subsf3": 15,
+        "___floatsisf": 6,
+        "___adddf3": 2
+      },
+      "___lshrsi3_r0": {
+        "_sm64_saturn_float_to_q16": 25,
+        "___addsf3": 21,
+        "_saturn_mtxq_refresh_float_mirror": 17,
+        "___fixsfsi": 15,
+        "___clzsi2": 12,
+        "___subsf3": 12,
+        "___adddf3": 2
+      },
+      "___udiv_qrnnd_16": {
+        "___divsf3": 81
+      },
+      "___addsf3": {
+        "_sqrtf": 30,
+        "_saturn_geo_enter_object": 14,
+        "_detect_object_hitbox_overlap": 9,
+        "_calc_new_obj_vel_and_pos_y": 4,
+        "_object_step": 3,
+        "_calculate_vertex_xyz": 2,
+        "_find_wall_collisions_from_list": 2,
+        "_dist_between_objects": 2
+      },
+      "___mulsf3": {
+        "_sqrtf": 15,
+        "_saturn_geo_enter_object": 15,
+        "_vec3f_cross": 15,
+        "_vec3f_normalize": 5,
+        "_detect_object_hitbox_overlap": 5,
+        "_obj_find_wall": 3,
+        "_find_floor_from_list": 2,
+        "_is_point_within_radius_of_mario": 2
+      },
+      "___divsf3": {
+        "_sqrtf": 31,
+        "_saturn_geo_enter_object": 5,
+        "_calculate_vertex_xyz": 1,
+        "_find_floor_from_list": 1
+      },
+      "___lesf2": {
+        "_sqrtf": 19,
+        "_calc_new_obj_vel_and_pos_y": 9,
+        "_saturn_geo_enter_object": 4,
+        "_find_floor_from_list": 1,
+        "_find_wall_collisions_from_list": 1,
+        "_is_point_within_radius_of_mario": 1,
+        "_cur_obj_update": 1
+      },
+      "___subsf3": {
+        "_detect_object_hitbox_overlap": 7,
+        "_vec3f_cross": 6,
+        "_is_point_within_radius_of_mario": 6,
+        "_saturn_geo_enter_object": 4,
+        "_make_shadow_vertex": 2,
+        "_find_floor_from_list": 1,
+        "_calc_new_obj_vel_and_pos_y": 1
+      },
+      "___fixsfsi": {
+        "_find_floor": 7,
+        "_find_wall_collisions": 6,
+        "_calc_new_obj_vel_and_pos_y": 6,
+        "_saturn_geo_enter_object": 3
+      },
+      "_sqrtf": {
+        "_detect_object_hitbox_overlap": 19
+      },
+      "___gesf2": {
+        "_saturn_geo_enter_object": 14,
+        "_calc_new_obj_vel_and_pos_y": 3,
+        "_detect_object_hitbox_overlap": 1
+      },
+      "___floatsisf": {
+        "_find_floor_from_list": 7,
+        "_saturn_geo_enter_object": 5
+      },
+      "___clzsi2": {
+        "___floatsisf": 9,
+        "___subsf3": 3
+      },
+      "___eqsf2": {
+        "_find_floor_from_list": 5
+      },
+      "___extendsfdf2": {
+        "_round_float": 1
+      },
+      "___adddf3": {
+        "_sourceboot_vdp2_sky_scroll_set": 1
+      },
+      "___fixdfsi": {
+        "_sourceboot_vdp2_sky_scroll_set": 1
+      }
+    },
+    "vblanks_per_frame": 11.2069,
+    "cycles_per_frame": 5014451.0,
+    "classes": {
+      "idle": {
+        "cycles": 591973,
+        "entries_sampled": 0,
+        "cycle_share": 0.73326876,
+        "est_calls_per_frame": 0.0
+      },
+      "application": {
+        "cycles": 177611,
+        "entries_sampled": 2050,
+        "cycle_share": 0.22000429,
+        "est_calls_per_frame": 12733.2
+      },
+      "soft-float": {
+        "cycles": 28969,
+        "entries_sampled": 259,
+        "cycle_share": 0.0358835,
+        "est_calls_per_frame": 1608.7
+      },
+      "divide": {
+        "cycles": 2977,
+        "entries_sampled": 81,
+        "cycle_share": 0.00368757,
+        "est_calls_per_frame": 503.1
+      },
+      "shift": {
+        "cycles": 2897,
+        "entries_sampled": 268,
+        "cycle_share": 0.00358847,
+        "est_calls_per_frame": 1664.6
+      },
+      "libm": {
+        "cycles": 901,
+        "entries_sampled": 19,
+        "cycle_share": 0.00111606,
+        "est_calls_per_frame": 118.0
+      },
+      "soft-float-convert": {
+        "cycles": 1237,
+        "entries_sampled": 34,
+        "cycle_share": 0.00153225,
+        "est_calls_per_frame": 211.2
+      },
+      "soft-float-support": {
+        "cycles": 306,
+        "entries_sampled": 12,
+        "cycle_share": 0.00037904,
+        "est_calls_per_frame": 74.5
+      },
+      "soft-double": {
+        "cycles": 364,
+        "entries_sampled": 1,
+        "cycle_share": 0.00045088,
+        "est_calls_per_frame": 6.2
+      },
+      "soft-double-convert": {
+        "cycles": 72,
+        "entries_sampled": 2,
+        "cycle_share": 8.919e-05,
+        "est_calls_per_frame": 12.4
+      }
+    },
+    "symbols": [
+      {
+        "symbol": "___slave_polling_entry",
+        "class": "idle",
+        "cycles": 348917,
+        "samples": 116400,
+        "cycle_share": 0.43219866,
+        "est_cycles_per_frame": 2167239.0,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 1.62035257
+      },
+      {
+        "symbol": "_sm64_saturn_source_runtime_wait_vblank",
+        "class": "idle",
+        "cycles": 243056,
+        "samples": 29200,
+        "cycle_share": 0.3010701,
+        "est_cycles_per_frame": 1509701.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 1.12873954
+      },
+      {
+        "symbol": "_demo_render_finalize",
+        "class": null,
+        "cycles": 19309,
+        "samples": 15073,
+        "cycle_share": 0.02391779,
+        "est_cycles_per_frame": 119934.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.08967
+      },
+      {
+        "symbol": "_sm64_saturn_scene_admit_with_scratch",
+        "class": null,
+        "cycles": 18091,
+        "samples": 14400,
+        "cycle_share": 0.02240907,
+        "est_cycles_per_frame": 112369.2,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.08401367
+      },
+      {
+        "symbol": "_demo_terrain_queue_world_lower",
+        "class": null,
+        "cycles": 17641,
+        "samples": 14890,
+        "cycle_share": 0.02185166,
+        "est_cycles_per_frame": 109574.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.08192389
+      },
+      {
+        "symbol": "_actor_meshlet_live_depth_bounds",
+        "class": null,
+        "cycles": 15683,
+        "samples": 12161,
+        "cycle_share": 0.01942631,
+        "est_cycles_per_frame": 97412.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.07283104
+      },
+      {
+        "symbol": "_saturn_geo_enter_object",
+        "class": null,
+        "cycles": 13763,
+        "samples": 11047,
+        "cycle_share": 0.01704804,
+        "est_cycles_per_frame": 85486.5,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 18.6,
+        "working_share": 0.06391466
+      },
+      {
+        "symbol": "_demo_actor_lower_compat_wrapper",
+        "class": null,
+        "cycles": 9175,
+        "samples": 7436,
+        "cycle_share": 0.01136495,
+        "est_cycles_per_frame": 56989.0,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.04260823
+      },
+      {
+        "symbol": "_demo_actor_queue_vertex_lookup",
+        "class": null,
+        "cycles": 9101,
+        "samples": 6964,
+        "cycle_share": 0.01127328,
+        "est_cycles_per_frame": 56529.3,
+        "entries_sampled": 267,
+        "est_calls_per_frame": 1658.4,
+        "working_share": 0.04226458
+      },
+      {
+        "symbol": "___addsf3",
+        "class": "soft-float",
+        "cycles": 8511,
+        "samples": 7447,
+        "cycle_share": 0.01054246,
+        "est_cycles_per_frame": 52864.6,
+        "entries_sampled": 71,
+        "est_calls_per_frame": 441.0,
+        "working_share": 0.03952465
+      },
+      {
+        "symbol": "___mulsf3",
+        "class": "soft-float",
+        "cycles": 7736,
+        "samples": 6713,
+        "cycle_share": 0.00958248,
+        "est_cycles_per_frame": 48050.9,
+        "entries_sampled": 64,
+        "est_calls_per_frame": 397.5,
+        "working_share": 0.03592559
+      },
+      {
+        "symbol": "_sm64_saturn_matrix_mul.isra.0",
+        "class": null,
+        "cycles": 6496,
+        "samples": 5262,
+        "cycle_share": 0.00804651,
+        "est_cycles_per_frame": 40348.8,
+        "entries_sampled": 7,
+        "est_calls_per_frame": 43.5,
+        "working_share": 0.03016709
+      },
+      {
+        "symbol": "_memset",
+        "class": null,
+        "cycles": 5843,
+        "samples": 5054,
+        "cycle_share": 0.00723764,
+        "est_cycles_per_frame": 36292.8,
+        "entries_sampled": 54,
+        "est_calls_per_frame": 335.4,
+        "working_share": 0.02713459
+      },
+      {
+        "symbol": "___divsf3",
+        "class": "soft-float",
+        "cycles": 5834,
+        "samples": 5043,
+        "cycle_share": 0.0072265,
+        "est_cycles_per_frame": 36236.9,
+        "entries_sampled": 38,
+        "est_calls_per_frame": 236.0,
+        "working_share": 0.0270928
+      },
+      {
+        "symbol": "_find_floor_from_list",
+        "class": null,
+        "cycles": 5417,
+        "samples": 4038,
+        "cycle_share": 0.00670996,
+        "est_cycles_per_frame": 33646.8,
+        "entries_sampled": 9,
+        "est_calls_per_frame": 55.9,
+        "working_share": 0.02515627
+      },
+      {
+        "symbol": "_saturn_mtxq_refresh_float_mirror",
+        "class": null,
+        "cycles": 4726,
+        "samples": 3951,
+        "cycle_share": 0.00585403,
+        "est_cycles_per_frame": 29354.8,
+        "entries_sampled": 7,
+        "est_calls_per_frame": 43.5,
+        "working_share": 0.0219473
+      },
+      {
+        "symbol": "_demo_projected_read",
+        "class": null,
+        "cycles": 4701,
+        "samples": 3762,
+        "cycle_share": 0.00582306,
+        "est_cycles_per_frame": 29199.5,
+        "entries_sampled": 189,
+        "est_calls_per_frame": 1173.9,
+        "working_share": 0.0218312
+      },
+      {
+        "symbol": "_sm64_saturn_hud_atlas_write_cell",
+        "class": null,
+        "cycles": 3994,
+        "samples": 3732,
+        "cycle_share": 0.00494731,
+        "est_cycles_per_frame": 24808.1,
+        "entries_sampled": 128,
+        "est_calls_per_frame": 795.1,
+        "working_share": 0.01854793
+      },
+      {
+        "symbol": "_memcpy",
+        "class": null,
+        "cycles": 3711,
+        "samples": 3300,
+        "cycle_share": 0.00459676,
+        "est_cycles_per_frame": 23050.2,
+        "entries_sampled": 38,
+        "est_calls_per_frame": 236.0,
+        "working_share": 0.01723369
+      },
+      {
+        "symbol": "___subsf3",
+        "class": "soft-float",
+        "cycles": 3462,
+        "samples": 3068,
+        "cycle_share": 0.00428833,
+        "est_cycles_per_frame": 21503.6,
+        "entries_sampled": 27,
+        "est_calls_per_frame": 167.7,
+        "working_share": 0.01607735
+      },
+      {
+        "symbol": "_actor_position_ref",
+        "class": null,
+        "cycles": 3386,
+        "samples": 2639,
+        "cycle_share": 0.00419419,
+        "est_cycles_per_frame": 21031.6,
+        "entries_sampled": 101,
+        "est_calls_per_frame": 627.3,
+        "working_share": 0.01572441
+      },
+      {
+        "symbol": "___udiv_qrnnd_16",
+        "class": "divide",
+        "cycles": 2977,
+        "samples": 2575,
+        "cycle_share": 0.00368757,
+        "est_cycles_per_frame": 18491.1,
+        "entries_sampled": 81,
+        "est_calls_per_frame": 503.1,
+        "working_share": 0.01382503
+      },
+      {
+        "symbol": "_demo_view_read",
+        "class": null,
+        "cycles": 2760,
+        "samples": 2120,
+        "cycle_share": 0.00341877,
+        "est_cycles_per_frame": 17143.3,
+        "entries_sampled": 99,
+        "est_calls_per_frame": 614.9,
+        "working_share": 0.0128173
+      },
+      {
+        "symbol": "_sm64_saturn_float_to_q16",
+        "class": null,
+        "cycles": 2285,
+        "samples": 1677,
+        "cycle_share": 0.0028304,
+        "est_cycles_per_frame": 14192.9,
+        "entries_sampled": 48,
+        "est_calls_per_frame": 298.1,
+        "working_share": 0.01061142
+      },
+      {
+        "symbol": "___lesf2",
+        "class": "soft-float",
+        "cycles": 2111,
+        "samples": 1850,
+        "cycle_share": 0.00261487,
+        "est_cycles_per_frame": 13112.1,
+        "entries_sampled": 36,
+        "est_calls_per_frame": 223.6,
+        "working_share": 0.00980338
+      },
+      {
+        "symbol": "_sm64_saturn_geo_walk_runtime_run",
+        "class": null,
+        "cycles": 2097,
+        "samples": 1588,
+        "cycle_share": 0.00259752,
+        "est_cycles_per_frame": 13025.2,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00973836
+      },
+      {
+        "symbol": "_push",
+        "class": null,
+        "cycles": 1766,
+        "samples": 1534,
+        "cycle_share": 0.00218752,
+        "est_cycles_per_frame": 10969.2,
+        "entries_sampled": 31,
+        "est_calls_per_frame": 192.6,
+        "working_share": 0.00820121
+      },
+      {
+        "symbol": "___ashlsi3_r0",
+        "class": "shift",
+        "cycles": 1765,
+        "samples": 1333,
+        "cycle_share": 0.00218628,
+        "est_cycles_per_frame": 10963.0,
+        "entries_sampled": 164,
+        "est_calls_per_frame": 1018.7,
+        "working_share": 0.00819657
+      },
+      {
+        "symbol": "_vdp2_frame_append_text",
+        "class": null,
+        "cycles": 1712,
+        "samples": 1235,
+        "cycle_share": 0.00212063,
+        "est_cycles_per_frame": 10633.8,
+        "entries_sampled": 26,
+        "est_calls_per_frame": 161.5,
+        "working_share": 0.00795044
+      },
+      {
+        "symbol": "_vdp2_frame_append_u32",
+        "class": null,
+        "cycles": 1686,
+        "samples": 1331,
+        "cycle_share": 0.00208842,
+        "est_cycles_per_frame": 10472.3,
+        "entries_sampled": 29,
+        "est_calls_per_frame": 180.1,
+        "working_share": 0.0078297
+      },
+      {
+        "symbol": "__vt_char_parse.constprop.0",
+        "class": null,
+        "cycles": 1479,
+        "samples": 1340,
+        "cycle_share": 0.00183202,
+        "est_cycles_per_frame": 9186.6,
+        "entries_sampled": 32,
+        "est_calls_per_frame": 198.8,
+        "working_share": 0.0068684
+      },
+      {
+        "symbol": "_demo_terrain_resolved_template",
+        "class": null,
+        "cycles": 1338,
+        "samples": 1096,
+        "cycle_share": 0.00165736,
+        "est_cycles_per_frame": 8310.8,
+        "entries_sampled": 34,
+        "est_calls_per_frame": 211.2,
+        "working_share": 0.0062136
+      },
+      {
+        "symbol": "_sm64_saturn_hud_publish",
+        "class": null,
+        "cycles": 1328,
+        "samples": 1068,
+        "cycle_share": 0.00164498,
+        "est_cycles_per_frame": 8248.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00616716
+      },
+      {
+        "symbol": "_sm64_saturn_lod_lifetime_select",
+        "class": null,
+        "cycles": 1324,
+        "samples": 1086,
+        "cycle_share": 0.00164002,
+        "est_cycles_per_frame": 8223.8,
+        "entries_sampled": 23,
+        "est_calls_per_frame": 142.9,
+        "working_share": 0.00614859
+      },
+      {
+        "symbol": "_sm64_saturn_mtxq_rotate_zxy_and_translate",
+        "class": null,
+        "cycles": 1205,
+        "samples": 832,
+        "cycle_share": 0.00149262,
+        "est_cycles_per_frame": 7484.7,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 24.8,
+        "working_share": 0.00559596
+      },
+      {
+        "symbol": "___lshrsi3_r0",
+        "class": "shift",
+        "cycles": 1132,
+        "samples": 848,
+        "cycle_share": 0.00140219,
+        "est_cycles_per_frame": 7031.2,
+        "entries_sampled": 104,
+        "est_calls_per_frame": 646.0,
+        "working_share": 0.00525695
+      },
+      {
+        "symbol": "___gesf2",
+        "class": "soft-float",
+        "cycles": 1130,
+        "samples": 978,
+        "cycle_share": 0.00139972,
+        "est_cycles_per_frame": 7018.8,
+        "entries_sampled": 18,
+        "est_calls_per_frame": 111.8,
+        "working_share": 0.00524766
+      },
+      {
+        "symbol": "__action_character_print",
+        "class": null,
+        "cycles": 1085,
+        "samples": 890,
+        "cycle_share": 0.00134397,
+        "est_cycles_per_frame": 6739.3,
+        "entries_sampled": 29,
+        "est_calls_per_frame": 180.1,
+        "working_share": 0.00503868
+      },
+      {
+        "symbol": "_saturn_geo_walk_enter",
+        "class": null,
+        "cycles": 1045,
+        "samples": 881,
+        "cycle_share": 0.00129443,
+        "est_cycles_per_frame": 6490.8,
+        "entries_sampled": 8,
+        "est_calls_per_frame": 49.7,
+        "working_share": 0.00485293
+      },
+      {
+        "symbol": "_sm64_saturn_mtxq_scale_vec3f",
+        "class": null,
+        "cycles": 956,
+        "samples": 646,
+        "cycle_share": 0.00118418,
+        "est_cycles_per_frame": 5938.0,
+        "entries_sampled": 6,
+        "est_calls_per_frame": 37.3,
+        "working_share": 0.00443961
+      },
+      {
+        "symbol": "_sqrtf",
+        "class": "libm",
+        "cycles": 901,
+        "samples": 762,
+        "cycle_share": 0.00111606,
+        "est_cycles_per_frame": 5596.4,
+        "entries_sampled": 19,
+        "est_calls_per_frame": 118.0,
+        "working_share": 0.0041842
+      },
+      {
+        "symbol": "_sm64_saturn_geo_walk_runtime_next",
+        "class": null,
+        "cycles": 901,
+        "samples": 784,
+        "cycle_share": 0.00111606,
+        "est_cycles_per_frame": 5596.4,
+        "entries_sampled": 27,
+        "est_calls_per_frame": 167.7,
+        "working_share": 0.0041842
+      },
+      {
+        "symbol": "_sm64_saturn_mtxq_billboard",
+        "class": null,
+        "cycles": 853,
+        "samples": 682,
+        "cycle_share": 0.0010566,
+        "est_cycles_per_frame": 5298.3,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 24.8,
+        "working_share": 0.00396129
+      },
+      {
+        "symbol": "__buffer_write",
+        "class": null,
+        "cycles": 841,
+        "samples": 678,
+        "cycle_share": 0.00104174,
+        "est_cycles_per_frame": 5223.7,
+        "entries_sampled": 27,
+        "est_calls_per_frame": 167.7,
+        "working_share": 0.00390556
+      },
+      {
+        "symbol": "___fixsfsi",
+        "class": "soft-float-convert",
+        "cycles": 834,
+        "samples": 697,
+        "cycle_share": 0.00103306,
+        "est_cycles_per_frame": 5180.3,
+        "entries_sampled": 22,
+        "est_calls_per_frame": 136.6,
+        "working_share": 0.00387305
+      },
+      {
+        "symbol": "__do_action.constprop.0",
+        "class": null,
+        "cycles": 703,
+        "samples": 545,
+        "cycle_share": 0.0008708,
+        "est_cycles_per_frame": 4366.6,
+        "entries_sampled": 31,
+        "est_calls_per_frame": 192.6,
+        "working_share": 0.0032647
+      },
+      {
+        "symbol": "__vt_parser_callback",
+        "class": null,
+        "cycles": 541,
+        "samples": 419,
+        "cycle_share": 0.00067013,
+        "est_cycles_per_frame": 3360.3,
+        "entries_sampled": 28,
+        "est_calls_per_frame": 173.9,
+        "working_share": 0.00251238
+      },
+      {
+        "symbol": "_sm64_saturn_div_s64_s32",
+        "class": null,
+        "cycles": 540,
+        "samples": 216,
+        "cycle_share": 0.00066889,
+        "est_cycles_per_frame": 3354.1,
+        "entries_sampled": 12,
+        "est_calls_per_frame": 74.5,
+        "working_share": 0.00250773
+      },
+      {
+        "symbol": "___movmemSI4",
+        "class": null,
+        "cycles": 474,
+        "samples": 298,
+        "cycle_share": 0.00058714,
+        "est_cycles_per_frame": 2944.2,
+        "entries_sampled": 99,
+        "est_calls_per_frame": 614.9,
+        "working_share": 0.00220123
+      },
+      {
+        "symbol": "_saturn_lod_select",
+        "class": null,
+        "cycles": 431,
+        "samples": 383,
+        "cycle_share": 0.00053387,
+        "est_cycles_per_frame": 2677.1,
+        "entries_sampled": 19,
+        "est_calls_per_frame": 118.0,
+        "working_share": 0.00200154
+      },
+      {
+        "symbol": "___floatsisf",
+        "class": "soft-float-convert",
+        "cycles": 403,
+        "samples": 359,
+        "cycle_share": 0.00049919,
+        "est_cycles_per_frame": 2503.2,
+        "entries_sampled": 12,
+        "est_calls_per_frame": 74.5,
+        "working_share": 0.00187151
+      },
+      {
+        "symbol": "_geo_append_display_list",
+        "class": null,
+        "cycles": 394,
+        "samples": 335,
+        "cycle_share": 0.00048804,
+        "est_cycles_per_frame": 2447.3,
+        "entries_sampled": 6,
+        "est_calls_per_frame": 37.3,
+        "working_share": 0.00182972
+      },
+      {
+        "symbol": "___movmemSI8",
+        "class": null,
+        "cycles": 372,
+        "samples": 197,
+        "cycle_share": 0.00046079,
+        "est_cycles_per_frame": 2310.6,
+        "entries_sampled": 95,
+        "est_calls_per_frame": 590.1,
+        "working_share": 0.00172755
+      },
+      {
+        "symbol": "___movmemSI12",
+        "class": null,
+        "cycles": 363,
+        "samples": 190,
+        "cycle_share": 0.00044964,
+        "est_cycles_per_frame": 2254.7,
+        "entries_sampled": 95,
+        "est_calls_per_frame": 590.1,
+        "working_share": 0.00168575
+      },
+      {
+        "symbol": "_saturn_lod_default_thresholds",
+        "class": null,
+        "cycles": 336,
+        "samples": 255,
+        "cycle_share": 0.0004162,
+        "est_cycles_per_frame": 2087.0,
+        "entries_sampled": 32,
+        "est_calls_per_frame": 198.8,
+        "working_share": 0.00156037
+      },
+      {
+        "symbol": "_detect_object_hitbox_overlap",
+        "class": null,
+        "cycles": 328,
+        "samples": 285,
+        "cycle_share": 0.00040629,
+        "est_cycles_per_frame": 2037.3,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00152322
+      },
+      {
+        "symbol": "___clzsi2",
+        "class": "soft-float-support",
+        "cycles": 306,
+        "samples": 244,
+        "cycle_share": 0.00037904,
+        "est_cycles_per_frame": 1900.7,
+        "entries_sampled": 12,
+        "est_calls_per_frame": 74.5,
+        "working_share": 0.00142105
+      },
+      {
+        "symbol": "_strlen",
+        "class": null,
+        "cycles": 305,
+        "samples": 217,
+        "cycle_share": 0.0003778,
+        "est_cycles_per_frame": 1894.5,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.0014164
+      },
+      {
+        "symbol": "_sm64_saturn_vdp2_frame_begin",
+        "class": null,
+        "cycles": 290,
+        "samples": 234,
+        "cycle_share": 0.00035922,
+        "est_cycles_per_frame": 1801.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00134675
+      },
+      {
+        "symbol": "_find_floor",
+        "class": null,
+        "cycles": 289,
+        "samples": 244,
+        "cycle_share": 0.00035798,
+        "est_cycles_per_frame": 1795.1,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.0013421
+      },
+      {
+        "symbol": "___cons_write",
+        "class": null,
+        "cycles": 288,
+        "samples": 149,
+        "cycle_share": 0.00035674,
+        "est_cycles_per_frame": 1788.9,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00133746
+      },
+      {
+        "symbol": "_sm64_saturn_geo_state_observer_begin_object",
+        "class": null,
+        "cycles": 282,
+        "samples": 227,
+        "cycle_share": 0.00034931,
+        "est_cycles_per_frame": 1751.6,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 18.6,
+        "working_share": 0.00130959
+      },
+      {
+        "symbol": "_saturn_vec3f_to_q16",
+        "class": null,
+        "cycles": 272,
+        "samples": 228,
+        "cycle_share": 0.00033692,
+        "est_cycles_per_frame": 1689.5,
+        "entries_sampled": 10,
+        "est_calls_per_frame": 62.1,
+        "working_share": 0.00126315
+      },
+      {
+        "symbol": "_calc_new_obj_vel_and_pos_y",
+        "class": null,
+        "cycles": 264,
+        "samples": 205,
+        "cycle_share": 0.00032701,
+        "est_cycles_per_frame": 1639.8,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.001226
+      },
+      {
+        "symbol": "_sm64_saturn_coss_q16",
+        "class": null,
+        "cycles": 256,
+        "samples": 176,
+        "cycle_share": 0.0003171,
+        "est_cycles_per_frame": 1590.1,
+        "entries_sampled": 19,
+        "est_calls_per_frame": 118.0,
+        "working_share": 0.00118885
+      },
+      {
+        "symbol": "_saturn_geo_walk_leave",
+        "class": null,
+        "cycles": 228,
+        "samples": 195,
+        "cycle_share": 0.00028242,
+        "est_cycles_per_frame": 1416.2,
+        "entries_sampled": 10,
+        "est_calls_per_frame": 62.1,
+        "working_share": 0.00105882
+      },
+      {
+        "symbol": "___movmemSI16",
+        "class": null,
+        "cycles": 222,
+        "samples": 96,
+        "cycle_share": 0.00027499,
+        "est_cycles_per_frame": 1378.9,
+        "entries_sampled": 48,
+        "est_calls_per_frame": 298.1,
+        "working_share": 0.00103096
+      },
+      {
+        "symbol": "_saturn_geo_leave_object_final",
+        "class": null,
+        "cycles": 221,
+        "samples": 177,
+        "cycle_share": 0.00027375,
+        "est_cycles_per_frame": 1372.7,
+        "entries_sampled": 10,
+        "est_calls_per_frame": 62.1,
+        "working_share": 0.00102631
+      },
+      {
+        "symbol": "_saturn_dma_queue_sequence_retired",
+        "class": null,
+        "cycles": 221,
+        "samples": 146,
+        "cycle_share": 0.00027375,
+        "est_cycles_per_frame": 1372.7,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00102631
+      },
+      {
+        "symbol": "_sm64_saturn_geo_state_observer_record_authoritative_geo_decision",
+        "class": null,
+        "cycles": 210,
+        "samples": 139,
+        "cycle_share": 0.00026012,
+        "est_cycles_per_frame": 1304.4,
+        "entries_sampled": 9,
+        "est_calls_per_frame": 55.9,
+        "working_share": 0.00097523
+      },
+      {
+        "symbol": "_cur_obj_update",
+        "class": null,
+        "cycles": 199,
+        "samples": 138,
+        "cycle_share": 0.0002465,
+        "est_cycles_per_frame": 1236.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00092415
+      },
+      {
+        "symbol": "_saturn_dma_queue_sequence_failed",
+        "class": null,
+        "cycles": 191,
+        "samples": 125,
+        "cycle_share": 0.00023659,
+        "est_cycles_per_frame": 1186.4,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00088699
+      },
+      {
+        "symbol": "_sourceboot_frame_update_telemetry",
+        "class": null,
+        "cycles": 189,
+        "samples": 163,
+        "cycle_share": 0.00023411,
+        "est_cycles_per_frame": 1173.9,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00087771
+      },
+      {
+        "symbol": "___muldf3",
+        "class": "soft-double",
+        "cycles": 188,
+        "samples": 168,
+        "cycle_share": 0.00023287,
+        "est_cycles_per_frame": 1167.7,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00087306
+      },
+      {
+        "symbol": "___eqsf2",
+        "class": "soft-float",
+        "cycles": 185,
+        "samples": 165,
+        "cycle_share": 0.00022916,
+        "est_cycles_per_frame": 1149.1,
+        "entries_sampled": 5,
+        "est_calls_per_frame": 31.1,
+        "working_share": 0.00085913
+      },
+      {
+        "symbol": "___adddf3",
+        "class": "soft-double",
+        "cycles": 176,
+        "samples": 158,
+        "cycle_share": 0.00021801,
+        "est_cycles_per_frame": 1093.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00081733
+      },
+      {
+        "symbol": "_sm64_saturn_geo_state_observer_record_geo_decision",
+        "class": null,
+        "cycles": 165,
+        "samples": 132,
+        "cycle_share": 0.00020438,
+        "est_cycles_per_frame": 1024.9,
+        "entries_sampled": 9,
+        "est_calls_per_frame": 55.9,
+        "working_share": 0.00076625
+      },
+      {
+        "symbol": "_find_wall_collisions",
+        "class": null,
+        "cycles": 157,
+        "samples": 138,
+        "cycle_share": 0.00019447,
+        "est_cycles_per_frame": 975.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 18.6,
+        "working_share": 0.0007291
+      },
+      {
+        "symbol": "___movmemSI24",
+        "class": null,
+        "cycles": 156,
+        "samples": 52,
+        "cycle_share": 0.00019324,
+        "est_cycles_per_frame": 969.0,
+        "entries_sampled": 27,
+        "est_calls_per_frame": 167.7,
+        "working_share": 0.00072446
+      },
+      {
+        "symbol": "___movmemSI20",
+        "class": null,
+        "cycles": 156,
+        "samples": 52,
+        "cycle_share": 0.00019324,
+        "est_cycles_per_frame": 969.0,
+        "entries_sampled": 26,
+        "est_calls_per_frame": 161.5,
+        "working_share": 0.00072446
+      },
+      {
+        "symbol": "_main",
+        "class": null,
+        "cycles": 144,
+        "samples": 97,
+        "cycle_share": 0.00017837,
+        "est_cycles_per_frame": 894.4,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00066873
+      },
+      {
+        "symbol": "_vec3f_cross",
+        "class": null,
+        "cycles": 143,
+        "samples": 121,
+        "cycle_share": 0.00017713,
+        "est_cycles_per_frame": 888.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 18.6,
+        "working_share": 0.00066408
+      },
+      {
+        "symbol": "_sm64_saturn_frame_pipeline_step",
+        "class": null,
+        "cycles": 136,
+        "samples": 107,
+        "cycle_share": 0.00016846,
+        "est_cycles_per_frame": 844.7,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00063158
+      },
+      {
+        "symbol": "_saturn_dma_queue_submit_pair",
+        "class": null,
+        "cycles": 120,
+        "samples": 99,
+        "cycle_share": 0.00014864,
+        "est_cycles_per_frame": 745.4,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00055727
+      },
+      {
+        "symbol": "__request_valid",
+        "class": null,
+        "cycles": 118,
+        "samples": 113,
+        "cycle_share": 0.00014616,
+        "est_cycles_per_frame": 732.9,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00054799
+      },
+      {
+        "symbol": "_saturn_geo_enter_shadow",
+        "class": null,
+        "cycles": 114,
+        "samples": 90,
+        "cycle_share": 0.00014121,
+        "est_cycles_per_frame": 708.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00052941
+      },
+      {
+        "symbol": "_sm64_saturn_vdp1_frame_bank_submit_transfers",
+        "class": null,
+        "cycles": 109,
+        "samples": 102,
+        "cycle_share": 0.00013502,
+        "est_cycles_per_frame": 677.0,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00050619
+      },
+      {
+        "symbol": "_find_wall_collisions_from_list",
+        "class": null,
+        "cycles": 104,
+        "samples": 96,
+        "cycle_share": 0.00012882,
+        "est_cycles_per_frame": 646.0,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00048297
+      },
+      {
+        "symbol": "_alloc_only_pool_alloc",
+        "class": null,
+        "cycles": 100,
+        "samples": 94,
+        "cycle_share": 0.00012387,
+        "est_cycles_per_frame": 621.1,
+        "entries_sampled": 5,
+        "est_calls_per_frame": 31.1,
+        "working_share": 0.00046439
+      },
+      {
+        "symbol": "_obj_find_wall",
+        "class": null,
+        "cycles": 95,
+        "samples": 87,
+        "cycle_share": 0.00011768,
+        "est_cycles_per_frame": 590.1,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 18.6,
+        "working_share": 0.00044118
+      },
+      {
+        "symbol": "_is_point_within_radius_of_mario",
+        "class": null,
+        "cycles": 83,
+        "samples": 71,
+        "cycle_share": 0.00010281,
+        "est_cycles_per_frame": 515.5,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00038545
+      },
+      {
+        "symbol": "_sm64_saturn_render_snapshot_retire",
+        "class": null,
+        "cycles": 81,
+        "samples": 56,
+        "cycle_share": 0.00010033,
+        "est_cycles_per_frame": 503.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00037616
+      },
+      {
+        "symbol": "_vec3f_normalize",
+        "class": null,
+        "cycles": 75,
+        "samples": 60,
+        "cycle_share": 9.29e-05,
+        "est_cycles_per_frame": 465.8,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.0003483
+      },
+      {
+        "symbol": "_saturn_lod_can_suppress",
+        "class": null,
+        "cycles": 72,
+        "samples": 64,
+        "cycle_share": 8.919e-05,
+        "est_cycles_per_frame": 447.2,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 24.8,
+        "working_share": 0.00033436
+      },
+      {
+        "symbol": "_alloc_display_list",
+        "class": null,
+        "cycles": 71,
+        "samples": 66,
+        "cycle_share": 8.795e-05,
+        "est_cycles_per_frame": 441.0,
+        "entries_sampled": 5,
+        "est_calls_per_frame": 31.1,
+        "working_share": 0.00032972
+      },
+      {
+        "symbol": "_obj_orient_graph",
+        "class": null,
+        "cycles": 69,
+        "samples": 60,
+        "cycle_share": 8.547e-05,
+        "est_cycles_per_frame": 428.6,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00032043
+      },
+      {
+        "symbol": "_saturn_lod_can_degrade_material",
+        "class": null,
+        "cycles": 64,
+        "samples": 60,
+        "cycle_share": 7.928e-05,
+        "est_cycles_per_frame": 397.5,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 24.8,
+        "working_share": 0.00029721
+      },
+      {
+        "symbol": "_object_step",
+        "class": null,
+        "cycles": 64,
+        "samples": 54,
+        "cycle_share": 7.928e-05,
+        "est_cycles_per_frame": 397.5,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00029721
+      },
+      {
+        "symbol": "__shared_puts",
+        "class": null,
+        "cycles": 56,
+        "samples": 42,
+        "cycle_share": 6.937e-05,
+        "est_cycles_per_frame": 347.8,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00026006
+      },
+      {
+        "symbol": "_saturn_dma_queue_kick",
+        "class": null,
+        "cycles": 55,
+        "samples": 48,
+        "cycle_share": 6.813e-05,
+        "est_cycles_per_frame": 341.6,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00025542
+      },
+      {
+        "symbol": "_sm64_saturn_geo_state_observer_generation",
+        "class": null,
+        "cycles": 50,
+        "samples": 40,
+        "cycle_share": 6.193e-05,
+        "est_cycles_per_frame": 310.6,
+        "entries_sampled": 6,
+        "est_calls_per_frame": 37.3,
+        "working_share": 0.0002322
+      },
+      {
+        "symbol": "_make_shadow_vertex",
+        "class": null,
+        "cycles": 49,
+        "samples": 44,
+        "cycle_share": 6.07e-05,
+        "est_cycles_per_frame": 304.4,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00022755
+      },
+      {
+        "symbol": "_range_in_region",
+        "class": null,
+        "cycles": 45,
+        "samples": 39,
+        "cycle_share": 5.574e-05,
+        "est_cycles_per_frame": 279.5,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00020898
+      },
+      {
+        "symbol": "___ashiftrt_r4_1",
+        "class": null,
+        "cycles": 42,
+        "samples": 28,
+        "cycle_share": 5.202e-05,
+        "est_cycles_per_frame": 260.9,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 87.0,
+        "working_share": 0.00019505
+      },
+      {
+        "symbol": "__shared_test",
+        "class": null,
+        "cycles": 42,
+        "samples": 32,
+        "cycle_share": 5.202e-05,
+        "est_cycles_per_frame": 260.9,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00019505
+      },
+      {
+        "symbol": "_bhv_bobomb_loop",
+        "class": null,
+        "cycles": 40,
+        "samples": 36,
+        "cycle_share": 4.955e-05,
+        "est_cycles_per_frame": 248.5,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00018576
+      },
+      {
+        "symbol": "_sm64_saturn_vdp1_frame_bank_begin_transfers",
+        "class": null,
+        "cycles": 40,
+        "samples": 35,
+        "cycle_share": 4.955e-05,
+        "est_cycles_per_frame": 248.5,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00018576
+      },
+      {
+        "symbol": "_fwrite",
+        "class": null,
+        "cycles": 39,
+        "samples": 33,
+        "cycle_share": 4.831e-05,
+        "est_cycles_per_frame": 242.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00018111
+      },
+      {
+        "symbol": "___fixdfsi",
+        "class": "soft-double-convert",
+        "cycles": 39,
+        "samples": 34,
+        "cycle_share": 4.831e-05,
+        "est_cycles_per_frame": 242.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00018111
+      },
+      {
+        "symbol": "_fputs",
+        "class": null,
+        "cycles": 38,
+        "samples": 31,
+        "cycle_share": 4.707e-05,
+        "est_cycles_per_frame": 236.0,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00017647
+      },
+      {
+        "symbol": "_bhv_cmd_call_native",
+        "class": null,
+        "cycles": 36,
+        "samples": 21,
+        "cycle_share": 4.459e-05,
+        "est_cycles_per_frame": 223.6,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 0.00016718
+      },
+      {
+        "symbol": "_obj_update_gfx_pos_and_angle",
+        "class": null,
+        "cycles": 33,
+        "samples": 29,
+        "cycle_share": 4.088e-05,
+        "est_cycles_per_frame": 205.0,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00015325
+      },
+      {
+        "symbol": "___extendsfdf2",
+        "class": "soft-double-convert",
+        "cycles": 33,
+        "samples": 33,
+        "cycle_share": 4.088e-05,
+        "est_cycles_per_frame": 205.0,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00015325
+      },
+      {
+        "symbol": "_saturn_mtxq_write_wire",
+        "class": null,
+        "cycles": 30,
+        "samples": 18,
+        "cycle_share": 3.716e-05,
+        "est_cycles_per_frame": 186.3,
+        "entries_sampled": 6,
+        "est_calls_per_frame": 37.3,
+        "working_share": 0.00013932
+      },
+      {
+        "symbol": "_sm64_saturn_vdp1_frame_bank_poll_transfers",
+        "class": null,
+        "cycles": 29,
+        "samples": 17,
+        "cycle_share": 3.592e-05,
+        "est_cycles_per_frame": 180.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00013467
+      },
+      {
+        "symbol": "_atan2s",
+        "class": null,
+        "cycles": 29,
+        "samples": 21,
+        "cycle_share": 3.592e-05,
+        "est_cycles_per_frame": 180.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00013467
+      },
+      {
+        "symbol": "_mtxf_align_terrain_normal",
+        "class": null,
+        "cycles": 25,
+        "samples": 21,
+        "cycle_share": 3.097e-05,
+        "est_cycles_per_frame": 155.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.0001161
+      },
+      {
+        "symbol": "_calculate_vertex_xyz",
+        "class": null,
+        "cycles": 25,
+        "samples": 19,
+        "cycle_share": 3.097e-05,
+        "est_cycles_per_frame": 155.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.0001161
+      },
+      {
+        "symbol": "_make_shadow_vertex_at_xyz",
+        "class": null,
+        "cycles": 23,
+        "samples": 22,
+        "cycle_share": 2.849e-05,
+        "est_cycles_per_frame": 142.9,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00010681
+      },
+      {
+        "symbol": "_snapshot_slot",
+        "class": null,
+        "cycles": 22,
+        "samples": 17,
+        "cycle_share": 2.725e-05,
+        "est_cycles_per_frame": 136.6,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 0.00010217
+      },
+      {
+        "symbol": "_check_collision_in_list",
+        "class": null,
+        "cycles": 21,
+        "samples": 15,
+        "cycle_share": 2.601e-05,
+        "est_cycles_per_frame": 130.4,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 9.752e-05
+      },
+      {
+        "symbol": "_sm64_saturn_geo_state_observer_bound",
+        "class": null,
+        "cycles": 20,
+        "samples": 15,
+        "cycle_share": 2.477e-05,
+        "est_cycles_per_frame": 124.2,
+        "entries_sampled": 5,
+        "est_calls_per_frame": 31.1,
+        "working_share": 9.288e-05
+      },
+      {
+        "symbol": "_sm64_saturn_geo_state_observer_end_object",
+        "class": null,
+        "cycles": 20,
+        "samples": 15,
+        "cycle_share": 2.477e-05,
+        "est_cycles_per_frame": 124.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 9.288e-05
+      },
+      {
+        "symbol": "_bhv_cmd_end_loop",
+        "class": null,
+        "cycles": 19,
+        "samples": 13,
+        "cycle_share": 2.354e-05,
+        "est_cycles_per_frame": 118.0,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 8.824e-05
+      },
+      {
+        "symbol": "_dbgio_puts",
+        "class": null,
+        "cycles": 16,
+        "samples": 11,
+        "cycle_share": 1.982e-05,
+        "est_cycles_per_frame": 99.4,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 7.43e-05
+      },
+      {
+        "symbol": "_dist_between_objects",
+        "class": null,
+        "cycles": 16,
+        "samples": 13,
+        "cycle_share": 1.982e-05,
+        "est_cycles_per_frame": 99.4,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 7.43e-05
+      },
+      {
+        "symbol": "_sm64_saturn_render_snapshot_release_claim_try",
+        "class": null,
+        "cycles": 16,
+        "samples": 11,
+        "cycle_share": 1.982e-05,
+        "est_cycles_per_frame": 99.4,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 7.43e-05
+      },
+      {
+        "symbol": "_sm64_saturn_render_snapshot_release_claim_release",
+        "class": null,
+        "cycles": 16,
+        "samples": 12,
+        "cycle_share": 1.982e-05,
+        "est_cycles_per_frame": 99.4,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 7.43e-05
+      },
+      {
+        "symbol": "__file_write",
+        "class": null,
+        "cycles": 15,
+        "samples": 11,
+        "cycle_share": 1.858e-05,
+        "est_cycles_per_frame": 93.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 6.966e-05
+      },
+      {
+        "symbol": "_cur_obj_bhv_stack_pop",
+        "class": null,
+        "cycles": 15,
+        "samples": 12,
+        "cycle_share": 1.858e-05,
+        "est_cycles_per_frame": 93.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 6.966e-05
+      },
+      {
+        "symbol": "_cur_obj_bhv_stack_push",
+        "class": null,
+        "cycles": 15,
+        "samples": 12,
+        "cycle_share": 1.858e-05,
+        "est_cycles_per_frame": 93.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 6.966e-05
+      },
+      {
+        "symbol": "_sourceboot_vdp2_sky_scroll_set",
+        "class": null,
+        "cycles": 15,
+        "samples": 12,
+        "cycle_share": 1.858e-05,
+        "est_cycles_per_frame": 93.2,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 6.966e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_8",
+        "class": null,
+        "cycles": 14,
+        "samples": 14,
+        "cycle_share": 1.734e-05,
+        "est_cycles_per_frame": 87.0,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 87.0,
+        "working_share": 6.502e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_7",
+        "class": null,
+        "cycles": 14,
+        "samples": 14,
+        "cycle_share": 1.734e-05,
+        "est_cycles_per_frame": 87.0,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 87.0,
+        "working_share": 6.502e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_6",
+        "class": null,
+        "cycles": 14,
+        "samples": 14,
+        "cycle_share": 1.734e-05,
+        "est_cycles_per_frame": 87.0,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 87.0,
+        "working_share": 6.502e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_5",
+        "class": null,
+        "cycles": 14,
+        "samples": 14,
+        "cycle_share": 1.734e-05,
+        "est_cycles_per_frame": 87.0,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 87.0,
+        "working_share": 6.502e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_4",
+        "class": null,
+        "cycles": 14,
+        "samples": 14,
+        "cycle_share": 1.734e-05,
+        "est_cycles_per_frame": 87.0,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 87.0,
+        "working_share": 6.502e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_3",
+        "class": null,
+        "cycles": 14,
+        "samples": 14,
+        "cycle_share": 1.734e-05,
+        "est_cycles_per_frame": 87.0,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 87.0,
+        "working_share": 6.502e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_2",
+        "class": null,
+        "cycles": 14,
+        "samples": 14,
+        "cycle_share": 1.734e-05,
+        "est_cycles_per_frame": 87.0,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 87.0,
+        "working_share": 6.502e-05
+      },
+      {
+        "symbol": "_saturn_dma_queue_wait_ticks_take",
+        "class": null,
+        "cycles": 12,
+        "samples": 10,
+        "cycle_share": 1.486e-05,
+        "est_cycles_per_frame": 74.5,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 12.4,
+        "working_share": 5.573e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_10",
+        "class": null,
+        "cycles": 11,
+        "samples": 11,
+        "cycle_share": 1.363e-05,
+        "est_cycles_per_frame": 68.3,
+        "entries_sampled": 11,
+        "est_calls_per_frame": 68.3,
+        "working_share": 5.108e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_9",
+        "class": null,
+        "cycles": 11,
+        "samples": 11,
+        "cycle_share": 1.363e-05,
+        "est_cycles_per_frame": 68.3,
+        "entries_sampled": 11,
+        "est_calls_per_frame": 68.3,
+        "working_share": 5.108e-05
+      },
+      {
+        "symbol": "_round_float",
+        "class": null,
+        "cycles": 8,
+        "samples": 7,
+        "cycle_share": 9.91e-06,
+        "est_cycles_per_frame": 49.7,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 3.715e-05
+      },
+      {
+        "symbol": "_sm64_saturn_frame_pipeline_action_generation",
+        "class": null,
+        "cycles": 7,
+        "samples": 6,
+        "cycle_share": 8.67e-06,
+        "est_cycles_per_frame": 43.5,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 3.251e-05
+      },
+      {
+        "symbol": "_sm64_saturn_vdp1_frame_bank_gouraud_source_is_hwram",
+        "class": null,
+        "cycles": 6,
+        "samples": 5,
+        "cycle_share": 7.43e-06,
+        "est_cycles_per_frame": 37.3,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 6.2,
+        "working_share": 2.786e-05
+      },
+      {
+        "symbol": "_sourceboot_vdp2_hud_write",
+        "class": null,
+        "cycles": 3,
+        "samples": 2,
+        "cycle_share": 3.72e-06,
+        "est_cycles_per_frame": 18.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 1.393e-05
+      }
+    ]
+  },
+  "phase_summaries": [
+    {
+      "idle": {
+        "cycles": 591973,
+        "entries_sampled": 0,
+        "cycle_share": 0.73326876,
+        "est_calls_per_frame": 0.0
+      },
+      "application": {
+        "cycles": 177611,
+        "entries_sampled": 2050,
+        "cycle_share": 0.22000429,
+        "est_calls_per_frame": 12733.2
+      },
+      "soft-float": {
+        "cycles": 28969,
+        "entries_sampled": 259,
+        "cycle_share": 0.0358835,
+        "est_calls_per_frame": 1608.7
+      },
+      "divide": {
+        "cycles": 2977,
+        "entries_sampled": 81,
+        "cycle_share": 0.00368757,
+        "est_calls_per_frame": 503.1
+      },
+      "shift": {
+        "cycles": 2897,
+        "entries_sampled": 268,
+        "cycle_share": 0.00358847,
+        "est_calls_per_frame": 1664.6
+      },
+      "libm": {
+        "cycles": 901,
+        "entries_sampled": 19,
+        "cycle_share": 0.00111606,
+        "est_calls_per_frame": 118.0
+      },
+      "soft-float-convert": {
+        "cycles": 1237,
+        "entries_sampled": 34,
+        "cycle_share": 0.00153225,
+        "est_calls_per_frame": 211.2
+      },
+      "soft-float-support": {
+        "cycles": 306,
+        "entries_sampled": 12,
+        "cycle_share": 0.00037904,
+        "est_calls_per_frame": 74.5
+      },
+      "soft-double": {
+        "cycles": 364,
+        "entries_sampled": 1,
+        "cycle_share": 0.00045088,
+        "est_calls_per_frame": 6.2
+      },
+      "soft-double-convert": {
+        "cycles": 72,
+        "entries_sampled": 2,
+        "cycle_share": 8.919e-05,
+        "est_calls_per_frame": 12.4
+      }
+    }
+  ]
+}
