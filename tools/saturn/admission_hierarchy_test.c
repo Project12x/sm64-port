@@ -49,6 +49,7 @@ static uint64_t g_digest = 1469598103934665603ULL;
 
 static unsigned long g_tested_reference_total;
 static unsigned long g_tested_shipped_total;
+static unsigned long g_nodes_shipped_total;
 static uint32_t g_tested_shipped_min = UINT32_MAX;
 static uint32_t g_tested_shipped_max;
 static uint32_t g_admitted_min = UINT32_MAX;
@@ -96,6 +97,114 @@ static void build_flat_scene(sm64_saturn_scene_admission_view_t *scene,
     scene->nodes = g_flat_node;
     scene->node_count = 1U;
     scene->cluster_refs = g_flat_refs;
+    scene->cluster_ref_count = cluster_count;
+    scene->root_node = 0U;
+}
+
+/* ------------------------------------------------------- host tree builder -- */
+
+/* A median split on the widest axis, the same shape emit_bob_scene.py bakes.
+ * Built here as well so the gate covers the *traversal* over hierarchies the
+ * generator does not currently produce -- every leaf size from 1 upward, which
+ * is where degenerate node shapes (single-cluster leaves, deep chains) live. */
+#define NODE_MAX 2048U
+
+static sm64_saturn_scene_admission_node_t g_tree_nodes[NODE_MAX];
+static uint16_t g_tree_refs[CLUSTER_MAX];
+static uint16_t g_tree_perm[CLUSTER_MAX];
+static uint16_t g_tree_node_count;
+static uint16_t g_tree_leaf_count;
+static uint16_t g_tree_depth_max;
+
+static const sm64_saturn_render_cluster_t *g_sort_clusters;
+static uint8_t g_sort_axis;
+
+static int compare_center(const void *left, const void *right)
+{
+    const uint16_t a = *(const uint16_t *)left;
+    const uint16_t b = *(const uint16_t *)right;
+    const int64_t ca = (int64_t)g_sort_clusters[a].bounds_min_q16[g_sort_axis] +
+                       g_sort_clusters[a].bounds_max_q16[g_sort_axis];
+    const int64_t cb = (int64_t)g_sort_clusters[b].bounds_min_q16[g_sort_axis] +
+                       g_sort_clusters[b].bounds_max_q16[g_sort_axis];
+    if (ca < cb) return -1;
+    if (ca > cb) return 1;
+    return a < b ? -1 : (a > b ? 1 : 0);
+}
+
+typedef struct pending { uint16_t node, lo, hi, depth; } pending_t;
+
+static void node_bounds(const sm64_saturn_render_cluster_t *clusters,
+                        uint16_t lo, uint16_t hi,
+                        sm64_saturn_scene_admission_node_t *node)
+{
+    for (uint8_t axis = 0U; axis < 3U; axis++) {
+        int32_t minimum = clusters[g_tree_perm[lo]].bounds_min_q16[axis];
+        int32_t maximum = clusters[g_tree_perm[lo]].bounds_max_q16[axis];
+        for (uint16_t i = (uint16_t)(lo + 1U); i < hi; i++) {
+            const sm64_saturn_render_cluster_t *c = &clusters[g_tree_perm[i]];
+            if (c->bounds_min_q16[axis] < minimum) minimum = c->bounds_min_q16[axis];
+            if (c->bounds_max_q16[axis] > maximum) maximum = c->bounds_max_q16[axis];
+        }
+        node->bounds_min_q16[axis] = minimum;
+        node->bounds_max_q16[axis] = maximum;
+    }
+}
+
+static void build_host_tree(sm64_saturn_scene_admission_view_t *scene,
+                            const sm64_saturn_render_cluster_t *clusters,
+                            uint16_t cluster_count, uint16_t leaf_max)
+{
+    static pending_t queue[NODE_MAX];
+    uint16_t head = 0U, tail = 0U;
+    memset(g_tree_nodes, 0, sizeof(g_tree_nodes));
+    for (uint16_t i = 0U; i < cluster_count; i++) g_tree_perm[i] = i;
+    g_tree_node_count = 1U;
+    g_tree_leaf_count = 0U;
+    g_tree_depth_max = 0U;
+    queue[tail++] = (pending_t){0U, 0U, cluster_count, 0U};
+    while (head < tail) {
+        const pending_t item = queue[head++];
+        sm64_saturn_scene_admission_node_t *node = &g_tree_nodes[item.node];
+        const uint16_t span = (uint16_t)(item.hi - item.lo);
+        node_bounds(clusters, item.lo, item.hi, node);
+        if (item.depth > g_tree_depth_max) g_tree_depth_max = item.depth;
+        if (span <= leaf_max || (uint32_t)g_tree_node_count + 2U > NODE_MAX) {
+            node->cluster_ref_first = item.lo;
+            node->cluster_ref_count = span;
+            g_tree_leaf_count++;
+            continue;
+        }
+        for (uint8_t axis = 0U; axis < 3U; axis++) {
+            const int64_t extent = (int64_t)node->bounds_max_q16[axis] -
+                                   node->bounds_min_q16[axis];
+            const int64_t widest = (int64_t)node->bounds_max_q16[g_sort_axis] -
+                                   node->bounds_min_q16[g_sort_axis];
+            if (axis == 0U || extent > widest) g_sort_axis = axis;
+        }
+        g_sort_clusters = clusters;
+        qsort(&g_tree_perm[item.lo], span, sizeof(g_tree_perm[0]),
+              compare_center);
+        node->child_first = g_tree_node_count;
+        node->child_count = 2U;
+        g_tree_node_count = (uint16_t)(g_tree_node_count + 2U);
+        queue[tail++] = (pending_t){node->child_first, item.lo,
+                                    (uint16_t)(item.lo + span / 2U),
+                                    (uint16_t)(item.depth + 1U)};
+        queue[tail++] = (pending_t){(uint16_t)(node->child_first + 1U),
+                                    (uint16_t)(item.lo + span / 2U), item.hi,
+                                    (uint16_t)(item.depth + 1U)};
+    }
+    for (uint16_t i = 0U; i < cluster_count; i++)
+        g_tree_refs[i] = g_tree_perm[i];
+    memset(scene, 0, sizeof(*scene));
+    scene->metadata_version = SM64_SATURN_SCENE_ADMISSION_VERSION;
+    scene->metadata_valid = 1U;
+    scene->clusters = clusters;
+    scene->cluster_count = cluster_count;
+    scene->nodes = g_tree_nodes;
+    scene->node_count = g_tree_node_count;
+    scene->cluster_refs = g_tree_refs;
     scene->cluster_ref_count = cluster_count;
     scene->root_node = 0U;
 }
@@ -241,6 +350,7 @@ static unsigned compare_pose(const char *label,
     g_admissions += out_reference.cluster_count;
     g_tested_reference_total += stats_reference.clusters_tested;
     g_tested_shipped_total += stats_shipped.clusters_tested;
+    g_nodes_shipped_total += stats_shipped.nodes_tested;
     if (stats_shipped.clusters_tested < g_tested_shipped_min)
         g_tested_shipped_min = stats_shipped.clusters_tested;
     if (stats_shipped.clusters_tested > g_tested_shipped_max)
@@ -288,7 +398,14 @@ static void sweep(const char *label,
                   const sm64_saturn_scene_admission_view_t *tree,
                   uint16_t capacity)
 {
+    const unsigned long before_poses = g_poses;
+    const unsigned long before_divergences = g_divergences;
+    const unsigned long before_reference = g_tested_reference_total;
+    const unsigned long before_shipped = g_tested_shipped_total;
+    const unsigned long before_nodes = g_nodes_shipped_total;
     char name[128];
+    g_tested_shipped_min = UINT32_MAX;
+    g_tested_shipped_max = 0U;
     for (unsigned li = 0U; li < sizeof(k_limits) / sizeof(k_limits[0]); li++)
         for (uint16_t pi = 0U; pi < g_pose_count; pi++) {
             snprintf(name, sizeof(name), "%s/%s/pose%u", label,
@@ -296,6 +413,21 @@ static void sweep(const char *label,
             (void)compare_pose(name, flat, tree, &g_poses_table[pi],
                                &k_limits[li], capacity);
         }
+    {
+        const unsigned long poses = g_poses - before_poses;
+        const unsigned long reference = g_tested_reference_total - before_reference;
+        const unsigned long shipped = g_tested_shipped_total - before_shipped;
+        const unsigned long nodes = g_nodes_shipped_total - before_nodes;
+        printf("  %-26s nodes %5u leaves %5u depth %2u | tests/pose "
+               "flat %6.1f tree %6.1f+n%5.1f (%5.1f%%) range %u..%u | div %lu\n",
+               label, (unsigned)tree->node_count, (unsigned)g_tree_leaf_count,
+               (unsigned)g_tree_depth_max,
+               (double)reference / (double)poses, (double)shipped / (double)poses,
+               (double)nodes / (double)poses,
+               reference ? 100.0 * (double)(shipped + nodes) / (double)reference : 0.0,
+               g_tested_shipped_min, g_tested_shipped_max,
+               g_divergences - before_divergences);
+    }
 }
 
 /* ------------------------------------------------------------------ main -- */
@@ -312,7 +444,48 @@ int main(void)
      * different function bodies over the same data, so a zero here proves the
      * comparison, the corpus and the reference hook are wired to something
      * real before any hierarchy is introduced. */
+    printf("admission hierarchy: %u poses x %u frustum templates per sweep\n",
+           (unsigned)g_pose_count,
+           (unsigned)(sizeof(k_limits) / sizeof(k_limits[0])));
+    g_tree_leaf_count = 1U;
+    g_tree_depth_max = 0U;
     sweep("bob-flat", &bob_flat, &bob_flat, CLUSTER_MAX);
+
+    /* Host-built median-split hierarchies over the same 867 clusters, from
+     * one cluster per leaf upward. Leaf size 1 is the degenerate shape --
+     * 1,733 nodes, single-cluster leaves -- and the largest is barely a tree
+     * at all; both must admit exactly what the flat pass admits. */
+    {
+        static const uint16_t k_leaf[] = {1U, 2U, 4U, 8U, 16U, 32U, 64U, 128U};
+        char label[64];
+        for (unsigned li = 0U; li < sizeof(k_leaf) / sizeof(k_leaf[0]); li++) {
+            sm64_saturn_scene_admission_view_t tree;
+            build_host_tree(&tree, sm64_saturn_bob_render_clusters,
+                            SM64_SATURN_BOB_CLUSTER_COUNT, k_leaf[li]);
+            snprintf(label, sizeof(label), "bob-tree-leaf%u",
+                     (unsigned)k_leaf[li]);
+            sweep(label, &bob_flat, &tree, CLUSTER_MAX);
+        }
+    }
+
+    /* The hierarchy the generator actually bakes, exactly as the target will
+     * traverse it. */
+    {
+        sm64_saturn_scene_admission_view_t baked;
+        memset(&baked, 0, sizeof(baked));
+        baked.metadata_version = SM64_SATURN_SCENE_ADMISSION_VERSION;
+        baked.metadata_valid = 1U;
+        baked.clusters = sm64_saturn_bob_render_clusters;
+        baked.cluster_count = SM64_SATURN_BOB_CLUSTER_COUNT;
+        baked.nodes = sm64_saturn_bob_scene_admission_nodes;
+        baked.node_count = SM64_SATURN_BOB_ADMISSION_NODE_COUNT;
+        baked.cluster_refs = sm64_saturn_bob_scene_admission_cluster_refs;
+        baked.cluster_ref_count = SM64_SATURN_BOB_ADMISSION_CLUSTER_REF_COUNT;
+        baked.root_node = 0U;
+        g_tree_leaf_count = 0U;
+        g_tree_depth_max = 0U;
+        sweep("bob-generated", &bob_flat, &baked, CLUSTER_MAX);
+    }
 
     printf("admission hierarchy: %lu poses, %lu cluster admissions, "
            "%lu divergences\n", g_poses, g_admissions, g_divergences);

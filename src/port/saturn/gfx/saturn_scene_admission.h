@@ -16,6 +16,22 @@
 /* These records are a view over validated S64P section payloads. They do not
  * own package memory and contain no renderer or VRAM pointers. Bounds remain
  * Q16.16 so the same metadata is usable by the master and worker SH-2s. */
+/* `child_first`/`child_count` are the spatial hierarchy: a node's children are
+ * the contiguous node indices [child_first, child_first + child_count). A leaf
+ * publishes both as zero. The package must satisfy two properties, both
+ * enforced by metadata_valid() rather than assumed:
+ *
+ *   - every child index is strictly greater than its parent's, so the descent
+ *     terminates without the visited[] guard being load-bearing, and no node
+ *     is the child of two parents or of the root;
+ *   - every child's bounds are contained in its parent's, which -- with the
+ *     existing node-to-cluster containment check -- makes each node's bounds a
+ *     bound on its whole subtree.
+ *
+ * The second property is what licenses the traversal to prune an OUTSIDE
+ * subtree and to admit an INSIDE subtree without testing it. These two fields
+ * replace the former `reserved` word and keep sizeof at 36 bytes.
+ * A node may carry both children and its own cluster refs. */
 typedef struct sm64_saturn_scene_admission_node {
     int32_t bounds_min_q16[3];
     int32_t bounds_max_q16[3];
@@ -23,7 +39,8 @@ typedef struct sm64_saturn_scene_admission_node {
     uint16_t cluster_ref_count;
     uint16_t portal_ref_first;
     uint16_t portal_ref_count;
-    uint16_t reserved;
+    uint16_t child_first;
+    uint16_t child_count;
 } sm64_saturn_scene_admission_node_t;
 
 typedef struct sm64_saturn_scene_admission_portal_window {

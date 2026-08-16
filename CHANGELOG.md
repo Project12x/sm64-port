@@ -4,6 +4,48 @@
 
 ### Added
 
+- Sprint 2 T2.12 (`spatial_admit`, T2.9 item 4 half b): admission traversal is
+  hierarchical. `sm64_saturn_scene_admission_node_t` gains
+  `child_first`/`child_count` in place of its `reserved` word -- children are a
+  contiguous node range, `sizeof` is unchanged at 36 bytes -- and
+  `sm64_saturn_scene_admit_with_scratch()` descends them carrying each node's
+  frustum classification. A node inheriting INSIDE is not tested and neither
+  are its clusters; a node testing OUTSIDE prunes its subtree; only INTERSECTS
+  descends and re-tests. This is Z-Treme's `ztCheckBoxInFrustum` short-circuit
+  (`ZT_RENDERING.c:425, 486-492`, recorded in
+  `sprint2-t2_0-reference-sweep.md` 4.3) and the pattern already written in
+  this repository at `saturn_demo_render.c:772-785`, adapted rather than
+  reinvented. The inherited state is packed into the two spare high bits of
+  the existing queue word, so no scratch grew.
+  **Two things this required that are not obvious.**
+  (1) *Pruning is not free of a correctness argument.* The classifier
+  quantises each AABB to an integer centre/half-extent pair and then floors
+  the projected centre and ceils the support radius. Both steps only ever
+  widen a box, but they widen node and cluster independently, so a contained
+  cluster's widened projection can poke past its node's -- the oracle found
+  102 poses where the flat pass admitted a cluster whose node the hierarchy
+  pruned, all within a couple of world units of the near plane. Node tests
+  therefore widen the node by a derived 8-world-unit margin
+  (`ADMISSION_NODE_MARGIN`); widening is conservative in both directions and
+  cannot admit less. Removing it is killed by `verify-admission-hierarchy`.
+  (2) *Output order had to stop depending on traversal shape.* The traversal
+  now only marks, and one ordered pass emits in ascending cluster index,
+  folding in the mandatory sweep. Without it every mandatory cluster in a
+  pruned subtree would move from its place in the sequence to the tail, and
+  admission order feeds the downstream depth-bin scatter's tie order. On the
+  flat pass this is a no-op -- BOB's ref list is already ascending and the
+  trailing sweep admitted nothing -- which is what makes the two forms
+  byte-identical rather than merely set-equal. `verify-frustum-equivalence`
+  reports the same admitted-set digest `0f70643abf026a13` as T2.10.
+  **Fail-closed additions to `metadata_valid()`:** child ranges in bounds, a
+  child index strictly above its parent's (so the descent terminates and the
+  hierarchy is acyclic), child bounds contained in parent bounds (the property
+  the prune and the short-circuit rest on), and a forest check -- no node is
+  claimed by two parents and the root is claimed by none, without which the
+  admitted set would depend on which edge the queue reached first.
+  **Consumer impact:** any package publishing admission nodes must zero both
+  new fields for a leaf; a non-zero `child_first` on a leaf is now malformed
+  metadata, where it used to be a non-zero `reserved`.
 - Sprint 2 T2.12 (equivalence oracle): `verify-admission-hierarchy`, a host
   gate that pins the admitted cluster index array of `spatial_admit` before
   the traversal is allowed to change shape. **Why it is needed:** T2.9 item 4

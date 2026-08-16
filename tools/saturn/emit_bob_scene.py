@@ -226,11 +226,12 @@ def emit_scene(mesh: dict[str, object], manifest: dict[str, object],
         "static const sm64_saturn_scene_admission_node_t sm64_saturn_bob_scene_admission_nodes[SM64_SATURN_BOB_ADMISSION_NODE_COUNT] = {",
     ]
     for node in admission["nodes"]:
-        lines.append("    {{%s}, {%s}, %dU, %dU, %dU, %dU, 0U}," % (
+        lines.append("    {{%s}, {%s}, %dU, %dU, %dU, %dU, %dU, %dU}," % (
             ", ".join(str(value * 65536) for value in node["bounds_min"]),
             ", ".join(str(value * 65536) for value in node["bounds_max"]),
             node["cluster_ref_first"], node["cluster_ref_count"],
-            node["portal_ref_first"], node["portal_ref_count"]))
+            node["portal_ref_first"], node["portal_ref_count"],
+            node.get("child_first", 0), node.get("child_count", 0)))
     lines += [
         "};",
         "static const uint16_t sm64_saturn_bob_scene_admission_cluster_refs[SM64_SATURN_BOB_ADMISSION_CLUSTER_REF_COUNT] = {",

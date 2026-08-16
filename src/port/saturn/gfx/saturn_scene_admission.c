@@ -27,6 +27,18 @@ static sm64_saturn_scene_admission_scratch_t *s_admission_scratch;
 #define s_admission_queue (s_admission_scratch->queue)
 #define s_admission_cluster_seen (s_admission_scratch->cluster_seen)
 
+/* Each queue slot carries the node index and the frustum classification it
+ * inherits from its parent, so the descent needs no second bank and no extra
+ * memory (Sprint 2 T2.12). Two bits are enough for the tri-state result and
+ * MAX_NODES leaves them free. */
+#define ADMISSION_QUEUE_STATE_SHIFT 14U
+#define ADMISSION_QUEUE_NODE_MASK 0x3FFFU
+_Static_assert(SM64_SATURN_SCENE_ADMISSION_MAX_NODES <=
+                   ADMISSION_QUEUE_NODE_MASK + 1U,
+               "admission queue packs the node index below the state bits");
+_Static_assert(SM64_SATURN_ZTREME_FRUSTUM_INSIDE <= 3,
+               "admission queue packs the frustum result into two bits");
+
 static int32_t floor_q16(int32_t value)
 {
     if (value >= 0) return value >> 16;
@@ -126,6 +138,53 @@ static sm64_saturn_ztreme_frustum_result_t test_bounds(
 {
     int32_t minimum[3], maximum[3];
     world_bounds(minimum_q16, maximum_q16, minimum, maximum);
+    return sm64_saturn_ztreme_frustum_aabb(frustum, minimum, maximum);
+}
+
+/* Hierarchy safety margin, in world units, applied to a node's bounds and to
+ * nothing else (Sprint 2 T2.12).
+ *
+ * Pruning a subtree because its node tested OUTSIDE is only equivalent to
+ * testing every cluster in it if OUTSIDE(node) implies OUTSIDE(cluster) for
+ * every contained cluster. Containment of the *true* boxes is validated by
+ * metadata_valid(), but the classifier does not test true boxes: it converts
+ * each AABB to a centre/half-extent pair in integers
+ * (ztreme_frustum.c:85-91) and then floors the projected centre and ceils the
+ * projected support radius. Each of those steps is individually conservative
+ * -- it can only widen a box -- but they widen the *cluster* and the *node*
+ * independently, so a small cluster's widened projection can poke past a large
+ * node's widened projection. The equivalence oracle found exactly that: 102
+ * poses where the flat pass admitted a cluster whose node the hierarchy had
+ * pruned, all of them within a couple of world units of the near plane.
+ *
+ * The bound: the centre/extent quantisation places the reconstructed box
+ * inside [min - 1, max + 1] per axis, whose projection onto a Q16 unit basis
+ * is at most sum|basis| <= sqrt(3) < 1.74 wider per side; the floor/ceil pair
+ * adds at most 1 more. So a contained cluster's computed projected extent
+ * exceeds the node's by less than 2.74 + 1 = 3.74 world units, and widening
+ * the node by d raises its own projected extent by at least d (sum|basis| >= 1
+ * for a unit basis). Eight units is that bound with better than a factor of
+ * two in hand, against a scene that spans +-8,192.
+ *
+ * Widening is conservative in both directions and cannot admit less: a wider
+ * node is harder to classify OUTSIDE, so fewer subtrees are pruned, and harder
+ * to classify INSIDE, so fewer subtrees skip their own tests. Removing it is
+ * killed by verify-admission-hierarchy. */
+#define ADMISSION_NODE_MARGIN 8
+
+static sm64_saturn_ztreme_frustum_result_t test_node_bounds(
+    const sm64_saturn_ztreme_frustum_t *frustum,
+    const int32_t minimum_q16[3], const int32_t maximum_q16[3])
+{
+    int32_t minimum[3], maximum[3];
+    uint8_t axis;
+    world_bounds(minimum_q16, maximum_q16, minimum, maximum);
+    /* world_bounds() has already reduced Q16.16 to world units, so both
+     * magnitudes are bounded by 32,768 and the margin cannot overflow. */
+    for (axis = 0U; axis < 3U; axis++) {
+        minimum[axis] -= ADMISSION_NODE_MARGIN;
+        maximum[axis] += ADMISSION_NODE_MARGIN;
+    }
     return sm64_saturn_ztreme_frustum_aabb(frustum, minimum, maximum);
 }
 
@@ -293,11 +352,29 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
                                node->cluster_ref_count;
         uint32_t portal_end = (uint32_t)node->portal_ref_first +
                               node->portal_ref_count;
+        uint32_t child_end = (uint32_t)node->child_first + node->child_count;
         if (!bounds_valid(node->bounds_min_q16, node->bounds_max_q16) ||
             cluster_end > scene->cluster_ref_count ||
-            portal_end > scene->portal_ref_count || node->reserved != 0U) {
+            portal_end > scene->portal_ref_count ||
+            (node->child_count == 0U && node->child_first != 0U) ||
+            child_end > scene->node_count ||
+            (node->child_count != 0U && node->child_first <= index)) {
             stats->malformed_metadata = 1U;
             return false;
+        }
+        /* A child's bounds must lie inside its parent's. Together with the
+         * per-node cluster containment below, this makes a node's bounds a
+         * bound on its entire subtree by induction -- the property the
+         * traversal's OUTSIDE prune and INSIDE short-circuit rest on. */
+        for (uint16_t child = node->child_first; child < (uint16_t)child_end;
+             child++) {
+            const sm64_saturn_scene_admission_node_t *kid = &scene->nodes[child];
+            for (uint8_t axis = 0U; axis < 3U; axis++)
+                if (kid->bounds_min_q16[axis] < node->bounds_min_q16[axis] ||
+                    kid->bounds_max_q16[axis] > node->bounds_max_q16[axis]) {
+                    stats->malformed_metadata = 1U;
+                    return false;
+                }
         }
         for (uint16_t ref = 0U; ref < node->cluster_ref_count; ref++) {
             const uint16_t cluster_index = scene->cluster_refs[
@@ -314,6 +391,25 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
                     stats->malformed_metadata = 1U;
                     return false;
                 }
+        }
+    }
+    /* The hierarchy must be a forest rooted at root_node: no node is claimed
+     * by two parents and the root is claimed by none. Without this, a node
+     * reachable from an INSIDE parent and an OUTSIDE parent would be resolved
+     * by whichever edge the queue happened to reach first, and the admitted
+     * set would depend on traversal order. Borrows the visited[] bank, which
+     * the admission path clears for itself before the traversal. */
+    memset(s_admission_visited, 0, scene->node_count);
+    for (index = 0U; index < scene->node_count; index++) {
+        const sm64_saturn_scene_admission_node_t *node = &scene->nodes[index];
+        for (uint16_t ref = 0U; ref < node->child_count; ref++) {
+            const uint16_t child = (uint16_t)(node->child_first + ref);
+            if (child == scene->root_node ||
+                s_admission_visited[child] != 0U) {
+                stats->malformed_metadata = 1U;
+                return false;
+            }
+            s_admission_visited[child] = 1U;
         }
     }
     for (index = 0U; index < scene->cluster_ref_count; index++)
@@ -465,7 +561,12 @@ bool sm64_saturn_scene_admit_with_scratch(
     s_admission_queue[queue_tail++] = scene->root_node;
     s_admission_queued[scene->root_node] = 1U;
     while (queue_head < queue_tail) {
-        const uint16_t node_index = s_admission_queue[queue_head++];
+        const uint16_t entry = s_admission_queue[queue_head++];
+        const uint16_t node_index =
+            (uint16_t)(entry & ADMISSION_QUEUE_NODE_MASK);
+        const sm64_saturn_ztreme_frustum_result_t inherited =
+            (sm64_saturn_ztreme_frustum_result_t)
+                (entry >> ADMISSION_QUEUE_STATE_SHIFT);
         const sm64_saturn_scene_admission_node_t *node;
         sm64_saturn_ztreme_frustum_result_t node_state;
         if (s_admission_visited[node_index] != 0U) {
@@ -475,8 +576,17 @@ bool sm64_saturn_scene_admit_with_scratch(
         s_admission_visited[node_index] = 1U;
         node = &scene->nodes[node_index];
         stats->nodes_tested++;
-        node_state = test_bounds(&frustum, node->bounds_min_q16,
-                                 node->bounds_max_q16);
+        /* Z-Treme's hierarchical short-circuit (ZT_RENDERING.c:425, 486-492,
+         * recorded in sprint2-t2_0-reference-sweep.md 4.3, and already written
+         * in this repository at saturn_demo_render.c:772-785): a subtree of a
+         * node that tested fully INSIDE is fully inside, so nothing below it
+         * is tested again. Only INTERSECTS descends and re-tests; OUTSIDE
+         * never reaches here because it is pruned below. */
+        if (inherited == SM64_SATURN_ZTREME_FRUSTUM_INSIDE)
+            node_state = SM64_SATURN_ZTREME_FRUSTUM_INSIDE;
+        else
+            node_state = test_node_bounds(&frustum, node->bounds_min_q16,
+                                          node->bounds_max_q16);
 #if SM64_SATURN_ADMIT_DIAG
         admit_cursor = sm64_saturn_prenotify_profile_span(
             admit_cursor, &admit.node_test_ticks, &admit.max_raw);
@@ -488,10 +598,17 @@ bool sm64_saturn_scene_admit_with_scratch(
                 node->cluster_ref_first + index];
             const sm64_saturn_render_cluster_t *cluster =
                 &scene->clusters[cluster_index];
-            const sm64_saturn_ztreme_frustum_result_t cluster_state =
-                test_bounds(&frustum, cluster->bounds_min_q16,
-                            cluster->bounds_max_q16);
-            stats->clusters_tested++;
+            sm64_saturn_ztreme_frustum_result_t cluster_state;
+            if (node_state == SM64_SATURN_ZTREME_FRUSTUM_INSIDE) {
+                cluster_state = SM64_SATURN_ZTREME_FRUSTUM_INSIDE;
+            } else {
+                cluster_state = test_bounds(&frustum, cluster->bounds_min_q16,
+                                            cluster->bounds_max_q16);
+                /* Counts frustum tests actually performed, which is the cost
+                 * this stage is measured by. It is no longer the scene's
+                 * cluster count. */
+                stats->clusters_tested++;
+            }
 #if SM64_SATURN_ADMIT_DIAG
             if (cluster_state == SM64_SATURN_ZTREME_FRUSTUM_INSIDE)
                 admit.clusters_inside++;
@@ -522,14 +639,7 @@ bool sm64_saturn_scene_admit_with_scratch(
                 stats->duplicate_clusters++;
                 continue;
             }
-            if (output->cluster_count >= output->cluster_capacity) {
-                stats->output_exhausted = 1U;
-                success = false;
-                continue;
-            }
-            output->cluster_indices[output->cluster_count++] = cluster_index;
             s_admission_cluster_seen[cluster_index] = 1U;
-            stats->clusters_admitted++;
             if (cluster->mandatory != 0U &&
                 cluster_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE)
                 stats->mandatory_clusters_admitted++;
@@ -537,6 +647,24 @@ bool sm64_saturn_scene_admit_with_scratch(
             admit_cursor = sm64_saturn_prenotify_profile_span(
                 admit_cursor, &admit.cluster_emit_ticks, &admit.max_raw);
 #endif
+        }
+        /* Descend, carrying this node's classification. A child of an
+         * INTERSECTS node is enqueued with INTERSECTS, which is the "test me"
+         * value, so nothing is skipped that the flat pass would have tested. */
+        for (index = 0U; index < node->child_count; index++) {
+            const uint16_t child = (uint16_t)(node->child_first + index);
+            if (s_admission_visited[child] != 0U ||
+                s_admission_queued[child] != 0U) {
+                stats->cycle_edges++;
+            } else if (queue_tail >= SM64_SATURN_SCENE_ADMISSION_MAX_NODES) {
+                stats->output_exhausted = 1U;
+                success = false;
+            } else {
+                s_admission_queue[queue_tail++] = (uint16_t)
+                    (child | ((uint16_t)node_state <<
+                              ADMISSION_QUEUE_STATE_SHIFT));
+                s_admission_queued[child] = 1U;
+            }
         }
         for (index = 0U; index < node->portal_ref_count; index++) {
             const uint16_t portal_index = scene->portal_refs[
@@ -583,25 +711,36 @@ bool sm64_saturn_scene_admit_with_scratch(
             admit_cursor, &admit.portal_ticks, &admit.max_raw);
 #endif
     }
-    /* Mandatory records are unconditional package obligations. They are
-     * retained even when their owning node is outside the current frustum. */
+    /* One ordered emission pass, which also discharges the mandatory
+     * obligation. The traversal above only *marks*; the output is produced
+     * here, in ascending cluster index, so it is a function of the admitted
+     * set alone and not of the shape of the traversal that found it.
+     *
+     * That is what makes hierarchical admission provably equivalent to the
+     * flat pass rather than merely equivalent as a set: the flat pass walked
+     * BOB's ascending ref list and emitted in ascending order, and a
+     * hierarchy walks the same clusters in a different order. Without this
+     * pass, every mandatory cluster whose subtree was pruned would move from
+     * its position in the sequence to the tail, and admission output order is
+     * an input to the downstream depth-bin scatter's tie order.
+     *
+     * Mandatory records are unconditional package obligations: they are
+     * retained even when their owning node is outside the current frustum,
+     * which is why an unmarked mandatory cluster is emitted here. */
     for (index = 0U; index < scene->cluster_count; index++) {
         const sm64_saturn_render_cluster_t *cluster = &scene->clusters[index];
-        if (cluster->mandatory == 0U || s_admission_cluster_seen[index] != 0U)
-            continue;
+        if (s_admission_cluster_seen[index] == 0U) {
+            if (cluster->mandatory == 0U) continue;
+            stats->mandatory_clusters_admitted++;
+            s_admission_cluster_seen[index] = 1U;
+        }
         if (output->cluster_count >= output->cluster_capacity) {
             stats->output_exhausted = 1U;
             success = false;
             continue;
         }
         output->cluster_indices[output->cluster_count++] = index;
-        /* Not observable -- this sweep visits each index once and nothing
-         * reads the array afterwards -- but it keeps the invariant above true
-         * to the end of the call rather than leaving a reader to discover it
-         * silently stops holding here. No mutation can kill this line. */
-        s_admission_cluster_seen[index] = 1U;
         stats->clusters_admitted++;
-        stats->mandatory_clusters_admitted++;
     }
 #if SM64_SATURN_ADMIT_DIAG
     admit_cursor = sm64_saturn_prenotify_profile_span(
