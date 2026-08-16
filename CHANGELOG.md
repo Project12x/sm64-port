@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### Added
+
+- Sprint 2 T2.12 (equivalence oracle): `verify-admission-hierarchy`, a host
+  gate that pins the admitted cluster index array of `spatial_admit` before
+  the traversal is allowed to change shape. **Why it is needed:** T2.9 item 4
+  proposes replacing a flat 867-cluster frustum pass with a hierarchical
+  descent that prunes and short-circuits. That changes *which* tests run, and
+  the only acceptable observable difference is none -- any move in the
+  admitted set is a visual change. **How it works:** the pre-T2.12 flat
+  traversal is pinned verbatim as
+  `sm64_saturn_scene_admit_reference_with_scratch()` in
+  `src/port/saturn/gfx/saturn_scene_admission.c`, compiled only under
+  `SM64_SATURN_SCENE_ADMISSION_REFERENCE`, which only the new recipe defines
+  (the in-tree convention T2.10 used for `ztreme_frustum.c`). The fixture
+  `tools/saturn/admission_hierarchy_test.c` drives it and the shipped entry
+  point over the **real generated BOB cluster bank** -- 867 clusters from
+  `bob_scene.h`, not a synthetic stand-in -- across 964 camera poses x 5
+  frustum limit templates = 4,820 comparisons, and requires the emitted index
+  arrays to be byte-equal. The corpus deliberately includes the poses a
+  hierarchy gets wrong: cameras inside the scene bounds, cameras far outside
+  looking away, a near plane deep enough that cluster bounds straddle it, and
+  limits that admit everything (867) and nothing but the mandatory floor
+  (125). **Consumer impact:** none at runtime -- the reference body does not
+  exist in a product object. Anyone changing admission traversal must now keep
+  this gate green.
+
 ### Fixed
 
 - Sprint 2 T2.11 (measurement): `summarize_cadence` in

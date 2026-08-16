@@ -620,6 +620,155 @@ bool sm64_saturn_scene_admit_with_scratch(
     return success && output->cluster_count != 0U;
 }
 
+#if defined(SM64_SATURN_SCENE_ADMISSION_REFERENCE)
+/* Host-fixture only. A verbatim copy of the pre-T2.12 traversal, taken from
+ * HEAD 3bf5f590 before any hierarchy existed: one BFS over portal edges, no
+ * child descent, no inherited node state, every cluster of every admitted node
+ * frustum-tested from scratch, emission in traversal order, and a trailing
+ * mandatory sweep. It shares metadata_valid(), admission_frustum() and
+ * test_bounds() with the shipped body on purpose -- T2.12 does not touch those
+ * and a second copy would only pin a paraphrase. What this copy pins is the
+ * one thing T2.12 replaces: which tests run and in what order clusters are
+ * emitted. The diagnostic probes are omitted because SM64_SATURN_ADMIT_DIAG is
+ * never set on a host build. */
+bool sm64_saturn_scene_admit_reference_with_scratch(
+    const sm64_saturn_scene_admission_view_t *scene,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_scene_admission_output_t *output,
+    sm64_saturn_scene_admission_stats_t *stats,
+    sm64_saturn_scene_admission_scratch_t *scratch)
+{
+    sm64_saturn_ztreme_frustum_t frustum;
+    uint16_t queue_head = 0U, queue_tail = 0U;
+    uint16_t index;
+    bool success = true;
+    if (scratch == NULL) return false;
+    s_admission_scratch = scratch;
+    if (stats != NULL) memset(stats, 0, sizeof(*stats));
+    if (output != NULL) {
+        output->cluster_count = 0U;
+        output->portal_count = 0U;
+    }
+    if (scene == NULL || view == NULL || output == NULL || stats == NULL ||
+        output->cluster_indices == NULL ||
+        (output->portal_capacity != 0U && output->portal_indices == NULL) ||
+        view->generation == 0U ||
+        (view->view_forward_q16[0] == 0 && view->view_forward_q16[1] == 0 &&
+         view->view_forward_q16[2] == 0)) {
+        if (stats != NULL) stats->malformed_metadata = 1U;
+        return false;
+    }
+    if (!metadata_valid(scene, stats)) return false;
+    memset(s_admission_visited, 0, sizeof(s_admission_visited));
+    memset(s_admission_queued, 0, sizeof(s_admission_queued));
+    memset(s_admission_cluster_seen, 0, scene->cluster_count);
+    frustum = admission_frustum(scene, view);
+    s_admission_queue[queue_tail++] = scene->root_node;
+    s_admission_queued[scene->root_node] = 1U;
+    while (queue_head < queue_tail) {
+        const uint16_t node_index = s_admission_queue[queue_head++];
+        const sm64_saturn_scene_admission_node_t *node;
+        sm64_saturn_ztreme_frustum_result_t node_state;
+        if (s_admission_visited[node_index] != 0U) {
+            stats->cycle_edges++;
+            continue;
+        }
+        s_admission_visited[node_index] = 1U;
+        node = &scene->nodes[node_index];
+        stats->nodes_tested++;
+        node_state = test_bounds(&frustum, node->bounds_min_q16,
+                                 node->bounds_max_q16);
+        if (node_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE) continue;
+        stats->nodes_admitted++;
+        for (index = 0U; index < node->cluster_ref_count; index++) {
+            const uint16_t cluster_index = scene->cluster_refs[
+                node->cluster_ref_first + index];
+            const sm64_saturn_render_cluster_t *cluster =
+                &scene->clusters[cluster_index];
+            const sm64_saturn_ztreme_frustum_result_t cluster_state =
+                test_bounds(&frustum, cluster->bounds_min_q16,
+                            cluster->bounds_max_q16);
+            stats->clusters_tested++;
+            if (cluster_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE &&
+                cluster->mandatory == 0U) {
+                stats->clusters_rejected_frustum++;
+                continue;
+            }
+            if (s_admission_cluster_seen[cluster_index] != 0U) {
+                stats->duplicate_clusters++;
+                continue;
+            }
+            if (output->cluster_count >= output->cluster_capacity) {
+                stats->output_exhausted = 1U;
+                success = false;
+                continue;
+            }
+            output->cluster_indices[output->cluster_count++] = cluster_index;
+            s_admission_cluster_seen[cluster_index] = 1U;
+            stats->clusters_admitted++;
+            if (cluster->mandatory != 0U &&
+                cluster_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE)
+                stats->mandatory_clusters_admitted++;
+        }
+        for (index = 0U; index < node->portal_ref_count; index++) {
+            const uint16_t portal_index = scene->portal_refs[
+                node->portal_ref_first + index];
+            const sm64_saturn_scene_admission_portal_window_t *portal =
+                &scene->portals[portal_index];
+            uint16_t destination;
+            sm64_saturn_ztreme_frustum_result_t portal_state;
+            stats->portals_tested++;
+            if (portal->open == 0U) {
+                stats->portals_rejected_closed++;
+                continue;
+            }
+            stats->portals_open++;
+            portal_state = test_bounds(&frustum, portal->bounds_min_q16,
+                                       portal->bounds_max_q16);
+            if (portal_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE) {
+                stats->portals_rejected_frustum++;
+                continue;
+            }
+            if (!output_has_portal(output, portal_index)) {
+                if (output->portal_count >= output->portal_capacity) {
+                    stats->output_exhausted = 1U;
+                    success = false;
+                } else {
+                    output->portal_indices[output->portal_count++] = portal_index;
+                }
+            }
+            destination = portal->node_a == node_index ? portal->node_b :
+                         portal->node_a;
+            if (s_admission_visited[destination] != 0U ||
+                s_admission_queued[destination] != 0U) {
+                stats->cycle_edges++;
+            } else if (queue_tail >= SM64_SATURN_SCENE_ADMISSION_MAX_NODES) {
+                stats->output_exhausted = 1U;
+                success = false;
+            } else {
+                s_admission_queue[queue_tail++] = destination;
+                s_admission_queued[destination] = 1U;
+            }
+        }
+    }
+    for (index = 0U; index < scene->cluster_count; index++) {
+        const sm64_saturn_render_cluster_t *cluster = &scene->clusters[index];
+        if (cluster->mandatory == 0U || s_admission_cluster_seen[index] != 0U)
+            continue;
+        if (output->cluster_count >= output->cluster_capacity) {
+            stats->output_exhausted = 1U;
+            success = false;
+            continue;
+        }
+        output->cluster_indices[output->cluster_count++] = index;
+        s_admission_cluster_seen[index] = 1U;
+        stats->clusters_admitted++;
+        stats->mandatory_clusters_admitted++;
+    }
+    return success && output->cluster_count != 0U;
+}
+#endif
+
 #ifndef SATURN_SOURCEBOOT
 static sm64_saturn_scene_admission_scratch_t s_admission_compat_scratch;
 #endif

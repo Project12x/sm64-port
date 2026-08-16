@@ -124,4 +124,19 @@ bool sm64_saturn_scene_admit(
     sm64_saturn_scene_admission_output_t *output,
     sm64_saturn_scene_admission_stats_t *stats);
 
+#if defined(SM64_SATURN_SCENE_ADMISSION_REFERENCE)
+/* Host-fixture only; see saturn_scene_admission.c. The pinned pre-T2.12 flat
+ * traversal: no child descent, no inherited frustum state, and emission in
+ * traversal order with a trailing mandatory sweep. Sprint 2 T2.12's
+ * equivalence oracle drives this and the shipped entry point over the same
+ * pose corpus and requires the admitted index arrays to be byte-equal. Only
+ * the verify-admission-hierarchy recipe defines the macro that compiles it. */
+bool sm64_saturn_scene_admit_reference_with_scratch(
+    const sm64_saturn_scene_admission_view_t *scene,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_scene_admission_output_t *output,
+    sm64_saturn_scene_admission_stats_t *stats,
+    sm64_saturn_scene_admission_scratch_t *scratch);
+#endif
+
 #endif
