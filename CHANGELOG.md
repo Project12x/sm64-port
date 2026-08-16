@@ -4,6 +4,35 @@
 
 ### Changed
 
+- Sprint 2 T2.10 item 2 (perf): scene admission validates package metadata once
+  per binding instead of once per frame. **Root cause of the cost:**
+  `metadata_valid()` was called unconditionally on entry and re-proved
+  properties of arrays that are `static const` in a generated header. T2.9
+  measured it at a flat **1,700-1,701 FRT ticks in every one of 1,330 frames**
+  -- 217,614 cycles, 10.6% of `demo_spatial_admit()`, 0.485 VBlanks -- for
+  ~3,470 loop iterations and ~19,400 cache-through cartridge reads. Nothing
+  else in the port measures that constant. **Fix:** a bind-scoped memo keyed on
+  every scalar and pointer the validator reads -- version, the valid byte, both
+  reserved fields, all five array pointers, all five counts, and the root node.
+  **Why the key is sufficient, and where it is not:** it covers every field the
+  validator reads, but it cannot see *through* a pointer, so a content change
+  behind an unchanged pointer is exactly what it would miss -- and the existing
+  fixture does precisely that, mutating `nodes[0].cluster_ref_count` and
+  expecting rejection. Rather than serve a stale verdict, the memo is gated on
+  a new **opt-in** field, `sm64_saturn_scene_admission_view_t::metadata_immutable`,
+  which is **fail-closed at zero**: a caller that does not set it revalidates
+  every call, exactly as before. Sourceboot sets it because the arrays live in
+  `.cart_rodata`, linked into the A-bus cartridge window -- read-only hardware,
+  not merely `const`-qualified. **Coverage is mechanical, not a promise:** a
+  `_Static_assert` requires the memo key struct to have the same size as the
+  view's prefix up to `frustum`, so adding a field the validator can read
+  without adding it to the key fails the build. **Rejection is never cached**,
+  so a malformed package is re-validated and re-reported through `stats` on
+  every attempt. **Consumer-facing impact: none** -- the equivalence fixture's
+  admitted-set digest is unchanged at `a6be5aa07ddca26c` over 1,024 poses and
+  28,461 admissions. **New prerequisite for package authors:** a view whose
+  metadata lives in mutable storage must leave `metadata_immutable` at zero.
+
 - Sprint 2 T2.10 item 1 (perf): scene admission's duplicate test is O(1)
   instead of a linear scan of the output list. **Root cause of the cost:**
   `output_has_cluster()` walked `output->cluster_indices[0 .. cluster_count)`

@@ -255,6 +255,95 @@ int main(void)
         assert(shared_stats.duplicate_clusters == 1U);
     }
 
+    /* Bind-scoped metadata memoisation (T2.10 item 2). The opt-in is
+     * fail-closed: every case above ran with metadata_immutable zero and
+     * therefore revalidated on every call, which is why they still reject the
+     * malformed variants they always did. These cases exercise the opt-in. */
+    {
+        sm64_saturn_render_cluster_t memo_clusters[3], other_clusters[3];
+        sm64_saturn_scene_admission_node_t memo_nodes[3];
+        sm64_saturn_scene_admission_portal_window_t memo_portals[2];
+        uint16_t memo_refs[3], memo_portal_refs[4];
+        uint16_t memo_admitted[8], memo_admitted_portals[4];
+        sm64_saturn_scene_admission_view_t memo_scene, other_scene;
+        sm64_saturn_scene_admission_output_t memo_output = {
+            memo_admitted, 8U, 0U, memo_admitted_portals, 4U, 0U};
+        sm64_saturn_scene_admission_stats_t memo_stats;
+        sm64_saturn_render_view_t memo_camera = view();
+
+        setup_scene(&memo_scene, memo_clusters, memo_nodes, memo_refs,
+                    memo_portals, memo_portal_refs);
+        memo_scene.metadata_immutable = 1U;
+        assert(sm64_saturn_scene_admit(&memo_scene, &memo_camera, &memo_output,
+                                       &memo_stats));
+        assert(memo_output.cluster_count == 2U);
+        const uint16_t first_count = memo_output.cluster_count;
+
+        /* Binding the same immutable view again must produce the same result
+         * from the memo. */
+        memo_output.cluster_count = memo_output.portal_count = 0U;
+        assert(sm64_saturn_scene_admit(&memo_scene, &memo_camera, &memo_output,
+                                       &memo_stats));
+        assert(memo_output.cluster_count == first_count);
+
+        /* The memo must be observable, or it could be silently dead and no
+         * gate would notice. This mutates the metadata behind an unchanged
+         * binding, which the immutability opt-in explicitly promises will not
+         * happen; the point is to pin the contract's consequence, not to
+         * endorse doing it. A caller that cannot make that promise leaves
+         * metadata_immutable zero and gets the checks above instead. */
+        memo_clusters[0].reserved[0] = 1U;
+        memo_output.cluster_count = memo_output.portal_count = 0U;
+        assert(sm64_saturn_scene_admit(&memo_scene, &memo_camera, &memo_output,
+                                       &memo_stats));
+        memo_clusters[0].reserved[0] = 0U;
+
+        /* A second immutable binding that differs from the memo only in its
+         * cluster pointer must be validated, not served from the memo. */
+        memcpy(other_clusters, memo_clusters, sizeof(other_clusters));
+        other_clusters[0].reserved[0] = 1U;
+        other_scene = memo_scene;
+        other_scene.clusters = other_clusters;
+        memo_output.cluster_count = memo_output.portal_count = 0U;
+        assert(!sm64_saturn_scene_admit(&other_scene, &memo_camera,
+                                        &memo_output, &memo_stats));
+        assert(memo_stats.malformed_metadata != 0U);
+
+        /* Rejection must not be cached: the same malformed binding has to be
+         * re-validated, and re-reported, on every attempt. */
+        memo_output.cluster_count = memo_output.portal_count = 0U;
+        assert(!sm64_saturn_scene_admit(&other_scene, &memo_camera,
+                                        &memo_output, &memo_stats));
+        assert(memo_stats.malformed_metadata != 0U);
+
+        /* Differing only in a count, and only in the metadata_valid byte, must
+         * likewise miss the memo. */
+        other_scene = memo_scene;
+        other_scene.cluster_count = 2U;
+        memo_output.cluster_count = memo_output.portal_count = 0U;
+        assert(!sm64_saturn_scene_admit(&other_scene, &memo_camera,
+                                        &memo_output, &memo_stats));
+        other_scene = memo_scene;
+        other_scene.metadata_valid = 0U;
+        memo_output.cluster_count = memo_output.portal_count = 0U;
+        assert(!sm64_saturn_scene_admit(&other_scene, &memo_camera,
+                                        &memo_output, &memo_stats));
+
+        /* An out-of-range opt-in value is malformed metadata, not a truthy
+         * flag. */
+        other_scene = memo_scene;
+        other_scene.metadata_immutable = 2U;
+        memo_output.cluster_count = memo_output.portal_count = 0U;
+        assert(!sm64_saturn_scene_admit(&other_scene, &memo_camera,
+                                        &memo_output, &memo_stats));
+
+        /* And the original binding still works after all of that. */
+        memo_output.cluster_count = memo_output.portal_count = 0U;
+        assert(sm64_saturn_scene_admit(&memo_scene, &memo_camera, &memo_output,
+                                       &memo_stats));
+        assert(memo_output.cluster_count == first_count);
+    }
+
     printf("scene admission fixture: PASS\n");
     return 0;
 }

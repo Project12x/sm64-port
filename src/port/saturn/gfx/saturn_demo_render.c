@@ -880,6 +880,12 @@ static void demo_spatial_admit(
     render_view.generation = generation;
     scene.metadata_version = SM64_SATURN_SCENE_ADMISSION_VERSION;
     scene.metadata_valid = 1U;
+    /* Every array bound below is static const in .cart_rodata, which the
+     * sourceboot link places in the A-bus cartridge window -- read-only
+     * hardware, not merely const-qualified -- so the binding satisfies the
+     * immutability contract and admission validates it once instead of once
+     * per frame (T2.10 item 2, T2.9 Finding C). */
+    scene.metadata_immutable = 1U;
     scene.clusters = sm64_saturn_bob_render_clusters;
     scene.cluster_count = SM64_SATURN_BOB_CLUSTER_COUNT;
     scene.nodes = sm64_saturn_bob_scene_admission_nodes;

@@ -39,6 +39,17 @@ typedef struct sm64_saturn_scene_admission_view {
     uint16_t metadata_version;
     uint8_t metadata_valid;
     uint8_t reserved0;
+    /* Opt-in, and fail-closed at zero. Setting it asserts that the arrays this
+     * view points at cannot change for as long as the view stays bound, which
+     * lets admission validate the package metadata once per binding instead of
+     * once per frame. A caller whose metadata lives in mutable storage must
+     * leave it zero: the memo key covers every scalar and pointer the
+     * validator reads, but it cannot see through a pointer, so a content
+     * change behind an unchanged pointer is exactly what it would miss.
+     * Sourceboot sets it because the generated tables are static const in
+     * .cart_rodata, physically ROM on the A-bus cartridge. */
+    uint8_t metadata_immutable;
+    uint8_t reserved2[3];
     const sm64_saturn_render_cluster_t *clusters;
     uint16_t cluster_count;
     const sm64_saturn_scene_admission_node_t *nodes;

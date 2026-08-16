@@ -1,6 +1,7 @@
 #include "saturn_scene_admission.h"
 
 #include <limits.h>
+#include <stddef.h>
 #include <string.h>
 
 /* T2.9 (docs/saturn/evidence/reports/sprint2-t2_9-spatial-admit-audit.md).
@@ -161,6 +162,95 @@ static bool output_has_portal(const sm64_saturn_scene_admission_output_t *output
     return false;
 }
 
+/* Mirrors sm64_saturn_scene_admission_view_t up to, but not including,
+ * `frustum`: that is every field metadata_valid() reads and no field it does
+ * not. The static assertion below is the mechanical half of that claim --
+ * adding a field to the view's prefix without adding it here fails the build
+ * instead of quietly narrowing the memo key. If a future ABI ever pads the two
+ * differently, revisit the key rather than deleting the assertion. */
+typedef struct metadata_memo {
+    uint16_t metadata_version;
+    uint8_t metadata_valid;
+    uint8_t reserved0;
+    uint8_t metadata_immutable;
+    uint8_t reserved2[3];
+    const sm64_saturn_render_cluster_t *clusters;
+    uint16_t cluster_count;
+    const sm64_saturn_scene_admission_node_t *nodes;
+    uint16_t node_count;
+    const uint16_t *cluster_refs;
+    uint16_t cluster_ref_count;
+    const sm64_saturn_scene_admission_portal_window_t *portals;
+    uint16_t portal_count;
+    const uint16_t *portal_refs;
+    uint16_t portal_ref_count;
+    uint16_t root_node;
+    uint16_t reserved1;
+} metadata_memo_t;
+
+_Static_assert(sizeof(metadata_memo_t) ==
+                   offsetof(sm64_saturn_scene_admission_view_t, frustum),
+               "metadata memo key must mirror every view field the validator "
+               "reads");
+
+/* Zero-initialised, and an all-zero key can never match a bindable view: a
+ * valid one has metadata_immutable non-zero and clusters non-NULL. There is
+ * therefore no separate liveness flag. Only successful validations are
+ * recorded, so a rejected package is re-validated -- and re-reported through
+ * stats -- on every attempt. */
+static metadata_memo_t s_metadata_memo;
+
+static bool metadata_memo_hit(const sm64_saturn_scene_admission_view_t *scene)
+{
+    /* An early-out, not the safety property: metadata_immutable is also a
+     * member of the key below, so a view that has not opted in could not match
+     * a stored key even without this line. */
+    if (scene->metadata_immutable == 0U) return false;
+    return s_metadata_memo.metadata_version == scene->metadata_version &&
+           s_metadata_memo.metadata_valid == scene->metadata_valid &&
+           s_metadata_memo.reserved0 == scene->reserved0 &&
+           s_metadata_memo.metadata_immutable == scene->metadata_immutable &&
+           s_metadata_memo.reserved2[0] == scene->reserved2[0] &&
+           s_metadata_memo.reserved2[1] == scene->reserved2[1] &&
+           s_metadata_memo.reserved2[2] == scene->reserved2[2] &&
+           s_metadata_memo.clusters == scene->clusters &&
+           s_metadata_memo.cluster_count == scene->cluster_count &&
+           s_metadata_memo.nodes == scene->nodes &&
+           s_metadata_memo.node_count == scene->node_count &&
+           s_metadata_memo.cluster_refs == scene->cluster_refs &&
+           s_metadata_memo.cluster_ref_count == scene->cluster_ref_count &&
+           s_metadata_memo.portals == scene->portals &&
+           s_metadata_memo.portal_count == scene->portal_count &&
+           s_metadata_memo.portal_refs == scene->portal_refs &&
+           s_metadata_memo.portal_ref_count == scene->portal_ref_count &&
+           s_metadata_memo.root_node == scene->root_node &&
+           s_metadata_memo.reserved1 == scene->reserved1;
+}
+
+static void metadata_memo_store(
+    const sm64_saturn_scene_admission_view_t *scene)
+{
+    s_metadata_memo.metadata_version = scene->metadata_version;
+    s_metadata_memo.metadata_valid = scene->metadata_valid;
+    s_metadata_memo.reserved0 = scene->reserved0;
+    s_metadata_memo.metadata_immutable = scene->metadata_immutable;
+    s_metadata_memo.reserved2[0] = scene->reserved2[0];
+    s_metadata_memo.reserved2[1] = scene->reserved2[1];
+    s_metadata_memo.reserved2[2] = scene->reserved2[2];
+    s_metadata_memo.clusters = scene->clusters;
+    s_metadata_memo.cluster_count = scene->cluster_count;
+    s_metadata_memo.nodes = scene->nodes;
+    s_metadata_memo.node_count = scene->node_count;
+    s_metadata_memo.cluster_refs = scene->cluster_refs;
+    s_metadata_memo.cluster_ref_count = scene->cluster_ref_count;
+    s_metadata_memo.portals = scene->portals;
+    s_metadata_memo.portal_count = scene->portal_count;
+    s_metadata_memo.portal_refs = scene->portal_refs;
+    s_metadata_memo.portal_ref_count = scene->portal_ref_count;
+    s_metadata_memo.root_node = scene->root_node;
+    s_metadata_memo.reserved1 = scene->reserved1;
+}
+
 static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
                            sm64_saturn_scene_admission_stats_t *stats)
 {
@@ -168,6 +258,8 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
     if (scene->metadata_version != SM64_SATURN_SCENE_ADMISSION_VERSION ||
         scene->metadata_valid == 0U || scene->cluster_count == 0U ||
         scene->reserved0 != 0U || scene->reserved1 != 0U ||
+        scene->metadata_immutable > 1U || scene->reserved2[0] != 0U ||
+        scene->reserved2[1] != 0U || scene->reserved2[2] != 0U ||
         scene->cluster_count > SM64_SATURN_SCENE_ADMISSION_MAX_REFS ||
         scene->node_count == 0U ||
         scene->node_count > SM64_SATURN_SCENE_ADMISSION_MAX_NODES ||
@@ -331,15 +423,26 @@ bool sm64_saturn_scene_admit_with_scratch(
         if (stats != NULL) stats->malformed_metadata = 1U;
         return false;
     }
-    if (!metadata_valid(scene, stats)) {
+    /* T2.9 Finding C: metadata_valid() re-proves properties of data that is
+     * static const in a generated header, and it measured a flat 1,700-1,701
+     * FRT ticks in every one of 1,330 frames -- 10.6% of the stage, 0.485
+     * VBlanks -- for ~3,470 loop iterations and ~19,400 uncached cartridge
+     * reads. Bind-scoped memoisation removes all of it for callers that can
+     * honour the immutability contract, and changes nothing for callers that
+     * cannot: metadata_immutable defaults to zero and the key is only consulted
+     * when it is set. */
+    if (!metadata_memo_hit(scene)) {
+        if (!metadata_valid(scene, stats)) {
 #if SM64_SATURN_ADMIT_DIAG
-        admit.malformed = 1U;
-        admit_cursor = sm64_saturn_prenotify_profile_span(
-            admit_cursor, &admit.validate_ticks, &admit.max_raw);
-        admit.total_ticks = (uint16_t)(admit_cursor - admit_entry);
-        sm64_saturn_prenotify_profile_publish_admit(&admit);
+            admit.malformed = 1U;
+            admit_cursor = sm64_saturn_prenotify_profile_span(
+                admit_cursor, &admit.validate_ticks, &admit.max_raw);
+            admit.total_ticks = (uint16_t)(admit_cursor - admit_entry);
+            sm64_saturn_prenotify_profile_publish_admit(&admit);
 #endif
-        return false;
+            return false;
+        }
+        if (scene->metadata_immutable != 0U) metadata_memo_store(scene);
     }
 #if SM64_SATURN_ADMIT_DIAG
     /* Charges the entry guards and the whole per-frame revalidation of
