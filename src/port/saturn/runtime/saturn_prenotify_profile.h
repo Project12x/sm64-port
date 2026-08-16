@@ -93,7 +93,7 @@
  */
 
 #define SM64_SATURN_PRENOTIFY_PROFILE_MAGIC 0x46505246u /* 'FPRF' */
-#define SM64_SATURN_PRENOTIFY_PROFILE_VERSION 3u
+#define SM64_SATURN_PRENOTIFY_PROFILE_VERSION 4u
 #define SM64_SATURN_PRENOTIFY_PROFILE_NODES 24u
 #define SM64_SATURN_PRENOTIFY_PROFILE_DEPTH 8u
 /* T2.8: the corrected frame is ~15 VBlanks (sprint2-t2_7-a9a-regression-
@@ -259,11 +259,82 @@ typedef struct {
     volatile uint32_t commands_total_accum;
     volatile uint32_t commands_actor_accum;
     volatile uint32_t commands_texture_accum;
+    /* ---------------------------------------------------------------- *
+     * T2.9 spatial admission decomposition.
+     *
+     * WHY FLAT ACCUMULATORS AND NOT NODE-TREE CHILDREN.  The hot loop
+     * inside sm64_saturn_scene_admit_with_scratch() runs 867 iterations
+     * per frame (SM64_SATURN_BOB_ADMISSION_CLUSTER_REF_COUNT).  A
+     * push/pop pair charges through the uncached working state and costs
+     * ~100 SH-2 cycles; three of them per iteration would have added
+     * ~260k cycles to a ~2.0M-cycle stage -- 13% perturbation at exactly
+     * the granularity the answer lives at, which is the T2.5 per-vertex
+     * mistake repeated.  A flat span is two on-chip FRT byte reads plus a
+     * register add: ~14 cycles.  The node table is therefore UNCHANGED at
+     * 24 entries and ids 0-23 keep their T2.4/T2.5/T2.6/T2.7 meaning, so
+     * every earlier ranked table stays directly comparable; these fields
+     * sub-divide the SPATIAL_ADMIT node's own total without touching it.
+     *
+     * CHAINING.  One uint16_t cursor threads the whole call: each span
+     * charges "time since the previous probe" to the bucket it names, the
+     * same discipline charge() uses for the node tree.  Loop paths that
+     * `continue` before reaching a probe therefore have their tail
+     * charged to the NEXT probe's bucket -- which is cluster_test.  That
+     * over-charges cluster_test by the loop overhead and is stated in the
+     * report rather than hidden.
+     *
+     * WRAP.  Every span is one probe gap inside a stage whose whole
+     * measured total is ~16,000 ticks, so a 16-bit difference cannot
+     * alias; admit_max_raw publishes the largest gap as the witness.
+     * ---------------------------------------------------------------- */
+    volatile uint32_t admit_windows;      /* completed admission calls */
+    volatile uint32_t admit_fallback_frames; /* generic path returned false */
+    volatile uint32_t admit_malformed_frames;
+    volatile uint32_t admit_view_setup_ticks_accum;
+    volatile uint32_t admit_validate_ticks_accum;
+    volatile uint32_t admit_validate_ticks_last;
+    volatile uint32_t admit_validate_ticks_max;
+    volatile uint32_t admit_scratch_ticks_accum;
+    volatile uint32_t admit_frustum_ticks_accum;
+    volatile uint32_t admit_node_test_ticks_accum;
+    volatile uint32_t admit_cluster_test_ticks_accum;
+    volatile uint32_t admit_cluster_test_ticks_last;
+    volatile uint32_t admit_cluster_test_ticks_max;
+    volatile uint32_t admit_cluster_dedup_ticks_accum;
+    volatile uint32_t admit_cluster_dedup_ticks_last;
+    volatile uint32_t admit_cluster_dedup_ticks_max;
+    volatile uint32_t admit_cluster_emit_ticks_accum;
+    volatile uint32_t admit_portal_ticks_accum;
+    volatile uint32_t admit_mandatory_ticks_accum;
+    volatile uint32_t admit_total_ticks_accum;
+    volatile uint32_t admit_total_ticks_last;
+    volatile uint32_t admit_total_ticks_max;
+    volatile uint32_t admit_max_raw;
+    /* Counts.  These answer the owner's question directly: if the scene
+     * is 867 clusters and 867 are tested every frame regardless of what
+     * is visible, the cost is structural rather than per-test. */
+    volatile uint32_t admit_nodes_tested_last;
+    volatile uint32_t admit_nodes_admitted_last;
+    volatile uint32_t admit_clusters_tested_last;
+    volatile uint32_t admit_clusters_admitted_last;
+    volatile uint32_t admit_clusters_rejected_last;
+    volatile uint32_t admit_clusters_inside_last;
+    volatile uint32_t admit_clusters_intersect_last;
+    volatile uint32_t admit_clusters_duplicate_last;
+    volatile uint32_t admit_portals_tested_last;
+    volatile uint32_t admit_output_count_last;
+    /* output_has_cluster() is a linear scan of the output list.  calls is
+     * how many times it ran; compares is how many uint16 slots it read in
+     * total.  compares/calls is the mean scan length, and the ratio of
+     * compares to clusters_admitted is the O(n^2) witness. */
+    volatile uint32_t admit_dedup_calls_last;
+    volatile uint32_t admit_dedup_compares_last;
+    volatile uint32_t admit_dedup_compares_accum;
     volatile uint32_t sequence_end;
 } sm64_saturn_prenotify_profile_t;
 
-_Static_assert(sizeof(sm64_saturn_prenotify_profile_t) == 716U,
-               "frame profile ABI must remain one hundred seventy-nine words");
+_Static_assert(sizeof(sm64_saturn_prenotify_profile_t) == 860U,
+               "frame profile ABI must remain two hundred fifteen words");
 
 #if defined(SATURN_DIAGNOSTIC_MODE) && SATURN_DIAGNOSTIC_MODE != 0 && \
     defined(__sh__)
@@ -456,6 +527,112 @@ static inline void sm64_saturn_prenotify_profile_slave_end(uint16_t start)
     record->slave_busy_last = ticks;
     record->slave_busy_accum += ticks;
     if (ticks > record->slave_busy_max) record->slave_busy_max = ticks;
+}
+
+/* ------------------------------------------------------------------ *
+ * T2.9 flat sub-spans.
+ *
+ * These do NOT touch the node stack.  They exist so that a stage which is
+ * a single node-tree entry (SPATIAL_ADMIT) can be decomposed at loop
+ * granularity without paying charge()'s uncached bookkeeping 2,600 times
+ * a frame.  The caller keeps the cursor and the accumulators in locals,
+ * so the compiler keeps them in registers and one span costs two on-chip
+ * FRT byte reads plus a subtract and an add.
+ * ------------------------------------------------------------------ */
+typedef struct {
+    uint32_t validate_ticks;
+    uint32_t scratch_ticks;
+    uint32_t frustum_ticks;
+    uint32_t node_test_ticks;
+    uint32_t cluster_test_ticks;
+    uint32_t cluster_dedup_ticks;
+    uint32_t cluster_emit_ticks;
+    uint32_t portal_ticks;
+    uint32_t mandatory_ticks;
+    uint32_t total_ticks;
+    uint32_t max_raw;
+    uint32_t dedup_calls;
+    uint32_t dedup_compares;
+    uint32_t nodes_tested;
+    uint32_t nodes_admitted;
+    uint32_t clusters_tested;
+    uint32_t clusters_admitted;
+    uint32_t clusters_rejected;
+    uint32_t clusters_inside;
+    uint32_t clusters_intersect;
+    uint32_t clusters_duplicate;
+    uint32_t portals_tested;
+    uint32_t output_count;
+    uint32_t malformed;
+} sm64_saturn_prenotify_admit_t;
+
+static inline uint16_t sm64_saturn_prenotify_profile_span(
+    uint16_t start, uint32_t *accum, uint32_t *max_raw)
+{
+    const uint16_t now = sm64_saturn_prenotify_profile_frt();
+    const uint16_t raw = (uint16_t)(now - start);
+    *accum += raw;
+    if ((uint32_t)raw > *max_raw) *max_raw = raw;
+    return now;
+}
+
+static inline void sm64_saturn_prenotify_profile_publish_admit(
+    const sm64_saturn_prenotify_admit_t *admit)
+{
+    volatile sm64_saturn_prenotify_profile_t *const record =
+        sm64_saturn_prenotify_profile_visible();
+    record->admit_windows++;
+    record->admit_validate_ticks_accum += admit->validate_ticks;
+    record->admit_validate_ticks_last = admit->validate_ticks;
+    if (admit->validate_ticks > record->admit_validate_ticks_max)
+        record->admit_validate_ticks_max = admit->validate_ticks;
+    record->admit_scratch_ticks_accum += admit->scratch_ticks;
+    record->admit_frustum_ticks_accum += admit->frustum_ticks;
+    record->admit_node_test_ticks_accum += admit->node_test_ticks;
+    record->admit_cluster_test_ticks_accum += admit->cluster_test_ticks;
+    record->admit_cluster_test_ticks_last = admit->cluster_test_ticks;
+    if (admit->cluster_test_ticks > record->admit_cluster_test_ticks_max)
+        record->admit_cluster_test_ticks_max = admit->cluster_test_ticks;
+    record->admit_cluster_dedup_ticks_accum += admit->cluster_dedup_ticks;
+    record->admit_cluster_dedup_ticks_last = admit->cluster_dedup_ticks;
+    if (admit->cluster_dedup_ticks > record->admit_cluster_dedup_ticks_max)
+        record->admit_cluster_dedup_ticks_max = admit->cluster_dedup_ticks;
+    record->admit_cluster_emit_ticks_accum += admit->cluster_emit_ticks;
+    record->admit_portal_ticks_accum += admit->portal_ticks;
+    record->admit_mandatory_ticks_accum += admit->mandatory_ticks;
+    record->admit_total_ticks_accum += admit->total_ticks;
+    record->admit_total_ticks_last = admit->total_ticks;
+    if (admit->total_ticks > record->admit_total_ticks_max)
+        record->admit_total_ticks_max = admit->total_ticks;
+    if (admit->max_raw > record->admit_max_raw)
+        record->admit_max_raw = admit->max_raw;
+    record->admit_nodes_tested_last = admit->nodes_tested;
+    record->admit_nodes_admitted_last = admit->nodes_admitted;
+    record->admit_clusters_tested_last = admit->clusters_tested;
+    record->admit_clusters_admitted_last = admit->clusters_admitted;
+    record->admit_clusters_rejected_last = admit->clusters_rejected;
+    record->admit_clusters_inside_last = admit->clusters_inside;
+    record->admit_clusters_intersect_last = admit->clusters_intersect;
+    record->admit_clusters_duplicate_last = admit->clusters_duplicate;
+    record->admit_portals_tested_last = admit->portals_tested;
+    record->admit_output_count_last = admit->output_count;
+    record->admit_dedup_calls_last = admit->dedup_calls;
+    record->admit_dedup_compares_last = admit->dedup_compares;
+    record->admit_dedup_compares_accum += admit->dedup_compares;
+    if (admit->malformed != 0U) record->admit_malformed_frames++;
+}
+
+/* The caller-side half: demo_spatial_admit() owns the render_view/scene
+ * assembly that happens before the admission call, and it alone can see
+ * whether the generic path declined and dropped through to BOB's legacy
+ * recursive painter. */
+static inline void sm64_saturn_prenotify_profile_publish_admit_view(
+    uint32_t setup_ticks, uint32_t fallback)
+{
+    volatile sm64_saturn_prenotify_profile_t *const record =
+        sm64_saturn_prenotify_profile_visible();
+    record->admit_view_setup_ticks_accum += setup_ticks;
+    if (fallback != 0U) record->admit_fallback_frames++;
 }
 
 #define SM64_SATURN_PRENOTIFY_PROFILE_BEGIN() sm64_saturn_prenotify_profile_begin()

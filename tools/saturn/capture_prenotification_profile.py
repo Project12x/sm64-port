@@ -61,11 +61,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 PROFILE_SYMBOL = "g_sm64_saturn_prenotify_profile"
 PROFILE_MAGIC = 0x46505246  # 'FPRF'
-PROFILE_VERSION = 3
+PROFILE_VERSION = 4
 PROFILE_NODES = 24
-# T2.8 appended a 66-word present-path / VDP1-fence section.
+# T2.8 appended a 66-word present-path / VDP1-fence section; T2.9 appended a
+# 36-word spatial-admission section.  The node table is UNCHANGED at 24, so
+# every T2.4-T2.7 ranked table stays directly comparable.
 PROFILE_COPR_RING = 32
-PROFILE_WORDS = 179
+PROFILE_WORDS = 215
 PROFILE_BYTES = PROFILE_WORDS * 4
 
 # Mirrors the enum in saturn_prenotify_profile.h, in order.  Node 0 is the
@@ -219,7 +221,44 @@ def decode_profile(raw: bytes) -> dict[str, Any]:
         "commands_total_accum": tail[36 + PROFILE_COPR_RING],
         "commands_actor_accum": tail[37 + PROFILE_COPR_RING],
         "commands_texture_accum": tail[38 + PROFILE_COPR_RING],
-        "sequence_end": tail[39 + PROFILE_COPR_RING],
+        # --- T2.9 spatial admission decomposition ----------------------
+        "admit_windows": tail[39 + PROFILE_COPR_RING],
+        "admit_fallback_frames": tail[40 + PROFILE_COPR_RING],
+        "admit_malformed_frames": tail[41 + PROFILE_COPR_RING],
+        "admit_view_setup_ticks_accum": tail[42 + PROFILE_COPR_RING],
+        "admit_validate_ticks_accum": tail[43 + PROFILE_COPR_RING],
+        "admit_validate_ticks_last": tail[44 + PROFILE_COPR_RING],
+        "admit_validate_ticks_max": tail[45 + PROFILE_COPR_RING],
+        "admit_scratch_ticks_accum": tail[46 + PROFILE_COPR_RING],
+        "admit_frustum_ticks_accum": tail[47 + PROFILE_COPR_RING],
+        "admit_node_test_ticks_accum": tail[48 + PROFILE_COPR_RING],
+        "admit_cluster_test_ticks_accum": tail[49 + PROFILE_COPR_RING],
+        "admit_cluster_test_ticks_last": tail[50 + PROFILE_COPR_RING],
+        "admit_cluster_test_ticks_max": tail[51 + PROFILE_COPR_RING],
+        "admit_cluster_dedup_ticks_accum": tail[52 + PROFILE_COPR_RING],
+        "admit_cluster_dedup_ticks_last": tail[53 + PROFILE_COPR_RING],
+        "admit_cluster_dedup_ticks_max": tail[54 + PROFILE_COPR_RING],
+        "admit_cluster_emit_ticks_accum": tail[55 + PROFILE_COPR_RING],
+        "admit_portal_ticks_accum": tail[56 + PROFILE_COPR_RING],
+        "admit_mandatory_ticks_accum": tail[57 + PROFILE_COPR_RING],
+        "admit_total_ticks_accum": tail[58 + PROFILE_COPR_RING],
+        "admit_total_ticks_last": tail[59 + PROFILE_COPR_RING],
+        "admit_total_ticks_max": tail[60 + PROFILE_COPR_RING],
+        "admit_max_raw": tail[61 + PROFILE_COPR_RING],
+        "admit_nodes_tested_last": tail[62 + PROFILE_COPR_RING],
+        "admit_nodes_admitted_last": tail[63 + PROFILE_COPR_RING],
+        "admit_clusters_tested_last": tail[64 + PROFILE_COPR_RING],
+        "admit_clusters_admitted_last": tail[65 + PROFILE_COPR_RING],
+        "admit_clusters_rejected_last": tail[66 + PROFILE_COPR_RING],
+        "admit_clusters_inside_last": tail[67 + PROFILE_COPR_RING],
+        "admit_clusters_intersect_last": tail[68 + PROFILE_COPR_RING],
+        "admit_clusters_duplicate_last": tail[69 + PROFILE_COPR_RING],
+        "admit_portals_tested_last": tail[70 + PROFILE_COPR_RING],
+        "admit_output_count_last": tail[71 + PROFILE_COPR_RING],
+        "admit_dedup_calls_last": tail[72 + PROFILE_COPR_RING],
+        "admit_dedup_compares_last": tail[73 + PROFILE_COPR_RING],
+        "admit_dedup_compares_accum": tail[74 + PROFILE_COPR_RING],
+        "sequence_end": tail[75 + PROFILE_COPR_RING],
     }
     record["stable"] = (
         record["magic_valid"]
@@ -294,6 +333,167 @@ def read_sample(client: YmirClient, addresses: dict[str, int]) -> dict[str, Any]
         ),
         "boot": decode_boot_trace(smoke_raw["sourceboot_boot_trace"]),
         "cadence": cadence,
+    }
+
+
+BOB_ADMISSION_NODE_COUNT = 1
+BOB_ADMISSION_CLUSTER_REF_COUNT = 867
+BOB_CLUSTER_COUNT = 867
+BOB_BSP_NODE_COUNT = 1183
+
+
+def admit_summary(
+    final: dict[str, Any],
+    ticks_per_vblank_nominal: float | None,
+    cycles_per_tick: int,
+    spatial_admit_mean_ticks: float | None,
+) -> dict[str, Any]:
+    """T2.9: inside demo_spatial_admit().
+
+    The sub-stage spans are flat FRT brackets, not node-tree children (see
+    saturn_prenotify_profile.h): the cluster loop runs 867 times per frame
+    and three push/pop pairs per iteration would have perturbed the loop by
+    more than 10%.  Because one cursor threads the whole call, the named
+    buckets sum to the whole admission call by construction; the only
+    unattributed part is the epilogue after the last probe.
+
+    The count block is the load-bearing half.  ``clusters_tested`` against
+    ``clusters_admitted`` says whether the traversal cost tracks what is
+    visible or what merely exists, and ``dedup_compares`` against
+    ``dedup_calls`` exposes the linear duplicate scan's quadratic growth.
+    """
+    calls = final["admit_windows"]
+
+    def per_call(field: str) -> float | None:
+        return final[field] / calls if calls else None
+
+    def vb(ticks: float | None) -> float | None:
+        if ticks is None or not ticks_per_vblank_nominal:
+            return None
+        return ticks / ticks_per_vblank_nominal
+
+    stages = (
+        ("view_setup", "admit_view_setup_ticks_accum"),
+        ("validate", "admit_validate_ticks_accum"),
+        ("scratch_clear", "admit_scratch_ticks_accum"),
+        ("frustum_derive", "admit_frustum_ticks_accum"),
+        ("node_test", "admit_node_test_ticks_accum"),
+        ("cluster_test", "admit_cluster_test_ticks_accum"),
+        ("cluster_dedup", "admit_cluster_dedup_ticks_accum"),
+        ("cluster_emit", "admit_cluster_emit_ticks_accum"),
+        ("portal", "admit_portal_ticks_accum"),
+        ("mandatory", "admit_mandatory_ticks_accum"),
+    )
+    total_mean = per_call("admit_total_ticks_accum")
+    view_mean = per_call("admit_view_setup_ticks_accum")
+    # The measured whole-call span excludes the caller-side view assembly,
+    # which is bracketed separately in demo_spatial_admit().
+    stage_denominator = (
+        (total_mean or 0.0) + (view_mean or 0.0)
+    ) or None
+    rows = []
+    for name, field in stages:
+        mean = per_call(field)
+        rows.append({
+            "stage": name,
+            "mean_ticks": mean,
+            "mean_cycles": mean * cycles_per_tick if mean is not None else None,
+            "mean_vblank_equiv": vb(mean),
+            "share_of_admit": (
+                mean / stage_denominator
+                if mean is not None and stage_denominator else None
+            ),
+            "share_of_spatial_admit_node": (
+                mean / spatial_admit_mean_ticks
+                if mean is not None and spatial_admit_mean_ticks else None
+            ),
+        })
+    named = sum(r["mean_ticks"] or 0.0 for r in rows)
+    clusters_tested = final["admit_clusters_tested_last"]
+    clusters_admitted = final["admit_clusters_admitted_last"]
+    dedup_calls = final["admit_dedup_calls_last"]
+    dedup_compares = final["admit_dedup_compares_last"]
+    return {
+        "admit_calls": calls,
+        "fallback_frames": final["admit_fallback_frames"],
+        "malformed_frames": final["admit_malformed_frames"],
+        "total_mean_ticks": total_mean,
+        "total_mean_cycles": (
+            total_mean * cycles_per_tick if total_mean is not None else None
+        ),
+        "total_mean_vblank_equiv": vb(total_mean),
+        "total_max_ticks": final["admit_total_ticks_max"],
+        "with_view_setup_mean_ticks": stage_denominator,
+        "spatial_admit_node_mean_ticks": spatial_admit_mean_ticks,
+        # The node tree measures the same code from the outside; agreement is
+        # the cross-check that no sub-span is double counted or missed.
+        "node_vs_span_ratio": (
+            stage_denominator / spatial_admit_mean_ticks
+            if stage_denominator and spatial_admit_mean_ticks else None
+        ),
+        "named_mean_ticks": named,
+        "unattributed_mean_ticks": (
+            stage_denominator - named if stage_denominator else None
+        ),
+        "unattributed_share": (
+            (stage_denominator - named) / stage_denominator
+            if stage_denominator else None
+        ),
+        "max_raw": final["admit_max_raw"],
+        "max_raw_headroom": 65535 - final["admit_max_raw"],
+        "ranked": sorted(
+            rows, key=lambda r: r["mean_ticks"] or 0.0, reverse=True),
+        "counts": {
+            "nodes_tested": final["admit_nodes_tested_last"],
+            "nodes_admitted": final["admit_nodes_admitted_last"],
+            "scene_admission_nodes": BOB_ADMISSION_NODE_COUNT,
+            "scene_bsp_nodes_unused_by_this_path": BOB_BSP_NODE_COUNT,
+            "clusters_tested": clusters_tested,
+            "clusters_admitted": clusters_admitted,
+            "clusters_rejected_frustum": final["admit_clusters_rejected_last"],
+            "clusters_inside": final["admit_clusters_inside_last"],
+            "clusters_intersect": final["admit_clusters_intersect_last"],
+            "clusters_duplicate": final["admit_clusters_duplicate_last"],
+            "portals_tested": final["admit_portals_tested_last"],
+            "output_count": final["admit_output_count_last"],
+            "scene_cluster_count": BOB_CLUSTER_COUNT,
+            "tested_share_of_scene": (
+                clusters_tested / BOB_CLUSTER_COUNT if BOB_CLUSTER_COUNT else None
+            ),
+            "admitted_share_of_tested": (
+                clusters_admitted / clusters_tested if clusters_tested else None
+            ),
+            "dedup_calls": dedup_calls,
+            "dedup_compares": dedup_compares,
+            "dedup_mean_scan_length": (
+                dedup_compares / dedup_calls if dedup_calls else None
+            ),
+            # A linear duplicate scan over a list that grows by one per
+            # admission costs K(K-1)/2 comparisons.  Publishing the closed
+            # form beside the measured count makes the O(n^2) explicit.
+            "dedup_compares_quadratic_model": (
+                clusters_admitted * (clusters_admitted - 1) // 2
+                if clusters_admitted else None
+            ),
+            "dedup_cycles_per_compare": (
+                (final["admit_cluster_dedup_ticks_last"] * cycles_per_tick
+                 / dedup_compares) if dedup_compares else None
+            ),
+        },
+        "per_unit": {
+            "cycles_per_cluster_tested": (
+                (total_mean * cycles_per_tick / clusters_tested)
+                if total_mean is not None and clusters_tested else None
+            ),
+            "cycles_per_cluster_admitted": (
+                (total_mean * cycles_per_tick / clusters_admitted)
+                if total_mean is not None and clusters_admitted else None
+            ),
+            "cluster_test_cycles_each": (
+                (final["admit_cluster_test_ticks_last"] * cycles_per_tick
+                 / clusters_tested) if clusters_tested else None
+            ),
+        },
     }
 
 
@@ -573,6 +773,9 @@ def summarize(final: dict[str, Any], cadence: dict[str, Any]) -> dict[str, Any]:
         # cadence rig above reports both intervals correctly in VBlanks.
         "present": present_summary(final, ticks_per_vblank_nominal,
                                    cycles_per_tick),
+        "spatial_admit": admit_summary(
+            final, ticks_per_vblank_nominal, cycles_per_tick,
+            by_name["spatial_admit"]["mean_ticks"]),
         "slave_busy": {
             "entries": slave_entries,
             "cycles_per_tick": slave_cycles_per_tick,

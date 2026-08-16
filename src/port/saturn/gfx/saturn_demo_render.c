@@ -39,6 +39,14 @@
 #include "saturn_render_lifecycle.h"
 #include "saturn_render_output_bank.h"
 #include "../runtime/saturn_prenotify_profile.h"
+/* T2.9: demo_spatial_admit()'s caller-side half.  Diagnostic-only; the
+ * product arm is unchanged. */
+#if defined(SATURN_DIAGNOSTIC_MODE) && SATURN_DIAGNOSTIC_MODE != 0 && \
+    defined(__sh__)
+#define SM64_SATURN_ADMIT_DIAG 1
+#else
+#define SM64_SATURN_ADMIT_DIAG 0
+#endif
 #include "saturn_render_payload_bank.h"
 #include "saturn_scene_admission.h"
 #include "saturn_terrain_command_template.h"
@@ -849,6 +857,9 @@ static void demo_spatial_admit(
      * legacy recursive painter remains below as a fail-closed compatibility
      * fallback for a malformed generated header, but normal frames never
      * enter that scene-specific path. */
+#if SM64_SATURN_ADMIT_DIAG
+    const uint16_t admit_view_cursor = sm64_saturn_prenotify_profile_frt();
+#endif
     sm64_saturn_render_view_t render_view = {0};
     sm64_saturn_scene_admission_output_t admission_output;
     sm64_saturn_scene_admission_stats_t admission_stats;
@@ -893,6 +904,15 @@ static void demo_spatial_admit(
     sm64_saturn_scene_admission_scratch_t *const admission_scratch =
         (sm64_saturn_scene_admission_scratch_t *)(void *)
             &s_terrain_master_commands[0][0];
+#if SM64_SATURN_ADMIT_DIAG
+    {
+        uint32_t admit_setup_ticks = 0U;
+        uint32_t admit_setup_max = 0U;
+        (void)sm64_saturn_prenotify_profile_span(
+            admit_view_cursor, &admit_setup_ticks, &admit_setup_max);
+        sm64_saturn_prenotify_profile_publish_admit_view(admit_setup_ticks, 0U);
+    }
+#endif
     if (sm64_saturn_scene_admit_with_scratch(
             &scene, &render_view, &admission_output, &admission_stats,
             admission_scratch)) {
@@ -907,6 +927,12 @@ static void demo_spatial_admit(
         profile->demo_bob_nodes_inside += admission_stats.nodes_admitted;
         return;
     }
+#if SM64_SATURN_ADMIT_DIAG
+    /* Reached only when the generic admission path declines.  T2.7 records
+     * that normal frames never enter BOB's legacy recursive painter; this
+     * counter is the on-target proof of that claim. */
+    sm64_saturn_prenotify_profile_publish_admit_view(0U, 1U);
+#endif
     memset(s_spatial_ref_seen, 0, sizeof(s_spatial_ref_seen));
     memset(s_spatial_node_seen, 0, sizeof(s_spatial_node_seen));
     s_render_work_count = 0U;

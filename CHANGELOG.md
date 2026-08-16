@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+### Added
+
+- Sprint 2 T2.9 (diagnostics): `demo_spatial_admit()` is decomposed at loop
+  resolution, answering the owner's question "does spatial_admit need to cost
+  as much as it does?" with **no**. **Why this was needed:** T2.7 localised
+  4.565 VBlanks/frame — 29% of the whole frame — to this single node and
+  T2.8 confirmed the frame is CPU-bound, but the node was opaque, and the
+  brief's per-unit arithmetic assumed a 1,183-node BSP descent that the
+  production path does not perform. **What the measurement found:**
+  `SM64_SATURN_BOB_ADMISSION_NODE_COUNT` is **1** — the production spatial
+  index is a single node holding all 867 cluster references, so no
+  hierarchical early-out is reachable at any granularity, and the BSP belongs
+  to a fail-closed fallback that ran 0 times in 1,330 frames. 867 clusters are
+  frustum-tested every frame (`clusters_tested` min = max = 867) while only
+  230-353 are admitted, and the test bucket measures 8,978-9,154 ticks
+  regardless. 27.7% of the stage is `output_has_cluster()`, a linear scan
+  costing exactly `K(K-1)/2` = 39,903 comparisons per frame that has found
+  **zero** duplicates; 10.6% is `metadata_valid()` revalidating `static const`
+  package metadata at a flat 1,700-1,701 ticks; 6.6% is a trailing mandatory
+  sweep that admits nothing. **71.8% of the stage is constant and 27.7% gets
+  more expensive the more you can see — nothing in it falls when less is
+  visible.** No soft-float and no software divide are on the path (T2.5's
+  `___divdi3` pathology does not recur), but each AABB test performs four SH-2
+  hardware 64/32 divisions — 3,472 per frame — for a projected limit a
+  cross-multiply yields in two `dmuls.l`. **Consumer-facing impact: none** —
+  the answer changes no default and no product code path. **Prerequisite for
+  the follow-up task:** the ranked remediation list is generic, not a BOB
+  bypass; items 1 and 2 (reuse the already-allocated
+  `s_admission_cluster_seen` bitset for the duplicate test; memoise
+  `metadata_valid()` on the view's identity) are worth ~918,000 cycles ≈ 2.04
+  VBlanks/frame between them, cannot change a single admitted cluster, and are
+  the recommended first commit. Defensible cost for the stage is 0.5-0.8
+  VBlanks against the measured 4.565, anchored on `work_order`'s own measured
+  880 cycles per cluster touched. Evidence:
+  `docs/saturn/evidence/reports/sprint2-t2_9-spatial-admit-audit.md`.
+
 ### Fixed
 
 - Sprint 2 T2.8 (diagnostics): the VDP1 draw fence is now measurable, and the
@@ -33,6 +69,28 @@
   on read as well as on write.
 
 ### Changed
+
+- Sprint 2 T2.9 (diagnostics): `sm64_saturn_prenotify_profile_t` ABI version
+  3 -> 4, 716 -> 860 bytes (179 -> 215 words). **The node table is deliberately
+  UNCHANGED at 24 entries and ids 0-23 keep their T2.4-T2.8 meaning**, so every
+  earlier ranked table stays directly comparable; the 36 new words are flat FRT
+  sub-spans that subdivide the `spatial_admit` node without participating in the
+  node stack. **Why flat spans rather than node-tree children:** the admission
+  cluster loop runs 867 times per frame, a `push`/`pop` pair costs ~100 SH-2
+  cycles through the `__uncached` working state, and three pairs per iteration
+  would have added ~13% to the very stage under measurement — the T2.5
+  per-vertex mistake repeated. One `uint16_t` cursor threads the whole call, so
+  the named buckets sum to the whole by construction (measured residue: -0.0
+  ticks). **Consumers must update together:** any reader of this record must
+  move to `PROFILE_VERSION = 4` / `PROFILE_WORDS = 215`;
+  `tools/saturn/capture_prenotification_profile.py` is updated in the same
+  commit and gains a `spatial_admit` summary block carrying the ranked
+  sub-stage table, the count table and the per-unit derivations. **Perturbation,
+  measured rather than estimated:** ~50 cycles per span against a predicted ~14
+  (the prediction was wrong by 3.5x and is corrected rather than quietly
+  adjusted); +3.52% on the stage, +0.22% on the frame against T2.8's build by
+  `summarize_cadence`. Unprobed control nodes reproduce T2.6/T2.8 to within
+  0.44%.
 
 - Sprint 2 T2.8 (diagnostics): `sm64_saturn_prenotify_profile_t` ABI version
   2 -> 3, 452 -> 716 bytes (113 -> 179 words). The T2.5/T2.6 FRT rig is

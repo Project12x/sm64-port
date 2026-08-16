@@ -3,6 +3,19 @@
 #include <limits.h>
 #include <string.h>
 
+/* T2.9 (docs/saturn/evidence/reports/sprint2-t2_9-spatial-admit-audit.md).
+ * Sub-span instrumentation only.  Every addition below is inside
+ * #if SM64_SATURN_ADMIT_DIAG, and the product arm of every #else is the
+ * pre-T2.9 statement verbatim, so a SATURN_DIAGNOSTIC_MODE=0 object is
+ * byte-identical to HEAD's. */
+#if defined(SATURN_DIAGNOSTIC_MODE) && SATURN_DIAGNOSTIC_MODE != 0 && \
+    defined(__sh__)
+#include "../runtime/saturn_prenotify_profile.h"
+#define SM64_SATURN_ADMIT_DIAG 1
+#else
+#define SM64_SATURN_ADMIT_DIAG 0
+#endif
+
 /* Admission is completed by the master before either SH-2 receives the
  * render job. Its bounded traversal scratch is supplied by the caller so the
  * sourceboot renderer can reuse an otherwise-dead LWRAM result bank during
@@ -123,6 +136,28 @@ static bool output_has_cluster(const sm64_saturn_scene_admission_output_t *outpu
         if (output->cluster_indices[index] == cluster) return true;
     return false;
 }
+
+#if SM64_SATURN_ADMIT_DIAG
+/* The same linear scan output_has_cluster() performs, returning how many
+ * output slots it read.  The count is taken from the loop's own induction
+ * variable rather than from a counter inside the loop: an increment in the
+ * innermost body would have added roughly 15% to the very loop under
+ * measurement.  Loop header and body are identical to output_has_cluster();
+ * only the exit paths differ. */
+static uint16_t output_cluster_scan(
+    const sm64_saturn_scene_admission_output_t *output, uint16_t cluster,
+    bool *found)
+{
+    uint16_t index;
+    for (index = 0U; index < output->cluster_count; index++)
+        if (output->cluster_indices[index] == cluster) {
+            *found = true;
+            return (uint16_t)(index + 1U);
+        }
+    *found = false;
+    return index;
+}
+#endif
 
 static bool output_has_portal(const sm64_saturn_scene_admission_output_t *output,
                               uint16_t portal)
@@ -280,6 +315,14 @@ bool sm64_saturn_scene_admit_with_scratch(
     uint16_t index;
     bool success = true;
     if (scratch == NULL) return false;
+#if SM64_SATURN_ADMIT_DIAG
+    sm64_saturn_prenotify_admit_t admit;
+    uint16_t admit_entry;
+    uint16_t admit_cursor;
+    memset(&admit, 0, sizeof(admit));
+    admit_entry = sm64_saturn_prenotify_profile_frt();
+    admit_cursor = admit_entry;
+#endif
     s_admission_scratch = scratch;
     if (stats != NULL) memset(stats, 0, sizeof(*stats));
     if (output != NULL) {
@@ -295,10 +338,33 @@ bool sm64_saturn_scene_admit_with_scratch(
         if (stats != NULL) stats->malformed_metadata = 1U;
         return false;
     }
-    if (!metadata_valid(scene, stats)) return false;
+    if (!metadata_valid(scene, stats)) {
+#if SM64_SATURN_ADMIT_DIAG
+        admit.malformed = 1U;
+        admit_cursor = sm64_saturn_prenotify_profile_span(
+            admit_cursor, &admit.validate_ticks, &admit.max_raw);
+        admit.total_ticks = (uint16_t)(admit_cursor - admit_entry);
+        sm64_saturn_prenotify_profile_publish_admit(&admit);
+#endif
+        return false;
+    }
+#if SM64_SATURN_ADMIT_DIAG
+    /* Charges the entry guards and the whole per-frame revalidation of
+     * static package metadata. */
+    admit_cursor = sm64_saturn_prenotify_profile_span(
+        admit_cursor, &admit.validate_ticks, &admit.max_raw);
+#endif
     memset(s_admission_visited, 0, sizeof(s_admission_visited));
     memset(s_admission_queued, 0, sizeof(s_admission_queued));
+#if SM64_SATURN_ADMIT_DIAG
+    admit_cursor = sm64_saturn_prenotify_profile_span(
+        admit_cursor, &admit.scratch_ticks, &admit.max_raw);
+#endif
     frustum = admission_frustum(scene, view);
+#if SM64_SATURN_ADMIT_DIAG
+    admit_cursor = sm64_saturn_prenotify_profile_span(
+        admit_cursor, &admit.frustum_ticks, &admit.max_raw);
+#endif
     s_admission_queue[queue_tail++] = scene->root_node;
     s_admission_queued[scene->root_node] = 1U;
     while (queue_head < queue_tail) {
@@ -314,6 +380,10 @@ bool sm64_saturn_scene_admit_with_scratch(
         stats->nodes_tested++;
         node_state = test_bounds(&frustum, node->bounds_min_q16,
                                  node->bounds_max_q16);
+#if SM64_SATURN_ADMIT_DIAG
+        admit_cursor = sm64_saturn_prenotify_profile_span(
+            admit_cursor, &admit.node_test_ticks, &admit.max_raw);
+#endif
         if (node_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE) continue;
         stats->nodes_admitted++;
         for (index = 0U; index < node->cluster_ref_count; index++) {
@@ -325,15 +395,39 @@ bool sm64_saturn_scene_admit_with_scratch(
                 test_bounds(&frustum, cluster->bounds_min_q16,
                             cluster->bounds_max_q16);
             stats->clusters_tested++;
+#if SM64_SATURN_ADMIT_DIAG
+            if (cluster_state == SM64_SATURN_ZTREME_FRUSTUM_INSIDE)
+                admit.clusters_inside++;
+            else if (cluster_state == SM64_SATURN_ZTREME_FRUSTUM_INTERSECTS)
+                admit.clusters_intersect++;
+            /* This bucket also absorbs the loop overhead of every iteration
+             * that continued before reaching a later probe -- see the ABI
+             * note in saturn_prenotify_profile.h. */
+            admit_cursor = sm64_saturn_prenotify_profile_span(
+                admit_cursor, &admit.cluster_test_ticks, &admit.max_raw);
+#endif
             if (cluster_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE &&
                 cluster->mandatory == 0U) {
                 stats->clusters_rejected_frustum++;
                 continue;
             }
+#if SM64_SATURN_ADMIT_DIAG
+            bool admit_duplicate = false;
+            admit.dedup_compares +=
+                output_cluster_scan(output, cluster_index, &admit_duplicate);
+            admit.dedup_calls++;
+            admit_cursor = sm64_saturn_prenotify_profile_span(
+                admit_cursor, &admit.cluster_dedup_ticks, &admit.max_raw);
+            if (admit_duplicate) {
+                stats->duplicate_clusters++;
+                continue;
+            }
+#else
             if (output_has_cluster(output, cluster_index)) {
                 stats->duplicate_clusters++;
                 continue;
             }
+#endif
             if (output->cluster_count >= output->cluster_capacity) {
                 stats->output_exhausted = 1U;
                 success = false;
@@ -344,6 +438,10 @@ bool sm64_saturn_scene_admit_with_scratch(
             if (cluster->mandatory != 0U &&
                 cluster_state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE)
                 stats->mandatory_clusters_admitted++;
+#if SM64_SATURN_ADMIT_DIAG
+            admit_cursor = sm64_saturn_prenotify_profile_span(
+                admit_cursor, &admit.cluster_emit_ticks, &admit.max_raw);
+#endif
         }
         for (index = 0U; index < node->portal_ref_count; index++) {
             const uint16_t portal_index = scene->portal_refs[
@@ -385,6 +483,10 @@ bool sm64_saturn_scene_admit_with_scratch(
                 s_admission_queued[destination] = 1U;
             }
         }
+#if SM64_SATURN_ADMIT_DIAG
+        admit_cursor = sm64_saturn_prenotify_profile_span(
+            admit_cursor, &admit.portal_ticks, &admit.max_raw);
+#endif
     }
     /* Mandatory records are unconditional package obligations. They are
      * retained even when their owning node is outside the current frustum. */
@@ -401,6 +503,20 @@ bool sm64_saturn_scene_admit_with_scratch(
         stats->clusters_admitted++;
         stats->mandatory_clusters_admitted++;
     }
+#if SM64_SATURN_ADMIT_DIAG
+    admit_cursor = sm64_saturn_prenotify_profile_span(
+        admit_cursor, &admit.mandatory_ticks, &admit.max_raw);
+    admit.total_ticks = (uint16_t)(admit_cursor - admit_entry);
+    admit.nodes_tested = stats->nodes_tested;
+    admit.nodes_admitted = stats->nodes_admitted;
+    admit.clusters_tested = stats->clusters_tested;
+    admit.clusters_admitted = stats->clusters_admitted;
+    admit.clusters_rejected = stats->clusters_rejected_frustum;
+    admit.clusters_duplicate = stats->duplicate_clusters;
+    admit.portals_tested = stats->portals_tested;
+    admit.output_count = output->cluster_count;
+    sm64_saturn_prenotify_profile_publish_admit(&admit);
+#endif
     return success && output->cluster_count != 0U;
 }
 
