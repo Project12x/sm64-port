@@ -758,6 +758,22 @@ verify-scene-admission: check-host-tools
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-admission-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-admission-test$(HOST_EXEEXT)"
 
+# T2.10 item 3: the cross-multiplied frustum classification must agree with the
+# divided form it replaces. SM64_SATURN_ZTREME_FRUSTUM_REFERENCE is defined
+# here and nowhere else, which is what compiles the pinned pre-T2.10 body into
+# ztreme_frustum.c for the fixture to compare against.
+verify-frustum-equivalence: check-host-tools
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_ZTREME_FRUSTUM_REFERENCE=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/frustum_cross_multiply_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_scene_admission.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_frustum.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frustum-cross-multiply-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/frustum-cross-multiply-test$(HOST_EXEEXT)"
+
 verify-portal-windows: check-host-tools
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \

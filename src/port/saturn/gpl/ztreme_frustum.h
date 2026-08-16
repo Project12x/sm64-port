@@ -31,4 +31,15 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
     const sm64_saturn_ztreme_frustum_t *frustum,
     const int32_t minimum[3], const int32_t maximum[3]);
 
+#if defined(SM64_SATURN_ZTREME_FRUSTUM_REFERENCE)
+/* Host-fixture only; see ztreme_frustum.c. The pinned pre-T2.10 divided
+ * classifier, plus a switch that routes the shipped entry point through it so
+ * a fixture can compare whole admitted sets across the two forms. */
+extern int sm64_saturn_ztreme_frustum_force_reference;
+
+sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb_reference(
+    const sm64_saturn_ztreme_frustum_t *frustum,
+    const int32_t minimum[3], const int32_t maximum[3]);
+#endif
+
 #endif

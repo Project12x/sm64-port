@@ -4,6 +4,32 @@
 
 ### Added
 
+- Sprint 2 T2.10 (test): an equivalence oracle for the frustum classification,
+  landed **before** the arithmetic it guards. **Why now:** T2.9 Finding E
+  identified four SH-2 hardware 64/32 divisions per AABB test (3,472 per
+  frame) that a cross-multiply removes, and flagged it as the one remediation
+  that can move the admitted cluster set. Pinning the current behaviour first
+  is what makes that change reviewable instead of a leap. **What it is:**
+  `tools/saturn/frustum_cross_multiply_test.c`, run by
+  `make -f Makefile.saturn.mk verify-frustum-equivalence`, comparing three
+  independent statements per case — the pinned pre-T2.10 divided body
+  (compiled into `ztreme_frustum.c` only under
+  `SM64_SATURN_ZTREME_FRUSTUM_REFERENCE`, which only this target defines),
+  whatever `sm64_saturn_ztreme_frustum_aabb()` currently is, and an exact
+  128-bit restatement written from the algebra that divides where the
+  cross-multiplied form multiplies and never clamps. It also drives the real
+  `sm64_saturn_scene_admit()` twice per camera pose with the classifier
+  switched underneath it and requires the emitted cluster index arrays to be
+  byte-equal, so the claim is about admitted **sets** rather than individual
+  comparisons. **Result at this commit:** 487,418 classifier cases (270,095
+  inside the cross-multiply domain, 217,323 outside it), 1,024 poses, 28,461
+  cluster admissions, **0 divergences**. **Tradeoff accepted:** the pinned
+  reference is a verbatim copy of the shipped body, so the two share a
+  prologue; the oracle's independent content is the lateral algebra, and the
+  copy is what covers the prologue. **Consumer-facing impact: none** —
+  `ztreme_frustum.c` compiled without the macro is byte-identical to HEAD's
+  object (`6cb04fcb…c0840`, 1,584 B, host `gcc -O2 -g0`).
+
 - Sprint 2 T2.9 (diagnostics): `demo_spatial_admit()` is decomposed at loop
   resolution, answering the owner's question "does spatial_admit need to cost
   as much as it does?" with **no**. **Why this was needed:** T2.7 localised

@@ -53,6 +53,11 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
     const sm64_saturn_ztreme_frustum_t *frustum,
     const int32_t minimum[3], const int32_t maximum[3])
 {
+#if defined(SM64_SATURN_ZTREME_FRUSTUM_REFERENCE)
+    if (sm64_saturn_ztreme_frustum_force_reference)
+        return sm64_saturn_ztreme_frustum_aabb_reference(frustum, minimum,
+                                                         maximum);
+#endif
     if (frustum == NULL || minimum == NULL || maximum == NULL) {
         return SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE;
     }
@@ -103,3 +108,72 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
     }
     return SM64_SATURN_ZTREME_FRUSTUM_INTERSECTS;
 }
+
+#if defined(SM64_SATURN_ZTREME_FRUSTUM_REFERENCE)
+/* Test-only equivalence-oracle support (Sprint 2 T2.10 item 3,
+ * docs/saturn/evidence/reports/sprint2-t2_10-spatial-admit-fixes.md).
+ *
+ * sm64_saturn_ztreme_frustum_aabb_reference() is a verbatim copy of the
+ * pre-T2.10 divided body, pinned here so the cross-multiplied classification
+ * is proven against the implementation it replaces rather than against
+ * itself. sm64_saturn_ztreme_frustum_force_reference lets the fixture drive
+ * the real sm64_saturn_scene_admit() through the pinned body, so the oracle
+ * can compare admitted cluster *sets* and not only individual comparisons.
+ *
+ * SM64_SATURN_ZTREME_FRUSTUM_REFERENCE is defined only by the host test
+ * target; no product build defines it, so none of this reaches the image. */
+int sm64_saturn_ztreme_frustum_force_reference = 0;
+
+sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb_reference(
+    const sm64_saturn_ztreme_frustum_t *frustum,
+    const int32_t minimum[3], const int32_t maximum[3])
+{
+    if (frustum == NULL || minimum == NULL || maximum == NULL) {
+        return SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE;
+    }
+    int64_t center_world[3];
+    int64_t extent_world[3];
+    for (uint8_t axis = 0U; axis < 3U; axis++) {
+        center_world[axis] = ((int64_t)minimum[axis] + maximum[axis]) / 2;
+        extent_world[axis] = ((int64_t)maximum[axis] - minimum[axis] + 1) / 2;
+    }
+    int64_t delta[3] = {
+        center_world[0] - frustum->position[0],
+        center_world[1] - frustum->position[1],
+        center_world[2] - frustum->position[2]};
+    const int64_t z = dot_q16(frustum->forward, delta) >> 16;
+    const int64_t x = dot_q16(frustum->right, delta) >> 16;
+    const int64_t y = dot_q16(frustum->up, delta) >> 16;
+    const int64_t z_radius =
+        support_radius_q16(frustum->forward, extent_world);
+    const int64_t x_radius =
+        support_radius_q16(frustum->right, extent_world);
+    const int64_t y_radius =
+        support_radius_q16(frustum->up, extent_world);
+    const int64_t near_limit = frustum->near_depth;
+    const int64_t far_limit = frustum->far_depth;
+    const int64_t far_z = z + z_radius > near_limit
+        ? z + z_radius : near_limit;
+    const int64_t near_z = z - z_radius > near_limit
+        ? z - z_radius : near_limit;
+    const int32_t far_width = scaled_limit(far_z, frustum->half_width,
+                                           frustum->focal_length);
+    const int32_t far_height = scaled_limit(far_z, frustum->half_height,
+                                            frustum->focal_length);
+    const int32_t near_width = scaled_limit(near_z, frustum->half_width,
+                                            frustum->focal_length);
+    const int32_t near_height = scaled_limit(near_z, frustum->half_height,
+                                             frustum->focal_length);
+    if (interval_outside(z, z_radius, near_limit, far_limit) ||
+        interval_outside(x, x_radius, -far_width, far_width) ||
+        interval_outside(y, y_radius, -far_height, far_height)) {
+        return SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE;
+    }
+    if (interval_inside(z, z_radius, near_limit, far_limit) &&
+        interval_inside(x, x_radius, -near_width, near_width) &&
+        interval_inside(y, y_radius, -near_height, near_height)) {
+        return SM64_SATURN_ZTREME_FRUSTUM_INSIDE;
+    }
+    return SM64_SATURN_ZTREME_FRUSTUM_INTERSECTS;
+}
+#endif
