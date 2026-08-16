@@ -2,6 +2,68 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Sprint 2 T2.15 (measurement): the geo walk's cadence ceiling is now measured
+  rather than estimated, and the estimate it replaces was wrong by 24x.
+
+  **What changed and why.** T2.14 closed by naming "the geo walk builds a
+  display list nobody reads" as the next lever, at "roughly 10x the entire
+  shadow path", and pointed at the pre-existing sealed diagnostic
+  `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1` to bound it in one build. T2.15 made
+  that build (`id-137ecb7d231a34d6`) and measured **6.3273 FPS mean / 9.4828
+  VBlanks per frame** against the 5.3538 / 11.2069 baseline -- **+0.9735 FPS,
+  +18.18%**, with median and 1% low both improving. That is the largest single
+  lever measured on this route.
+
+  **Root cause of the bad estimate.** T2.14 arrived at "10x" by attributing
+  `_saturn_geo_enter_object` (1.7048% of sampled cycles) and
+  `_saturn_mtxq_refresh_float_mirror` (0.5854%) to display-list construction.
+  A site-by-site classification of `src/game/rendering_graph_node.c` shows both
+  are dominated by state the demo renderer and the simulation read back: the
+  list-building inside `saturn_geo_enter_object` is exactly three statements
+  (`:1643`, `:1647`, `:1650`), and `saturn_mtxq_refresh_float_mirror` is
+  entirely state -- its own comment at `:1602-1607` records that it cannot even
+  be *deferred*, because `cameraToObject` and `obj_is_in_view` read the float
+  mirror first. The genuinely removable set is the four symbols
+  `_geo_append_display_list`, `_alloc_only_pool_alloc`, `_alloc_display_list`
+  and `_saturn_mtxq_write_wire`: **0.0737% of cycles, 3,695.7 cycles/frame**,
+  which is **0.41x** the shadow path, not 10x.
+
+  **Tradeoff taken.** No code change was landed. Removing the display-list
+  construction is worth **+0.004 to +0.011 FPS** (0.07%-0.21%), about half the
+  shadow-path gating T2.14 already declined; `gDisplayListHead` is written at
+  443 sites across 13 files, four of the highest-value sites both compute state
+  and write it into a list, and the byte-identical oracle the change would need
+  costs more than the prize. The classification is the durable deliverable.
+
+  **Consumer-facing.** The ceiling build is a diagnostic and must never ship:
+  `area.c:400` gates the whole walk plus `render_hud()` and
+  `render_text_labels()` in one `if`, so besides the animation/warp/camera/
+  water/moving-texture/carpet/matrix state its own comment names, it also
+  freezes `sPowerMeterHUD`, which `sourceboot/main.c:505-506` publishes into the
+  render snapshot -- a snapshot field, newly documented here. Anyone chasing the
+  remaining 99.5% must also re-check the T2.11 concurrency rail: the allowance
+  goes from needed in 0 of 29 intervals to 29 of 29 at the ceiling.
+
+  Prerequisite recorded for the next builder: the known g15 repair is delete
+  **and then explicitly republish** `build/saturn/packages/bob/1/actors-v3-g15/`
+  -- deleting alone fails the build with "actor family bundle publication is
+  incomplete".
+
+### Fixed
+
+- Sprint 2 T2.15 (docs): recorded two further instances of the MSYS/path
+  recipe-defect class in `STATE.md`, bringing the known count to four.
+  `verify-source-geo-state-diff` hands an MSYS-form path to a native-Windows
+  Python `subprocess.run` and dies with `FileNotFoundError`, though its binary
+  passes when run by hand; `verify-graph-q16-contract` omits
+  `build/saturn/sourceboot/generated` from its include path while
+  `saturn_geo_walk_storage.h:8` needs the generated
+  `saturn_geo_depth_manifest.h`, so it has been dying at the preprocessor and
+  verifying nothing inside `verify-all`. Recipes not repaired here; recorded so
+  they are not rediscovered a fifth time.
+
 ### Added
 
 - Sprint 2 T2.14 (diagnostics): `tools/saturn/capture_route_counters.py`, which

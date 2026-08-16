@@ -208,6 +208,36 @@ tree (6 files, 16 KB) instead of its build directory. Run by hand it **PASSES:
 43.3 billion checks, 0 failures** -- and it pins the soft-fp *library* only, so
 T2.13's change was outside its scope regardless.
 
+**T2.15 found two more, making four known instances of the same class.**
+`verify-source-geo-state-diff` (`Makefile.saturn.mk:623`) hands the MSYS-form
+path of its built test to a native-Windows Python `subprocess.run` and dies with
+`FileNotFoundError [WinError 2]`; run by hand the binary **passes, rc=0**.
+`verify-graph-q16-contract` (`Makefile.saturn.mk:1925-1930`) omits
+`build/saturn/sourceboot/generated` from its `-I` list while
+`src/port/saturn/runtime/saturn_geo_walk_storage.h:8` includes the generated
+`saturn_geo_depth_manifest.h`, so it dies at the preprocessor -- the identical
+shape as the repaired `verify-render-clusters` defect, and it has been sitting
+in `verify-all` verifying nothing. Neither is a regression: T2.15 modified no
+tracked source.
+
+## Cadence ceiling
+
+**The geo walk is the largest lever measured to date, and it is mostly not
+removable.** T2.15 built the sealed `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1`
+diagnostic (`id-137ecb7d231a34d6`) and measured **6.3273 FPS mean / 9.4828 VB
+per frame** -- **+0.9735 FPS, +18.18%** against 5.3538 / 11.2069. Median 6.6667,
+1% low 5.4545. That build **can never ship**: `area.c:400` suppresses the whole
+walk plus `render_hud()` and `render_text_labels()`, invalidating animation,
+warp, camera, water, moving-texture, carpet and matrix state and the HUD
+power-meter snapshot field.
+
+**The display-list construction inside that region -- the thing T2.14 named as
+"~10x the shadow path" -- is 0.479% of the ceiling**, 3,695.7 of 771,443 cycles
+per frame, worth about **+0.005 FPS**. T2.15 landed no code change on that
+basis and retired the estimate. The remaining 99.5% is state the demo renderer
+reads; see `docs/saturn/evidence/reports/sprint2-t2_15-geo-walk-display-list.md`
+sections 2 and 6 for the full site classification and where to attack instead.
+
 ## Product truth
 
 **There is now an owner-accepted current CUE: `id-86d3880727ed1d10`.**

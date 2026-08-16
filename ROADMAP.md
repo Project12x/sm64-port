@@ -62,13 +62,31 @@ again after T2.12 closed `spatial_admit` out**):
   oracle declaring zero indirect edges, which now declares 115; the project had
   already pinned v3/v4 at 700 and excluded the v2 gate from releases on
   2026-08-10.
-- **The geo walk builds a display list nobody reads — THE NEW LEVER (T2.14).**
-  Under `SATURN_DEMO_PATH=1` display submission is suppressed around the whole
-  of `game_loop_one_iteration()`; the screen is built entirely by
-  `saturn_demo_render.c`. The walk itself must stay (it owns animation,
-  camera and matrix state) but the display-list construction inside it is pure
-  waste, at roughly **10x the entire shadow path**. `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1`
-  already exists to bound the prize in one build.
+- ~~The geo walk's display list as a lever~~ — **CLOSED by T2.15: worth
+  +0.004 to +0.011 FPS.** T2.14's "~10x the entire shadow path" is **retired as
+  a 24-fold over-estimate** — it counted `_saturn_geo_enter_object` (1.7048%)
+  and `_saturn_mtxq_refresh_float_mirror` (0.5854%) as list construction, and
+  T2.15's site classification shows both are dominated by state the demo
+  renderer reads. The genuinely removable set is **0.0737% of cycles**, which is
+  **0.41x** the shadow path, not 10x. Not worth the build slot or the blast
+  radius (`gDisplayListHead` is written at 443 sites across 13 files).
+- **The geo walk ITSELF is the largest lever measured to date — +0.9735 FPS
+  (+18.18%) CEILING (T2.15).** `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1` measures
+  **6.3273 FPS / 9.4828 VB** against 5.3538 / 11.2069 on
+  `id-137ecb7d231a34d6`. That is a sealed diagnostic and can never ship — it
+  invalidates animation, warp, camera, water, moving-texture, carpet and matrix
+  state, and (newly documented) the HUD power-meter snapshot field, because
+  `area.c:400` gates `render_hud()` and `render_text_labels()` in the same `if`.
+  **99.5% of the ceiling is state-owning work.** Attack it by making that state
+  cheaper, not by deleting output: `_saturn_geo_enter_object` is 85,486
+  cycles/frame over 18.6 objects, `_sm64_saturn_matrix_mul` 40,349 and
+  `_saturn_mtxq_refresh_float_mirror` 29,355 (both at 43.5 calls/frame).
+  Named starting point, bit-exact and cheap: `obj_is_in_view`
+  (`rendering_graph_node.c:1477-1479`) recomputes a frame-constant `halfFov`
+  plus its `sins`/`coss` pair **per object** — hoist it to the perspective node.
+  Caveat for anyone who captures a large share of this: the T2.11 concurrency
+  allowance goes from needed in **0 of 29** intervals to **29 of 29** at the
+  ceiling, so the rail must be re-checked.
 - ~~Shadows as a cadence item~~ — **CLOSED by T2.14: worth +0.01 to +0.03 FPS,
   below run-to-run spread.** Not several FPS: T2.13 had already banked the
   expensive part. Shadows are now a *fidelity direction*, not a performance one --
