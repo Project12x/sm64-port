@@ -7,13 +7,14 @@
 **Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
 **Sprint 2 (cadence recovery) — investigation phase COMPLETE 2026-08-15.**
 
-**Current measured cadence: 4.9432 FPS / 12.1379 VBlanks per frame** on
-`id-05046d9d5d8a5593` (T2.12), against A9A's 5.294 FPS / 11.333 VB. The gap is
-now **1.071x** — 0.805 VB/frame — and the medians are equal at 5.0. Source:
-`docs/saturn/evidence/reports/sprint2-t2_12-hierarchical-admission.md`,
-29 intervals, `summarize_cadence`, 1% low 4.6154. Predecessors on the same
-basis: `id-b46f60d0a6d129dd` 4.3176 / 13.8966 (T2.10+T2.11, owner-accepted),
-`id-6eca5970628d581d` 3.8753 / 15.4828.
+**Current measured cadence: 5.3538 FPS / 11.2069 VBlanks per frame** on
+`id-a61d5203793986e7` (T2.13), against A9A's 5.294 FPS / 11.333 VB. **This is
+the first build past A9A on both numbers.** Median 5.4545, 1% low 5.0. Source:
+`docs/saturn/evidence/reports/sprint2-t2_13-softfloat-matrix-path.md`,
+29 intervals, `summarize_cadence`. Predecessors on the same basis:
+`id-05046d9d5d8a5593` 4.9432 / 12.1379 (T2.12), `id-b46f60d0a6d129dd`
+4.3176 / 13.8966 (T2.10+T2.11, owner-accepted), `id-6eca5970628d581d`
+3.8753 / 15.4828.
 
 > **Retired figures — do not cite.** The 1.0682 (T2.2), 1.0866 (T2.3) and
 > 1.4634 (T2.6) FPS numbers were hand-computed from capture *failure
@@ -72,6 +73,25 @@ What the sprint established, in order:
   `min(simulation, master_finalization)`, an upper bound on that double count
   read from the same trace, and is unchanged (zero allowance) for v1 traces.
   Control reproduces T2.7 to every digit.
+- **T2.13** — **the soft-float purge, measured before it was cut: 5.3538 FPS /
+  11.2069 VB, +8.31% and −0.9310 VB** against `id-05046d9d5d8a5593`, and the
+  first build past A9A on both numbers. The measurement came first and
+  **overturned the census's target**: `guRotateF` never executes on this route,
+  and every sampled soft-double call traces to `calculate_vertex_xyz` in
+  `src/game/shadow.c`, which spent five double-precision polynomial evaluations
+  per shadow vertex recovering an angle `atan2s` had already produced exactly.
+  It now indexes the engine's own `sins`/`coss` table. **Not bit-exact and
+  owner-visible** — worst shadow-vertex movement 0.147 world units, under a
+  tenth of a pixel, bounded by `verify-shadow-trig` (measured 1.486145e-3
+  against a derived 1.4871e-3) and cannot accumulate. Two bit-exact wins landed
+  beside it (held-object translation, HUD digit ladder) and the report says
+  plainly that both are worth approximately nothing dynamically. **Static call
+  sites misrank dynamic cost badly**: the census's #1 float caller at 110 sites
+  is near the bottom, and six of its top nine targets never executed once in
+  240,000 samples. New tooling: `capture_softfloat_profile.py` cycle-attributes
+  the running build through `exec.stepi` with no rebuild. **The finding that
+  outranks the plan: 70.21% of sampled SH-2 cycles are idle**, so the largest
+  remaining lever looks like the master/slave handoff, not arithmetic.
 - **T2.12** — **the spatial index is a real tree at last: 255 nodes over the
   867 BOB clusters, with the INSIDE short-circuit. 4.9432 FPS / 12.1379 VB,
   −1.7587 VB and +14.5%** against `id-b46f60d0a6d129dd`; −1.2414 VB of that
@@ -108,12 +128,24 @@ naked-eye reading independently corroborates `summarize_cadence`'s 4.3176 FPS
 mean (1% low above 4), which is further confirmation that the T2.7
 measurement contamination is behind us: observed and measured cadence now agree.
 
-**Open owner gate: `id-05046d9d5d8a5593` (T2.12).** It is byte-identical in
-admitted content to the build the owner just accepted, so it carries no known
-visual or audio risk — but it has not been look-and-listened, and the measured
-jump from 4.3176 to 4.9432 FPS is the kind of change worth confirming by eye.
+**Open owner gate: `id-a61d5203793986e7` (T2.13).** 5.3538 FPS / 11.2069 VB,
+the first build past A9A on both. **Unlike every candidate before it, this one
+is NOT byte-identical in emitted geometry.** T2.13 replaced the shadow path's
+double-precision `sinf`/`cosf` with the engine's own trig table, so Mario's
+shadow is built from vertex positions that differ by up to 0.147 world units
+(under a tenth of a screen pixel at a typical camera distance, and it cannot
+accumulate across frames). What to look at: Mario's shadow on sloped ground
+while he moves across the slope. Nothing else in the frame is affected; the
+other two T2.13 changes are bit-exact and proven so.
 
-**Known RED gate, not T2.12's doing:** `verify-render-clusters` fails because its
+`id-05046d9d5d8a5593` (T2.12) is superseded on cadence and was never
+look-and-listened.
+
+**T2.13's cadence-rail note:** the T2.11 concurrency allowance, needed on 14
+of 29 intervals at T2.12 and flagged there as trending badly, is needed on
+**0 of 29** in this build.
+
+**Known RED gate, not T2.13's doing:** `verify-render-clusters` fails because its
 recipe passes `-I src/port/saturn/gfx` while `1ec76248` gave `ztreme_hot_promotion.c`
 a `src`-relative include. Same class as the 22 latent Makefile recipe defects
 T2.10 flagged. Filed, not fixed.
