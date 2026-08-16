@@ -4,6 +4,26 @@
 
 ### Added
 
+- Sprint 2 T2.13 (gates): `verify-shadow-trig` and
+  `verify-shadow-trig-mutation`, the error-bounded oracle for the shadow trig
+  substitution, both wired into `verify-all`. **This is the first oracle in
+  Sprint 2 that is deliberately not an identity oracle** -- replacing a
+  double-precision polynomial with a 4096-step table changes the answer by
+  construction, and asserting byte-identity here would be a lie. It instead
+  (a) bounds the movement over all 65,536 s16 angles against the libultra
+  polynomial copied verbatim from `lib/src/math/{sinf,cosf}.c` and fed through
+  the same f32 rounding chain the caller applied, (b) names the blunders that
+  must never ship -- quadrant error, sign flip, off-by-one table index, a flat
+  floor that is not the identity -- so a failure reports which one happened
+  rather than "a number got big", and (c) measures the largest single-angle
+  step discontinuity, because a fixed small offset is acceptable here but
+  geometry that pops between frames is not. Measured worst case
+  **1.486145e-3 against a derived bound of 1.4871e-3** -- the derivation is
+  confirmed to four significant figures. Four mutations, all killed; the
+  tolerance mutation is deliberately tight (2.0e-5, landing at 1.506e-3, just
+  past the 1.5e-3 bound) because a mutation that overshoots by an order of
+  magnitude proves only that a comparison exists.
+
 - Sprint 2 T2.13 (float, bit-exact): `saturn_geo_enter_held_object` builds its
   Q16 translation with an integer multiply. It was computing
   `node->translation[i] / 4.0f` on `s16` input and then converting the result
@@ -52,9 +72,11 @@
   90 degrees is exactly 0x4000 BAM, so the tilt subtraction stays exact.
   **This is not bit-exact and the owner may be able to see it.** `sins`/`coss`
   discard the low 4 bits of the angle, so trig values move by up to
-  1.526e-3 absolute (measured worst case over all 65,536 angles), which moves a
-  shadow vertex by up to 0.153 world units at BOB's largest shadow scale --
-  under a tenth of a screen pixel at Mario's on-screen size. The quantisation
+  1.486e-3 absolute (measured worst case over all 65,536 angles, against a
+  derived bound of 1.4871e-3), which moves a shadow vertex by up to **0.147
+  world units** at Mario's shadow scale of 100 -- about 0.04 screen pixels at a
+  typical camera distance, and it cannot accumulate across frames because the
+  substitution is memoryless. The quantisation
   is the *same* one every `mtxf_*` constructor in this engine already applies,
   and the same one Sega's own SGL documents for `slSin`/`slCos`, so the shadow
   is now consistent with the geometry it sits on rather than more precise than

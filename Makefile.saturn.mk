@@ -162,7 +162,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-saturn-object-pool-probe-contract verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-audio-sequences compile-saturn-audio verify-pcm-transport verify-source-audio-live verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-admission-hierarchy verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-painter-chain verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-bank-v2 verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-family-bundle verify-actor-family-bundle-build verify-actor-identity-registry verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema verify-saturn-sha256 classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-actor-family-bundle inventory-actor-family-bundles compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-actor-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-saturn-object-pool-probe-contract verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-audio-sequences compile-saturn-audio verify-pcm-transport verify-source-audio-live verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-admission-hierarchy verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-painter-chain verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-bank-v2 verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-family-bundle verify-actor-family-bundle-build verify-actor-identity-registry verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-shadow-trig verify-shadow-trig-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema verify-saturn-sha256 classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-actor-family-bundle inventory-actor-family-bundles compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-actor-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 .PHONY: verify-actor-variant-bank
 
@@ -1644,6 +1644,63 @@ verify-ir-transform:
 # float-boundary and signed-Q16-division differential fixture on every normal
 # verification pass. The companion target is a deterministic mutation check:
 # it only passes when the fixture rejects the test-only broken division mode.
+# Sprint 2 T2.13: the error-bounded oracle for the shadow trig substitution.
+#
+# Unlike every other equivalence gate in this tree it deliberately does NOT
+# prove byte-identity. calculate_vertex_xyz's Saturn arm indexes the engine
+# trig table where it used to evaluate the libultra double-precision
+# polynomial, so its output moves by construction and an identity assertion
+# here would be a lie. What the fixture does instead is:
+#   (a) BOUND that movement over the whole s16 angle domain -- all 65,536
+#       values, both wrap points included -- against the polynomial copied
+#       verbatim from lib/src/math/{sinf,cosf}.c and fed through the same f32
+#       rounding chain the caller applied, so the comparison is against what
+#       the target really computed rather than an idealised sine;
+#   (b) name the BLUNDERS that must never ship -- quadrant error, sign flip,
+#       off-by-one table index, a flat floor that is not the identity -- so a
+#       failure reports which one happened instead of "a number got big";
+#   (c) measure the largest single-angle-step discontinuity the table
+#       introduces, because a fixed small offset is acceptable to this project
+#       but geometry that pops between frames is not.
+#
+# It also carries the two identity-preserving T2.13 changes: the held-object
+# translation over all 65,536 s16 inputs, and push_clamped_int's digit ladder
+# against the general loop it replaced, over widths that include the ones
+# which still take the loop.
+verify-shadow-trig:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -O2 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/include" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/shadow_trig_test.c" \
+	  -lm \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/shadow-trig-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/shadow-trig-test$(HOST_EXEEXT)"
+
+# Deterministic mutation companion: every mutation must make the fixture FAIL.
+# A tolerance oracle whose bound nothing can breach is decorative, so the
+# tolerance mutation is deliberately TIGHT -- 2.0e-5 on top of a measured worst
+# case of 1.486e-3 lands at 1.506e-3, just past the 1.5e-3 bound. The other
+# three are the blunders: a one-unit error in the bit-exact held-object
+# translation, a one-entry table index shift, and a sine/cosine swap.
+SHADOW_TRIG_MUTATIONS := SHADOW_TRIG_TEST_MUTATE_TOLERANCE SHADOW_TRIG_TEST_MUTATE_EXACT SHADOW_TRIG_TEST_MUTATE_INDEX SHADOW_TRIG_TEST_MUTATE_QUADRANT
+
+verify-shadow-trig-mutation:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	@for mutation in $(SHADOW_TRIG_MUTATIONS); do \
+	  $(HOST_CC_ENV) $(HOST_CC) -std=c11 -O2 -w -D$$mutation=1 \
+	    -I"$(SATURN_REPO_ROOT)/include" \
+	    -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	    "$(SATURN_REPO_ROOT)/tools/saturn/shadow_trig_test.c" -lm \
+	    -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/shadow-trig-mutation$(HOST_EXEEXT)" || exit 1; \
+	  if "$(SATURN_REPO_ROOT)/build/saturn/host-tests/shadow-trig-mutation$(HOST_EXEEXT)" >/dev/null 2>&1; then \
+	    printf '%s\n' "shadow-trig mutation $$mutation escaped the fixture" >&2; \
+	    exit 1; \
+	  else \
+	    printf '%s\n' "shadow-trig mutation $$mutation caught by the fixture"; \
+	  fi; \
+	done
+
 verify-render-native-math:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
@@ -2123,7 +2180,7 @@ compile-castle-collision: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_collision.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-collision-bank-2026-07-19.json"
 
-verify-all: verify-tools verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-frame-pipeline verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-saturn-object-pool-probe-contract classify-source verify-hello verify-hwtest
+verify-all: verify-tools verify-shadow-trig verify-shadow-trig-mutation verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-frame-pipeline verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-saturn-object-pool-probe-contract classify-source verify-hello verify-hwtest
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean
