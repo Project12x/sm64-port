@@ -9,13 +9,13 @@
   were exercised only by valid trees, which is how a fail-closed guard becomes
   silently dead. Cases: a child index at or below its parent's, a child range
   past the node count, a leaf with a non-zero `child_first`, child bounds not
-  contained in the parent's, and one node claimed by two parents — plus a
+  contained in the parent's, and one node claimed by two parents â€” plus a
   positive case binding the fixture's three nodes as a hierarchy and asserting
   the admitted count does not move. Two cases had to be constructed so that
   the check under test is the *only* one that rejects them; as first written,
   containment rejected them first and the mutations survived.
   **Mutation result: four of the five checks killed.** The child-range check
-  survives and cannot be killed from C — removing it makes the fixture read
+  survives and cannot be killed from C â€” removing it makes the fixture read
   one node past the array, so what rejects the case is undefined-behaviour
   garbage rather than the guard. Test-only: no product code changes, so the
   measured build is unaffected.

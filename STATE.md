@@ -7,12 +7,13 @@
 **Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
 **Sprint 2 (cadence recovery) — investigation phase COMPLETE 2026-08-15.**
 
-**Current measured cadence: 4.3176 FPS / 13.8966 VBlanks per frame** on
-`id-b46f60d0a6d129dd` against A9A's 5.294 FPS / 11.333 VB. The gap is
-**1.23x**, not the 3.6x once believed. Source:
-`docs/saturn/evidence/reports/sprint2-t2_11-cadence-summarizer-fix.md` §5.2,
-30 presentation events, `summarize_cadence`. The previous product build
-`id-6eca5970628d581d` measures 3.8753 / 15.4828 on the same basis.
+**Current measured cadence: 4.9432 FPS / 12.1379 VBlanks per frame** on
+`id-05046d9d5d8a5593` (T2.12), against A9A's 5.294 FPS / 11.333 VB. The gap is
+now **1.071x** — 0.805 VB/frame — and the medians are equal at 5.0. Source:
+`docs/saturn/evidence/reports/sprint2-t2_12-hierarchical-admission.md`,
+29 intervals, `summarize_cadence`, 1% low 4.6154. Predecessors on the same
+basis: `id-b46f60d0a6d129dd` 4.3176 / 13.8966 (T2.10+T2.11, owner-accepted),
+`id-6eca5970628d581d` 3.8753 / 15.4828.
 
 > **Retired figures — do not cite.** The 1.0682 (T2.2), 1.0866 (T2.3) and
 > 1.4634 (T2.6) FPS numbers were hand-computed from capture *failure
@@ -71,16 +72,55 @@ What the sprint established, in order:
   `min(simulation, master_finalization)`, an upper bound on that double count
   read from the same trace, and is unchanged (zero allowance) for v1 traces.
   Control reproduces T2.7 to every digit.
+- **T2.12** — **the spatial index is a real tree at last: 255 nodes over the
+  867 BOB clusters, with the INSIDE short-circuit. 4.9432 FPS / 12.1379 VB,
+  −1.7587 VB and +14.5%** against `id-b46f60d0a6d129dd`; −1.2414 VB of that
+  lands in `construction`, where `demo_spatial_admit()` lives, meeting T2.9's
+  1.0-1.2 VB estimate at its upper end. `clusters_tested` finally **varies with
+  the view — 0 to 548** against a flat pass that read 867 every frame without
+  exception; total tests fall to 31.6% of flat. Both halves fit: the generator
+  owned the whole admission section in one function (+95/−20 lines of Python)
+  and the node array lives in cart `.cart_rodata` (9,180 B, no work RAM). The
+  1,183-node BSP was correctly **rejected** as the data source — it indexes primitive
+  spans, not cluster refs. Admitted output is **byte-identical**: 48,200
+  comparisons over the real cluster bank, 0 divergences, new gate `verify-admission-hierarchy`.
+  Two hazards the brief did not anticipate, both found by failing first: AABB
+  quantisation makes OUTSIDE pruning **non-monotone** (fixed with a derived
+  8-unit margin on node tests; 102 poses caught), and output order had to stop
+  depending on traversal shape (96 mandatory clusters/frame sit in pruned
+  subtrees). Mutations: OUTSIDE-inverted, INTERSECTS-dropped and margin-removed
+  all KILLED; both INSIDE short-circuit removals SURVIVE **by construction** — a
+  correct short-circuit is unobservable in output, which is why the prune and
+  descent mutations are the real guards.
 
-**Next:** T2.9's remaining items 4-8, or the arithmetic census's 1,827
-soft-float sites. The BOB bypass is demoted to diagnostic value only — the
-generic fixes recovered comparable time and keep charter D6 intact.
+**Next:** the arithmetic census's 1,827 soft-float sites (incl. double-precision
+`sinf`/`cosf` on the per-frame matrix path), the Mario double-emit (two VDP1
+commands per textured primitive, the lower one provably invisible), or T2.9's
+remaining items 5-8. The BOB bypass stays demoted to diagnostic value only —
+the generic fixes recovered comparable time and keep charter D6 intact, and
+T2.12 in particular scales *better* as levels grow.
 
-**Open owner gate:** candidate `id-6eca5970628d581d` (clean audio, Mario
-prep -95%, visuals bit-identical) has not been look-and-listened.
-`id-b46f60d0a6d129dd` now supersedes it on cadence (4.3176 vs 3.8753 FPS) and
-is likewise bit-identical in output, so one look-and-listen on the newer build
-would close both.
+**Owner gate CLOSED 2026-08-16.** `id-b46f60d0a6d129dd` was look-and-listened
+on desktop Ymir: **visuals good, sound working,
+owner observed 4-5 FPS by eye.** This closes the gate on `id-6eca5970628d581d`
+as well — it is superseded on cadence and bit-identical in output. The
+naked-eye reading independently corroborates `summarize_cadence`'s 4.3176 FPS
+mean (1% low above 4), which is further confirmation that the T2.7
+measurement contamination is behind us: observed and measured cadence now agree.
+
+**Open owner gate: `id-05046d9d5d8a5593` (T2.12).** It is byte-identical in
+admitted content to the build the owner just accepted, so it carries no known
+visual or audio risk — but it has not been look-and-listened, and the measured
+jump from 4.3176 to 4.9432 FPS is the kind of change worth confirming by eye.
+
+**Known RED gate, not T2.12's doing:** `verify-render-clusters` fails because its
+recipe passes `-I src/port/saturn/gfx` while `1ec76248` gave `ztreme_hot_promotion.c`
+a `src`-relative include. Same class as the 22 latent Makefile recipe defects
+T2.10 flagged. Filed, not fixed.
+
+**Watch item:** T2.11's cadence allowance is being spent 3.5x harder — needed on
+**14 of 29** intervals here vs 4 of 29 at T2.10, though still only 1 crossing each
+inside a 4.66 allowance. Not blocking at 12 VB/frame; it will be at 8.
 
 ## Product truth
 
