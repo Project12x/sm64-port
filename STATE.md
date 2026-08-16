@@ -5,56 +5,58 @@
 **Active plan:**
 [`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
 **Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
-**Sprint 2 (cadence recovery):** T2.0 reference sweep, T2.1 peak capture,
-T2.2 reclamation+un-split and T2.3 painter counting sort all COMPLETE
-(2026-08-15). **T2.2's result is the
-load-bearing one: recovering 67,584 B of HWRAM and returning the full
-54,080 B hot working set to 32-bit memory did NOT move cadence** (1.068 FPS
-vs the R1 baseline's comparable 1.071). Memory objective met — true slack
-over the floor went 472 B → 13,944 B, and a real latent `gGfxPool` overflow
-corruption was fixed en route. Cadence objective not met. The memory-tier
-hypothesis is narrowed, not refuted (`_sourceboot_fast3d`, 44,616 B, is still
-in LWRAM; its unlock is the T2.0 L3 staging-window architecture, which needs
-its own CUE). **T2.3 painter counting sort COMPLETE (2026-08-15,
-candidate `id-aa57d83c898e3af1`): correctness objective met — the relink is
-a byte-identical counting sort, 20.6x fewer record visits — and cadence
-moved 1.0682 -> 1.0866 FPS (+1.72%), a real but small gain.** The saving is
-0.97 VBlanks/frame and its attribution is exact: master finalization
-5.80 -> 4.83 while the pre-notification window (18.92), slave overlap (2.73)
-and simulation (6.07) counters are bit-identical. Honest read: the rescan
-was ~4% of construction, not the bulk of it — T2.0 L8's "115,200 steps"
-assumed ~1,800 live commands, but T2.1 measured 653.
-**T2.4 and T2.5 COMPLETE (2026-08-15, measurement only — nothing
-optimised): the pre-notification window has been decomposed twice, and the
-bottleneck is now named, located and explained.** T2.4 built T2.0 L14's FRT
-sub-stage profiler and found the window is two stages —
-`demo_prepare_mario()` 69.2% and `demo_spatial_admit()` 26.4%, 95.7%
-together, with the parts summing to 99.95% of the whole. T2.5 sub-probed
-the first: **97.8% of `demo_prepare_mario()` is one function,
-`actor_meshlet_live_depth_bounds()`, at 5,245,905 cycles/frame = 11.43
-VBlanks = 20.7% of the entire frame.** Root cause confirmed at instruction
-level: `actor_saturating_mul_i64()` checks overflow *by dividing*, so every
-call emits libgcc's `___divdi3` — **~14,080 64-bit software divisions per
-frame**, and it is the only 64-bit-division caller on any hot path in the
-image. The walk also runs **twice** per frame (the two instrumented passes
-measure 0.001% apart). Measured cost: 3,725.8 cycles per position visit,
-12,647.7 per mesh vertex, against a defensible ~100–150. **Mesh reduction
-is NOT the lever** — halving the mesh leaves 5.72 VBlanks/frame; fixing the
-arithmetic at full detail leaves ~0.2. **T2.6 implements**, ranked in the
-plan: (1) carry pass 1's bounds into pass 2 — 5.72 VBlanks, bit-identical
-by construction; (2) replace the saturating `int64` arithmetic with
-per-actor algebra — ~11.2 VBlanks combined, ~20% of the frame, but it can
-shift an LOD tier or painter bin so it needs an equivalence oracle and
-owner sign-off. T2.5 also cleared T2.4's recorded instrument debt: the two
-cross-CPU FRT fields are removed, the profiler state is `__uncached`, the
-fault accounting is fixed (the harness now exits 0 with all twelve checks
-passing), and FRT wrap headroom went 17% -> 71.6%. Open: owner
-look-and-listen on `id-6b7c7e5d5f71e809` (T2.2's capacity cuts, inherited by
-this build). Evidence:
-`docs/saturn/evidence/reports/sprint2-t2_2-reclaim-unsplit.md`,
-`sprint2-t2_3-painter-counting-sort.md`,
-`sprint2-t2_4-prenotification-profile.md`,
-`sprint2-t2_5-prepare-mario-audit.md`.
+**Sprint 2 (cadence recovery) — investigation phase COMPLETE 2026-08-15.**
+
+**Current measured cadence: 3.81 FPS / 15.76 VBlanks per frame** against A9A's
+5.294 FPS / 11.333 VB. The gap is **1.37x**, not the 3.6x previously believed.
+
+> **Retired figures — do not cite.** The 1.0682 (T2.2), 1.0866 (T2.3) and
+> 1.4634 (T2.6) FPS numbers were hand-computed from capture *failure
+> diagnostics* over `vblanks_advanced`, which includes the ~1,549-VBlank
+> pre-gameplay ramp. A9A's 5.294 always came from `summarize_cadence` and
+> was never contaminated. All cadence figures must come from the summarizer.
+
+What the sprint established, in order:
+
+- **T2.1** — every capacity-shrink gate measured safe (VDP1 peak 653 of 2048).
+- **T2.2** — 67,584 B of HWRAM reclaimed and the full 54,080 B hot working set
+  returned to 32-bit memory: **no cadence change.** The memory-tier hypothesis
+  is disproved as the lever. Banked anyway: true slack 472 B -> 13,944 B, and a
+  real latent `gGfxPool` overflow corruption fixed en route.
+- **T2.3** — painter counting sort, 20.6x fewer steps, but only ~+1.7%: the
+  reference sweep's step estimate assumed ~1,800 live commands where T2.1 had
+  measured 653.
+- **T2.4/T2.5/T2.6** — `demo_prepare_mario()` was 21% of the frame because
+  `actor_saturating_mul_i64()` **checked overflow by dividing**
+  (~14,080 libgcc `___divdi3` calls/frame) and the meshlet walk ran twice.
+  Both fixed; that stage fell **95%** (3,725.8 -> 102.9 cycles/visit) with
+  bit-identical output across 685,456 equivalence cases.
+- **T2.7** — the contamination above; the real gap is one module.
+- **T2.8** — **VDP1 measured idle: 0 waits across 1,349 fence events**,
+  `vdp1_sync()` proven non-blocking, ~552 commands/frame against a 1,664
+  capacity. **We are CPU-bound.** Every fill-rate lever (user clipping,
+  command-count LOD, HSS, the Mario double-emit) is demoted as a cadence lever.
+- **Arithmetic census** — divides essentially fixed, 64-bit healthy, but
+  **1,827 hot-reachable soft-float sites survive, 150 of them soft-double**,
+  including double-precision `sinf`/`cosf` on the per-frame matrix
+  path. Also: the in-tree native-math verifier now fails (1,402 helpers vs a
+  pinned 582) — number established, cause not.
+- **T2.9** — **`spatial_admit` does not need to cost what it costs.**
+  `SM64_SATURN_BOB_ADMISSION_NODE_COUNT` is **1**: the spatial index is a
+  single node holding all 867 cluster refs, a flat list with a tree's type
+  signature, so no early-out is possible and cost never falls with visibility
+  (`clusters_tested` = 867, min = max, every sample). 71.8% of it is
+  literally constant and 27.7% (a dedup scan that has **never found a
+  duplicate**, K(K-1)/2 = 39,903 compares/frame) gets *worse* the more is
+  visible. Defensible cost 0.5-0.8 VB; **recoverable ~3.8-4.0 VB = 24-26% of
+  the frame, all generically.**
+
+**Next:** T2.9's remediation (O(1) dedup, memoised validation, cross-multiplied
+divides, then a real hierarchy). The BOB bypass is demoted to diagnostic value
+only — the generic fixes recover comparable time and keep charter D6 intact.
+
+**Open owner gate:** candidate `id-6eca5970628d581d` (clean audio, Mario
+prep -95%, visuals bit-identical) has not been look-and-listened.
 
 ## Product truth
 

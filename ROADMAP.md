@@ -10,62 +10,36 @@ only with a newly built, uniquely identified CUE and its live evidence.
 **Deliverable:** the accepted R1 capability set at a materially better frame
 rate, without losing music, audio, or visual acceptance.
 
-Measured starting point (candidate `id-86d3880727ed1d10`): ~1.1 FPS sustained,
-~53 VBlanks per presented frame, dominated by scene construction (~24.5
-VBlanks) and master finalization (~5.8).
+Measured starting point (candidate `id-6eca5970628d581d`, figures from
+`summarize_cadence`): **3.81 FPS / 15.76 VBlanks per frame**, against
+A9A's 5.294 FPS / 11.333 VB — a **1.37x** gap. Construction is ~66% of the
+frame; VDP1 is measured idle.
 
-Known levers, in evidence order (**updated after T2.2's measured result**):
+Levers, in evidence order (**rewritten after T2.2/T2.8/T2.9 measurements**):
 
-- ~~Committed HWRAM reduction~~ — **DONE and DISPROVED as the lever.** T2.2
-  recovered 67,584 B and returned the entire 54,080 B hot working set to
-  32-bit HWRAM; cadence moved 1.071 → 1.068 FPS, i.e. not at all. Banked
-  wins: slack 472 B → 13,944 B, and a silent `gGfxPool` overflow corruption
-  fixed. Do not spend further effort here on this evidence.
-- ~~The painter relink is O(bins x commands) per frame~~ — **DONE, kept, and
-  much smaller than estimated.** T2.3 replaced the per-bin rescan with a
-  counting sort over intrusive per-bin chains (T2.0 L7's separation of sort
-  from link write; 128 B of stack, no side buffer), byte-identical output
-  verified against the retained predecessor and an independent model on 16
-  cases with three mutation kills. 42,900 -> 2,078 record visits per frame
-  (20.6x). Cadence 1.0682 -> 1.0866 FPS (+1.72%), all of it attributable to
-  master finalization (5.80 -> 4.83 VBlanks/frame) with every other phase
-  counter bit-identical. L8's "115,200 steps" assumed ~1,800 live commands;
-  T2.1 measured 653, so the stage was only ~4% of construction.
-- ~~The unmeasured pre-notification window~~ — **MEASURED, twice, and the
-  bottleneck is now named.** T2.4 built T2.0 **L14**'s FRT sub-stage
-  profiler and decomposed the window into two stages: `demo_prepare_mario()`
-  69.2% and `demo_spatial_admit()` 26.4%, 95.7% together, unattributed
-  remainder 0.048%. T2.5 then sub-probed the first and found **97.8% of it
-  is `actor_meshlet_live_depth_bounds()`** — 5,245,905 cycles/frame, 11.43
-  VBlanks, **20.7% of the entire frame** — because
-  `actor_saturating_mul_i64()` checks overflow by *dividing*, emitting
-  ~14,080 libgcc `___divdi3` calls per frame, and because the whole walk
-  runs twice per frame. T2.0 **L12** is also answered: master spin on the
-  slave is zero by construction and the slave is busy 1.02x its own overlap
-  window, so there is no idle-slave slack to rebalance.
-- **T2.6 is the active lever: fix the depth-bounds walk.** (1) Carry pass
-  1's bounds and span into pass 2 — **5.72 VBlanks/frame (10.4% of the
-  frame)**, bit-identical by construction, one 620–868 B static array.
-  (2) Replace the loop's saturating `int64` arithmetic with per-actor
-  algebra (`depth(v) = dot(pos−cam, fwd) + dot(S⊙v, R_yawᵀ·fwd)`) —
-  **~11.2 VBlanks combined, ~20% of the frame**; risk is numeric, since
-  `depth_bounds` feeds `actor_lod_tier()` and `actor_depth_bin()`, so it
-  needs an equivalence oracle committed before the swap (T2.3's pattern)
-  and owner sign-off on Mario's appearance. Then re-measure:
-  `demo_spatial_admit()` becomes the largest block.
-- **Mesh reduction is NOT the lever, with numbers.** Halving Mario's mesh
-  leaves the stage at 5.72 VBlanks/frame; fixing the arithmetic at *full*
-  424-vertex detail leaves ~0.2. Poly count is a linear factor on a constant
-  that is ~25–37x too large. Revisit only for VDP1 fill rate or the
-  post-notification emit stage, neither of which has been profiled.
-- Not the next step: T2.0 **L10**'s coarser per-BSP-leaf ordering unit. It
-  would attack a stage that now costs 2,078 record visits per frame.
-- Mario dominates the command stream (638 of 882 visible items; 50 source
-  triangles expanding to ~200 VDP1 commands).
-- Structural, deferred: SlaveDriver keeps both VDP1 command banks in VRAM
-  behind a 10,240 B staging window (T2.0 L3). Adopting it would return
-  ~96,256 B of our 106,496 B staging — enough to rehome `_sourceboot_fast3d`
-  — but it changes the transport contract and needs its own CUE and gate.
+- ~~Committed HWRAM reduction~~ — **DONE and DISPROVED.** T2.2 returned the
+  entire 54,080 B hot working set to 32-bit HWRAM with no cadence change.
+- ~~Fill rate / VDP work~~ — **DISPROVED as a cadence lever.** T2.8 measured
+  the VDP1 draw fence at **0 waits in 1,349 frames**; ~552 commands/frame
+  against a 1,664 capacity. User clipping, command-count LOD, HSS and the
+  Mario double-emit remain real *fidelity/scale* items but buy no frames now.
+- ~~Painter relink~~ — **DONE**, +1.7% (T2.3).
+- ~~Mario meshlet arithmetic~~ — **DONE**, that stage -95% (T2.5/T2.6).
+- **`spatial_admit` — THE ACTIVE LEVER.** 4.565 VB/frame = 29% of frame,
+  one call, view-independent because the "spatial index" is a single node over
+  867 clusters. Generic fixes, ranked: O(1) dedup via the already-allocated
+  seen-array (~1.56 VB); memoise `metadata_valid()` on view identity
+  (~0.48 VB); cross-multiply instead of 4 hardware divides per test
+  (~0.55 VB); restore a real hierarchy with the INSIDE short-circuit
+  (~1.0-1.2 VB, and the only one that makes cost fall with visibility).
+  **Total ~3.8-4.0 VB => roughly 5.0-5.5 FPS**, no fidelity cost, D6 intact.
+- **Soft-float purge** — 1,827 hot-reachable sites, 150 soft-double, including
+  double-precision `sinf`/`cosf` on the per-frame matrix path, in a
+  port whose premise is that this compiler's soft-float miscompiles and crawls.
+  Correctness *and* speed; a 0x1400-entry Q16 trig table already exists.
+- **Slave overlap window** — the slave carries ~7% of frame work because it is
+  given a ~3-VB window across four blocking fork-joins; SlaveDriver dispatches
+  once and joins after simulation. Structural, deferred behind the above.
 
 **Gate:** owner-observed cadence improvement with music, audio, and visuals
 still accepted. The >=4 FPS floor becomes binding again once a cadence
