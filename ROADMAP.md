@@ -10,13 +10,21 @@ only with a newly built, uniquely identified CUE and its live evidence.
 **Deliverable:** the accepted R1 capability set at a materially better frame
 rate, without losing music, audio, or visual acceptance.
 
-Measured baseline (candidate `id-05046d9d5d8a5593`, figures from
-`summarize_cadence`): **4.9432 FPS / 12.1379 VBlanks per frame**, against
-A9A's 5.294 FPS / 11.333 VB — a **1.071x** gap, 0.805 VB/frame, with the two
-medians equal at 5.0. The Sprint 2 series, all on the same basis:
-3.8753 (`id-6eca5970628d581d`) -> 4.3176 (`id-b46f60d0a6d129dd`,
-owner-accepted at 4-5 FPS by eye) -> 4.9432 — **+27.5% across the sprint.**
-Construction is ~66% of the frame; VDP1 is measured idle.
+Measured baseline (candidate `id-a61d5203793986e7`, figures from
+`summarize_cadence`): **5.3538 FPS / 11.2069 VBlanks per frame** --
+**past A9A on both numbers** (5.294 / 11.333) for the first time in the
+project's history. Median 5.4545, 1% low 5.0. The Sprint 2 series, all on the
+same basis: 3.8753 (`id-6eca5970628d581d`) -> 4.3176 (`id-b46f60d0a6d129dd`,
+owner-accepted at 4-5 FPS by eye) -> 4.9432 (`id-05046d9d5d8a5593`) -> 5.3538 --
+**+38.2% across the sprint.**
+
+**The ranking below is now partly superseded by measurement.** T2.13 built a
+cycle profiler (`exec.stepi`, 240,000 samples on the shipped ELF, no rebuild)
+and found that **70.21% of sampled SH-2 cycles are idle** (`___slave_polling_entry`
+41.4%, master VBlank wait 28.8%), that all float is 7.50% of sampled cycles,
+and that all integer divide is 0.12% with `___sdivsi3` never appearing at all.
+**Treat static call-site counts as leads, not as a cost ranking** -- six of the
+census's top nine float targets never execute on this route.
 
 Levers, in evidence order (**rewritten after T2.2/T2.8/T2.9 measurements, and
 again after T2.12 closed `spatial_admit` out**):
@@ -38,17 +46,28 @@ again after T2.12 closed `spatial_admit` out**):
   -0.55 VB estimate, because T2.9 priced the SH-2 DIVU at serial datasheet
   latency when the divider actually runs concurrently with the pipeline.
   **Revert-vs-keep on those 168 lines is still open.**
-- **Soft-float purge — THE ACTIVE LEVER.** 1,827 hot-reachable sites, 150 of
-  them soft-double, including double-precision `sinf`/`cosf` called
-  from `guRotateF` and `calculate_vertex_xyz` on the per-frame
-  matrix path — in a port whose founding premise is that this compiler's
-  soft-float both miscompiles and crawls. **Correctness as much as speed.** A
-  0x1400-entry Q16 trig table already exists in tree, and four
-  `saturn_geo_enter_*` functions have fully-Q16 siblings to use as the
-  template. Counts are static reachability, so 1,827 is a lower bound.
-  Related and unexplained: the in-tree native-math verifier now fails
-  (1,402 sim-route helpers against a pinned contract of 582) — the number is
-  established, the cause is not.
+- ~~Soft-float purge~~ — **SLICE 1 DONE (T2.13), and the census was wrong about
+  where.** `guRotateF` **never executes on this route** -- its callers are
+  ingame_menu, paintings and the goddard Mario head. The double-precision trig
+  was reached through `calculate_vertex_xyz` in `src/game/shadow.c`, which
+  recovered an angle `atan2s` had already produced exactly; it now indexes the
+  engine's own `sins`/`coss` table (+8.31%). Soft-float that is *not* double is
+  still ~4.6% of sampled cycles, led by `_saturn_geo_enter_object` -- which has a
+  fully-Q16 sibling, `_saturn_geo_enter_camera`, beside it as the template.
+  **The 1,827 figure is static reachability and misranks dynamic cost; census
+  items 2 and 5 are phantoms here.** The native-math verifier's failure is
+  diagnosed: a **stale contract, not a regression** -- 582 was pinned against an
+  oracle declaring zero indirect edges, which now declares 115; the project had
+  already pinned v3/v4 at 700 and excluded the v2 gate from releases on
+  2026-08-10.
+- **Master/slave handoff — THE ACTIVE LEVER (promoted by measurement).** 70.21%
+  of sampled SH-2 cycles are idle. The slave carries ~7% of frame work because
+  it is given a ~3-VB window across four blocking fork-joins; SlaveDriver
+  dispatches once and joins after simulation. Structural, and now the biggest
+  single number in the profile.
+- **`_actor_meshlet_live_depth_bounds` — 3.662% of sampled cycles: the largest
+  single non-idle symbol in the profile, and not floating-point at all.** No
+  census item names it; sampling alone found it.
 - **Mario double-emit** — every textured primitive emits **two** VDP1 commands
   with the same sort key: a Gouraud polygon, then a distorted sprite drawn
   over it (`saturn_demo_render.c:3871-3931`). The polygon underneath is
@@ -68,13 +87,16 @@ again after T2.12 closed `spatial_admit` out**):
   indoor course, so this is an S1/S5/S6 prerequisite rather than a cadence
   item today.
 
-**Known RED gate, filed:** none — `verify-render-clusters`'s include-path
-defect was repaired. **22 Makefile recipes still carry the MSYS path defect**
-T2.10 fixed in three of them.
+**Host-gate defects, MSYS path class (22 recipes remain):** `verify-render-clusters`'s
+include path is repaired (099ce72a) -- it had been dying at the preprocessor
+since `1ec76248`, verifying nothing from inside `verify-all` -- but its final
+step still execs the built binary via Python `subprocess.run`, which will not
+resolve a missing `.exe`. `verify-softfp-bitexact` hands an MSYS-form root to
+native Windows Python and created a stray `D:\d\Code\...` tree instead of its build
+directory. Run by hand it PASSES: 43.3 billion checks, 0 failures.
 
-**Watch item:** T2.11's cadence allowance is spent on **14 of 29** intervals
-at T2.12 versus 4 of 29 at T2.10, though still only one VBlank crossing each
-inside a 4.66 allowance. Not blocking at 12 VB/frame; it will be at 8.
+**Watch item resolved:** T2.11's cadence allowance was needed on 14 of 29
+intervals at T2.12 and is needed on **0 of 29** at T2.13.
 
 **Gate:** owner-observed cadence improvement with music, audio, and visuals
 still accepted. The >=4 FPS floor becomes binding again once a cadence

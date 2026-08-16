@@ -113,12 +113,18 @@ What the sprint established, in order:
   correct short-circuit is unobservable in output, which is why the prune and
   descent mutations are the real guards.
 
-**Next:** the arithmetic census's 1,827 soft-float sites (incl. double-precision
-`sinf`/`cosf` on the per-frame matrix path), the Mario double-emit (two VDP1
-commands per textured primitive, the lower one provably invisible), or T2.9's
-remaining items 5-8. The BOB bypass stays demoted to diagnostic value only —
-the generic fixes recovered comparable time and keep charter D6 intact, and
-T2.12 in particular scales *better* as levels grow.
+**Next: the target moved, and T2.13's profile is why.** **70.21% of sampled
+SH-2 cycles are idle** (`___slave_polling_entry` 41.4%, master VBlank wait
+28.8%), so the master/slave handoff -- four blocking fork-joins giving the slave
+a ~3-VB window, where SlaveDriver dispatches once and joins after simulation --
+is now the largest single lever. Behind it: `_actor_meshlet_live_depth_bounds` at
+**3.662% of sampled cycles, the largest non-idle symbol in the profile and not
+floating-point at all** (no census item names it); then the remaining soft-float
+at ~4.6%, led by `_saturn_geo_enter_object`, which has a fully-Q16 sibling
+(`_saturn_geo_enter_camera`) beside it as the template. Also open: the Mario
+double-emit, and T2.9's items 5-8. **Census items 2 and 5 should be
+deprioritised -- they are static phantoms on this route.** The BOB bypass stays
+demoted to diagnostic value only.
 
 **Owner gate CLOSED 2026-08-16.** `id-b46f60d0a6d129dd` was look-and-listened
 on desktop Ymir: **visuals good, sound working,
@@ -145,14 +151,18 @@ look-and-listened.
 of 29 intervals at T2.12 and flagged there as trending badly, is needed on
 **0 of 29** in this build.
 
-**Known RED gate, not T2.13's doing:** `verify-render-clusters` fails because its
-recipe passes `-I src/port/saturn/gfx` while `1ec76248` gave `ztreme_hot_promotion.c`
-a `src`-relative include. Same class as the 22 latent Makefile recipe defects
-T2.10 flagged. Filed, not fixed.
-
-**Watch item:** T2.11's cadence allowance is being spent 3.5x harder — needed on
-**14 of 29** intervals here vs 4 of 29 at T2.10, though still only 1 crossing each
-inside a 4.66 allowance. Not blocking at 12 VB/frame; it will be at 8.
+**Two host gates are silently un-runnable in some shells -- the MSYS path class
+T2.10 flagged, 22 recipes still to go.** `verify-render-clusters`'s include-path
+defect is **repaired** (099ce72a): it passed only `-I src/port/saturn/gfx` while
+`1ec76248` gave `ztreme_hot_promotion.c` a `src`-relative include, so the gate
+had been dying at the preprocessor -- sitting in `verify-all` and verifying
+nothing. Its final step still execs the built binary through Python `subprocess.run`,
+which will not resolve a missing `.exe` suffix the way the MSYS shell does.
+`verify-softfp-bitexact` hands an MSYS-form `SATURN_REPO_ROOT` to a
+native-Windows Python, so its `mkdir` step created a stray `D:\d\Code\...` mirror
+tree (6 files, 16 KB) instead of its build directory. Run by hand it **PASSES:
+43.3 billion checks, 0 failures** -- and it pins the soft-fp *library* only, so
+T2.13's change was outside its scope regardless.
 
 ## Product truth
 
