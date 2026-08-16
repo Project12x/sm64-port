@@ -7,8 +7,12 @@
 **Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
 **Sprint 2 (cadence recovery) — investigation phase COMPLETE 2026-08-15.**
 
-**Current measured cadence: 3.81 FPS / 15.76 VBlanks per frame** against A9A's
-5.294 FPS / 11.333 VB. The gap is **1.37x**, not the 3.6x previously believed.
+**Current measured cadence: 4.3176 FPS / 13.8966 VBlanks per frame** on
+`id-b46f60d0a6d129dd` against A9A's 5.294 FPS / 11.333 VB. The gap is
+**1.23x**, not the 3.6x once believed. Source:
+`docs/saturn/evidence/reports/sprint2-t2_11-cadence-summarizer-fix.md` §5.2,
+30 presentation events, `summarize_cadence`. The previous product build
+`id-6eca5970628d581d` measures 3.8753 / 15.4828 on the same basis.
 
 > **Retired figures — do not cite.** The 1.0682 (T2.2), 1.0866 (T2.3) and
 > 1.4634 (T2.6) FPS numbers were hand-computed from capture *failure
@@ -51,12 +55,32 @@ What the sprint established, in order:
   visible. Defensible cost 0.5-0.8 VB; **recoverable ~3.8-4.0 VB = 24-26% of
   the frame, all generically.**
 
-**Next:** T2.9's remediation (O(1) dedup, memoised validation, cross-multiplied
-divides, then a real hierarchy). The BOB bypass is demoted to diagnostic value
-only — the generic fixes recover comparable time and keep charter D6 intact.
+- **T2.10** — T2.9's three generic fixes landed. `demo_spatial_admit()` fell
+  **40.5%** (16,588.1 -> 9,871.8 FRT ticks) with **zero** divergences across
+  516,090 classifier cases and 1,024 admission poses. Item 3
+  (cross-multiplied divides) is bit-identical but a **measured regression**,
+  +0.075 VB. No FPS could be reported: the summarizer aborted twice.
+- **T2.11** — **the summarizer is repaired and T2.10 is confirmed at the frame
+  level: 4.3176 FPS / 13.8966 VB/frame, −1.586 VB and +11.4% against
+  `id-6eca5970628d581d`**, with the whole saving landing in `construction`
+  where the three fixes were made. Root cause of the abort: `construction`
+  subtracts a slave-work window whose opening boundary `retirement_vblank` is
+  stamped **on the slave SH-2**, while the master is still inside the source
+  tick the frame pipeline admitted — so those crossings were charged to both
+  `construction` and `simulation`. The guard now subtracts
+  `min(simulation, master_finalization)`, an upper bound on that double count
+  read from the same trace, and is unchanged (zero allowance) for v1 traces.
+  Control reproduces T2.7 to every digit.
+
+**Next:** T2.9's remaining items 4-8, or the arithmetic census's 1,827
+soft-float sites. The BOB bypass is demoted to diagnostic value only — the
+generic fixes recovered comparable time and keep charter D6 intact.
 
 **Open owner gate:** candidate `id-6eca5970628d581d` (clean audio, Mario
 prep -95%, visuals bit-identical) has not been look-and-listened.
+`id-b46f60d0a6d129dd` now supersedes it on cadence (4.3176 vs 3.8753 FPS) and
+is likewise bit-identical in output, so one look-and-listen on the newer build
+would close both.
 
 ## Product truth
 
