@@ -536,7 +536,36 @@ def phase_delta(previous: dict[str, int], current: dict[str, int]) -> dict[str, 
         simulation_crossings + construction_crossings +
         transport_presentation_crossings
     )
-    if attributed > vblank_delta:
+    # T2.11.  `attributed <= vblank_delta` asserts that the accounted phases are
+    # wall-disjoint sub-windows of the interval.  For a single-threaded master
+    # sampling one monotone VBlank counter that holds exactly -- but one phase
+    # boundary in the v2 schema is not stamped by the master.
+    #
+    # `master_finalization` is `terminal_vblank - retirement_vblank`, and
+    # `retirement_vblank` is written from the *slave* SH-2 at the instant the
+    # slave retires the job (`sourceboot_render_runtime_marker`, RETIRED arm, in
+    # src/port/saturn/sourceboot/main.c -- its own comment records that the
+    # observer runs on the slave).  The master does not begin finalizing then;
+    # it is still inside whatever action it was dispatched to run, and the frame
+    # pipeline admits the next source tick while the render is in flight
+    # (`sm64_saturn_frame_pipeline_step`, the sim-credit branch taken when
+    # `render_active && render_service_started`).  Every whole VBlank crossing
+    # between the slave's stamp and the master's first poll after it is charged
+    # twice: once to `master_finalization`, hence to `construction`, and once to
+    # `simulation`.
+    #
+    # That double charge is a sub-window of both phases, so it is bounded above
+    # by their minimum.  The bound is read out of this same trace rather than
+    # chosen: it is exactly zero when no finalization window exists -- a v1
+    # trace with no overlap fields, or a phase aborted before notification --
+    # and it shrinks with either phase.  Widening it further, or applying it
+    # where no concurrent window is recorded, would stop the check failing on
+    # data that really is inconsistent.
+    concurrent_allowance = (
+        min(simulation_crossings, master_finalize_crossings)
+        if has_overlap_phases else 0
+    )
+    if attributed - concurrent_allowance > vblank_delta:
         raise ValueError("phase VBlank crossings exceed the observed interval")
     result = {
         "vblank_delta": vblank_delta,
@@ -569,6 +598,9 @@ def phase_delta(previous: dict[str, int], current: dict[str, int]) -> dict[str, 
             "vblank_crossings": master_finalize_crossings,
             "count": delta("master_finalize_count"),
         }
+        result["concurrent_phase_allowance_vblank_crossings"] = (
+            concurrent_allowance
+        )
     return result
 
 

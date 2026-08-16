@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Sprint 2 T2.11 (measurement): `summarize_cadence` in
+  `tools/saturn/capture_sourceboot_throughput.py` no longer aborts with
+  `ObservationError: phase VBlank crossings exceed the observed interval` on
+  builds materially faster than ~15.5 VBlanks per frame. **This changes when a
+  capture aborts; it does not change any FPS or VBlank figure the tool
+  computes.** **Root cause:** `phase_delta()` required
+  `simulation + construction + transport_presentation <= vblank_delta`, which
+  asserts the accounted phases are wall-disjoint sub-windows of the interval.
+  For a single-threaded master differencing one monotone VBlank counter that
+  holds exactly -- but one boundary in the v2 cadence schema is not stamped by
+  the master. `master_finalization` is `terminal_vblank - retirement_vblank`,
+  and `retirement_vblank` is written from the **slave SH-2** at the instant the
+  slave retires the job (`sourceboot_render_runtime_marker`, RETIRED arm,
+  `src/port/saturn/sourceboot/main.c`). The master does not begin finalizing
+  then; it is still inside the action it was dispatched to run, and
+  `sm64_saturn_frame_pipeline_step()` admits the next source tick while the
+  render is in flight. Every whole VBlank crossing between the slave's stamp and
+  the master's first poll after it is therefore charged **twice** -- once to
+  `master_finalization`, hence to `construction`, and once to `simulation`.
+  **Why it surfaced now rather than earlier:** the overshoot is bounded by one
+  crossing per affected interval, and the previous product build
+  `id-6eca5970628d581d` had exactly enough idle time per frame to absorb it
+  (`attributed == vblank_delta` in 25 of its 29 intervals, margin zero). T2.10
+  removed 1.586 VBlanks per frame of that slack, so four of 29 intervals tipped
+  one crossing past the interval and the whole summary was discarded.
+  **Fix:** the double charge is a sub-window of both phases, so it is bounded
+  above by `min(simulation, master_finalization)`, and the check is now
+  `attributed - concurrent_allowance <= vblank_delta`. **The bound is read out
+  of the same trace, not chosen:** it is exactly zero when no finalization
+  window exists -- a v1 trace with no overlap fields, or a phase aborted before
+  notification -- and it shrinks with either phase. It cannot excuse an
+  overshoot in `transport_presentation`, whose boundaries are both master
+  stamped. **Tradeoff:** the interval-level margin on the current build family
+  widens from 0 to about 5 crossings of 15, because the cadence trace carries no
+  clock finer than whole VBlank crossings with which to resolve the overlap
+  exactly. **Consumer-facing impact:** `attributed_vblank_crossings` and
+  `unattributed_vblank_crossings` keep their existing definitions, so
+  `unattributed` may now be reported **negative** where it previously forced an
+  abort; that is the honest raw margin and readers must not treat it as idle
+  time. Intervals decoded from a v2 trace gain one new field,
+  `concurrent_phase_allowance_vblank_crossings`; v1 intervals are unchanged.
+  **Prerequisite removed:** every FPS measurement in the project was blocked on
+  this, including T2.10's, whose cadence is recorded in
+  `docs/saturn/evidence/reports/sprint2-t2_11-cadence-summarizer-fix.md`.
+  **Owner follow-up, not fixed here:** stamping `retirement_vblank` from the
+  master's observation of retirement, or adding an FRT field to a cadence trace
+  v3, would remove the ambiguity instead of bounding it.
+
 ### Changed
 
 - Sprint 2 T2.10 item 3 (perf): the frustum AABB classification derives its

@@ -31,6 +31,40 @@ QUEUE_ADDRESS = 0x06010200
 CADENCE_ADDRESS = 0x06010300
 
 
+REPO_ROOT = TOOLS_DIR.parents[1]
+EVIDENCE_DIR = REPO_ROOT / "docs" / "saturn" / "evidence" / "reports"
+# The two runs T2.10 retained when `summarize_cadence` aborted on build
+# `id-b46f60d0a6d129dd`.  Both are deterministic replays of that same build, so
+# their retained cumulative cadence records are two samples of one trajectory.
+T2_10_ABORT_REPORTS = (
+    EVIDENCE_DIR / "sprint2-t2_10-throughput-10events.json",
+    EVIDENCE_DIR / "sprint2-t2_10-throughput.json",
+)
+
+
+def _retained_t2_10_abort_records() -> tuple[dict[str, int], dict[str, int]]:
+    records: list[dict[str, int]] = []
+    for path in T2_10_ABORT_REPORTS:
+        report = json.loads(path.read_text(encoding="utf-8"))
+        if report["status"] != "failed":
+            raise AssertionError(f"{path.name} is no longer a retained abort")
+        records.append(
+            dict(report["observation_diagnostics"]["last_cadence_trace"]["record"])
+        )
+    return records[0], records[1]
+
+
+def _retained_t2_10_abort_events() -> list[dict[str, object]]:
+    return [
+        {
+            "vblank_generation": int(record["presentation_generation"]),
+            "presentation_generation": int(record["presentation_generation"]),
+            "cadence": record,
+        }
+        for record in _retained_t2_10_abort_records()
+    ]
+
+
 def be_words(size: int, values: dict[int, int]) -> bytes:
     raw = bytearray(size)
     for offset, value in values.items():
@@ -448,6 +482,97 @@ class ThroughputCaptureTests(unittest.TestCase):
         impossible["master_finalize_vblank_crossings"] = 3
         with self.assertRaisesRegex(ValueError, "finalization.*construction"):
             capture.phase_delta(previous, impossible)
+
+    def test_t2_10_retained_abort_data_summarises_and_reports_negative_margin(
+        self,
+    ) -> None:
+        """T2.11 regression: the two runs T2.10 retained must summarise.
+
+        Both aborted runs are deterministic replays of the same build
+        (`id-b46f60d0a6d129dd`, ELF `68fbdeb0...88a6`), so the cumulative
+        cadence records they retained at presentation events 10 and 30 are two
+        samples of one trajectory and their difference is a real 20-frame
+        interval.  It is the interval that tripped the old invariant.
+        """
+        previous, current = _retained_t2_10_abort_records()
+
+        delta = capture.phase_delta(previous, current)
+
+        self.assertEqual(delta["vblank_delta"], 282)
+        self.assertEqual(delta["simulation"]["vblank_crossings"], 122)
+        self.assertEqual(delta["construction"]["vblank_crossings"], 162)
+        self.assertEqual(
+            delta["transport_presentation"]["vblank_crossings"], 0
+        )
+        self.assertEqual(delta["master_finalization"]["vblank_crossings"], 102)
+        # The raw sum still exceeds the interval and is still reported as such:
+        # the fix does not hide the overshoot, it stops treating it as fatal.
+        self.assertEqual(delta["attributed_vblank_crossings"], 284)
+        self.assertEqual(delta["unattributed_vblank_crossings"], -2)
+        self.assertEqual(
+            delta["concurrent_phase_allowance_vblank_crossings"], 102
+        )
+
+        events = _retained_t2_10_abort_events()
+        summary = capture.summarize_cadence(events, nominal_refresh_hz=60.0)
+        self.assertEqual(summary["interval_count"], 1)
+        self.assertEqual(summary["target_vblank_delta"], 282)
+
+    def test_transport_overshoot_has_no_concurrent_window_and_still_raises(
+        self,
+    ) -> None:
+        """Genuinely inconsistent data must still abort.
+
+        `transport_presentation` runs on the master with both boundaries
+        stamped by the master, so no concurrency can excuse it.  Inflating it
+        past the interval on otherwise real T2.10 data must still fail.
+        """
+        previous, current = _retained_t2_10_abort_records()
+        inconsistent = dict(current)
+        inconsistent["transport_presentation_vblank_crossings"] = 400
+
+        with self.assertRaisesRegex(ValueError, "exceed the observed interval"):
+            capture.phase_delta(previous, inconsistent)
+
+    def test_overshoot_larger_than_the_finalization_window_still_raises(
+        self,
+    ) -> None:
+        """The allowance is bounded by the finalization window, not by need."""
+        previous, current = _retained_t2_10_abort_records()
+        inconsistent = dict(current)
+        # +103 construction against a 102-crossing finalization window: one
+        # crossing more than the concurrent window can possibly account for.
+        inconsistent["construction_vblank_crossings"] = (
+            int(current["construction_vblank_crossings"]) + 103
+        )
+
+        with self.assertRaisesRegex(ValueError, "exceed the observed interval"):
+            capture.phase_delta(previous, inconsistent)
+
+        # The allowance is capped by the finalization window, so it does not
+        # grow to meet an arbitrarily large simulation overshoot.
+        runaway_simulation = dict(current)
+        runaway_simulation["simulation_vblank_crossings"] = (
+            int(current["simulation_vblank_crossings"]) + 1000
+        )
+        with self.assertRaisesRegex(ValueError, "exceed the observed interval"):
+            capture.phase_delta(previous, runaway_simulation)
+
+    def test_v1_trace_without_overlap_fields_gets_no_allowance(self) -> None:
+        """No recorded concurrent window means no allowance at all."""
+        previous = {field: 0 for field in capture.CADENCE_V1_RECORD_FIELDS}
+        current = {field: 0 for field in capture.CADENCE_V1_RECORD_FIELDS}
+        current.update({
+            "observed_vblank_generation": 10,
+            "simulation_vblank_crossings": 6,
+            "simulation_count": 1,
+            "construction_vblank_crossings": 5,
+            "construction_count": 1,
+        })
+        # min(simulation, construction) would have excused this overshoot had
+        # the allowance been applied without a recorded overlap window.
+        with self.assertRaisesRegex(ValueError, "exceed the observed interval"):
+            capture.phase_delta(previous, current)
 
     def test_failure_queue_record_preserves_nonzero_quarantine(self) -> None:
         decoded = capture.decode_runtime(runtime(
