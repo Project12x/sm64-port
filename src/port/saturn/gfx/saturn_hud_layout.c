@@ -124,6 +124,39 @@ push_clamped_int(sm64_saturn_hud_cell_t *out_cells, uint32_t count, uint32_t cap
                  uint8_t start_col, uint8_t row, int32_t value, uint8_t max_digits)
 {
     if (value < 0) value = 0;
+    /* Every call site below passes max_digits of 2 or 3, so the general loop
+     * that follows never runs on this build -- but it is retained rather than
+     * asserted away so this function stays total over its whole declared
+     * domain, and so the ladder can be proven bit-identical against it rather
+     * than merely believed to be.
+     *
+     * Why the ladder exists: `value / divisor` with a *runtime* divisor is a
+     * call to ___sdivsi3, GCC's 32-step software divide, and the loop makes
+     * `max_digits` of them per call across seven call sites per HUD build.
+     * With the divisor a compile-time constant GCC strength-reduces each
+     * division to a reciprocal multiply through `dmuls.l`, so the divide
+     * helper disappears entirely. */
+    if (max_digits <= 3U) {
+        uint8_t written = 0U;
+        if (max_digits >= 3U) {
+            count = push_cell(out_cells, count, capacity,
+                              (uint8_t)(start_col + written), row,
+                              digit_glyph((value / 100) % 10));
+            written++;
+        }
+        if (max_digits >= 2U) {
+            count = push_cell(out_cells, count, capacity,
+                              (uint8_t)(start_col + written), row,
+                              digit_glyph((value / 10) % 10));
+            written++;
+        }
+        if (max_digits >= 1U) {
+            count = push_cell(out_cells, count, capacity,
+                              (uint8_t)(start_col + written), row,
+                              digit_glyph(value % 10));
+        }
+        return count;
+    }
     int32_t divisor = 1;
     for (uint8_t place = 1U; place < max_digits; place++)
         divisor *= 10;

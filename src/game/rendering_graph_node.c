@@ -1824,8 +1824,8 @@ static struct saturn_geo_held_object_children
 saturn_geo_enter_held_object(struct GraphNodeHeldObject *node) {
 #ifndef TARGET_SATURN
     Mat4 mat;
-#endif
     Vec3f translation;
+#endif
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
     struct saturn_geo_held_object_children out = { NULL, node->fnNode.node.children };
 
@@ -1839,9 +1839,11 @@ saturn_geo_enter_held_object(struct GraphNodeHeldObject *node) {
     if (node->objNode != NULL && node->objNode->header.gfx.sharedChild != NULL) {
         s32 hasAnimation = (node->objNode->header.gfx.node.flags & GRAPH_RENDER_HAS_ANIMATION) != 0;
 
+#ifndef TARGET_SATURN
         translation[0] = node->translation[0] / 4.0f;
         translation[1] = node->translation[1] / 4.0f;
         translation[2] = node->translation[2] / 4.0f;
+#endif
 
 #ifdef TARGET_SATURN
         {
@@ -1857,7 +1859,21 @@ saturn_geo_enter_held_object(struct GraphNodeHeldObject *node) {
              * instead). Recover N to index the Q16 twin exactly. */
             s32 throwIdx = saturn_mtxq_gmatstack_index(gCurGraphNodeObject->throwMatrix);
 
-            saturn_vec3f_to_q16(tQ, translation);
+            /* `node->translation` is Vec3s. The float form this replaces was
+             * `n / 4.0f` followed by `sm64_saturn_float_to_q16`, which is
+             * `trunc(n / 4 * 65536)` == `n * 16384` -- exactly, for every one
+             * of the 65,536 s16 inputs: n/4 is representable in f32 without
+             * loss (dividing by four only decrements the exponent), and its
+             * Q16.16 image is an integer, so the conversion's truncation has
+             * nothing to discard. Doing the integer multiply directly is
+             * therefore bit-identical and deletes three ___floatsisf, three
+             * ___divsf3 and three ___fixsfsi per held object per frame.
+             * Proven exhaustively by `verify-shadow-trig`'s held-object case.
+             * A multiply, not `<< 14`: node->translation is signed and
+             * left-shifting a negative value is undefined behaviour. */
+            tQ[0] = (int32_t) node->translation[0] * 16384;
+            tQ[1] = (int32_t) node->translation[1] * 16384;
+            tQ[2] = (int32_t) node->translation[2] * 16384;
             sm64_saturn_mtxq_translate(&matQ, tQ);
             gMatStackQ[gMatStackIndex + 1] = gMatStackQ[throwIdx];
             gMatStackQ[gMatStackIndex + 1].m[3][0] = gMatStackQ[gMatStackIndex].m[3][0];

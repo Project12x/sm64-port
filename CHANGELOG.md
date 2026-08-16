@@ -4,6 +4,35 @@
 
 ### Added
 
+- Sprint 2 T2.13 (float, bit-exact): `saturn_geo_enter_held_object` builds its
+  Q16 translation with an integer multiply. It was computing
+  `node->translation[i] / 4.0f` on `s16` input and then converting the result
+  straight back to Q16.16 with `sm64_saturn_float_to_q16` -- three
+  `___floatsisf`, three `___divsf3` and three `___fixsfsi` per held object per
+  frame, to compute a value that is exactly `n * 16384`. `n / 4` is
+  representable in `f32` without loss (dividing by four only decrements the
+  exponent) and its Q16.16 image is an integer, so the conversion's truncation
+  has nothing to discard. **Bit-identical over all 65,536 s16 inputs**, proven
+  exhaustively rather than argued. A multiply and not `<< 14`: the input is
+  signed and left-shifting a negative value is undefined. Flagged by the
+  arithmetic census as its stand-alone free win. Dynamic value measured
+  separately, and it is small: `_saturn_geo_enter_held_object` did not appear
+  in the sampled profile at all on the BOB route.
+- Sprint 2 T2.13 (divide, bit-exact): `push_clamped_int`
+  (`src/port/saturn/gfx/saturn_hud_layout.c`) uses a fixed decimal ladder.
+  `value / divisor` with a *runtime* divisor is a call to `___sdivsi3`, GCC's
+  32-step software divide, and the loop made `max_digits` of them per call
+  across seven call sites per HUD build -- up to ~21 per frame, the highest
+  confirmed per-frame divide count in the census. Every call site passes 2 or
+  3, so a three-step ladder with constant divisors covers them, and GCC
+  strength-reduces a constant divide to a `dmuls.l` reciprocal multiply. The
+  general loop is **retained** for `max_digits > 3` rather than asserted away,
+  so the function stays total over its declared domain and the ladder can be
+  proven identical against it instead of merely believed. Measured value: also
+  small -- `___sdivsi3` does not appear in the sampled dynamic profile at all,
+  and the whole `divide` class is 0.12% of cycles, all of it `___udiv_qrnnd_16`
+  reached from `___divsf3`.
+
 - Sprint 2 T2.13 (float, **owner-visible**): the shadow path stops evaluating
   double-precision trigonometry. `calculate_vertex_xyz` (`src/game/shadow.c`)
   called `cosf` three times and `sinf` twice per shadow vertex, and both are
