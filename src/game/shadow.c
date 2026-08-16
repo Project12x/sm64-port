@@ -45,6 +45,21 @@ struct Shadow {
     f32 floorDownwardAngle;
     /* Angle describing "how tilted the ground is" in degrees (-90 to 90). */
     f32 floorTilt;
+#ifdef TARGET_SATURN
+    /* Binary-angle (BAM) twins of the two fields above, in the s16 unit
+     * `sins`/`coss` index with (0x10000 == one revolution). Both f32 fields
+     * are produced by `atan2_deg`, which is nothing but `atan2s` -- already a
+     * BAM -- scaled into degrees; `calculate_vertex_xyz` then scaled that back
+     * into radians and called `sinf`/`cosf` on it. Those two are the
+     * libultra double-precision polynomials (lib/src/math/sinf.c), so the
+     * round trip cost five soft-double polynomial evaluations per shadow
+     * vertex to recover an angle that was an exact s16 to begin with. Keeping
+     * the BAM lets the Saturn path index the engine's own trig table instead.
+     * The f32 fields are retained unchanged so nothing else observes a
+     * difference and the non-Saturn build is untouched. */
+    s16 floorDownwardAngleBam;
+    s16 floorTiltBam;
+#endif
     /* Initial solidity of the shadow, from 0 to 255 (just an alpha value). */
     u8 solidity;
 };
@@ -248,14 +263,25 @@ s8 init_shadow(struct Shadow *s, f32 xPos, f32 yPos, f32 zPos, s16 shadowScale, 
     s->shadowScale = scale_shadow_with_distance(shadowScale, yPos - s->floorHeight);
 
     s->floorDownwardAngle = atan2_deg(s->floorNormalZ, s->floorNormalX);
+#ifdef TARGET_SATURN
+    s->floorDownwardAngleBam = atan2s(s->floorNormalZ, s->floorNormalX);
+#endif
 
     floorSteepness = sqrtf(s->floorNormalX * s->floorNormalX + s->floorNormalZ * s->floorNormalZ);
 
     // This if-statement avoids dividing by 0.
     if (floorSteepness == 0.0) {
         s->floorTilt = 0;
+#ifdef TARGET_SATURN
+        s->floorTiltBam = 0;
+#endif
     } else {
         s->floorTilt = 90.0 - atan2_deg(floorSteepness, s->floorNormalY);
+#ifdef TARGET_SATURN
+        /* 90 degrees is exactly 0x4000 BAM, so the subtraction that the f32
+         * line above performs in degrees is an exact integer here. */
+        s->floorTiltBam = (s16) (0x4000 - atan2s(floorSteepness, s->floorNormalY));
+#endif
     }
     return 0;
 }
@@ -363,8 +389,26 @@ void get_vertex_coords(s8 index, s8 shadowVertexType, s8 *xCoord, s8 *zCoord) {
  */
 void calculate_vertex_xyz(s8 index, struct Shadow s, f32 *xPosVtx, f32 *yPosVtx, f32 *zPosVtx,
                           s8 shadowVertexType) {
+#ifdef TARGET_SATURN
+    /* The engine's own trig table, indexed by the BAM these two angles never
+     * stopped being. This replaces three `cosf` and two `sinf` calls per
+     * shadow vertex; each of those evaluates a five-term polynomial in
+     * `double` on a CPU with no FPU, and they were measured to be the whole
+     * of this build's soft-double cost (see
+     * sprint2-t2_13-softfloat-matrix-path.md). `sins`/`coss` are pure f32
+     * loads -- no arithmetic at all -- and they quantise the angle to the
+     * same 4096 steps per revolution that every `mtxf_*` constructor in this
+     * engine already uses, so the shadow is now consistent with the geometry
+     * it sits under rather than more precise than it. */
+    const f32 sinDownward = sins(s.floorDownwardAngleBam);
+    const f32 cosDownward = coss(s.floorDownwardAngleBam);
+    f32 tiltedScale = coss(s.floorTiltBam) * s.shadowScale;
+#else
     f32 tiltedScale = cosf(s.floorTilt * M_PI / 180.0) * s.shadowScale;
     f32 downwardAngle = s.floorDownwardAngle * M_PI / 180.0;
+    const f32 sinDownward = sinf(downwardAngle);
+    const f32 cosDownward = cosf(downwardAngle);
+#endif
     f32 halfScale;
     f32 halfTiltedScale;
     s8 xCoordUnit;
@@ -377,8 +421,8 @@ void calculate_vertex_xyz(s8 index, struct Shadow s, f32 *xPosVtx, f32 *yPosVtx,
     halfScale = (xCoordUnit * s.shadowScale) / 2.0;
     halfTiltedScale = (zCoordUnit * tiltedScale) / 2.0;
 
-    *xPosVtx = (halfTiltedScale * sinf(downwardAngle)) + (halfScale * cosf(downwardAngle)) + s.parentX;
-    *zPosVtx = (halfTiltedScale * cosf(downwardAngle)) - (halfScale * sinf(downwardAngle)) + s.parentZ;
+    *xPosVtx = (halfTiltedScale * sinDownward) + (halfScale * cosDownward) + s.parentX;
+    *zPosVtx = (halfTiltedScale * cosDownward) - (halfScale * sinDownward) + s.parentZ;
 
     if (gShadowAboveWaterOrLava) {
         *yPosVtx = s.floorHeight;

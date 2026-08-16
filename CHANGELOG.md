@@ -4,6 +4,34 @@
 
 ### Added
 
+- Sprint 2 T2.13 (float, **owner-visible**): the shadow path stops evaluating
+  double-precision trigonometry. `calculate_vertex_xyz` (`src/game/shadow.c`)
+  called `cosf` three times and `sinf` twice per shadow vertex, and both are
+  the libultra five-term polynomial *in `double`* (`lib/src/math/sinf.c`) on a
+  CPU with no FPU. Measured, that was essentially the whole of this build's
+  soft-double cost: 26 of 28 sampled `___muldf3` entries, 18 of 19 `___adddf3`,
+  15 of 15 `___subdf3` and 12 of 13 `___truncdfsf2` came from `_cosf`, and
+  every sampled `_sinf` and `_cosf` entry came from `_calculate_vertex_xyz`.
+  Soft-double plus its conversions plus the `sinf`/`cosf` bodies were **2.73%
+  of all sampled SH-2 cycles and 9.2% of non-idle cycles**.
+  Root cause of the waste: both angles are produced by `atan2_deg`, which is
+  `atan2s` -- already an exact s16 binary angle -- scaled into degrees;
+  `calculate_vertex_xyz` then scaled that back into radians and called `sinf`.
+  The fix keeps the binary angle: `struct Shadow` gains `floorDownwardAngleBam`
+  and `floorTiltBam` (Saturn only), and the Saturn arm indexes the engine's own
+  `sins`/`coss` table, which is a pure `f32` load with no arithmetic at all.
+  90 degrees is exactly 0x4000 BAM, so the tilt subtraction stays exact.
+  **This is not bit-exact and the owner may be able to see it.** `sins`/`coss`
+  discard the low 4 bits of the angle, so trig values move by up to
+  1.526e-3 absolute (measured worst case over all 65,536 angles), which moves a
+  shadow vertex by up to 0.153 world units at BOB's largest shadow scale --
+  under a tenth of a screen pixel at Mario's on-screen size. The quantisation
+  is the *same* one every `mtxf_*` constructor in this engine already applies,
+  and the same one Sega's own SGL documents for `slSin`/`slCos`, so the shadow
+  is now consistent with the geometry it sits on rather than more precise than
+  it. The non-Saturn build is untouched: the `sinf`/`cosf` arm is preserved
+  verbatim under `#else`.
+
 - Sprint 2 T2.13 (measurement): `tools/saturn/capture_softfloat_profile.py`,
   a cycle-attributed statistical profiler for the running target that needs no
   rebuild and no instrumentation. `ymir-headless`'s `exec.stepi` already
