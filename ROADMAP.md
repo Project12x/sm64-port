@@ -115,18 +115,32 @@ again after T2.12 closed `spatial_admit` out**):
   neither (`m_emulateSH2Caches = false`), so any figure for it is an upper
   bound. **Ranked 4th by T2.16, behind the scheduler stall, the float purge and
   VDP1 command reduction.**
-- **Frame-pipeline per-field epoch stall — THE ACTIVE LEVER (T2.16).**
-  **2.1903 VB/frame (19.5% of the frame)**, all of it at `main.c:2013`, all of
-  it caused by `saturn_frame_pipeline.c` returning `WAIT_VBLANK` when the one
-  remaining action was already taken this field. The master burns it to
-  interleave **0.14 VB/frame** of transport and publication work. **The only
-  large idle block the hard constraints do not tax**, because no data crosses
-  CPUs. Expected landing ~9.86 VB (~6.09 FPS), capped by VDP1's plot time.
-- **VDP1 command reduction — PROMOTED by T2.16, strictly after the stall fix.**
-  `EDSR.CEF` is set in only 12.0% of samples: **VDP1 plots 88% of the frame
-  (~9.86 VB)** and is not starved. Master work is 9.0166 VB/frame, so VDP1
-  becomes binding the moment the stall is released — and buys nothing before
-  then. "552 of 1,664" is static array occupancy, not load.
+- ~~**Frame-pipeline per-field epoch stall — THE ACTIVE LEVER (T2.16).**~~
+  **CLOSED by T2.17.** Was 2.1903 VB/frame (19.5% of the frame) at
+  `main.c:2013`. Measured after: **6.7181 FPS / 8.9310 VB, -2.2759 VB/frame,
+  +25.5%** -- slightly more than the block T2.16 sized, because a little master
+  work (previous-frame reuse presentations) left with it. **The predicted
+  landing at ~9.86 VB against VDP1 did not bind**; see
+  `sprint2-t2_17-epoch-stall.md` section 6. The reviewed epoch invariant was
+  narrowed to its two hardware-carrying gates rather than removed, with the full
+  bank-ownership argument in section 2 of that report.
+- **Bound the VDP1 overwrite fence — NEW, and now a correctness prerequisite.**
+  `vdp1_sync_wait()` has no deadline, and T2.17 removed the slack that kept it
+  from ever firing (T2.8 measured 0 waits in 1,349 events on a 15.483 VB/frame
+  build). A bounded, fail-soft fence — skip the transfer this field, reuse the
+  previous frame — removes the only hang path this change can open.
+- **VDP1 command reduction — NOW THE ACTIVE LEVER. The stall fix landed (T2.17)
+  and VDP1 is the wall.** Re-measured on `id-c0352f297034f653`: `EDSR.CEF` is
+  set in **6.33%** of 300 samples, so **VDP1 plots 93.67% of the frame** and
+  only ~0.57 VB/frame remains in which it is idle. The full command list still
+  sweeps to completion, so it is neither starved nor cut short. T2.8's own list
+  — per-command user clipping, command-count LOD, the Mario double-emit — is
+  live for the first time with a cadence success criterion. "552 of 1,664" is
+  static array occupancy, not load. **Do not quote an absolute plot time**:
+  T2.16 read ~9.86 VB and T2.17 reads ~8.37 VB, and the two captures warm up by
+  a fixed VBlank count, so a 25% faster build samples a different point on the
+  replay route (`sprint2-t2_17-epoch-stall.md` section 6.2). Fixing that
+  warm-up to count simulation ticks is a prerequisite for sizing this work.
 - **`_actor_meshlet_live_depth_bounds` — 3.662% of sampled cycles: the largest
   single non-idle symbol in the profile, and not floating-point at all.** No
   census item names it; sampling alone found it.

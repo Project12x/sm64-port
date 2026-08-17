@@ -7,11 +7,19 @@
 **Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
 **Sprint 2 (cadence recovery) — investigation phase COMPLETE 2026-08-15.**
 
-**Current measured cadence: 5.3538 FPS / 11.2069 VBlanks per frame** on
-`id-a61d5203793986e7` (T2.13), against A9A's 5.294 FPS / 11.333 VB. **This is
-the first build past A9A on both numbers.** Median 5.4545, 1% low 5.0. Source:
-`docs/saturn/evidence/reports/sprint2-t2_13-softfloat-matrix-path.md`,
-29 intervals, `summarize_cadence`. Predecessors on the same basis:
+**Current measured cadence: 6.7181 FPS / 8.9310 VBlanks per frame** on
+`id-c0352f297034f653` (**T2.17**), against A9A's 5.294 FPS / 11.333 VB.
+Median 6.6667, 1% low 6.0. Source:
+`docs/saturn/evidence/reports/sprint2-t2_17-epoch-stall.md`, 29 intervals,
+`summarize_cadence`. **+25.5% over T2.13 in one scheduler change** -- the
+per-field epoch stall collapsed onto the two gates that carry a hardware
+guarantee. **Not yet owner-observed:** this is a headless cadence result on a
+frame-scheduler change, and section 8 of that report lists what to look for.
+**The T2.11 concurrency rail is now needed on 28 of 29 intervals (0 of 29 at
+T2.13), so the phase decomposition no longer closes and must not be quoted;
+the cadence figures are independent of it and stand.**
+Predecessors on the same basis: `id-a61d5203793986e7` 5.3538 / 11.2069
+(T2.13, the first build past A9A on both numbers),
 `id-05046d9d5d8a5593` 4.9432 / 12.1379 (T2.12), `id-b46f60d0a6d129dd`
 4.3176 / 13.8966 (T2.10+T2.11, owner-accepted), `id-6eca5970628d581d`
 3.8753 / 15.4828.
@@ -211,11 +219,26 @@ What the sprint established, in order:
     figure for slave offload is an upper bound; the master-stall figure is not
     affected, because no data crosses CPUs in it.
 
+- **T2.17 (scheduler)** -- **the epoch stall is collapsed, and it went further
+  than predicted.** T2.16 item 1 is **DONE**: **6.7181 FPS / 8.9310 VB**,
+  **-2.2759 VB/frame**, slightly more than the 2.1903 VB T2.16 measured (that
+  figure was a single 1.75-frame window). The reviewed per-field epoch rule was
+  narrowed, not deleted: publication keeps the stamp that bounds it to one
+  publication, one plot start and one frame-buffer change per field, and drops
+  the service stamp, because service builds into the bank publication just
+  retired and touches no VDP1 state; and only the *submitting* poll stays
+  epoch-gated, its follow-ups being pure DMA-status reads admitted inside the
+  submit field alone. **All eleven pre-existing assertions still pass
+  verbatim**; three tests and three mutations were added, and one of the new
+  mutations survived the first draft of the suite, which is why the isolating
+  test exists. **The predicted VDP1 cap at ~9.86 VB did not bind** -- see
+  `sprint2-t2_17-epoch-stall.md` section 6.
+
 **Next, ranked by releasable VB/frame per unit of constraint tax
-(T2.16 section 9).** **(1) Collapse the per-field epoch stall** -- ~1.9-2.19
-VB/frame, the only large block the hard constraints do not tax; expected
-landing ~9.86 VB (~6.09 FPS, +13.7%), capped by VDP1. Cost: 11 `WAIT_VBLANK`
-assertions in `frame_pipeline_test.c` and a bank-ownership safety argument.
+(T2.16 section 9, as amended by T2.17).** **(1) DONE (T2.17): the per-field
+epoch stall.** **(1a) Give the overwrite fence a deadline** -- `vdp1_sync_wait()`
+is unbounded and T2.17 made it load-bearing for the first time; T2.8 section 9
+item 3 already listed repairing it and it is no longer optional.
 **(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
 correctly priced, master-local, no constraint tax. **(3) VDP1 command
 reduction -- promoted, but strictly after (1)**; before (1) it is worth zero

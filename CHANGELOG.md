@@ -60,6 +60,42 @@
 
 ### Added
 
+- Sprint 2 T2.17 (evidence):
+  `docs/saturn/evidence/reports/sprint2-t2_17-epoch-stall.md`,
+  `sprint2-t2_17-throughput-30events.json`,
+  `sprint2-t2_17-idle-attribution-fullframe.json`.
+
+  **Measured: 6.7181 FPS mean / 8.9310 VB per frame** on `id-c0352f297034f653`
+  (ELF SHA-256 `2933c5d5…8c2fecd`), against the `id-a61d5203793986e7` baseline
+  of 5.3538 FPS / 11.2069 VB — **+25.5% FPS, -2.2759 VB/frame**, median 6.6667,
+  1% low 6.0, `summarize_cadence`, 30 presentation events, on-target identity
+  MATCH. `presentation_generation_delta == 1` on all 29 intervals and the frame
+  bank queue retired 30 of 30 generations with zero faults, which are the two
+  scheduler-level checks against a dropped or duplicated field.
+
+  **Confirming measurement: the raster spin is gone, directly observed.** A
+  contiguous 16.3566-VBlank (1.83-frame) dual-CPU trace measures master idle at
+  **0.000000** with **zero** excursions into
+  `_sm64_saturn_source_runtime_wait_vblank` and an empty wait-call-site table,
+  against T2.16's 19.544% / 2.1903 VB / 24 excursions. Every other master
+  symbol's absolute VB/frame is within ~7% of where T2.16 measured it, so the
+  stall was removed without disturbing the work.
+
+  **VDP1 is now the wall: `EDSR.CEF` set in 6.33% of samples, so VDP1 plots
+  93.67% of the frame**, up from 88.0%. This promotes T2.8's fill-rate list —
+  user clipping, command-count LOD, the Mario double-emit — for the first time
+  with a cadence success criterion.
+
+  **Two caveats that bind readers of these numbers.** (1) The T2.11 concurrency
+  allowance is needed on **28 of 29** intervals against 0 of 29 at T2.13, so the
+  phase decomposition no longer closes and must not be quoted; `summarize_cadence`
+  reads presentation-edge deltas and is independent of it, so the cadence figures
+  stand. (2) Both idle-attribution captures warm up by a *fixed* 1,800 VBlanks,
+  so a 25% faster build samples a different point on the replay route — which is
+  the likeliest reason the absolute VDP1 plot time reads ~8.37 VB here against
+  T2.16's ~9.86 VB. Warm-up should count simulation ticks before anyone sizes
+  fill-rate work from it.
+
 - Sprint 2 T2.17 (tests): three frame-pipeline contract tests and three
   mutation executables in `verify-frame-pipeline`.
   `test_publication_field_admits_service_but_not_transfer`,
