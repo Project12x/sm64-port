@@ -15,8 +15,9 @@ W0 is planned and owner-approved at the design level. No W0 runtime code has
 been implemented, no W0 host gate has run, no W0 target has compiled, no W0
 CUE has been built, and no W0 artifact has been observed in Ymir. The accepted
 T2.17 gameplay artifact remains the only preserved product baseline. The
-planning transition will record its exact commit in a follow-up evidence-only
-commit after the plan commit exists.
+execution plan is committed at
+`530578cc715debc52db295f9617f715dc14744f9`; this evidence-only transition
+records that immutable planning boundary before runtime work starts.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
@@ -54,9 +55,10 @@ the baseline.
 | Recovery branch | `saturn/recovery` |
 | Design approval HEAD | `9d6c98170f7e97219cb7e26d5bce20b8360f3d79` |
 | Design commit | `9d6c9817 docs(design): correct VDP1 deferral recovery semantics` |
+| Implementation-plan commit | `530578cc715debc52db295f9617f715dc14744f9 docs(plan): add W0 VDP1 overwrite fence execution plan` |
 | Grok Build verdict | `APPROVE WITH CHANGES`, independently reconciled on 2026-08-17 |
 | Owner design decision | Corrected epoch-deferral design approved on 2026-08-17 |
-| Planning tests | Document structure, placeholder scan, link/type consistency, `git diff --check`; results recorded with the planning commit |
+| Planning tests | PASS: 4 tasks/26 checkbox steps enumerated; required API and mutation types consistent; local Markdown links resolve; placeholder scan found no unresolved planning marker in the new plan/ledger; `git diff --cached --check` passed before commit |
 
 ## Memory, ownership, and transport debt record
 
@@ -87,8 +89,10 @@ check.
 
 ## Commits and review
 
-No W0 implementation or evidence commit exists yet. Independent review is not
-requested until after the first identity-bound live product observation.
+No W0 implementation or runtime-evidence commit exists yet. The planning and
+planning-boundary evidence commits change documentation only. Independent
+review is not requested until after the first identity-bound live product
+observation.
 
 ## Tests and observations
 
