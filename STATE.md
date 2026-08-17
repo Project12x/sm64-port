@@ -24,6 +24,18 @@ Predecessors on the same basis: `id-a61d5203793986e7` 5.3538 / 11.2069
 4.3176 / 13.8966 (T2.10+T2.11, owner-accepted), `id-6eca5970628d581d`
 3.8753 / 15.4828.
 
+> **Build identity moved at T2.22 — the sealed tag for a given tuple is not
+> comparable across it.** T2.22 made eight asset generators write-if-changed,
+> which removed the four-links-per-build loop (`-j12` 694.9 s → 417.0 s, and a
+> no-op rebuild now does nothing at all). Generator scripts and makefiles are
+> source-closure inputs and the closure hash is compiled into the ELF, so the
+> tuple that sealed `id-0fade22f26a95c0c` now seals `id-bed197e0c5e928d3`.
+> Product bytes did not change: 279 of 280 objects, `SOURCE.DAT` and the CUE
+> are byte-identical, and the ELF differs only inside the identity blob. Any
+> cadence figure above was measured on a pre-T2.22 tag; re-running the same
+> tuple today produces a new tag for the same product.
+> `docs/saturn/evidence/reports/sprint2-t2_22-build-relink-loop.md`.
+
 > **Retired figures — do not cite.** The 1.0682 (T2.2), 1.0866 (T2.3) and
 > 1.4634 (T2.6) FPS numbers were hand-computed from capture *failure
 > diagnostics* over `vblanks_advanced`, which includes the ~1,549-VBlank

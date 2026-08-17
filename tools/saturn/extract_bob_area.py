@@ -18,6 +18,7 @@ from typing import Any
 
 from extract_castle_area import flatten
 from extract_mario_actor import blocks, vertex_groups
+from write_if_changed import write_text_if_changed
 
 
 def root_display_lists(geo_source: str) -> list[dict[str, str]]:
@@ -166,10 +167,12 @@ def main() -> None:
     args = parser.parse_args()
     report = intake(args.area)
     mesh = mesh_ir(report)
-    args.intake_output.parent.mkdir(parents=True, exist_ok=True)
-    args.mesh_ir_output.parent.mkdir(parents=True, exist_ok=True)
-    args.intake_output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    args.mesh_ir_output.write_text(json.dumps(mesh, indent=2) + "\n", encoding="utf-8")
+    write_text_if_changed(args.intake_output,
+                          json.dumps(report, indent=2) + "\n",
+                          encoding="utf-8")
+    write_text_if_changed(args.mesh_ir_output,
+                          json.dumps(mesh, indent=2) + "\n",
+                          encoding="utf-8")
 
 
 if __name__ == "__main__":

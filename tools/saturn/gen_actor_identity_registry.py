@@ -23,6 +23,7 @@ from compile_actor_bank import (
     FAMILY_RECORD_STRUCT,
     validate_family_bank_payload,
 )
+from write_if_changed import write_text_if_changed
 
 
 MODEL_DEFINE_RE = re.compile(
@@ -424,8 +425,8 @@ def main() -> None:
         args.model_ids,
         args.scene_generation,
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(header, encoding="utf-8", newline="\n")
+    write_text_if_changed(args.output, header, encoding="utf-8",
+                          newline="\n")
 
 
 if __name__ == "__main__":

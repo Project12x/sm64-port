@@ -4,6 +4,64 @@
 
 ### Changed
 
+- Sprint 2 T2.22 (build): eight Saturn asset generators now publish
+  write-if-changed, through a new shared `tools/saturn/write_if_changed.py`.
+  Every build linked the ELF **four times** and wrote four byte-identical
+  52,289,956-byte `objdump -S` listings; it now links **once**.
+  `-j12` from scratch **694.9 s → 417.0 s (−277.9 s, −40.0%)`; `-j1` from
+  scratch **1039 s → 797.1 s (−241.9 s, −23.3%)**. Re-running `make sourceboot` with
+  nothing changed used to perform four links and four listings and now
+  performs **zero compiles, zero links and zero listings**.
+
+  **Root cause.** One build is four fresh parses of the sourceboot makefile:
+  the build sub-make, the `pre-build-iso` and `post-build-iso` hooks that
+  `third_party/libyaul/libyaul/build/build.post.iso-cue.mk:24,33` re-enters,
+  and the `verify-sealed-inputs seal-release` sub-make. Several generated
+  sources are produced by rules with PHONY prerequisites — deliberately, so a
+  stale package generation or a renamed geo source cannot survive into a
+  build — and those generators rewrote their outputs unconditionally. Identical
+  bytes, fresh mtimes. The `.d` files then make those outputs ordinary
+  prerequisites of the objects, so each parse restaled
+  `src/game/rendering_graph_node.o` and `src/port/saturn/gfx/saturn_demo_render.o`,
+  recompiled them, relinked, and re-ran `nm` and `objdump -S`. The BOB chain
+  was worse than wasteful: PHONY `compile-bob-area` rewrites
+  `bob_area1_intake.json`, which is a *prerequisite* of the tiles rule, whose
+  output is a prerequisite of the BSP rule, so each parse handed the next one a
+  fresh reason to run.
+
+  **Changed generators.** `extract_bob_area.py`, `saturn_mesh_ir.py`,
+  `bake_bob_tiles.py`, `compile_bob_bsp.py`, `emit_bob_scene.py`,
+  `geo_depth_manifest.py`, `gen_actor_identity_registry.py`,
+  `compile_sourceboot_sfx_bundle.py`. `compile_scene_package.py` was **not**
+  changed — contrary to what T2.18 section 6 predicted, it has always published
+  through `publish_or_verify_set`, which already compares bytes.
+
+  **The PHONY prerequisites were kept.** Each buys a guarantee a file
+  prerequisite cannot express — a package-generation variable change, an
+  `rglob` over source directories, a cross-makefile sub-make goal. With
+  write-if-changed they cost one Python process instead of a relink. An
+  order-only prerequisite is not a substitute: `$(SH_OBJS_UNIQ)` already
+  depended on two of these order-only and the loop happened anyway.
+
+  **Consumer impact: the sealed identity moves once.** The makefiles and every
+  generator script are source-closure inputs, and the closure hash is compiled
+  into the ELF by `src/port/saturn/platform/saturn_build_identity.c`. The tuple
+  that sealed `id-0fade22f26a95c0c` now seals `id-bed197e0c5e928d3`, so the
+  next build writes a new `e2-bob-identity-id-*` tree and
+  `release_manifest.py compare` reports six differing fields, all of them that
+  identity chain. Nothing else moved: **279 of 280 object files are
+  byte-identical** (the exception is `saturn_build_identity.o`), `SOURCE.DAT`
+  and the CUE are byte-identical, and the two ELFs are the same size and differ
+  in exactly one 64-byte run, wholly inside the 500-byte identity blob.
+
+  **Migration note.** Any tooling that pins `id-0fade22f26a95c0c` must move to
+  `id-bed197e0c5e928d3`. The A9A baseline under
+  `build/saturn/baselines/a9a-2026-08-05/` is untouched.
+
+  Evidence, including the mutation-checked regeneration tests that prove a
+  corrupted generated header is still repaired and still re-links:
+  `docs/saturn/evidence/reports/sprint2-t2_22-build-relink-loop.md`.
+
 - Sprint 2 T2.17 (scheduler): the frame pipeline's per-field epoch rule is
   narrowed from "one SERVICE and one POLL per observed field, and neither for a
   promoted bank in the publication field" to the two gates that actually carry
@@ -60,6 +118,15 @@
 
 ### Added
 
+- Sprint 2 T2.22 (build/tests): `tools/saturn/write_if_changed.py` and
+  `tools/saturn/test_write_if_changed.py` (11 tests, wired into
+  `verify-tools`) — a content-comparing publish helper for generators whose
+  rules are intentionally always out of date, plus the tests that keep it from
+  degrading into silent staleness: a corrupted or truncated output must still
+  be rewritten, a genuine input change must still move the bytes, and
+  CRLF-on-disk must not be accepted as matching an LF-pinned write.
+- Sprint 2 T2.22 (evidence):
+  `docs/saturn/evidence/reports/sprint2-t2_22-build-relink-loop.md`.
 - Sprint 2 T2.17 (evidence):
   `docs/saturn/evidence/reports/sprint2-t2_17-epoch-stall.md`,
   `sprint2-t2_17-throughput-30events.json`,

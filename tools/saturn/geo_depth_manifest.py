@@ -30,6 +30,8 @@ import sys
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from write_if_changed import write_text_if_changed
+
 
 SCHEMA = "sm64-saturn-geo-depth-manifest-v1"
 INPUT_SCHEMA = "sm64-saturn-geo-depth-input-v1"
@@ -263,7 +265,7 @@ def emit_header(path: Path, report: Mapping[str, object]) -> None:
         f"#define SM64_SATURN_GEO_TRAVERSAL_INPUT_SHA256 \"{report['input_sha256']}\"\n\n"
         "#endif\n"
     )
-    path.write_text(text, encoding="utf-8", newline="\n")
+    write_text_if_changed(path, text, encoding="utf-8", newline="\n")
 
 
 def emit_linker_fragment(path: Path, report: Mapping[str, object]) -> None:
@@ -274,7 +276,7 @@ def emit_linker_fragment(path: Path, report: Mapping[str, object]) -> None:
         f"PROVIDE(__sourceboot_geo_traversal_expected_capacity = {int(report['capacity'])});\n"
         f"PROVIDE(__sourceboot_geo_traversal_expected_size = 0x{size:X});\n"
     )
-    path.write_text(text, encoding="utf-8", newline="\n")
+    write_text_if_changed(path, text, encoding="utf-8", newline="\n")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -318,8 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.output_linker is not None:
             emit_linker_fragment(args.output_linker, report)
         if args.output_json is not None:
-            args.output_json.parent.mkdir(parents=True, exist_ok=True)
-            args.output_json.write_text(
+            write_text_if_changed(
+                args.output_json,
                 json.dumps(report, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
                 newline="\n",

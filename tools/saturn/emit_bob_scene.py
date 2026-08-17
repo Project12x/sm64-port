@@ -7,6 +7,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from write_if_changed import write_text_if_changed
+
 
 def c_array(values: list[object], width: int = 12) -> list[str]:
     lines: list[str] = []
@@ -347,8 +349,7 @@ def main() -> None:
         json.loads(args.manifest.read_text(encoding="utf-8")),
         bsp,
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(output, encoding="utf-8")
+    write_text_if_changed(args.output, output, encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -18,6 +18,8 @@ from pathlib import Path
 
 from bake_castle_uv import quantize_clut16, pack_clut16, sample_triangle
 from vdp1_texture import downsample_rgb1555
+from write_if_changed import (write_bytes_if_changed,
+                             write_text_if_changed)
 
 MAX_TILE_BYTES = 333_696
 MAX_VDP1_TEXTURE_BYTES = 446_432
@@ -196,12 +198,13 @@ def main() -> None:
     intake = json.loads(args.intake.read_text(encoding="utf-8"))
     bank, clut, manifest = bake_bob(intake, args.asset_root)
     for path, payload in ((args.bank, bank), (args.clut, clut)):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(payload)
+        write_bytes_if_changed(path, payload)
     manifest["bank_sha256"] = hashlib.sha256(bank).hexdigest()
     manifest["clut_sha256"] = hashlib.sha256(clut).hexdigest()
-    args.manifest.parent.mkdir(parents=True, exist_ok=True)
-    args.manifest.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_text_if_changed(
+        args.manifest,
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
 
 
 if __name__ == "__main__":

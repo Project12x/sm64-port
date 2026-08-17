@@ -1329,6 +1329,7 @@ SOURCEBOOT_GENERATOR_INPUTS := $(sort \
   $(ROOT)/tools/saturn/gen_actor_identity_registry.py \
   $(ROOT)/tools/saturn/compile_actor_bank.py \
   $(ROOT)/tools/saturn/collect_scene_closure.py \
+  $(ROOT)/tools/saturn/write_if_changed.py \
   $(SOURCEBOOT_ACTOR_PACKAGE_TOOLS) \
   $(SOURCEBOOT_GEO_DEPTH_TOOL) $(SOURCEBOOT_QUAD_MAP_TOOLS) \
   $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_TILE_TOOLS) $(SOURCEBOOT_BOB_SCENE_TOOL))

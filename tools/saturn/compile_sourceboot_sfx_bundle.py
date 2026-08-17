@@ -26,6 +26,8 @@ from saturn_audio_package import (
     _decimate_sfx_sample,
     parse_aiff,
 )
+from write_if_changed import (write_bytes_if_changed,
+                             write_text_if_changed)
 
 
 BUNDLE_MAGIC = 0x53465842  # "SFXB"
@@ -439,11 +441,11 @@ def main() -> None:
                                   music_rate=args.music_rate)
     for path, data in ((args.metadata_output, bundle.metadata),
                        (args.pcm_output, bundle.pcm)):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-    args.manifest.parent.mkdir(parents=True, exist_ok=True)
-    args.manifest.write_text(json.dumps(_manifest(bundle), indent=2, sort_keys=True) + "\n",
-                             encoding="utf-8")
+        write_bytes_if_changed(path, data)
+    write_text_if_changed(
+        args.manifest,
+        json.dumps(_manifest(bundle), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
 
 
 if __name__ == "__main__":

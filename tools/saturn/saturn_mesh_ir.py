@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from quad_pairing import RenderPrimitive, pair_triangles
+from write_if_changed import write_text_if_changed
 
 
 SOURCE_SCHEMA = "sm64-saturn-mesh-ir"
@@ -296,10 +297,12 @@ def main() -> None:
     document = json.loads(args.input.read_text(encoding="utf-8"))
     compiled, _primitives, report = compile_mesh_ir(document)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(compiled, indent=2) + "\n", encoding="utf-8", newline="\n")
+    write_text_if_changed(args.output, json.dumps(compiled, indent=2) + "\n",
+                          encoding="utf-8", newline="\n")
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
+        write_text_if_changed(args.report, json.dumps(report, indent=2) + "\n",
+                              encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

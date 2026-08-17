@@ -18,6 +18,7 @@ from pathlib import Path
 
 from static_bsp import (Node, Polygon, Vertex, build, iter_polygons,
                          painter_order, plane_distance)
+from write_if_changed import write_text_if_changed
 
 
 def _polygons(scene: dict[str, object]) -> list[Polygon]:
@@ -448,12 +449,14 @@ def main() -> None:
         args.manifest.read_text(encoding="utf-8"))
     report = compile_bsp(scene, args.candidate_limit, args.split_weight,
                          manifest)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    write_text_if_changed(args.output,
+                          json.dumps(report, indent=2) + "\n",
+                          encoding="utf-8")
     if args.header is not None:
-        args.header.parent.mkdir(parents=True, exist_ok=True)
-        args.header.write_text(header_text(scene, args.candidate_limit,
-                                           args.split_weight), encoding="utf-8")
+        write_text_if_changed(args.header,
+                              header_text(scene, args.candidate_limit,
+                                          args.split_weight),
+                              encoding="utf-8")
 
 
 if __name__ == "__main__":
