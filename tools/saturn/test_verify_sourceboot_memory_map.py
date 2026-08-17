@@ -231,12 +231,12 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
         mutations.append(wrong_size)
         unaligned = image("unaligned-command", end=0x060F9000, stage=8, scc=True)
         unaligned.sections[".lwram_cmdts"] = verify.Section(
-            ".lwram_cmdts", 0x00200010, 0x20000, "NOBITS"
+            ".lwram_cmdts", 0x00200010, verify.VDP1_COMMAND_BANK_BYTES, "NOBITS"
         )
         mutations.append(unaligned)
         command_in_hwram = image("command-in-hwram", end=0x060F9000, stage=8, scc=True)
         command_in_hwram.sections[".lwram_cmdts"] = verify.Section(
-            ".lwram_cmdts", 0x06020000, 0x20000, "NOBITS"
+            ".lwram_cmdts", 0x06020000, verify.VDP1_COMMAND_BANK_BYTES, "NOBITS"
         )
         mutations.append(command_in_hwram)
         gouraud_in_lwram = image("gouraud-in-lwram", end=0x060F9000, stage=8, scc=True)
