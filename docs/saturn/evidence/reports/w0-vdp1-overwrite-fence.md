@@ -1,8 +1,8 @@
 # W0 VDP1 Overwrite Fence Execution Ledger
 
 **Date opened:** 2026-08-17
-**Status:** `active; W0.1/W0.2 host-contract-passed; normal target-compiled;
-normal live-observed; diagnostic target compile blocked; review and owner gates pending`
+**Status:** `active; W0.1/W0.2 host-contract-passed; normal live-observed;
+diagnostic target-compiled; review and owner gates pending`
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -13,18 +13,20 @@ normal live-observed; diagnostic target compile blocked; review and owner gates 
 ## Current proof statement
 
 W0.1's scheduler acknowledgement and W0.2's sourceboot integration are
-`host-contract-passed`; W0.2 is not source-complete until the normal and
-diagnostic target-equivalent consumers compile. W0.2 performs one busy observation,
-defers the exact `READY` generation before any destination write, and records
-deferrals without retaining a blocking diagnostic spin. Target compilation,
-CUE construction, and Ymir observation remain pending. The accepted T2.17
-gameplay artifact remains the only preserved product baseline.
+`host-contract-passed`. The normal diagnostic-mode-0 candidate is
+`live-observed`; the diagnostic-mode-2 arm is `target-compiled` at a
+tool/docs-only descendant revision, not artifact-identical to that frozen normal
+candidate. W0.2 performs one busy observation, defers the exact `READY`
+generation before any destination write, and records deferrals without retaining
+a blocking diagnostic spin. The accepted T2.17 gameplay artifact remains the
+only owner-accepted product baseline; independent review and owner observation
+remain open.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
 | W0.1 scheduler acknowledgement | `host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, and VDP1 frame-bank ownership checks pass | Sourceboot integration and target gates remain |
-| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; normal target-compiled` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed; normal diagnostic-mode-0 link and both floors passed | Diagnostic target-equivalent compile; normal live proof; presentation-boundary literal drift remains recorded below |
-| W0.3 normal build and live product observation | `active; first observation inconclusive` | Unique normal candidate `id-e8720d58595d9a62`, its memory floors, staging, and identity binding are recorded; attempt 1 reached generation 50 with coherent queues but stopped on an unstable cadence seqlock | One bounded tool-only retry against the same staged candidate; no target rebuild or behavior change |
+| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; normal live-observed; diagnostic target-compiled` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed; normal mode 0 and diagnostic mode 2 links both passed memory floors | Known pre-W0 presentation-boundary literal drift; review and owner gate |
+| W0.3 normal build and live product observation | `complete at evidence level` | Normal `id-e8720d58595d9a62` staged and passed the bounded retry: 30 events/29 intervals, 6.6923 mean, 6.0 1% low, coherent queues and delta 1; diagnostic `id-5f27c53e9ae67c9c` linked/sealed and passed both floors | No diagnostic capture: condition absent. Owner/review gates remain separately open. |
 | W0.4 review and owner gate | `planned` | Review and desktop acceptance criteria recorded | Independent verdict, identity-bound desktop launch, explicit owner judgment |
 
 ## Preserved accepted product baseline
@@ -104,6 +106,9 @@ check.
 | --- | --- |
 | `4b66543e850e0b601ea4ec2cfc22062853da5771` | `feat(saturn): acknowledge deferred VDP1 transfers` — rewritten W0.1 implementation with the mandatory same-commit changelog entry |
 | `da41248f40dd4236147f3c3ea4dbb52225772c35` | `fix(saturn): defer busy VDP1 overwrites` — W0.2 sourceboot busy deferral, profile-summary correction, focused contracts, approved A8 acceptance-test repair, and same-commit behavior documentation |
+| `facb9db7` | `fix(saturn): bound cadence observation retries` — tool-only bounded transient seqlock observation retry; no product source/profile/artifact change |
+| `ebee7e54` | `docs(saturn): record W0 live product evidence` — normal candidate/stage and live-observation evidence |
+| `d347cf61` | `docs(saturn): clarify W0 diagnostic evidence` — documentation/evidence descendant used when the diagnostic arm was built |
 
 Independent review is not requested until after the first identity-bound live
 product observation.
@@ -215,6 +220,36 @@ The W0 busy branch is **`host-proven; target-compiled; live occurrence
 unproven`**: normal live observation proves the product path, but its normal
 profile exposes no deferral counter and did not classify a busy occurrence.
 
+### Normal candidate identity, launch ordering, and capture command
+
+The normal product candidate is
+`releases/2026-08-17_w0-product/id-e8720d58595d9a62` from frozen source
+`6697a3ce1c048d007a8d950d18fa1c653ad29923`, diagnostic mode 0. Its staged
+ELF, ISO, CUE, and release manifest all have LastWriteTimeUtc
+`2026-08-17T19:41:10Z`; their SHA-256 values are, respectively,
+`021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`,
+`186f8734944941a6fe2f9f2455483871007e8f11a13a7e86966235be13729846`,
+`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, and
+`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`.
+The profile path is `tools/saturn/profiles/sourceboot-bob-demo-v1.json`
+(LastWriteTimeUtc `2026-08-16T23:24:20Z`, SHA-256
+`a562c98760a893a474092799ba3d52b6feb9312afadb28c967271bd8da1c8b9c`), and
+the expected ELF executable-window probe is
+`d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5`.
+The recoverable normal completion time is that staged-manifest timestamp; no
+durable transcript retains the original build start or duration.
+
+The identity block was printed immediately before the final emulator command in
+the execution transcript. That raw combined console transcript was not saved as
+a durable file, so this ledger does not fabricate a stronger replayable ordering
+claim. The canonical capture JSON instead binds the named staged CUE/ELF/release
+manifest, their hashes, the expected probe, and
+`created_utc=2026-08-17T19:51:46.491200+00:00`. The exact command was:
+
+```powershell
+& C:\Users\estee\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe tools\saturn\capture_sourceboot_throughput.py --ymir D:\Code\RetroDev\sm64-saturn-port\ymir-agent\build-agent2\apps\ymir-headless\Release\ymir-headless.exe --ipl "D:\Code\RetroDev\sm64-saturn-port\sm64-port\.ymir-profile\roms\ipl\Sega Saturn BIOS (USA).bin" --game releases\2026-08-17_w0-product\id-e8720d58595d9a62\sm64-saturn-sourceboot-e2.cue --elf releases\2026-08-17_w0-product\id-e8720d58595d9a62\obj\sm64-saturn-sourceboot-e2.elf --release-manifest releases\2026-08-17_w0-product\id-e8720d58595d9a62\saturn-release-manifest-v1.json --output docs\saturn\evidence\reports\w0-vdp1-overwrite-fence-throughput.json --startup-vblanks 4096 --warmup-ticks 30 --max-warmup-vblanks 20000 --max-vblanks 4096 --presentation-events 30 --timeout 1800
+```
+
 The separate untracked diagnostic profile changed only mode 0 to 2 (SHA-256
 `bf4fed164b24fead55275aefcf750cbdddb85d46d91fc11c97de52ba477f5ca6`). Two
 direct elevated MSYS Bash attempts, using the normal command tuple plus only
@@ -224,29 +259,96 @@ manifest across a bounded sample. Both stalled process trees were recorded and
 terminated; no diagnostic target link/memory/capture claim is made.
 
 Independent-review fix round 1 isolated `identity-assets` directly at
-2026-08-17T20:17:23Z with the same diagnostic profile, scene generation 15,
-development release mode, and manifest root. Its bounded command completed
-(durable stdout 385078 bytes, stderr 2221 bytes; final output at
-2026-08-17T20:20:04Z). The immediately following exact full Step-6 tuple
-again reached post-assets work, then had no compiler child, identity directory,
-or generated-file progress across the final bounded sample; its remaining
-processes were terminated. Diagnostic link/memory remain blocked.
+2026-08-17T20:17:23Z, but that historical command omitted the full override
+tuple and its stderr selected default camv1/stage16 paths. It is not diagnostic
+proof. The original outer recursive-make failure is therefore correctly
+attributed to its *post-assets handoff*, not to identity-assets itself.
+
+### Task 3 diagnostic arm: exact-tuple direct handoff (2026-08-17)
+
+Round 2 used the entire normal override tuple, `SATURN_DIAGNOSTIC_MODE=2`, the
+untracked mode-2 profile, scene generation 15, development release mode, and
+the recovery worktree manifest root for every direct inner-Make invocation.
+The directly invoked `identity-assets` and `identity-discovery` stages completed
+with durable stdout/stderr logs and camv3/stage8/diag2 paths. A first
+`print-identity-tag` query that omitted the tuple was safely rejected by the
+profile equality check and produced no artifact; its corrected full-tuple query
+returned `id-5f27c53e9ae67c9c`. The existing Makefile.saturn.mk 272--288
+handoff was then executed directly: tagged sourceboot build followed by
+`verify-sealed-inputs seal-release`. This is a narrow manual handoff bypass of
+the historical outer post-assets process, not a new build abstraction.
+
+The durable exact-stage log intervals (UTC) are assets
+`20:30:40--20:33:13`, discovery `20:34:17--20:35:41`, tagged build
+`20:38:09--20:44:35`, and sealed-input verification/release
+`20:46:42--20:49:34`. The logged commands are exactly the full-tuple scripts
+`task-3-diag-identity-assets.sh`, `task-3-diag-identity-discovery.sh`,
+`task-3-diag-sealed-build.sh`, and `task-3-diag-seal-release.sh` under
+`.superpowers/sdd/2026-08-17-vdp1-overwrite-fence/`, launched with
+`C:\\msys64\\usr\\bin\\bash.exe`; the latter two contain, respectively,
+`timeout 900s make SOURCEBOOT_SEALED_IDENTITY=id-5f27c53e9ae67c9c <full tuple>`
+and `timeout 300s make verify-sealed-inputs seal-release
+SOURCEBOOT_SEALED_IDENTITY=id-5f27c53e9ae67c9c <same full tuple>`.
+
+The resulting diagnostic manifest is
+`build/saturn/sourceboot/e2-bob-identity-id-5f27c53e9ae67c9c/saturn-release-manifest-v1.json`
+(SHA-256 `9cc86c488238302f5739c4ceae055a50042241ff9f2f611c04d455f336b39ef8`,
+LastWriteTimeUtc `2026-08-17T20:49:34Z`). Its ELF is
+`build/saturn/sourceboot/e2-bob-identity-id-5f27c53e9ae67c9c/obj/sm64-saturn-sourceboot-e2.elf`
+(SHA-256 `aff9145af07bda5c8afceaf2ab8b1fdf6e2fafdb4dba26f1d7ab80cd901207cb`,
+LastWriteTimeUtc `2026-08-17T20:40:48Z`). The mode-2 profile is
+`build/saturn/w0/sourceboot-bob-demo-diag2-v1.json` (SHA-256
+`bf4fed164b24fead55275aefcf750cbdddb85d46d91fc11c97de52ba477f5ca6`), changing
+only diagnostic mode from the normal profile.
+
+The manifest provenance is `d347cf612133e046afee4d498a8d3c367ef707b7`, not
+the frozen normal product source `6697a3ce1c048d007a8d950d18fa1c653ad29923`.
+The durable comparison `git diff --name-status 6697a3ce..d347cf61` enumerated
+exactly these tracked paths:
+
+```text
+M CHANGELOG.md
+M ROADMAP.md
+M STATE.md
+A docs/saturn/evidence/reports/w0-vdp1-overwrite-fence-throughput-attempt-1-failed.json
+A docs/saturn/evidence/reports/w0-vdp1-overwrite-fence-throughput.json
+M docs/saturn/evidence/reports/w0-vdp1-overwrite-fence.md
+M docs/superpowers/plans/2026-08-17-saturn-shaped-port-phase-plan.md
+M docs/superpowers/plans/2026-08-17-vdp1-overwrite-fence.md
+M tools/saturn/capture_sourceboot_throughput.py
+M tools/saturn/test_capture_sourceboot_throughput.py
+```
+
+It contains no target C/header, `Makefile.saturn.mk`, sourceboot Makefile,
+normal profile, package/compiler input, or target-behavior change. Thus the
+truthful classification is **`target-equivalent diagnostic arm compiled at
+tool/docs-only descendant revision; not artifact-identical to frozen normal
+candidate`**. Its map verification passed: `___end=0x060FC274`, HWRAM remaining
+`0x3D8C >= 0x1F00`, `lwram_end=0x002E8D60`, and LWRAM remaining
+`0x172A0 >= 0x4000`.
+
+No diagnostic capture ran: the normal observation neither recorded an
+unclassifiable busy deferral nor received a reviewer requirement for target
+deferral telemetry. The W0 busy branch remains **`host-proven; target-compiled;
+live occurrence unproven`**.
 
 ## Remaining gates
 
 - [x] Scheduler deferral host contract, two new mutations, and VDP1 frame-bank
   ownership gate pass.
 - [x] Sourceboot busy branch has host-contract evidence for no wait, DMA,
-  replot, or bank ownership change; target-equivalent compile is still pending.
+  replot, or bank ownership change; both target configurations compile and pass
+  their declared memory floors.
 - [x] `verify-frame-pipeline`, `verify-vdp1-frame-bank`,
   `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration`
   pass without weakened assertions. `verify-sourceboot-presentation-boundary`
   remains unchecked: all seven tests fail at the known pre-W0 bootstrap literal
   `bootstrap must contain exactly one null-snapshot VDP2 begin`, before any W0
   path assertion runs.
-- [ ] Normal and diagnostic target configurations link and retain memory floors.
-  Normal mode 0 links and passes both floors; diagnostic mode 2 is blocked at
-  the repeated environment/build handoff and has no link or memory evidence.
+- [x] Normal and diagnostic target configurations link and retain memory floors.
+  Normal mode 0 is the frozen staged product candidate; diagnostic mode 2 is a
+  separately sealed, target-equivalent tool/docs-only descendant and is not
+  artifact-identical to that candidate.
 - [x] A unique W0 normal artifact is staged with exact identity hashes.
 - [x] Earliest headless product observation passes the 4 FPS floor and generic
   gameplay coherence checks on the exact staged normal candidate.

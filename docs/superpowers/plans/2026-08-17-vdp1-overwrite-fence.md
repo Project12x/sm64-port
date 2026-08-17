@@ -580,7 +580,7 @@ compile.
 - Modify: `ROADMAP.md:134-138`
 - Create untracked build input: `build/saturn/w0/sourceboot-bob-demo-diag2-v1.json`
 
-- [ ] **Step 1: Freeze and record the normal build inputs.**
+- [x] **Step 1: Freeze and record the normal build inputs.**
 
   Require a clean tracked diff, record HEAD, and hash the normal profile:
 
@@ -596,7 +596,7 @@ compile.
   busy defers without hang or incomplete upload), and preserved baseline
   identity in the ledger before building.
 
-- [ ] **Step 2: Build the exact normal-profile product once.**
+- [x] **Step 2: Build the exact normal-profile product once.**
 
   ```powershell
   .\tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 sourceboot SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=0 SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=0 SATURN_FEATURE_SEMANTIC_AUDIO=1 SATURN_RENDERER_PIPELINE=4 SATURN_SOURCEBOOT_LEVEL_ID=9 SATURN_SOURCEBOOT_AREA_ID=1 SATURN_SOURCEBOOT_ROUTE_ID=0 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1 SATURN_SOURCEBOOT_LIVE_INPUT=1 SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS=600 SATURN_SOURCEBOOT_CAMERA_ROUTE=0 SATURN_CAMERA_VARIANT=3 SATURN_ATAN2_VARIANT=2 SATURN_DIAGNOSTIC_MODE=0 SATURN_EXPERIMENTAL_SKIP_GEO_WALK=0 SATURN_CART_MBIT=32 SATURN_SOURCE_CART_STAGE_SECTORS=8 SATURN_DEMO_VIEW_RADIUS=6000 SATURN_SLAVE_RENDER=1 SATURN_DEMO_POLY_TIER=2 SATURN_DEMO_HOT_PROMOTION=1 SATURN_DEMO_NEAR_CLIP=1 SATURN_DEMO_BSP_ORDER=1 SATURN_DEMO_BSP_FRAGMENTS=0 SATURN_DEMO_FRAGMENT_MODE=0 SATURN_DEMO_BSP_FRAGMENT_FLAT=0 SATURN_OBJECT_POOL_CAPACITY=208 SATURN_CAMERA_IDLE_START_TICK=0 SATURN_CAMERA_IDLE_DISCOVERY=0 SATURN_CAMERA_RANGE_CAPTURE=0 SATURN_FAST3D_Q16_TRACE=0
@@ -606,7 +606,7 @@ compile.
   `git_revision` equals frozen HEAD and effective config has diagnostic mode 0.
   Do not select a build solely by directory timestamp.
 
-- [ ] **Step 3: Verify memory and stage atomically under a new destination.**
+- [x] **Step 3: Verify memory and stage atomically under a new destination.**
 
   Resolve the build by manifest provenance and require exactly one match. Run:
 
@@ -639,7 +639,7 @@ compile.
   existing release. Record HWRAM end/free/margin and LWRAM end/free/margin;
   both declared floors must pass. Keep the resolved variables for Steps 4-5.
 
-- [ ] **Step 4: Print launch identity before opening Ymir.**
+- [x] **Step 4: Print launch identity before opening Ymir.**
 
   For the staged ELF, ISO, CUE, release manifest, and normal profile, print
   `Get-Item` full path and `LastWriteTimeUtc`, then `Get-FileHash -Algorithm
@@ -657,7 +657,7 @@ compile.
   Confirm none resolves inside the preserved T2.17 artifact directory. This
   identity block must precede the first emulator command in the transcript.
 
-- [ ] **Step 5: Run the earliest headless product observation.**
+- [x] **Step 5: Run the earliest headless product observation.**
 
   ```powershell
   $python = 'C:\Users\estee\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
@@ -687,7 +687,7 @@ compile.
   failed observation blocks W0 without diagnostic capture, review, or owner
   acceptance.
 
-- [ ] **Step 6: Compile the diagnostic arm without changing tracked profile.**
+- [x] **Step 6: Compile the diagnostic arm without changing tracked profile.**
 
   Copy the exact normal JSON to
   `build/saturn/w0/sourceboot-bob-demo-diag2-v1.json` as an untracked build
@@ -706,7 +706,7 @@ compile.
   branch as `host-proven; target-compiled; live occurrence unproven` and avoid an
   unnecessary second product capture.
 
-- [ ] **Step 7: Record live state and commit Task 3 evidence.**
+- [x] **Step 7: Record live state and commit Task 3 evidence.**
 
   Update the ledger with normal and diagnostic identities, hashes, build times,
   memory margins, exact capture command, actual JSON checks, and proof labels.

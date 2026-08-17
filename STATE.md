@@ -298,8 +298,12 @@ re-presentation on busy; the old normal/diagnostic wait and spin are gone.
 `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` pass.
 The normal target link passed both memory floors and its identity-bound Ymir
 observation passed 30 events/29 intervals at 6.6923 mean and 6.0 1% low FPS.
-The diagnostic-mode-2 build is blocked at the MSYS recursive-make
-identity-assets handoff; owner acceptance and independent review remain pending.
+The diagnostic-mode-2 arm now links and passes both floors through the existing
+direct Makefile handoff, at a tool/docs-only descendant revision rather than
+the frozen normal candidate revision; it is target-equivalent, not
+artifact-identical. The busy branch remains `host-proven; target-compiled; live
+occurrence unproven`. No diagnostic capture was needed under its stated
+condition. Owner acceptance and independent review remain pending.
 **(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
 correctly priced, master-local, no constraint tax. **(3) VDP1 command
 reduction -- promoted, but strictly after (1)**; before (1) it is worth zero
