@@ -117,6 +117,7 @@ check.
 | `e13baf1e9832671efe7c81be4eb29d5b7fc26438` | `test(saturn): close W0 review evidence findings` — corrected LWRAM maximum, focused contracts, review record, and status reconciliation; no product-code change |
 | `6044ba147c344f7379923ba1b41cbe6c809546a7` | `docs(saturn): record W0 desktop launch` — durable pre-launch and launch identity/process evidence; owner gate remains pending |
 | `aa4b8ac5f3353afb84150c0270d0ec78cef7c05d` | `docs(saturn): record W0 owner partial evidence` — verbatim owner cadence, visual, and audio evidence without inferring acceptance |
+| `93021686cda0afd1095bc73df53d96f911f7e841` | `docs(saturn): accept W0 overwrite fence candidate` — verbatim final owner acceptance closes W0 on the exact identity; retained limitations remain explicit |
 
 Independent review completed after the first identity-bound live product
 observation; see the review-evidence transition below.
