@@ -157,6 +157,13 @@ bool sm64_saturn_render_job_graph_claim_slave(
 bool sm64_saturn_render_job_graph_propagate_failures(
     sm64_saturn_render_job_graph_t *graph, uint32_t generation)
 {
+    /* The loop below reads graph->count, graph->queue and (through
+     * predecessor_failed) graph->dependency_mask directly.  Both SH-2s
+     * call this -- the slave from poll_slave(), the master from
+     * drain_master() -- and graph_current()'s alias is local to its own
+     * parameter, so without this the peer reads its own stale cached
+     * line of a field the publisher wrote through P2. */
+    graph = graph_cache_through(graph);
     bool changed = false;
     if (!graph_current(graph, generation)) return false;
     bool pass_changed;

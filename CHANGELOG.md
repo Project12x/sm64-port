@@ -4,6 +4,52 @@
 
 ### Fixed
 
+- Sprint 2 T2.25 (coherency): `sm64_saturn_render_job_graph_propagate_failures()`
+  read the shared render-job graph through the **cached** P0 alias. Both SH-2s
+  call it -- the slave from `poll_slave()`, the master from `drain_master()` --
+  and it dereferences `graph->count`, `graph->queue` and (through
+  `predecessor_failed()`) `graph->dependency_mask[]`, all of which the master
+  publishes through the cache-through alias in `graph_publish()`.
+
+  **Root cause.** The function opened with
+  `if (!graph_current(graph, generation)) return false;`, and `graph_current()`
+  re-aliases *its own* parameter. C is call-by-value, so the caller's pointer
+  was never re-aliased and every subsequent `graph->` in the loop went through
+  P0. The SH7604 pair has no cache coherency: a peer can therefore read its own
+  stale line for `count` and `dependency_mask` from an earlier generation. The
+  live consequence is bounded -- the graph's job count changes only between
+  4 (Mario visible) and 2 (Mario culled), and a stale read misfires only
+  *failure propagation*, so the visible symptom would be a missed quarantine
+  of a dependent job rather than wrong geometry -- but it is a genuine
+  incoherent read on the slave dispatch path.
+
+  **Why no capture ever showed it, and never could.** Ymir sets
+  `m_emulateSH2Caches = false` (`ymir-core/src/ymir/sys/saturn.cpp:156`) and
+  models no inter-SH-2 bus arbitration, so a cached P0 read and a
+  cache-through P2 read of the same HWRAM are the same access with the same
+  latency. Every cadence, profile and idle-attribution number this project
+  holds is blind to this class of defect. It was found by auditing our
+  discipline against SlaveDriver's (`WALLS.C:1272-1273`, `:1806-1807`,
+  `:1824-1825` at `a8986591557b6e680550d3c23970284d3b38ff8f`), not by
+  measurement.
+
+  **Fix, and the gate that would have caught it.** `propagate_failures()` now
+  re-aliases in its own body. `tools/saturn/verify_dual_cpu_coherency.py`
+  gains a `--graph-source` mode that splits the translation unit into
+  functions and requires every entry point touching `graph->` to select the
+  cache-through alias itself, plus a release-order check on `graph_publish()`
+  and a producer-completion check on `graph_claim()`. It is wired into
+  `verify-render-job-graph` with `--self-test`. Run against the pre-fix source
+  it fails with the exact defect; its self-test rejects five incoherent
+  variants, including dropping the alias from `propagate_failures()`, dropping
+  it from the claim path, and removing `CPU_CACHE_THROUGH` outright.
+
+  A sweep of the four sibling files found no second instance.
+  `predecessors_done()`/`predecessor_failed()` take a pointer their callers
+  have already aliased and are whitelisted for that reason;
+  `span_valid()` in `saturn_render_payload_bank.c` reads only
+  written-once-at-cold-init fields.
+
 - Sprint 2 T2.25 (build gates): five host gates over the cross-SH-2 render-job
   scheduler have been unrunnable for **130 commits** and are now restored.
   `verify-render-job-queue`, `verify-render-callback-context`,

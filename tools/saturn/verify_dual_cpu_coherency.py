@@ -313,6 +313,121 @@ def check_symbols(arguments: list[str]) -> int:
     return 0
 
 
+GRAPH_ALIAS = "graph_cache_through("
+# Helpers that receive a pointer the caller already re-aliased.  They take a
+# const parameter and must not re-alias it away.
+GRAPH_TRUSTED_CALLEES = ("predecessors_done", "predecessor_failed")
+GRAPH_NO_SHARED_STATE = ("graph_cache_through", "dependency_graph_acyclic")
+
+
+def graph_functions(source: str) -> list[tuple[str, str]]:
+    """Split the graph translation unit into (name, body) pairs.
+
+    Deliberately a line scanner rather than a regex: every definition in this
+    file starts at column 0 and ends at a line that is exactly ``}``.
+    """
+    out: list[tuple[str, str]] = []
+    lines = source.split("\n")
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        match = re.match(
+            r"^(?:static\s+)?(?:inline\s+)?(?:bool|void)\s+"
+            r"([A-Za-z_][A-Za-z0-9_]*)\s*\(", line)
+        if match is None:
+            index += 1
+            continue
+        name = match.group(1)
+        end = index + 1
+        while end < len(lines) and lines[end] != "}":
+            end += 1
+        out.append((name, "\n".join(lines[index:end + 1])))
+        index = end + 1
+    return out
+
+
+def graph_source_failures(source: str) -> list[str]:
+    """Reject a graph entry point that reads shared state through P0.
+
+    The dependency mask, the job count and the queue pointer are written by
+    the master through the cache-through alias and are read by BOTH SH-2s --
+    the slave from poll_slave(), the master from drain_master().  The SH7604
+    pair has no cache coherency, so a reader that dereferences the caller's
+    plain pointer can hit its own stale line from an earlier generation.
+    Every entry point that touches ``graph->`` must therefore re-alias in its
+    own body; delegating to a helper that aliases its OWN parameter does not
+    count, because C is call-by-value and the caller's pointer is unchanged.
+
+    Ymir sets ``m_emulateSH2Caches = false`` and models no inter-SH-2 bus
+    arbitration, so no emulator capture can observe a violation of this rule.
+    This gate is the only thing standing between the port and a failure that
+    appears on hardware alone.
+    """
+    failures: list[str] = []
+    if "CPU_CACHE_THROUGH" not in source:
+        failures.append("graph does not select the cache-through alias at all")
+    functions = graph_functions(source)
+    if not functions:
+        failures.append("graph source could not be parsed into functions")
+    for name, text in functions:
+        if name in GRAPH_NO_SHARED_STATE or name in GRAPH_TRUSTED_CALLEES:
+            continue
+        head, _, tail = text.partition("{")
+        if "graph->" not in tail:
+            continue
+        if GRAPH_ALIAS not in tail:
+            failures.append(
+                name + "() reads graph-> without selecting cache-through")
+    claim = dict(functions).get("graph_claim")
+    if claim is None:
+        failures.append("graph claim implementation is missing")
+    elif "predecessors_done(" not in claim:
+        failures.append("graph claim does not gate on producer completion")
+    publish = dict(functions).get("sm64_saturn_render_job_graph_publish")
+    if publish is None:
+        failures.append("graph publish implementation is missing")
+    else:
+        mask = publish.find("memcpy(graph->dependency_mask")
+        fence = publish.find("graph_fence();")
+        queue = publish.find("sm64_saturn_render_job_queue_publish(")
+        if min(mask, fence, queue) < 0 or not mask < fence < queue:
+            failures.append(
+                "graph publishes the queue before fencing its dependency mask")
+    return failures
+
+
+def graph_self_test(source_path: Path) -> int:
+    source = source_path.read_text(encoding="utf-8")
+    alias = "    graph = graph_cache_through(graph);\n"
+    mutants = (
+        (source.replace(alias + "    bool changed = false;",
+                        "    bool changed = false;", 1),
+         "propagate_failures reads the dependency mask through P0"),
+        (source.replace(alias + "    if (job_index != NULL)",
+                        "    if (job_index != NULL)", 1),
+         "the claim path reads the job count through P0"),
+        (source.replace("predecessors_done(graph, generation, index) &&",
+                        "true &&", 1),
+         "the claim path drops its producer-completion gate"),
+        (source.replace("    graph_fence();\n", "", 1),
+         "the dependency mask is published without a release fence"),
+        (source.replace("CPU_CACHE_THROUGH", "0U", 1),
+         "the cache-through alias is removed outright"),
+    )
+    for mutant, name in mutants:
+        if mutant == source:
+            print("render-job graph mutation did not apply: " + name,
+                  file=sys.stderr)
+            return 1
+        if not graph_source_failures(mutant):
+            print("render-job graph mutation unexpectedly passed: " + name,
+                  file=sys.stderr)
+            return 1
+    print("render-job graph mutation gate OK: five incoherent graph variants "
+          "rejected")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path)
@@ -320,10 +435,23 @@ def main() -> int:
     parser.add_argument("--queue-source", type=Path)
     parser.add_argument("--queue-header", type=Path)
     parser.add_argument("--output-bank-source", type=Path)
+    parser.add_argument("--graph-source", type=Path)
     parser.add_argument("--output-bank-header", type=Path)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("symbols", nargs="*")
     args = parser.parse_args()
+    if args.graph_source is not None:
+        failures = graph_source_failures(
+            args.graph_source.read_text(encoding="utf-8"))
+        if failures:
+            print("render-job graph coherency source gate FAILED:",
+                  file=sys.stderr)
+            for failure in failures:
+                print(f"  {failure}", file=sys.stderr)
+            return 1
+        print("render-job graph coherency source gate OK: "
+              "every entry point re-aliases shared state")
+        return graph_self_test(args.graph_source) if args.self_test else 0
     if args.output_bank_source is not None:
         if args.output_bank_header is None:
             parser.error("--output-bank-source requires --output-bank-header")
