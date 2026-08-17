@@ -18,8 +18,18 @@ Never regenerate or overwrite it.
 
 ## Build and launch discipline
 
-- Use the repository MSYS wrapper and serial `-j1` make route documented in the
-  build guide. Do not invoke a different Make, Python, or profile implicitly.
+- Use the repository MSYS wrapper and the full 27-variable make route documented
+  in the build guide. Do not invoke a different Make, Python, or profile
+  implicitly.
+- Parallel make is permitted; `-j1` is not required. T2.18 built the same tuple
+  `-j12`, `-j12` and `-j1` into three fresh trees and got byte-identical ELF,
+  ISO, linker map and all 280 objects, all sealing identity
+  `id-0fade22f26a95c0c`, with `release_manifest.py compare` clean
+  (`identical: true`, zero differing fields) on all three pairs. `-j1` 1039 s
+  vs `-j12` 713 s / 708 s. See
+  `docs/saturn/evidence/reports/sprint2-t2_18-parallel-build-identity.md`.
+  Prefer a `-j` at or below the host core count; keep `-j1` when the machine is
+  busy.
 - After building, record the CUE/ELF/profile hashes and filesystem build time.
 - Before opening Ymir, print those values and verify the launched path is the
   new artifact—not a baseline, superseded release, or another worktree.

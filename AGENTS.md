@@ -57,10 +57,25 @@ A new plan, abstraction, repair round, audit, or generalized format is
 
 ## Build invocation
 
-Builds must go through `tools/saturn/with-msys-toolchain.ps1` with `-j1`
-and the full 27-variable set documented in `docs/saturn/BUILDING.md`; the
-profile JSON is not read back into Make. Do not invoke a different Make,
-Python, or profile implicitly.
+Builds must go through `tools/saturn/with-msys-toolchain.ps1` with the full
+27-variable set documented in `docs/saturn/BUILDING.md`; the profile JSON is
+not read back into Make. Do not invoke a different Make, Python, or profile
+implicitly.
+
+Parallel make is permitted. `-j1` is **not** required and was never a
+correctness constraint. T2.18 built the same 27-variable tuple three times
+(`-j12`, `-j12`, `-j1`) into three fresh trees: all three sealed identity
+`id-0fade22f26a95c0c` and produced byte-identical ELF
+(`23937dcc5e8fb03a7b8d76b73f72cf65c508406d899703b600908c4657baf931`), ISO
+(`134c074ffd28605805534b416e93076fc96743a2bc9c333fffcbf07f676f65d7`), linker
+map, and all 280 object files, with `release_manifest.py compare` reporting
+`identical: true` and zero differing fields for all three pairs. An
+independent `-j12`/`-j1` pair at a different source state agrees. Wall clock:
+`-j1` 1039 s vs `-j12` 713 s / 708 s (~31% saving). Evidence:
+`docs/saturn/evidence/reports/sprint2-t2_18-parallel-build-identity.md`.
+Use a `-j` at or below the host core count; `-j1` remains correct and is the
+right choice on a loaded machine. Do not reinstate `-j1` as a mandate without
+new evidence that contradicts the above.
 
 ## Artifact identity
 
