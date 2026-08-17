@@ -1,7 +1,7 @@
 # VDP1 Overwrite Fence Fail-Soft Design
 
 **Date:** 2026-08-17
-**Status:** Behavioral direction owner-approved; written-spec review pending
+**Status:** Core behavior owner-approved; corrected written-spec review pending
 **Active phase plan:**
 [`2026-08-17-saturn-shaped-port-phase-plan.md`](../plans/2026-08-17-saturn-shaped-port-phase-plan.md)
 **Scope:** W0 only: remove the unbounded VDP1 command-VRAM overwrite wait
@@ -13,8 +13,18 @@ When a completed source command bank reaches its transfer-submission poll and
 VDP1 is still plotting, the runtime will defer that exact bank and generation
 until a later observed VBlank. It will not spin, submit DMA, poison the shared
 VDP1 destination, quarantine the bank, or rebuild the generation. The current
-presentation opportunity is recorded as previous-frame reuse, while the last
-complete framebuffer remains visible and authoritative simulation continues.
+presentation opportunity is consumed in the scheduler as previous-frame
+retention, while the hardware naturally keeps the last complete framebuffer
+visible. Sourceboot does not re-present that framebuffer on the busy branch.
+
+The master returns to the scheduler, but deferral does not reopen simulation
+credit. The existing normal-plus-recovery budget permits at most two
+authoritative ticks while a generation remains unpublished. Once that budget
+is exhausted, simulation, input consumption, and the source audio tick pause
+until the retained generation publishes. This bounded-state safe pause is
+deliberate:
+it prevents hidden simulation from overrunning the two render-snapshot slots
+or replacing the generation owned by the retained VDP1 bank.
 
 The normal idle path is unchanged: an idle VDP1 permits the existing validated
 command-prefix CPU-DMAC transfer followed by the existing validated Gouraud
@@ -24,9 +34,9 @@ checks.
 This is the smallest Saturn-shaped correction because Yaul's VDP1 busy state
 is retired by the VBlank-OUT synchronization path. Polling it repeatedly inside
 one scheduler action cannot create the hardware event that clears it. The
-scheduler already has an observed-field epoch and a safe previous-frame reuse
-contract, so retrying on the next epoch preserves forward progress without
-inventing another interrupt owner or transfer architecture.
+scheduler already has an observed-field epoch and a safe previous-frame
+retention contract, so retrying on the next epoch permits automatic recovery
+without inventing another interrupt owner or transfer architecture.
 
 ## Product problem and causal hypothesis
 
@@ -43,9 +53,13 @@ the existing safe-overwrite predicate and all transfer validation. A busy
 result is not data corruption and is not a frame-bank fault; it is a missed
 transfer opportunity.
 
-The owner-visible invariant is therefore stronger than "the wait is bounded":
-VDP1 remaining busy indefinitely may reduce visual freshness, but it must not
-freeze gameplay or expose an incomplete command list.
+The owner-visible invariant is therefore precise: no VDP1-busy observation may
+trap the master in an unbounded software wait, start an unsafe destination
+write, or expose an incomplete command list. A transient busy state must retry
+and recover automatically after a later observed VBlank. A permanently busy
+VDP1 is not claimed to remain playable: it retains the last complete frame and
+enters the existing unpublished-generation pause with simulation advancement
+capped rather than running ahead of owned render resources.
 
 ## Baseline and candidate identity
 
@@ -88,10 +102,12 @@ bool sm64_saturn_frame_pipeline_transfer_deferred(
 
 It succeeds only when all of these facts hold:
 
-- a render generation is active and complete;
-- a transfer poll has been issued for that exact nonzero generation;
-- the transfer has not completed; and
-- no different generation is being acknowledged.
+- `generation` is nonzero and equals the active `render_generation`;
+- `render_completed_valid` is true and its generation equals `generation`;
+- `transfer_started` is true and `transfer_generation` equals `generation`;
+- the submitting poll has a valid `transfer_poll_vblank` stamp equal to the
+  pipeline's current `last_vblank_count`; and
+- no completed-transfer record exists for `generation`.
 
 On success it:
 
@@ -101,8 +117,9 @@ On success it:
    record, the queued snapshot, and the displayed generation;
 3. preserves the current `transfer_poll_vblank` stamp, preventing a second
    submission attempt in the same observed field;
-4. consumes the current pending presentation opportunity when one exists;
-5. increments `previous_frame_reuse_count`; and
+4. if a presentation opportunity is pending, consumes it and increments
+   `previous_frame_reuse_count` exactly once;
+5. does not increment reuse when no presentation opportunity is pending; and
 6. reports the displayed generation as the scheduler's action generation.
 
 It does not mark a transfer complete, publish a generation, free or quarantine
@@ -128,8 +145,9 @@ current plot retires. "Reuse" here is a scheduler/accounting result: the
 hardware continues showing the last complete framebuffer naturally.
 
 If the acknowledgement unexpectedly rejects the current generation, the
-runtime must fail closed through the existing generation-mismatch fault path.
-That is an internal state violation, unlike an ordinary VDP1-busy deferral.
+runtime increments the existing pipeline fault evidence and returns without
+submitting DMA or re-presenting. That is an internal state violation, unlike an
+ordinary VDP1-busy deferral; it must not fall through to the idle submit path.
 
 ## Frame and generation sequence
 
@@ -141,10 +159,12 @@ For a completed render generation `N`:
 3. If busy, no destination write begins. The pipeline acknowledges deferral,
    counts one previous-frame reuse opportunity, and retains source bank `N` in
    `READY`.
-4. Further scheduler steps in `F` cannot resubmit because the transfer-poll
-   stamp still matches `F`.
+4. The next scheduler step in `F` is `WAIT_VBLANK` with the displayed
+   generation. It is not `POLL_TRANSFERS` or `REUSE_PREVIOUS_FRAME`, so
+   sourceboot neither retries DMA nor calls `sourceboot_present_generation()`.
 5. On the first eligible poll after a later observed VBlank, the same bank and
-   generation `N` are reconsidered.
+   generation `N` are reconsidered. Any remaining simulation credit may be
+   consumed first according to the existing scheduler ordering.
 6. Once VDP1 is idle, the existing command and Gouraud transfers start, retire,
    and publish `N` through the unchanged completion path.
 
@@ -152,6 +172,29 @@ A queued snapshot may remain queued during repeated deferrals. It does not
 replace `N`, and no source bank can be reused until its existing ownership
 contract retires it. Thus a late idle observation cannot upload a mixture of
 generations.
+
+### Bounded overload and snapshot behavior
+
+Deferral does not reset `sim_ticks_this_presentation`, manufacture simulation
+credit, or alter `SM64_SATURN_FRAME_MAX_SIM_TICKS`. Repeated busy fields can
+consume only the existing normal-plus-recovery allowance for the unpublished
+generation. This is load-bearing ownership behavior:
+
+- the completed VDP1 bank for `N` remains `READY`;
+- at most one later simulation snapshot is queued for promotion;
+- the two-slot render-snapshot bank is not asked to preserve an untracked
+  third generation; and
+- once `N` publishes, the queued snapshot is promoted under the existing
+  budget accounting and authoritative simulation can resume.
+
+Input interrupts and VBlank handling may continue at the platform level, but
+`game_loop_one_iteration()`—including input consumption and the source audio
+tick—runs only on `RUN_SIM_TICK`. W0 therefore promises automatic recovery from
+a transient busy fence and a safe pause with bounded simulation advancement
+for a permanent hardware stall, not invisible indefinite gameplay behind a
+frozen display. Reopening
+the simulation budget would require a separately designed snapshot
+drop/coalescing and frame-bank cancellation contract and is outside W0.
 
 ## Memory, ownership, and transport record
 
@@ -186,10 +229,14 @@ remain decodable:
 - fence/overwrite-wait tick fields are zero because the runtime performs no
   wait in this path.
 
-The profile decoder and evidence labels must call the event a "busy deferral,"
-not a completed wait. `previous_frame_reuse_count` remains the product-level
+The raw field names and profile version remain unchanged because the binary
+layout does not change. The profile decoder and evidence labels must expose
+`vdp1_fence_waits` as `busy_deferrals` and derive a
+`deferral_share_of_events`; they must not publish zero ticks/iterations as a
+mean wait cost. Source comments that still name `vdp1_sync_wait()` as the live
+fence must be updated. `previous_frame_reuse_count` remains the product-level
 count of missed presentation opportunities; it may include causes other than
-VDP1 busy, so it is not a substitute for `vdp1_fence_waits`.
+VDP1 busy, so it is not a substitute for the deferral count.
 
 ## Reference-code record
 
@@ -207,6 +254,21 @@ An event-driven draw-end DMA trigger remains a possible measured follow-up if
 natural busy-deferral telemetry proves material. It is not a W0 prerequisite
 and cannot be introduced without a separate ownership and interrupt design.
 
+## Adversarial review correction
+
+Grok Build returned `APPROVE WITH CHANGES` on 2026-08-17. Its material claims
+were independently checked against the current source rather than accepted by
+authority. The review correctly identified that the original draft overstated
+indefinite simulation progress, did not explicitly require a same-field
+`WAIT_VBLANK` assertion, left the acknowledgement predicate ambiguous, and
+needed stronger diagnostic/source-contract wording. Those corrections are in
+this revision.
+
+The review did not identify a reason to replace epoch deferral with sprite-end
+DMA or a bounded in-function VBlank wait. The core design remains unchanged.
+Owner review of this corrected written specification is still required before
+the implementation plan is written.
+
 ## Verification design
 
 ### Host contracts
@@ -214,23 +276,31 @@ and cannot be introduced without a separate ownership and interrupt design.
 The implementation plan must make these checks executable:
 
 1. Extend the frame-pipeline host test with a completed generation that is
-   polled, deferred, and retried. It must prove that the displayed generation
-   stays unchanged, the candidate generation remains complete, no transfer is
-   complete, and no retry occurs in the same observed field.
-2. Advance VBlank once and prove that the exact retained generation becomes
+   polled and deferred. It must prove that the displayed generation stays
+   unchanged, the candidate generation remains complete, no transfer is
+   complete, and reuse increments exactly once when a presentation was
+   pending.
+2. Prove that the next same-field action is `WAIT_VBLANK` for the displayed
+   generation—not `POLL_TRANSFERS` or `REUSE_PREVIOUS_FRAME`—and that the busy
+   sourceboot branch cannot reach `sourceboot_present_generation()`.
+3. Advance VBlank once and prove that the exact retained generation becomes
    eligible for `POLL_TRANSFERS` again, then can complete and publish through
    the normal path.
-3. Prove that wrong-generation, duplicate, pre-poll, and post-completion
+4. Prove that wrong-generation, duplicate, pre-poll, and post-completion
    deferral acknowledgements fail without mutation.
-4. Add a targeted compile-time mutation that incorrectly permits a same-field
-   retry (or clears the epoch stamp) and require the nominal harness to reject
-   it. Existing frame-pipeline mutation checks remain enabled.
-5. Update the VDP1 transfer source contract to prove that no
-   `vdp1_sync_wait()` or equivalent unbounded busy loop is reachable before
-   command-VRAM submission, that the busy branch acknowledges deferral before
-   returning, and that the existing frame-bank submit function remains the
-   sole writer path.
-6. Run `verify-frame-pipeline` and `verify-vdp1-frame-bank` without weakening
+5. Repeat deferrals across observed fields and prove that they neither reopen
+   the two-tick unpublished-generation budget nor create an untracked snapshot;
+   then prove eventual idle submission/publication resumes the normal budget.
+6. Add targeted compile-time mutations that leave `transfer_started` set or
+   clear the epoch stamp and require the nominal harness to reject both.
+   Existing frame-pipeline mutation checks remain enabled.
+7. Update the VDP1 transfer source contract to reject both
+   `vdp1_sync_wait()` and `while (vdp1_sync_busy())` in the normal and
+   diagnostic pre-submit paths. It must prove that the busy branch
+   acknowledges deferral and returns before transfer submission or
+   re-presentation, and that the existing frame-bank submit function remains
+   the sole command/Gouraud writer path.
+8. Run `verify-frame-pipeline` and `verify-vdp1-frame-bank` without weakening
    existing ownership, alignment, capacity, or generation assertions.
 
 Passing these checks is `host-contract-passed`, not target proof.
@@ -248,19 +318,24 @@ The earliest live observation is the generic standard scene-package path in
 BOB, using the normal registry, queue, residency, frame-bank, DMA, renderer,
 and presentation route. After the gameplay stage is visibly rendered, observe:
 
-- continued Mario animation, controls, camera, collision, normal actors, and
-  audible output;
-- no freeze, torn/partial command list, flicker, or mixed-generation frame;
+- normal Mario animation, controls, camera, collision, normal actors, and
+  audible output before and after any transient busy deferral;
+- automatic recovery after a transient deferral, with no unbounded fence
+  stall, torn/partial command list, duplicate plot, flicker, or
+  mixed-generation frame;
 - at least the accepted 4 FPS floor, with the T2.17/T2.25 6.7181-FPS cadence
   used as the regression comparison rather than a guaranteed exact result;
 - exact build/profile/artifact identity in the launch and capture record; and
 - diagnostic busy-deferral count plus previous-frame reuse count.
 
-If natural gameplay records one or more busy deferrals and continues correctly,
-the fail-soft branch is `live-observed`. If it records zero, the normal path may
-be `live-observed`, but the busy branch remains `host-proven/unproven-on-target`;
-the evidence must say so explicitly. W0 does not authorize an injected model,
-forced record, object-specific branch, or synthetic normal-level substitute.
+If natural gameplay records one or more busy deferrals and later publishes the
+retained generation without a product regression, the transient fail-soft
+branch is `live-observed`. If it records zero, the normal path may be
+`live-observed`, but the busy branch remains `host-proven/unproven-on-target`;
+the evidence must say so explicitly. A VDP1 that remains permanently busy does
+not pass the owner product gate even though the bounded safe-pause contract is
+working. W0 does not authorize an injected model, forced record,
+object-specific branch, or synthetic normal-level substitute.
 
 ## Stop and rollback policy
 
@@ -288,8 +363,9 @@ accepted artifact.
   the scheduler behavior and kill a same-field-retry mutation.
 - `tools/saturn/test_vdp1_transfer_pipeline_source.py`: revise the source
   contract from "wait before submit" to "defer before submit when busy."
-- Existing profile decoder/report documentation: relabel retained fields
-  without changing their binary layout.
+- `tools/saturn/capture_prenotification_profile.py` and profile/report
+  documentation: expose deferral semantics without changing the binary layout
+  or profile version.
 - `CHANGELOG.md`, the active phase plan, `STATE.md`, and the active SDD
   ledger/evidence report: record behavior, rationale, exact tests, commit,
   review verdict, artifact identity, observation status, and all remaining
@@ -307,8 +383,12 @@ W0 is complete only when all of the following are true:
   an unbounded VDP1 busy wait;
 - a busy observation starts no DMA, changes no VDP1 destination, and retains
   the exact `READY` bank/generation for a later observed field;
-- the scheduler cannot retry submission in the same observed field and does
-  count the missed presentation as previous-frame reuse;
+- the acknowledgement consumes a pending presentation exactly once; the next
+  same-field action is `WAIT_VBLANK`, with no DMA retry or hardware
+  re-presentation;
+- repeated deferrals do not reopen the existing two-tick
+  unpublished-generation budget or create an untracked snapshot, and a later
+  successful publication resumes the normal pipeline;
 - idle submission, DMA retirement, publication, poison, quarantine, alignment,
   capacity, and stale-generation contracts remain unchanged;
 - nominal and mutation host contracts pass, target compile/link succeeds, and
@@ -317,6 +397,10 @@ W0 is complete only when all of the following are true:
   level and remaining gates; and
 - a new identity-bound Ymir candidate preserves the product gates and 4 FPS
   floor without replacing the accepted artifact.
+
+A permanently busy VDP1 is specified as a safe pause with bounded simulation
+advancement, not as playable degradation, and cannot advance the owner gate
+until the normal hardware path recovers.
 
 Only `live-observed` or owner acceptance advances the product milestone.
 Host tests, source completeness, target compilation, memory margins, review,

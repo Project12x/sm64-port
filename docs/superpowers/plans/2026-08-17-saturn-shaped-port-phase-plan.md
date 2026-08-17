@@ -161,9 +161,17 @@ T2.8 §9 item 3 already listed it. This is the hang path in the build awaiting o
 
 **Size:** ~1 hour. Not a cadence item.
 
-**Exit:** the fence has a bounded wait with a defined failure behaviour that degrades
-rather than hangs; `verify-frame-pipeline` and `verify-vdp1-frame-bank` still pass with
-no assertion weakened (T2.17 kept all eleven passing verbatim — hold that standard).
+**Exit:** the fence performs one busy observation and immediately defers the exact
+`READY` bank/generation to a later observed VBlank. The busy branch starts no DMA,
+does not re-present while VDP1 is plotting, and contains neither `vdp1_sync_wait()` nor
+an equivalent diagnostic spin. The scheduler preserves its existing two-tick
+unpublished-generation budget: a transient busy state recovers automatically, while a
+permanent busy state retains the last complete framebuffer and pauses with simulation
+advancement capped rather than overrunning snapshot ownership. `verify-frame-pipeline` and
+`verify-vdp1-frame-bank` still pass with no assertion weakened (T2.17 kept all eleven
+passing verbatim — hold that standard). The corrected design contract, pending written
+owner review, is
+[`2026-08-17-vdp1-overwrite-fence-design.md`](../specs/2026-08-17-vdp1-overwrite-fence-design.md).
 
 ---
 
