@@ -86,6 +86,52 @@ stall all paid, **four consecutive investigations returned 0.07–0.5%** (shadow
 construction, user clipping, command-count LOD). That is what a subsystem out of slack
 looks like.
 
+## 2a. Porting versus recreating — the choice that governs every workstream
+
+**Owner ruling (2026-08-17):** *"not everything can be ported - it is better that its
+recreated as saturn native."*
+
+This is a per-subsystem decision, and **it determines the acceptance criterion, not just
+the implementation**. Getting the pairing wrong is expensive in both directions: porting
+what should be recreated buys a slow, foreign-shaped result; recreating what should be
+ported throws away working behaviour for no gain.
+
+| | **Port** | **Recreate** |
+|---|---|---|
+| Intent | preserve the original algorithm | solve the same problem the Saturn way |
+| Verified by | equivalence or bounded divergence **against the original** | **behaviour**: does it play and look right |
+| Divergence is | a defect to bound | **the point** |
+| Cost | cheap when the algorithm already fits | design effort, and needs an owner judgement |
+
+**Precedents already set in this project, both correct:**
+
+- **Ported:** T2.13's shadow trig. The algorithm fit — an exact s16 angle was being sent
+  on a detour through float degrees — so substituting a table was a *port*, verified by
+  bounded, memoryless, sub-pixel divergence. Cheap and right.
+- **Recreated:** shadows themselves. A generic painted sprite that does not follow light
+  cues is **not** a degraded SM64 shadow; it is the Saturn answer to the same problem.
+  Measuring its divergence from SM64's shadow would be measuring the wrong thing.
+
+**Correction to W6b, recorded:** an earlier draft of this plan specified a per-tick state
+divergence harness as W6b's acceptance criterion. **That criterion assumes porting.** If a
+subsystem is recreated, it will diverge by design and the harness would reject the very
+approach the owner has chosen. The harness is still the right tool for *converted*
+subsystems; recreated ones need behavioural acceptance instead. See W6b as amended.
+
+**Applying it to the workstreams:**
+
+- **W1** (scene-graph traversal) — **recreate.** The renderer already has a Saturn-native
+  path; the N64 walk is the foreign structure. Constraint: the surviving camera matrix and
+  the callback side effects are *interfaces to gameplay*, so those are ported, not
+  recreated.
+- **W3** (bake) — **already recreation.** Authoring to a declared budget rather than converting
+  N64 geometry is the whole point.
+- **W6a** (soft-float library) — **port, strictly.** Bit-exactness is the entire value; there
+  is nothing to redesign.
+- **W6b** (simulation math) — **mixed, and the split is the design work.** See below.
+
+---
+
 ## 3. Sequencing against the charter
 
 | Charter phase | Relationship to this plan |
@@ -361,11 +407,26 @@ simulation against the same route and compare `gMarioState` and object state
 already exists: the route is deterministic, `sState.input_replay_ticks` indexes it exactly
 (T2.19d proved it is the index, not a correlate), and captures are tick-addressable.
 
-**The acceptance criterion is the shape of the divergence, not its size.** Bounded and
-non-accumulating is fine — that is the same standard T2.13 used for the trig substitution,
-which was accepted precisely because it is memoryless. **Divergence that compounds across
-ticks is a defect regardless of how small it starts**, because simulation state feeds
-itself forward. Design the harness to detect compounding specifically.
+**Acceptance depends on whether a given subsystem is ported or recreated (see 2a) —
+and that decision is design work owed before any conversion starts.**
+
+- **Where the algorithm already fits** — anything already keyed to s16 angles, integer
+  positions, or Q16 quantities on a detour through float — treat as a **port**. Accept on
+  bounded, **non-accumulating** divergence, the same standard T2.13's memoryless
+  substitution met. **Divergence that compounds across ticks is a defect at any starting
+  size**, because simulation state feeds itself forward; design the harness to detect
+  compounding specifically rather than magnitude.
+- **Where the algorithm does not fit** — f32 collision epsilons, physics tuned to float
+  rounding — **recreate**, and accept on **behaviour**: does Mario clear the gap he used to,
+  does the floor hold him, does the jump feel right. **Per-tick divergence is the wrong
+  measure here and will reject good work.** This needs owner play-testing, not a
+  bit-comparison, and it should be scoped so the owner is asked a small number of
+  answerable questions rather than handed a diff.
+
+**The dual-run harness is still worth building** — the route is deterministic,
+`sState.input_replay_ticks` indexes it exactly (T2.19d), and captures are
+tick-addressable — but as an **instrument for the ported parts and a change-detector for
+the recreated ones**, not as the gate for both.
 
 **Sequencing:** after W6a (free speedup on the same code) and after W5a (so the category
 is measurable and the win is attributable). W5b's actor-scaling curve tells you which
