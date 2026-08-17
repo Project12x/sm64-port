@@ -685,6 +685,99 @@ class ThroughputCaptureTests(unittest.TestCase):
         self.assertEqual(events[1]["cadence"]["dropped_vblank_credit"], 3)
         self.assertEqual(observation["measurement"]["intervals"][0]["phases"]["simulation"]["count"], 1)
 
+    def test_observation_retries_one_transient_torn_cadence_snapshot_without_recording_a_partial_event(self) -> None:
+        class FakeYmir:
+            def __init__(self) -> None:
+                self.tick = 0
+                self.cadence_reads = 0
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                presentation = max(0, (self.tick - 1) // 2)
+                if address == BOOT_ADDRESS:
+                    return {"data": list(trace(self.tick, presentation))}
+                if address == CADENCE_ADDRESS:
+                    self.cadence_reads += 1
+                    record = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+                    record["observed_vblank_generation"] = self.tick
+                    record["frame_generation"] = self.tick
+                    record["build_generation"] = self.tick
+                    record["presentation_generation"] = presentation
+                    record["dropped_vblank_credit"] = self.tick
+                    record["simulation_vblank_crossings"] = self.tick
+                    record["simulation_count"] = self.tick
+                    raw = bytearray(cadence_trace(sequence=self.tick * 2, record=record))
+                    if self.cadence_reads == 1:
+                        raw[-4:] = (self.tick * 2 - 2).to_bytes(4, "big")
+                    return {"data": list(raw)}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(runtime(qn=self.tick, qr=self.tick, notify=self.tick, retired=self.tick))}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(0))}
+                raise AssertionError(address)
+
+        observation = capture.observe_target(
+            FakeYmir(),
+            {
+                "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": capture.CADENCE_TRACE_BYTES},
+                "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+            },
+            max_vblanks=6,
+            nominal_refresh_hz=60.0,
+        )
+        self.assertEqual(observation["vblanks_advanced"], 5)
+        self.assertEqual(observation["cadence_unstable_retry_count"], 1)
+        self.assertEqual(
+            [event["presentation_generation"] for event in observation["presentation_events"]], [1, 2]
+        )
+
+    def test_observation_fails_after_bounded_persistent_torn_cadence_snapshots(self) -> None:
+        class FakeYmir:
+            def __init__(self) -> None:
+                self.tick = 0
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                presentation = max(0, (self.tick - 1) // 2)
+                if address == BOOT_ADDRESS:
+                    return {"data": list(trace(self.tick, presentation))}
+                if address == CADENCE_ADDRESS:
+                    record = {field: self.tick for field in capture.CADENCE_RECORD_FIELDS}
+                    record["presentation_generation"] = presentation
+                    raw = bytearray(cadence_trace(sequence=self.tick * 2, record=record))
+                    raw[-4:] = (self.tick * 2 - 2).to_bytes(4, "big")
+                    return {"data": list(raw)}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(runtime(qn=self.tick, qr=self.tick, notify=self.tick, retired=self.tick))}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(0))}
+                raise AssertionError(address)
+
+        with self.assertRaisesRegex(capture.ObservationError, "remained unstable after") as caught:
+            capture.observe_target(
+                FakeYmir(),
+                {
+                    "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": capture.CADENCE_TRACE_BYTES},
+                    "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                    "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+                },
+                max_vblanks=6,
+                nominal_refresh_hz=60.0,
+            )
+        diagnostics = caught.exception.diagnostics
+        self.assertEqual(diagnostics["cadence_unstable_retry_count"], capture.CADENCE_UNSTABLE_RETRY_BUDGET)
+        self.assertEqual(diagnostics["cadence_unstable_retry_budget"], capture.CADENCE_UNSTABLE_RETRY_BUDGET)
+        self.assertIn("seqlock is not stable", diagnostics["cadence_decode_error"])
+
     def test_failed_observation_retains_final_cadence_seqlock_snapshot(self) -> None:
         class FakeYmir:
             def __init__(self, *, torn_cadence: bool = False) -> None:

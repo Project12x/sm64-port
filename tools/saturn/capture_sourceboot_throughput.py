@@ -61,6 +61,7 @@ RUNTIME_LAYOUTS = {
 RENDER_JOB_QUEUE_BYTES = 232
 IDENTITY_PROBE_BYTES = 16
 MAX_VBLANKS = 4096
+CADENCE_UNSTABLE_RETRY_BUDGET = 2
 P2_ALIAS_BIT = 0x20000000
 MAX_DIAGNOSTIC_NOTIFICATIONS = 64
 MAX_DIAGNOSTIC_NOTIFICATION_BYTES = 64 * 1024
@@ -701,6 +702,7 @@ def observe_target(
     last_runtime: dict[str, Any] | None = None
     last_queue_generation: int | None = None
     last_cadence_trace: dict[str, Any] | None = None
+    cadence_unstable_retry_count = 0
     cadence_symbol = symbols.get("sourceboot_cadence_trace")
     for sample_index in range(max_vblanks):
         client.call("exec.run_for", {"frames": 1})
@@ -735,8 +737,23 @@ def observe_target(
                     read_exact(client, _p2(cadence_symbol["address"]), CADENCE_TRACE_BYTES)
                 )
             except ValueError as error:
+                if (
+                    str(error) == "cadence trace seqlock is not stable"
+                    and cadence_unstable_retry_count < CADENCE_UNSTABLE_RETRY_BUDGET
+                ):
+                    # `run_for` may stop either SH-2 in the writer's seqlock
+                    # publication. Keep the prior presentation edge pending and
+                    # advance exactly one later stopped field before rereading.
+                    cadence_unstable_retry_count += 1
+                    continue
                 raise ObservationError(
-                    f"cadence trace decode failed: {error}",
+                    (
+                        "cadence trace remained unstable after "
+                        f"{cadence_unstable_retry_count} retries "
+                        f"(budget {CADENCE_UNSTABLE_RETRY_BUDGET}): {error}"
+                        if str(error) == "cadence trace seqlock is not stable"
+                        else f"cadence trace decode failed: {error}"
+                    ),
                     {
                         "vblanks_advanced": sample_index + 1,
                         "presentation_events_observed": len(events),
@@ -744,6 +761,8 @@ def observe_target(
                         "last_trace": trace,
                         "last_cadence_trace": last_cadence_trace,
                         "cadence_decode_error": str(error),
+                        "cadence_unstable_retry_count": cadence_unstable_retry_count,
+                        "cadence_unstable_retry_budget": CADENCE_UNSTABLE_RETRY_BUDGET,
                         "last_runtime": runtime,
                         "last_queue_generation": queue_generation,
                     },
@@ -770,30 +789,62 @@ def observe_target(
         if len(events) >= presentation_events and latest_queue is not None:
             break
     if cadence_symbol is not None:
-        try:
-            last_cadence_trace = decode_cadence_trace(
-                read_exact(client, _p2(cadence_symbol["address"]), CADENCE_TRACE_BYTES)
-            )
-        except ValueError as error:
-            raise ObservationError(
-                f"cadence trace decode failed: {error}",
-                {
-                    "vblanks_advanced": sample_index + 1,
-                    "presentation_events_observed": len(events),
-                    "presentation_events_required": presentation_events,
-                    "last_trace": last_trace,
-                    "last_cadence_trace": last_cadence_trace,
-                    "cadence_decode_error": str(error),
-                    "last_runtime": last_runtime,
-                    "last_queue_generation": last_queue_generation,
-                },
-            ) from error
+        while True:
+            try:
+                last_cadence_trace = decode_cadence_trace(
+                    read_exact(client, _p2(cadence_symbol["address"]), CADENCE_TRACE_BYTES)
+                )
+                break
+            except ValueError as error:
+                if (
+                    str(error) != "cadence trace seqlock is not stable"
+                    or cadence_unstable_retry_count >= CADENCE_UNSTABLE_RETRY_BUDGET
+                    or sample_index + 1 >= max_vblanks
+                ):
+                    raise ObservationError(
+                        (
+                            "cadence trace remained unstable after "
+                            f"{cadence_unstable_retry_count} retries "
+                            f"(budget {CADENCE_UNSTABLE_RETRY_BUDGET}): {error}"
+                            if str(error) == "cadence trace seqlock is not stable"
+                            else f"cadence trace decode failed: {error}"
+                        ),
+                        {
+                            "vblanks_advanced": sample_index + 1,
+                            "presentation_events_observed": len(events),
+                            "presentation_events_required": presentation_events,
+                            "last_trace": last_trace,
+                            "last_cadence_trace": last_cadence_trace,
+                            "cadence_decode_error": str(error),
+                            "cadence_unstable_retry_count": cadence_unstable_retry_count,
+                            "cadence_unstable_retry_budget": CADENCE_UNSTABLE_RETRY_BUDGET,
+                            "last_runtime": last_runtime,
+                            "last_queue_generation": last_queue_generation,
+                        },
+                    ) from error
+                cadence_unstable_retry_count += 1
+                client.call("exec.run_for", {"frames": 1})
+                sample_index += 1
+                last_trace = decode_boot_trace(read_exact(
+                    client, _p2(symbols["sourceboot_boot_trace"]["address"]), BOOT_TRACE_BYTES
+                ))
+                last_runtime = decode_runtime(read_exact(
+                    client, _p2(symbols["s_runtime"]["address"]), symbols["s_runtime"]["size"]
+                ))
+                last_queue_generation = decode_queue_generation(read_exact(
+                    client, _p2(symbols["s_render_job_queue"]["address"]), RENDER_JOB_QUEUE_BYTES
+                ))
+                coherent = accept_coherent_queue(last_runtime, last_queue_generation)
+                if coherent is not None:
+                    latest_queue = coherent
     diagnostics = {
         "vblanks_advanced": sample_index + 1,
         "presentation_events_observed": len(events),
         "presentation_events_required": presentation_events,
         "last_trace": last_trace,
         "last_cadence_trace": last_cadence_trace,
+        "cadence_unstable_retry_count": cadence_unstable_retry_count,
+        "cadence_unstable_retry_budget": CADENCE_UNSTABLE_RETRY_BUDGET,
         "last_runtime": last_runtime,
         "last_queue_generation": last_queue_generation,
     }
@@ -813,6 +864,8 @@ def observe_target(
         "measurement": measurement,
         "latest_coherent_queue": latest_queue,
         "presentation_events": events,
+        "cadence_unstable_retry_count": cadence_unstable_retry_count,
+        "cadence_unstable_retry_budget": CADENCE_UNSTABLE_RETRY_BUDGET,
     }
 
 

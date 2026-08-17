@@ -677,6 +677,16 @@ compile.
   one narrow repair or restore the accepted baseline; do not continue to review
   or desktop acceptance with a failed product capture.
 
+  **Observation acceptance correction (2026-08-17).** An `exec.run_for`
+  boundary can leave the SH-2 stopped while the cadence writer owns its seqlock.
+  The observer may retry only that strict transient decode by advancing at most
+  two later stopped fields. It must not append an event or advance
+  `last_presentation` on a torn sample, and it must retain the retry count and
+  budget in failure diagnostics. This is a tool-only, final second-observation
+  allowance: no target source/profile/staged artifact may change, and a second
+  failed observation blocks W0 without diagnostic capture, review, or owner
+  acceptance.
+
 - [ ] **Step 6: Compile the diagnostic arm without changing tracked profile.**
 
   Copy the exact normal JSON to

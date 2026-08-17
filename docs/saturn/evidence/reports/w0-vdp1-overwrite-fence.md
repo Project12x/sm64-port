@@ -1,7 +1,9 @@
 # W0 VDP1 Overwrite Fence Execution Ledger
 
 **Date opened:** 2026-08-17
-**Status:** `active; W0.1/W0.2 host-contract-passed; target compile and live gates pending`
+**Status:** `active; W0.1/W0.2 host-contract-passed; normal target-compiled;
+first live observation inconclusive at the cadence-reader boundary; one
+tool-only second observation remains`
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -22,8 +24,8 @@ gameplay artifact remains the only preserved product baseline.
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
 | W0.1 scheduler acknowledgement | `host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, and VDP1 frame-bank ownership checks pass | Sourceboot integration and target gates remain |
-| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; target compile and live gates pending` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed | Normal/diagnostic target-equivalent compile, memory floors, identity-bound live observation; presentation-boundary literal drift remains recorded below |
-| W0.3 normal build and live product observation | `planned` | Preserved baseline and exact build/capture recipe recorded | Unique build, memory check, atomic staging, identity-bound headless Ymir capture |
+| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; normal target-compiled` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed; normal diagnostic-mode-0 link and both floors passed | Diagnostic target-equivalent compile; normal live proof; presentation-boundary literal drift remains recorded below |
+| W0.3 normal build and live product observation | `active; first observation inconclusive` | Unique normal candidate `id-e8720d58595d9a62`, its memory floors, staging, and identity binding are recorded; attempt 1 reached generation 50 with coherent queues but stopped on an unstable cadence seqlock | One bounded tool-only retry against the same staged candidate; no target rebuild or behavior change |
 | W0.4 review and owner gate | `planned` | Review and desktop acceptance criteria recorded | Independent verdict, identity-bound desktop launch, explicit owner judgment |
 
 ## Preserved accepted product baseline
@@ -109,6 +111,23 @@ product observation.
 
 ## Tests and observations
 
+### Task 3 pre-build identity freeze (2026-08-17)
+
+Before invoking the normal target build, recovery worktree `saturn/recovery`
+was at immutable task base `6697a3ce1c048d007a8d950d18fa1c653ad29923` with
+no tracked diff. The only pre-existing untracked paths were `.msys-home/`,
+`releases/`, and the two historical A9 desktop-launch logs; they are preserved
+and excluded from this task. The exact normal profile is
+`tools/saturn/profiles/sourceboot-bob-demo-v1.json`, SHA-256
+`a562c98760a893a474092799ba3d52b6feb9312afadb28c967271bd8da1c8b9c`.
+
+The W0 hypothesis being observed is: a transient VDP1 busy state immediately
+defers its exact ready generation and later retries it, without a hang or an
+incomplete upload. The owner-accepted T2.17 artifact remains immutable:
+`id-c0352f297034f653` (CUE SHA-256
+`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`);
+the normal build must create and stage a new identity outside that artifact.
+
 W0.1 scheduler gates run on 2026-08-17. The mandated RED command first failed
 at the compiler with an implicit declaration of
 `sm64_saturn_frame_pipeline_transfer_deferred`; an initial sandbox invocation
@@ -157,6 +176,34 @@ local wrapper could not rerun tests, so the commands above remain the actual
 test evidence. Independent review remains deferred until the first
 identity-bound live product observation.
 
+### Task 3 first live observation and observer correction (2026-08-17)
+
+The normal target build is `id-e8720d58595d9a62` from product source
+`6697a3ce1c048d007a8d950d18fa1c653ad29923`, diagnostic mode 0, and normal
+profile hash `a562c98760a893a474092799ba3d52b6feb9312afadb28c967271bd8da1c8b9c`.
+It links with HWRAM free `0x4A58` (margin `0x2B58` over the required `0x1F00`)
+and LWRAM free `0x17620` (floor `0x4000`), and was atomically staged outside
+the immutable T2.17 artifact.
+
+Attempt 1 is preserved, not overwritten, as
+`w0-vdp1-overwrite-fence-throughput-attempt-1-failed.json` (SHA-256
+`abfaae9267cf8293cbfe2a6f431a4c3b7cbf77c3df530103b2d0a866d09f8a`). It stopped
+after 21/30 events with `cadence trace seqlock is not stable`. Its last stable
+cadence sequence was 98/presentation generation 49; runtime reached generation
+50 with `notify=qn=qr=retired=50`, all queues zero, and both failure counters
+zero. This is a capture-race hypothesis, not a live product PASS or a proven
+absence of regression.
+
+Controller authorized one final observer-only retry. The observer now retries
+only that strict seqlock error for at most two later stopped fields, retaining
+the old presentation edge until it has a coherent cadence record. It leaves
+`decode_cadence_trace` strict and changes no target/runtime/product source;
+the staged candidate remains from `6697a3ce` while this observer revision is
+newer. Focused RED/GREEN tests cover transient torn-then-stable success and
+persistent torn bounded failure. The full tool module has one unrelated local
+ACL failure in `test_release_binding_retains_verified_snapshot_after_source_mutation`
+while attempting to lock `C:\\Users\\estee`; the three cadence-focused tests pass.
+
 ## Remaining gates
 
 - [x] Scheduler deferral host contract, two new mutations, and VDP1 frame-bank
@@ -170,9 +217,12 @@ identity-bound live product observation.
   `bootstrap must contain exactly one null-snapshot VDP2 begin`, before any W0
   path assertion runs.
 - [ ] Normal and diagnostic target configurations link and retain memory floors.
-- [ ] A unique W0 normal artifact is staged with exact identity hashes.
+  Normal mode 0 links and passes both floors; diagnostic mode 2 remains gated
+  on a successful second normal observation.
+- [x] A unique W0 normal artifact is staged with exact identity hashes.
 - [ ] Earliest headless product observation passes the 4 FPS floor and generic
-  gameplay coherence checks.
+  gameplay coherence checks. Attempt 1 is inconclusive; one identity-bound,
+  tool-only retry remains against the same staged candidate.
 - [ ] Independent code review passes or its one narrow repair is re-observed.
 - [ ] Owner observes and accepts boot, play, fidelity, camera, collision,
   ordinary actors, audio, presentation, and cadence on the exact W0 artifact.

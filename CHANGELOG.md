@@ -15,6 +15,16 @@
 
 ### Fixed
 
+- The headless sourceboot throughput observer now treats an unstable cadence
+  seqlock snapshot as a bounded observation race rather than a product failure.
+  It advances at most two later stopped fields and retries only the strict
+  unstable-seqlock decode; it neither records a partial presentation event nor
+  advances its presentation baseline until a coherent record is read. A
+  persistent or structurally invalid snapshot still fails with the exact retry
+  count and budget. This changes host observation behavior only: the W0 target
+  source, profile ABI, staged product candidate, and cadence acceptance floors
+  are unchanged.
+
 - W0 scheduler deferral now acknowledges only the exact completed generation
   observed during the current VBlank poll. It clears the in-flight transfer
   ownership and submit stamp while preserving the poll epoch for a later retry,
