@@ -1,0 +1,1760 @@
+{
+  "schema": "sm64-saturn-route-counters-v1",
+  "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.elf",
+  "elf_sha256": "bc49eafa8bc9695ec708a7ffa24884be7084be10b0ad7a1bd1ca87bdbe6ccbad",
+  "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.cue",
+  "identity": {
+    "address": 574619648,
+    "size": 16,
+    "expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "observed_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "match": true,
+    "startup_vblanks_waited": 681,
+    "startup_identity_attempts": 681
+  },
+  "addresses": {
+    "profile": "0x2cdac4",
+    "state": "0x60f0d28",
+    "numcalls": "0x60dcb64"
+  },
+  "sampling": {
+    "startup_vblanks": 4096,
+    "warmup": {
+      "mode": "vblanks-deprecated",
+      "warmup_vblanks": 1800,
+      "vblanks_advanced": 1800,
+      "deprecation": "VBlank warm-up is wall-clock: builds of different speed land on different route positions. Prefer --warmup-ticks (T2.19d).",
+      "replay_ticks": 25,
+      "global_timer": 25
+    },
+    "samples": 40,
+    "gap_vblanks": 11
+  },
+  "wall_seconds": 50.1,
+  "per_frame": {
+    "profile": {
+      "command_count": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "triangle_count": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "triangles_transformed": {
+        "intervals": 39,
+        "mean": 337.359,
+        "median": 337.0,
+        "min": 337.0,
+        "max": 339.0
+      },
+      "triangles_emitted": {
+        "intervals": 39,
+        "mean": 502.4359,
+        "median": 503.0,
+        "min": 488.0,
+        "max": 520.0
+      },
+      "reject_near_far": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_backface": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_degenerate": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_vertex_range": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_command_capacity": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "triangles_vdp1_emitted": {
+        "intervals": 39,
+        "mean": 502.4359,
+        "median": 503.0,
+        "min": 488.0,
+        "max": 520.0
+      },
+      "reject_vdp1_arena_capacity": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_w_nonpositive": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_z_near": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_z_far": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_offscreen": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reject_span": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "state": {
+      "input_polls": {
+        "intervals": 39,
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "submitted_tasks": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "unhandled_tasks": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "audio_ticks": {
+        "intervals": 39,
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "preflight_tasks": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "preflight_failures": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "input_replay_ticks": {
+        "intervals": 39,
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "scene_graph_walks": {
+        "intervals": 39,
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "scene_graph_walks_suppressed": {
+        "intervals": 39,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "numcalls": {
+      "floor": {
+        "intervals": 39,
+        "mean": 43.0,
+        "median": 43.0,
+        "min": 43.0,
+        "max": 43.0
+      },
+      "ceil": {
+        "intervals": 39,
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "wall": {
+        "intervals": 39,
+        "mean": 10.0,
+        "median": 10.0,
+        "min": 10.0,
+        "max": 10.0
+      }
+    }
+  },
+  "rows": [
+    {
+      "sample": 0,
+      "profile": {
+        "frame_serial": 23,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 8811,
+        "triangles_emitted": 10570,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 10570,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 25,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 25,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 25,
+        "scene_graph_walks": 25,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1065,
+        "ceil": 25,
+        "wall": 252
+      }
+    },
+    {
+      "sample": 1,
+      "profile": {
+        "frame_serial": 24,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 9150,
+        "triangles_emitted": 11066,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 11066,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 26,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 26,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 26,
+        "scene_graph_walks": 26,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1108,
+        "ceil": 26,
+        "wall": 262
+      }
+    },
+    {
+      "sample": 2,
+      "profile": {
+        "frame_serial": 25,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 9489,
+        "triangles_emitted": 11568,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 11568,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 27,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 27,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 27,
+        "scene_graph_walks": 27,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1151,
+        "ceil": 27,
+        "wall": 272
+      }
+    },
+    {
+      "sample": 3,
+      "profile": {
+        "frame_serial": 26,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 9828,
+        "triangles_emitted": 12056,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 12056,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 28,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 28,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 28,
+        "scene_graph_walks": 28,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1194,
+        "ceil": 28,
+        "wall": 282
+      }
+    },
+    {
+      "sample": 4,
+      "profile": {
+        "frame_serial": 27,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 10167,
+        "triangles_emitted": 12546,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 12546,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 29,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 29,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 29,
+        "scene_graph_walks": 29,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1237,
+        "ceil": 29,
+        "wall": 292
+      }
+    },
+    {
+      "sample": 5,
+      "profile": {
+        "frame_serial": 28,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 10506,
+        "triangles_emitted": 13054,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 13054,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 30,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 30,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 30,
+        "scene_graph_walks": 30,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1280,
+        "ceil": 30,
+        "wall": 302
+      }
+    },
+    {
+      "sample": 6,
+      "profile": {
+        "frame_serial": 29,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 10845,
+        "triangles_emitted": 13553,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 13553,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 31,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 31,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 31,
+        "scene_graph_walks": 31,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1323,
+        "ceil": 31,
+        "wall": 312
+      }
+    },
+    {
+      "sample": 7,
+      "profile": {
+        "frame_serial": 30,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 11182,
+        "triangles_emitted": 14057,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 14057,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 32,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 32,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 32,
+        "scene_graph_walks": 32,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1366,
+        "ceil": 32,
+        "wall": 322
+      }
+    },
+    {
+      "sample": 8,
+      "profile": {
+        "frame_serial": 31,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 11521,
+        "triangles_emitted": 14559,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 14559,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 33,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 33,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 33,
+        "scene_graph_walks": 33,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1409,
+        "ceil": 33,
+        "wall": 332
+      }
+    },
+    {
+      "sample": 9,
+      "profile": {
+        "frame_serial": 32,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 11858,
+        "triangles_emitted": 15052,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 15052,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 34,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 34,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 34,
+        "scene_graph_walks": 34,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1452,
+        "ceil": 34,
+        "wall": 342
+      }
+    },
+    {
+      "sample": 10,
+      "profile": {
+        "frame_serial": 33,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 12195,
+        "triangles_emitted": 15542,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 15542,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 35,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 35,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 35,
+        "scene_graph_walks": 35,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1495,
+        "ceil": 35,
+        "wall": 352
+      }
+    },
+    {
+      "sample": 11,
+      "profile": {
+        "frame_serial": 34,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 12532,
+        "triangles_emitted": 16035,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 16035,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 36,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 36,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 36,
+        "scene_graph_walks": 36,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1538,
+        "ceil": 36,
+        "wall": 362
+      }
+    },
+    {
+      "sample": 12,
+      "profile": {
+        "frame_serial": 35,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 12869,
+        "triangles_emitted": 16527,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 16527,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 37,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 37,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 37,
+        "scene_graph_walks": 37,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1581,
+        "ceil": 37,
+        "wall": 372
+      }
+    },
+    {
+      "sample": 13,
+      "profile": {
+        "frame_serial": 36,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 13206,
+        "triangles_emitted": 17020,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 17020,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 38,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 38,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 38,
+        "scene_graph_walks": 38,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1624,
+        "ceil": 38,
+        "wall": 382
+      }
+    },
+    {
+      "sample": 14,
+      "profile": {
+        "frame_serial": 37,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 13543,
+        "triangles_emitted": 17518,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 17518,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 39,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 39,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 39,
+        "scene_graph_walks": 39,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1667,
+        "ceil": 39,
+        "wall": 392
+      }
+    },
+    {
+      "sample": 15,
+      "profile": {
+        "frame_serial": 38,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 13880,
+        "triangles_emitted": 18009,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 18009,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 40,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 40,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 40,
+        "scene_graph_walks": 40,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1710,
+        "ceil": 40,
+        "wall": 402
+      }
+    },
+    {
+      "sample": 16,
+      "profile": {
+        "frame_serial": 39,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 14217,
+        "triangles_emitted": 18500,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 18500,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 41,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 41,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 41,
+        "scene_graph_walks": 41,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1753,
+        "ceil": 41,
+        "wall": 412
+      }
+    },
+    {
+      "sample": 17,
+      "profile": {
+        "frame_serial": 40,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 14554,
+        "triangles_emitted": 18993,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 18993,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 42,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 42,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 42,
+        "scene_graph_walks": 42,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1796,
+        "ceil": 42,
+        "wall": 422
+      }
+    },
+    {
+      "sample": 18,
+      "profile": {
+        "frame_serial": 41,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 14891,
+        "triangles_emitted": 19490,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 19490,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 43,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 43,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 43,
+        "scene_graph_walks": 43,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1839,
+        "ceil": 43,
+        "wall": 432
+      }
+    },
+    {
+      "sample": 19,
+      "profile": {
+        "frame_serial": 42,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 15228,
+        "triangles_emitted": 19996,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 19996,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 44,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 44,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 44,
+        "scene_graph_walks": 44,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1882,
+        "ceil": 44,
+        "wall": 442
+      }
+    },
+    {
+      "sample": 20,
+      "profile": {
+        "frame_serial": 43,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 15565,
+        "triangles_emitted": 20508,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 20508,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 45,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 45,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 45,
+        "scene_graph_walks": 45,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1925,
+        "ceil": 45,
+        "wall": 452
+      }
+    },
+    {
+      "sample": 21,
+      "profile": {
+        "frame_serial": 44,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 15902,
+        "triangles_emitted": 21021,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 21021,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 46,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 46,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 46,
+        "scene_graph_walks": 46,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 1968,
+        "ceil": 46,
+        "wall": 462
+      }
+    },
+    {
+      "sample": 22,
+      "profile": {
+        "frame_serial": 45,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 16239,
+        "triangles_emitted": 21538,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 21538,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 47,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 47,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 47,
+        "scene_graph_walks": 47,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2011,
+        "ceil": 47,
+        "wall": 472
+      }
+    },
+    {
+      "sample": 23,
+      "profile": {
+        "frame_serial": 46,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 16576,
+        "triangles_emitted": 22058,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 22058,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 48,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 48,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 48,
+        "scene_graph_walks": 48,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2054,
+        "ceil": 48,
+        "wall": 482
+      }
+    },
+    {
+      "sample": 24,
+      "profile": {
+        "frame_serial": 47,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 16913,
+        "triangles_emitted": 22576,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 22576,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 49,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 49,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 49,
+        "scene_graph_walks": 49,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2097,
+        "ceil": 49,
+        "wall": 492
+      }
+    },
+    {
+      "sample": 25,
+      "profile": {
+        "frame_serial": 48,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 17250,
+        "triangles_emitted": 23091,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 23091,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 50,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 50,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 50,
+        "scene_graph_walks": 50,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2140,
+        "ceil": 50,
+        "wall": 502
+      }
+    },
+    {
+      "sample": 26,
+      "profile": {
+        "frame_serial": 49,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 17587,
+        "triangles_emitted": 23600,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 23600,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 51,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 51,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 51,
+        "scene_graph_walks": 51,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2183,
+        "ceil": 51,
+        "wall": 512
+      }
+    },
+    {
+      "sample": 27,
+      "profile": {
+        "frame_serial": 50,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 17924,
+        "triangles_emitted": 24106,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 24106,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 52,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 52,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 52,
+        "scene_graph_walks": 52,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2226,
+        "ceil": 52,
+        "wall": 522
+      }
+    },
+    {
+      "sample": 28,
+      "profile": {
+        "frame_serial": 51,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 18261,
+        "triangles_emitted": 24608,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 24608,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 53,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 53,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 53,
+        "scene_graph_walks": 53,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2269,
+        "ceil": 53,
+        "wall": 532
+      }
+    },
+    {
+      "sample": 29,
+      "profile": {
+        "frame_serial": 52,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 18598,
+        "triangles_emitted": 25106,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 25106,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 54,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 54,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 54,
+        "scene_graph_walks": 54,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2312,
+        "ceil": 54,
+        "wall": 542
+      }
+    },
+    {
+      "sample": 30,
+      "profile": {
+        "frame_serial": 53,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 18935,
+        "triangles_emitted": 25610,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 25610,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 55,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 55,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 55,
+        "scene_graph_walks": 55,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2355,
+        "ceil": 55,
+        "wall": 552
+      }
+    },
+    {
+      "sample": 31,
+      "profile": {
+        "frame_serial": 54,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 19272,
+        "triangles_emitted": 26107,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 26107,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 56,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 56,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 56,
+        "scene_graph_walks": 56,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2398,
+        "ceil": 56,
+        "wall": 562
+      }
+    },
+    {
+      "sample": 32,
+      "profile": {
+        "frame_serial": 55,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 19609,
+        "triangles_emitted": 26610,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 26610,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 57,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 57,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 57,
+        "scene_graph_walks": 57,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2441,
+        "ceil": 57,
+        "wall": 572
+      }
+    },
+    {
+      "sample": 33,
+      "profile": {
+        "frame_serial": 56,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 19946,
+        "triangles_emitted": 27118,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 27118,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 58,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 58,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 58,
+        "scene_graph_walks": 58,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2484,
+        "ceil": 58,
+        "wall": 582
+      }
+    },
+    {
+      "sample": 34,
+      "profile": {
+        "frame_serial": 57,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 20283,
+        "triangles_emitted": 27630,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 27630,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 59,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 59,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 59,
+        "scene_graph_walks": 59,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2527,
+        "ceil": 59,
+        "wall": 592
+      }
+    },
+    {
+      "sample": 35,
+      "profile": {
+        "frame_serial": 58,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 20620,
+        "triangles_emitted": 28140,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 28140,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 60,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 60,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 60,
+        "scene_graph_walks": 60,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2570,
+        "ceil": 60,
+        "wall": 602
+      }
+    },
+    {
+      "sample": 36,
+      "profile": {
+        "frame_serial": 59,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 20957,
+        "triangles_emitted": 28647,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 28647,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 61,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 61,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 61,
+        "scene_graph_walks": 61,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2613,
+        "ceil": 61,
+        "wall": 612
+      }
+    },
+    {
+      "sample": 37,
+      "profile": {
+        "frame_serial": 60,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 21294,
+        "triangles_emitted": 29155,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 29155,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 62,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 62,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 62,
+        "scene_graph_walks": 62,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2656,
+        "ceil": 62,
+        "wall": 622
+      }
+    },
+    {
+      "sample": 38,
+      "profile": {
+        "frame_serial": 61,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 21631,
+        "triangles_emitted": 29660,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 29660,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 63,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 63,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 63,
+        "scene_graph_walks": 63,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2699,
+        "ceil": 63,
+        "wall": 632
+      }
+    },
+    {
+      "sample": 39,
+      "profile": {
+        "frame_serial": 62,
+        "command_count": 0,
+        "triangle_count": 0,
+        "triangles_transformed": 21968,
+        "triangles_emitted": 30165,
+        "reject_near_far": 0,
+        "reject_backface": 0,
+        "reject_degenerate": 0,
+        "reject_vertex_range": 0,
+        "reject_command_capacity": 0,
+        "triangles_vdp1_emitted": 30165,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 0,
+        "reject_z_near": 0,
+        "reject_z_far": 0,
+        "reject_offscreen": 0,
+        "reject_span": 0
+      },
+      "state": {
+        "input_polls": 64,
+        "submitted_tasks": 0,
+        "unhandled_tasks": 0,
+        "audio_ticks": 64,
+        "preflight_tasks": 0,
+        "preflight_failures": 0,
+        "input_replay_ticks": 64,
+        "scene_graph_walks": 64,
+        "scene_graph_walks_suppressed": 0
+      },
+      "numcalls": {
+        "floor": 2742,
+        "ceil": 64,
+        "wall": 642
+      }
+    }
+  ]
+}

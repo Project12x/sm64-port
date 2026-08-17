@@ -1,0 +1,14 @@
+{
+  "raised": true,
+  "type": "WarmupError",
+  "message": "replay tick is frozen at 600 while the simulation kept ticking (8 ticks with no route sample consumed): the route is exhausted, so warm-up target 605 is unreachable",
+  "observation": {
+    "target_tick": 605,
+    "vblanks_advanced": 7501,
+    "steps": 184,
+    "replay_ticks": 600,
+    "global_timer": 608
+  },
+  "target_tick": 605,
+  "wall_seconds": 141.6
+}

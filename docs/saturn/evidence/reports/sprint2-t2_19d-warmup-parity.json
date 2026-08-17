@@ -1,0 +1,321 @@
+{
+  "schema": "sm64-saturn-route-warmup-parity-v1",
+  "builds": [
+    {
+      "label": "id-a61d5203793986e7",
+      "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.elf"
+    },
+    {
+      "label": "id-c0352f297034f653",
+      "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_17-product\\id-c0352f297034f653\\obj\\sm64-saturn-sourceboot-e2.elf"
+    }
+  ],
+  "verdicts": [
+    {
+      "mode": "vblanks",
+      "amount": 1800,
+      "builds_agree_on_route_position": false,
+      "replay_ticks": [
+        25,
+        31
+      ],
+      "global_timer": [
+        25,
+        31
+      ],
+      "mario_pos_bits": [
+        [
+          "0xc5ccf000",
+          "0x80000000",
+          "0x45ca0000"
+        ],
+        [
+          "0xc5ccf000",
+          "0x80000000",
+          "0x45ca0000"
+        ]
+      ],
+      "profile": [
+        {
+          "frame_serial": 23,
+          "command_count": 0,
+          "triangle_count": 0,
+          "triangles_transformed": 8811,
+          "triangles_emitted": 10570,
+          "triangles_vdp1_emitted": 10570
+        },
+        {
+          "frame_serial": 29,
+          "command_count": 0,
+          "triangle_count": 0,
+          "triangles_transformed": 10845,
+          "triangles_emitted": 13553,
+          "triangles_vdp1_emitted": 13553
+        }
+      ],
+      "vblanks_advanced": [
+        1800,
+        1800
+      ]
+    },
+    {
+      "mode": "ticks",
+      "amount": 30,
+      "builds_agree_on_route_position": true,
+      "replay_ticks": [
+        30,
+        30
+      ],
+      "global_timer": [
+        30,
+        30
+      ],
+      "mario_pos_bits": [
+        [
+          "0xc5ccf000",
+          "0x80000000",
+          "0x45ca0000"
+        ],
+        [
+          "0xc5ccf000",
+          "0x80000000",
+          "0x45ca0000"
+        ]
+      ],
+      "profile": [
+        {
+          "frame_serial": 28,
+          "command_count": 0,
+          "triangle_count": 0,
+          "triangles_transformed": 10506,
+          "triangles_emitted": 13054,
+          "triangles_vdp1_emitted": 13054
+        },
+        {
+          "frame_serial": 28,
+          "command_count": 0,
+          "triangle_count": 0,
+          "triangles_transformed": 10506,
+          "triangles_emitted": 13054,
+          "triangles_vdp1_emitted": 13054
+        }
+      ],
+      "vblanks_advanced": [
+        1852,
+        1788
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "label": "id-a61d5203793986e7",
+      "mode": "vblanks",
+      "amount": 1800,
+      "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.elf",
+      "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.cue",
+      "identity_vblanks_waited": 681,
+      "warmup": {
+        "mode": "vblanks-deprecated",
+        "warmup_vblanks": 1800,
+        "vblanks_advanced": 1800,
+        "deprecation": "VBlank warm-up is wall-clock: builds of different speed land on different route positions. Prefer --warmup-ticks (T2.19d).",
+        "replay_ticks": 25,
+        "global_timer": 25
+      },
+      "state": {
+        "replay_ticks": 25,
+        "global_timer": 25,
+        "mario_state_pointer": "0x60bced4",
+        "profile": {
+          "frame_serial": 23,
+          "command_count": 0,
+          "triangle_count": 0,
+          "triangles_transformed": 8811,
+          "triangles_emitted": 10570,
+          "triangles_vdp1_emitted": 10570
+        },
+        "mario": {
+          "action": "0xc400201",
+          "pos_bits": [
+            "0xc5ccf000",
+            "0x80000000",
+            "0x45ca0000"
+          ],
+          "pos": [
+            -6558.0,
+            -0.0,
+            6464.0
+          ],
+          "face_angle": [
+            0,
+            24576,
+            0
+          ]
+        }
+      },
+      "wall_seconds": 68.7
+    },
+    {
+      "label": "id-c0352f297034f653",
+      "mode": "vblanks",
+      "amount": 1800,
+      "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_17-product\\id-c0352f297034f653\\obj\\sm64-saturn-sourceboot-e2.elf",
+      "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_17-product\\id-c0352f297034f653\\sm64-saturn-sourceboot-e2.cue",
+      "identity_vblanks_waited": 681,
+      "warmup": {
+        "mode": "vblanks-deprecated",
+        "warmup_vblanks": 1800,
+        "vblanks_advanced": 1800,
+        "deprecation": "VBlank warm-up is wall-clock: builds of different speed land on different route positions. Prefer --warmup-ticks (T2.19d).",
+        "replay_ticks": 31,
+        "global_timer": 31
+      },
+      "state": {
+        "replay_ticks": 31,
+        "global_timer": 31,
+        "mario_state_pointer": "0x60bcf14",
+        "profile": {
+          "frame_serial": 29,
+          "command_count": 0,
+          "triangle_count": 0,
+          "triangles_transformed": 10845,
+          "triangles_emitted": 13553,
+          "triangles_vdp1_emitted": 13553
+        },
+        "mario": {
+          "action": "0xc400201",
+          "pos_bits": [
+            "0xc5ccf000",
+            "0x80000000",
+            "0x45ca0000"
+          ],
+          "pos": [
+            -6558.0,
+            -0.0,
+            6464.0
+          ],
+          "face_angle": [
+            0,
+            24576,
+            0
+          ]
+        }
+      },
+      "wall_seconds": 72.5
+    },
+    {
+      "label": "id-a61d5203793986e7",
+      "mode": "ticks",
+      "amount": 30,
+      "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.elf",
+      "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_13-product\\id-a61d5203793986e7\\sm64-saturn-sourceboot-e2.cue",
+      "identity_vblanks_waited": 681,
+      "warmup": {
+        "mode": "ticks",
+        "target_tick": 30,
+        "replay_ticks": 30,
+        "global_timer": 30,
+        "vblanks_advanced": 1852,
+        "steps": 136,
+        "start_replay_ticks": 0,
+        "start_global_timer": 0,
+        "max_vblanks": 20000,
+        "addresses": {
+          "replay_ticks": "0x60f0d40",
+          "global_timer": "0x60bcd64",
+          "mario_state": "0x6091fc8",
+          "profile": "0x2cdac4"
+        }
+      },
+      "state": {
+        "replay_ticks": 30,
+        "global_timer": 30,
+        "mario_state_pointer": "0x60bced4",
+        "profile": {
+          "frame_serial": 28,
+          "command_count": 0,
+          "triangle_count": 0,
+          "triangles_transformed": 10506,
+          "triangles_emitted": 13054,
+          "triangles_vdp1_emitted": 13054
+        },
+        "mario": {
+          "action": "0xc400201",
+          "pos_bits": [
+            "0xc5ccf000",
+            "0x80000000",
+            "0x45ca0000"
+          ],
+          "pos": [
+            -6558.0,
+            -0.0,
+            6464.0
+          ],
+          "face_angle": [
+            0,
+            24576,
+            0
+          ]
+        }
+      },
+      "wall_seconds": 43.1
+    },
+    {
+      "label": "id-c0352f297034f653",
+      "mode": "ticks",
+      "amount": 30,
+      "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_17-product\\id-c0352f297034f653\\obj\\sm64-saturn-sourceboot-e2.elf",
+      "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_17-product\\id-c0352f297034f653\\sm64-saturn-sourceboot-e2.cue",
+      "identity_vblanks_waited": 681,
+      "warmup": {
+        "mode": "ticks",
+        "target_tick": 30,
+        "replay_ticks": 30,
+        "global_timer": 30,
+        "vblanks_advanced": 1788,
+        "steps": 120,
+        "start_replay_ticks": 0,
+        "start_global_timer": 0,
+        "max_vblanks": 20000,
+        "addresses": {
+          "replay_ticks": "0x60f0d80",
+          "global_timer": "0x60bcda4",
+          "mario_state": "0x6091ff8",
+          "profile": "0x2cdac8"
+        }
+      },
+      "state": {
+        "replay_ticks": 30,
+        "global_timer": 30,
+        "mario_state_pointer": "0x60bcf14",
+        "profile": {
+          "frame_serial": 28,
+          "command_count": 0,
+          "triangle_count": 0,
+          "triangles_transformed": 10506,
+          "triangles_emitted": 13054,
+          "triangles_vdp1_emitted": 13054
+        },
+        "mario": {
+          "action": "0xc400201",
+          "pos_bits": [
+            "0xc5ccf000",
+            "0x80000000",
+            "0x45ca0000"
+          ],
+          "pos": [
+            -6558.0,
+            -0.0,
+            6464.0
+          ],
+          "face_angle": [
+            0,
+            24576,
+            0
+          ]
+        }
+      },
+      "wall_seconds": 38.9
+    }
+  ]
+}
