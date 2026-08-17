@@ -131,14 +131,16 @@ again after T2.12 closed `spatial_admit` out**):
   `sprint2-t2_17-epoch-stall.md` section 6. The reviewed epoch invariant was
   narrowed to its two hardware-carrying gates rather than removed, with the full
   bank-ownership argument in section 2 of that report.
-- **Bound the VDP1 overwrite fence — host-contract-passed; target compile and
-  live gates pending.**
+- **Bound the VDP1 overwrite fence — normal target compiled and live-observed;
+  diagnostic environment blocker, review, and owner gates pending.**
   `sourceboot_frame_poll_transfers()` now observes busy once and defers the
   exact `READY` bank to a later observed field instead of waiting. The busy
   branch starts no DMA or re-presentation, and profile v4 reports its
-  historical wait field as busy deferrals. The normal/diagnostic target links,
-  memory floors, and identity-bound live observation remain pending; the known
-  pre-W0 presentation-boundary literal drift is explicitly not a W0 PASS.
+  historical wait field as busy deferrals. Normal `id-e8720d58595d9a62` passed
+  both memory floors and the identity-bound 30-event Ymir capture; the separate
+  diagnostic build repeatedly stalls in its MSYS identity-assets handoff, so no
+  diagnostic target/live claim is made. The known pre-W0 presentation-boundary
+  literal drift is explicitly not a W0 PASS.
 - **VDP1 command reduction — NOW THE ACTIVE LEVER. The stall fix landed (T2.17)
   and VDP1 is the wall.** Re-measured on `id-c0352f297034f653`: `EDSR.CEF` is
   set in **6.33%** of 300 samples, so **VDP1 plots 93.67% of the frame** and

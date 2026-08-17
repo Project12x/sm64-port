@@ -2,8 +2,7 @@
 
 **Date opened:** 2026-08-17
 **Status:** `active; W0.1/W0.2 host-contract-passed; normal target-compiled;
-first live observation inconclusive at the cadence-reader boundary; one
-tool-only second observation remains`
+normal live-observed; diagnostic target compile blocked; review and owner gates pending`
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -204,6 +203,22 @@ persistent torn bounded failure. The full tool module has one unrelated local
 ACL failure in `test_release_binding_retains_verified_snapshot_after_source_mutation`
 while attempting to lock `C:\\Users\\estee`; the three cadence-focused tests pass.
 
+The final identity-bound retry passed on the same staged candidate: evidence
+SHA-256 `2110a8138ad9a628c70658ca5c3c176504b4caa9f77fd88cdea9e7d44ef7d6ed`,
+created `2026-08-17T19:51:46Z`, with 30 events/29 intervals, mean
+6.6923077 FPS, 1% low 6.0 FPS, every generation delta 1, target/probe matches,
+and coherent terminal `notify=qn=qr=retired=58` with failures and qf/qq/qw
+all zero. One transient cadence retry was used. This is `live-observed`; it is
+not desktop owner acceptance.
+
+The separate untracked diagnostic profile changed only mode 0 to 2 (SHA-256
+`bf4fed164b24fead55275aefcf750cbdddb85d46d91fc11c97de52ba477f5ca6`). Two
+direct elevated MSYS Bash attempts, using the normal command tuple plus only
+that profile and `SATURN_DIAGNOSTIC_MODE=2`, reached recursive
+`identity-assets`, then had no worker, new identity, CPU/file progress, or
+manifest across a bounded sample. Both stalled process trees were recorded and
+terminated; no diagnostic target link/memory/capture claim is made.
+
 ## Remaining gates
 
 - [x] Scheduler deferral host contract, two new mutations, and VDP1 frame-bank
@@ -217,12 +232,11 @@ while attempting to lock `C:\\Users\\estee`; the three cadence-focused tests pas
   `bootstrap must contain exactly one null-snapshot VDP2 begin`, before any W0
   path assertion runs.
 - [ ] Normal and diagnostic target configurations link and retain memory floors.
-  Normal mode 0 links and passes both floors; diagnostic mode 2 remains gated
-  on a successful second normal observation.
+  Normal mode 0 links and passes both floors; diagnostic mode 2 is blocked at
+  the repeated environment/build handoff and has no link or memory evidence.
 - [x] A unique W0 normal artifact is staged with exact identity hashes.
-- [ ] Earliest headless product observation passes the 4 FPS floor and generic
-  gameplay coherence checks. Attempt 1 is inconclusive; one identity-bound,
-  tool-only retry remains against the same staged candidate.
+- [x] Earliest headless product observation passes the 4 FPS floor and generic
+  gameplay coherence checks on the exact staged normal candidate.
 - [ ] Independent code review passes or its one narrow repair is re-observed.
 - [ ] Owner observes and accepts boot, play, fidelity, camera, collision,
   ordinary actors, audio, presentation, and cadence on the exact W0 artifact.

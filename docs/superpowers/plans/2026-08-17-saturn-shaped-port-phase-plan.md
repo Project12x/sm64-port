@@ -159,9 +159,10 @@ first time — the frame is 2.28 VB shorter with the plot unchanged, so the fenc
 reachable where T2.8 never saw it fire. `STATE.md` records it as "no longer optional";
 T2.8 §9 item 3 already listed it. This is the hang path in the build awaiting observation.
 
-**Status:** `active`; W0.1 and W0.2 are host-contract-passed. Target-equivalent
-normal/diagnostic compilation, memory margins, live observation, independent
-review, and owner acceptance remain pending.
+**Status:** `active; live-observed`; normal mode 0 linked, passed both memory
+floors, and passed the identity-bound headless product observation. Diagnostic
+mode 2 target compilation is blocked at the environment's recursive-make
+identity-assets handoff; independent review and owner acceptance remain pending.
 
 **Execution records:**
 
@@ -183,8 +184,9 @@ review, and owner acceptance remain pending.
   for its known pre-W0 `bootstrap must contain exactly one null-snapshot VDP2
   begin` literal-drift failure; it did not identify a W0 presentation-path
   change. Normal/diagnostic target and live evidence remain pending.
-- [ ] W0.3 unique normal build and earliest Ymir product observation — planned;
-  the preserved T2.17 artifact remains the accepted baseline.
+- [x] W0.3 unique normal build and earliest Ymir product observation —
+  `id-e8720d58595d9a62` passed 30 events/29 intervals at 6.6923 mean and 6.0
+  1% low FPS; T2.17 remains the owner-accepted baseline.
 - [ ] W0.4 independent review and desktop owner observation — planned.
 
 **Size:** ~1 hour of code plus target build, live observation, review, and owner
