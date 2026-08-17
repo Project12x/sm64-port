@@ -439,7 +439,14 @@ sections 2 and 6 for the full site classification and where to attack instead.
 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`; ELF
 `021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`.
 
-Owner-observed and accepted at the gate:
+### Historical R1 observations for `id-86d3880727ed1d10`
+
+The following owner-gate observations, cadence, feature tuple, and host-audio
+investigation describe the preserved prior R1 artifact `id-86d3880727ed1d10`.
+They do not describe the current owner-accepted W0 candidate
+`id-e8720d58595d9a62` above.
+
+Owner-observed and accepted for historical R1:
 
 - **Audible looping music**, started by the source game's own `play_music`
   call through the semantic API into the MC68000/SCSP driver — the first game
@@ -452,9 +459,9 @@ Owner-observed and accepted at the gate:
 The A9A slice (5.294 FPS) remains the immutable historical oracle at
 `build/saturn/baselines/a9a-2026-08-05/`. The regressions it was contrasted
 against were diagnosed as configuration-attributable and are neutralised in
-this candidate's feature tuple.
+`id-86d3880727ed1d10`'s historical feature tuple.
 
-One owner-observed artifact — a periodic piercing noise — was investigated to
+One historical R1 owner-observed artifact — a periodic piercing noise — was investigated to
 mechanism and **dispositioned as a Ymir host-audio underrun, not a port
 defect** (Ymir's `ProcessAudioCallback` drains without underrun detection;
 this build is a pathological slow producer). Full elimination chain:
