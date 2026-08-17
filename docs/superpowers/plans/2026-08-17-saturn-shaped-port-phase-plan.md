@@ -100,6 +100,9 @@ looks like.
 **Ordering rule:** W0 before anything (correctness). W1 and W2 are independent and may run
 in parallel — W1 is structural in `src/game/`, W2 is arithmetic in `src/port/saturn/`.
 W3 is offline and independent of both. W4 is a standing policy, not a task.
+**W6a should run early regardless of the rest** — it is bit-exact, whole-program, and
+does not depend on W5's measurement. **W6b runs last**, after W5a makes the category
+measurable and W5b says which parts of the simulation are hot.
 
 ---
 
@@ -169,6 +172,11 @@ above are gameplay. Changes must be guarded so the non-Saturn arm is untouched.
 ---
 
 ## W2 — Finish fixed-point on the master
+
+> **See also W6.** W2 converts *call sites* to fixed-point. **W6a instead replaces the
+> soft-float library underneath every remaining site** — bit-exact, whole-program, and
+> provable by an existing gate. If W6a lands first, W2's remaining sites get cheaper
+> without being touched, which may change which of them are still worth converting.
 
 **Why:** ~19–20% of the master critical path remains soft-float, on a compiler this
 project was founded on distrusting. Both references are fixed-point throughout.
@@ -289,6 +297,85 @@ workstream on intuition; open it on the scaling curve.**
 cadence regresses as the game is restored and we will be optimizing the render path
 while the frame is spent elsewhere — the same error this plan was written to correct,
 one level down.
+
+---
+
+## W6 — Make the math appropriate for the SH-2
+
+**Owner ruling (2026-08-17):** *"sm64 can be recreated with q16 math with enough
+effort."* Recorded as decided direction. The two parts below differ enormously in
+risk and must not be conflated — **W6a is verifiable by an existing gate; W6b needs a
+harness that does not exist yet.** Do W6a first regardless: it is free, it is
+whole-program, and it buys time on the very code W6b would later convert.
+
+### W6a — Replace the soft-float *implementation* (bit-exact, zero semantic risk)
+
+**Why:** we link **GCC's generic portable C reference implementation** —
+`third_party/gcc-soft-fp/soft-fp/` (`addsf3.c`, `mulsf3.c`,
+`divsf3.c`, `adddf3.c` …), built by `SOFTFP_VENDOR` at `Makefile.saturn.mk:2090`.
+That code is written for correctness across every target GCC supports, then compiled for
+SH-2. It is not tuned for this CPU, and it leaves `dmuls.l` on the table for mantissa
+work.
+
+**A tuned SH-2 soft-float speeds up every float site in the program at once** — including
+the entire unmeasured simulation (W5) — with **no change to results**.
+
+**This is the only large lever in the project where correctness is *decidable* rather
+than argued.** `verify-softfp-bitexact` already exists and pins the library specifically:
+**43.3 billion checks, 0 failures** (T2.13 ran it by hand; note T2.26-era tooling notes it
+has an MSYS path defect that must be worked around, not ignored). A replacement is
+bit-exact or the gate fails. No oracle to design, no tolerance to argue, no gameplay risk.
+
+**Why it de-risks the whole question:** it pays proportionally to whatever float's share
+turns out to be. If float is 20% of the frame a 2x implementation buys 10%; if it is
+50% it buys 25%. **It does not require W5's measurement to land first.**
+
+**Open before promising a figure:** verify live what permissively-licensed SH-2
+soft-float exists and how fast it actually is. GCC's own SH `lib1funcs.S` is a
+candidate and **GPL is not a barrier** — the project is GPL-compatible (owner, 2026-08-17)
+and `UPSTREAM_CODE_LEDGER.md` authorises direct reuse; GPL-derived code lands in
+`src/port/saturn/gpl/` with notices preserved. Pin the SHA, record licence and
+reuse mode. **Do not hand-roll before searching** — per `CLAUDE.md`'s reference-code-first
+rule, and note `find-library`'s vetted register had **no rows** for the analogous mesh
+search (T2.24), so expect to do live verification rather than lookup.
+
+### W6b — Q16 the simulation
+
+**The premise is sound and the codebase already half-agrees.** SM64's rotations are
+**already fixed-point**: angles are s16 binary (BAM), `atan2s` returns an exact s16, and
+90 degrees is exactly `0x4000`. T2.13's finding makes the point sharply — the shadow path
+was taking an angle `atan2s` had **already produced exactly**, scaling it to degrees, then
+back to radians, to call a double-precision polynomial. **The float was the detour.**
+Positions, velocities and collision are the f32 remainder.
+
+**The real cost is verification, not conversion.** Unlike render-path float (T2.13:
+bounded error, sub-pixel movement, owner ruled byte-identity irrelevant), simulation
+arithmetic decides **what the game does** — jump arcs, floor-detection epsilons,
+wall-push distances. A divergence here is not a fidelity tradeoff; it is Mario falling
+through a floor or failing a gap he used to clear.
+
+**The harness this needs, and why it is tractable here:** a **dual-run state-divergence
+comparison over the deterministic replay route**. Run the f32 simulation and the Q16
+simulation against the same route and compare `gMarioState` and object state
+**per tick**, reporting divergence as a curve rather than a boolean. The infrastructure
+already exists: the route is deterministic, `sState.input_replay_ticks` indexes it exactly
+(T2.19d proved it is the index, not a correlate), and captures are tick-addressable.
+
+**The acceptance criterion is the shape of the divergence, not its size.** Bounded and
+non-accumulating is fine — that is the same standard T2.13 used for the trig substitution,
+which was accepted precisely because it is memoryless. **Divergence that compounds across
+ticks is a defect regardless of how small it starts**, because simulation state feeds
+itself forward. Design the harness to detect compounding specifically.
+
+**Sequencing:** after W6a (free speedup on the same code) and after W5a (so the category
+is measurable and the win is attributable). W5b's actor-scaling curve tells you which
+parts of the simulation are worth converting first — convert the hot ones, not all 1,827
+static sites, six of whose top nine never execute on this route (T2.20).
+
+**Scope discipline:** this is the largest workstream in the plan and the only one that
+can change gameplay. It should be split into its own implementation plan per subsystem
+(collision, camera, object physics), each with its own divergence budget, rather than
+attempted as one conversion.
 
 ---
 
