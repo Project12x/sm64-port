@@ -15,6 +15,10 @@ side channel. The traversal's output is discarded. Saturn-shaping means removing
 foreign structure while keeping the foreign *game*, and authoring data to a declared
 budget instead of converting it.
 
+**Amended 2026-08-17** to add W5 after the owner observed that the plan named no
+simulation cost at all. That was a real omission: the original four workstreams account
+for the render path only.
+
 **Basis:** All figures are measured. Cadence from `summarize_cadence` only; profiles from
 `capture_idle_attribution`'s exact census, never the burst sampler (T2.20 measured it at
 ±2.6 pp per symbol and it reported the soft-float trend with the wrong sign).
@@ -54,6 +58,28 @@ of running a decompiled N64 game:
   of that region is display-list construction (T2.15); the rest is traversal and state work.
 - **Soft-float — ~19–20% of the master critical path.** Both references are fixed-point
   throughout.
+
+**But the accounting is incomplete, and the gap is the simulation.** The two figures
+above cover the *render* path. **SM64's game simulation has never been attributed as a
+category** — and the instrument that would do it, the `simulation` vs `construction`
+phase decomposition, is **broken**: the T2.11 concurrency rail needs its allowance on
+**28 of 29 intervals** since T2.17, so the decomposition no longer closes and `STATE.md`
+records that it must not be quoted.
+
+Symbol censuses do not substitute. They surface simulation symbols — `_find_floor_from_list`
+appears among T2.13's float leaders, T2.14 measured **43.471 `find_floor` calls/frame** —
+but rank them low, and **that is an artifact of the route, not a property of the code**.
+The replay has one actor, stationary until tick 121 and walking at 180: no Bob-ombs, no
+goombas, no coins, no moving platforms. SM64's simulation cost scales with active
+objects and we exercise almost none of it. For scale: **11 of those 43 `find_floor`
+calls are Mario's shadow** — 25.3% of all floor collision work is one shadow, on a route
+where collision has nothing else to do (T2.14).
+
+So T2.20's "no hidden gameplay hot spots" establishes that **moving Mario does not
+change the ranking** — *not* that gameplay load does not. Those are different claims.
+**The simulation is the largest unmeasured block in the frame, and it is the most
+structurally N64-shaped code in the tree**: float `vec3f` throughout, collision written
+for an FPU, per-object interpreted behaviour scripts.
 
 The renderer itself is near its floor: after spatial admission, meshlets and the epoch
 stall all paid, **four consecutive investigations returned 0.07–0.5%** (shadows, display-list
@@ -229,6 +255,40 @@ already taken in this frame:
 
 **Applies going forward to:** CLUT depth, draw distance, actor count per scene, and
 per-level budgets in W3.
+
+---
+
+## W5 — Make the simulation measurable, then measure it
+
+**Why:** everything above accounts for the render path. The simulation is unattributed,
+and on the current route it is unattributable — there is no gameplay in it to measure.
+This workstream removes both obstacles, in order.
+
+**W5a — restore the phase decomposition.** The T2.11 allowance is spent on 28 of 29
+intervals, so `simulation` and `construction` no longer close and cannot be quoted.
+T2.11's fix bounded a provable cross-CPU double-count with
+`min(simulation, master_finalization)`; at 8.93 VB/frame that bound is saturated. Re-derive
+it so category attribution works again at current cadence. **Until this lands, no one can
+say what fraction of the frame is game logic.** `summarize_cadence` reads presentation-edge
+deltas independently and is unaffected — FPS figures stand throughout.
+
+**W5b — treat charter R2 as the load-bearing measurement, not only a feature.** Putting a
+normal Bob-omb in the scene is the first time behaviour scripts, object-list traversal
+and collision-against-something-that-moves are exercised at all. Plan the R2 capture as
+deliberate instrumentation: profile with **one** actor, then several, and report how master
+work scales with active object count. That scaling curve is what decides whether the
+simulation is a Saturn-shaping target or a rounding error — and it is currently unknown
+in either direction.
+
+**Sequencing:** W5a is a prerequisite for interpreting W5b. Both are prerequisites for
+deciding whether a sixth workstream (Saturn-shaping the simulation itself — fixed-point
+`vec3f`, collision rework, behaviour-script cost) is justified. **Do not open that
+workstream on intuition; open it on the scaling curve.**
+
+**Risk if skipped:** R2, R3 and S6 each add actors. If simulation cost scales steeply,
+cadence regresses as the game is restored and we will be optimizing the render path
+while the frame is spent elsewhere — the same error this plan was written to correct,
+one level down.
 
 ---
 
