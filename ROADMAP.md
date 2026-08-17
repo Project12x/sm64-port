@@ -131,8 +131,7 @@ again after T2.12 closed `spatial_admit` out**):
   `sprint2-t2_17-epoch-stall.md` section 6. The reviewed epoch invariant was
   narrowed to its two hardware-carrying gates rather than removed, with the full
   bank-ownership argument in section 2 of that report.
-- **Bound the VDP1 overwrite fence — live-observed; independent review PASS
-  WITH FINDINGS; desktop launched; owner gate pending.**
+- **Bound the VDP1 overwrite fence — complete; owner-accepted.**
   `sourceboot_frame_poll_transfers()` now observes busy once and defers the
   exact `READY` bank to a later observed field instead of waiting. The busy
   branch starts no DMA or re-presentation, and profile v4 reports its
@@ -144,13 +143,15 @@ again after T2.12 closed `spatial_admit` out**):
   The busy branch remains `host-proven; target-compiled; live occurrence
   unproven`; no diagnostic capture condition arose. Independent review found no
   critical or important issue and authorized desktop owner launch; its memory
-  accounting and source-contract findings are closed. The exact staged normal
-  candidate remained alive after a 20-second desktop Ymir monitor, but launch
-  is not an owner visual/audio/gameplay verdict. The known pre-W0
-  presentation-boundary literal drift is explicitly not a W0 PASS. Owner
-  partial wording, `I see 6-7 FPS and things look the same` and `things look
-  and sound good`, supports the >=4 FPS floor, no obvious visual regression,
-  and audible output only; the rest of the owner checklist remains pending.
+  accounting and source-contract findings are closed. The owner explicitly
+  accepted exact normal candidate `id-e8720d58595d9a62` (manifest
+  `fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`; CUE
+  `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`) after
+  a desktop check of controls, camera, collision, ordinary actors, audible
+  output, no tearing/flicker/partial-or-duplicate plot/permanent freeze, and
+  a 6–7 FPS observation. The busy branch remains `host-proven; target-compiled;
+  live occurrence unproven`; the known pre-W0 presentation-boundary literal
+  drift is retained as a limitation, not a W0 PASS.
 - **VDP1 command reduction — NOW THE ACTIVE LEVER. The stall fix landed (T2.17)
   and VDP1 is the wall.** Re-measured on `id-c0352f297034f653`: `EDSR.CEF` is
   set in **6.33%** of 300 samples, so **VDP1 plots 93.67% of the frame** and

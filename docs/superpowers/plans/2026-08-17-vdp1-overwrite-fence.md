@@ -721,6 +721,12 @@ compile.
 
 ## Task 4: Obtain independent review and close the desktop owner gate
 
+**Task status (2026-08-17):** `complete; owner-accepted`. The accepted normal
+candidate is `id-e8720d58595d9a62`; review is `PASS WITH FINDINGS`, its two
+tool/test findings are closed, and the owner supplied explicit acceptance after
+desktop observation. The known pre-W0 presentation-boundary literal drift and
+the unobserved-live busy occurrence remain recorded limitations, not W0 PASSes.
+
 **Files:**
 
 - Create: `docs/saturn/evidence/reports/w0-vdp1-overwrite-fence-desktop-launch.json`
@@ -782,7 +788,7 @@ compile.
   Capture screenshots or video only after gameplay is visibly rendered. Never
   show an older CUE as the current candidate.
 
-- [ ] **Step 4: Ask the owner to judge the complete product gate.**
+- [x] **Step 4: Ask the owner to judge the complete product gate.**
 
   Record explicit observations for boot, Mario visual fidelity and animation,
   controls, camera, collision, ordinary actor rendering, audible output, no

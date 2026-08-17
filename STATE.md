@@ -290,8 +290,8 @@ What the sprint established, in order:
 
 **Next, ranked by releasable VB/frame per unit of constraint tax
 (T2.16 section 9, as amended by T2.17).** **(1) DONE (T2.17): the per-field
-epoch stall.** **(1a) Live-observed; independent review PASS WITH FINDINGS;
-desktop launched; owner gate pending (W0): bound the overwrite fence.**
+epoch stall.** **(1a) Complete; owner-accepted (W0): bound the overwrite
+fence.**
 `sourceboot_frame_poll_transfers()` now observes busy once,
 defers the exact `READY` bank through the scheduler, and starts no DMA or
 re-presentation on busy; the old normal/diagnostic wait and spin are gone.
@@ -305,15 +305,17 @@ the frozen normal candidate revision; it is target-equivalent, not
 artifact-identical. The busy branch remains `host-proven; target-compiled; live
 occurrence unproven`. No diagnostic capture was needed under its stated
 condition. Independent review found no critical or important issue, authorized
-desktop owner launch, and its two review-evidence findings are closed; owner
-acceptance remains pending. The exact staged normal candidate launched through
-desktop Ymir and remained alive after the bounded 20-second monitor; that is
-process proof only, not an inferred presentation, input, collision, or audio
-judgment. Owner partial wording is: `I see 6-7 FPS and things look the same`
-and `things look and sound good`. It establishes observed cadence >=4 FPS, no
-obvious visual regression, and audible output only; explicit acceptance,
-controls, tearing/flicker/partial/duplicate presentation, and permanent-busy
-checks remain open.
+desktop owner launch, and its two review-evidence findings are closed. The exact
+staged normal candidate (`id-e8720d58595d9a62`, manifest
+`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
+`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`) launched
+through desktop Ymir. The owner stated `I see 6-7 FPS and things look the
+same`, `things look and sound good`, and `I tested the controls; camera,
+collision, and actors behave normally; there is no tearing, flicker,
+partial/duplicate plotting, or permanent freezing. I accept this W0
+candidate.` W0 is therefore `complete; owner-accepted`. The busy branch
+remains `host-proven; target-compiled; live occurrence unproven`; the known
+pre-W0 presentation-boundary literal drift remains a retained limitation.
 **(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
 correctly priced, master-local, no constraint tax. **(3) VDP1 command
 reduction -- promoted, but strictly after (1)**; before (1) it is worth zero

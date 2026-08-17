@@ -1,9 +1,10 @@
 # W0 VDP1 Overwrite Fence Execution Ledger
 
 **Date opened:** 2026-08-17
-**Status:** `active; W0.1/W0.2 host-contract-passed; normal live-observed;
-diagnostic target-compiled; independent review PASS WITH FINDINGS; desktop
-launched; owner gate pending`
+**Status:** `complete; owner-accepted`; W0.1/W0.2 remain
+`host-contract-passed`, the normal candidate remains `live-observed`, and the
+diagnostic arm remains `target-compiled`. Independent review is `PASS WITH
+FINDINGS` with its two findings closed.
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -22,17 +23,16 @@ generation before any destination write, and records deferrals without retaining
 a blocking diagnostic spin. Independent review returned `PASS WITH FINDINGS`
 with no critical or important issue and authorized the desktop owner launch;
 its two review-evidence findings are closed without a product-code change. The
-accepted T2.17 gameplay artifact remains the only owner-accepted product
-baseline; owner observation remains open. The exact normal candidate launched
-and remained alive through a 20-second desktop monitor; this is process proof,
-not a visual, audio, control, collision, or cadence acceptance claim.
+accepted T2.17 gameplay artifact remains preserved. The exact normal candidate
+was owner-accepted after an identity-bound desktop launch and complete owner
+observation. This closes W0 without claiming a live busy-branch occurrence.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
-| W0.1 scheduler acknowledgement | `host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, VDP1 frame-bank ownership checks, and full-state immutability on wrong/duplicate acknowledgement pass | Normal product observation and owner gate are separately recorded below |
-| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; normal live-observed; diagnostic target-compiled` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed; source contract now proves exactly one busy observation and no busy-branch ownership mutation; normal mode 0 and diagnostic mode 2 links both passed memory floors | Known pre-W0 presentation-boundary literal drift; owner gate |
-| W0.3 normal build and live product observation | `complete at evidence level` | Normal `id-e8720d58595d9a62` staged and passed the bounded retry: 30 events/29 intervals, 6.6923 mean, 6.0 1% low, coherent queues and delta 1; diagnostic `id-5f27c53e9ae67c9c` linked/sealed and passed both floors | No diagnostic capture: condition absent. Owner/review gates remain separately open. |
-| W0.4 review and owner gate | `review PASS WITH FINDINGS; desktop launched; owner gate pending` | Review found no critical/important issue; `id-e8720d58595d9a62` remained alive after its 20-second identity-bound desktop monitor | Explicit owner judgment; no launch-time visual/audio inference |
+| W0.1 scheduler acknowledgement | `host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, VDP1 frame-bank ownership checks, and full-state immutability on wrong/duplicate acknowledgement pass | Closed as part of owner-accepted W0; no separate remaining gate |
+| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; normal live-observed; diagnostic target-compiled` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed; source contract now proves exactly one busy observation and no busy-branch ownership mutation; normal mode 0 and diagnostic mode 2 links both passed memory floors | Known pre-W0 presentation-boundary literal drift; busy occurrence remains unproven live |
+| W0.3 normal build and live product observation | `complete at evidence level` | Normal `id-e8720d58595d9a62` staged and passed the bounded retry: 30 events/29 intervals, 6.6923 mean, 6.0 1% low, coherent queues and delta 1; diagnostic `id-5f27c53e9ae67c9c` linked/sealed and passed both floors | No diagnostic capture: normal observation did not classify a busy deferral |
+| W0.4 review and owner gate | `complete; owner-accepted` | Review `PASS WITH FINDINGS`, no critical/important issue, closed tool/test findings, identity-bound desktop launch, and explicit owner acceptance | Busy occurrence remains host-proven/target-compiled only; known pre-W0 presentation-boundary literal drift retained |
 
 ## Preserved accepted product baseline
 
@@ -390,22 +390,46 @@ ISO hashes equal the staged candidate hashes. No screenshot or video was
 captured, and no visual, audio, control, camera, collision, actor, presentation,
 busy-occurrence, or FPS judgment is inferred from process liveness.
 
-### Owner partial observation (2026-08-17)
+### Owner observation and acceptance (2026-08-17)
 
-The owner stated verbatim: **`I see 6-7 FPS and things look the same`** and
-**`things look and sound good`**. This is evidence that the observed cadence is
-at least 4 FPS, there is no obvious visual regression against the owner’s
-baseline, and audible output is good. It is not full owner acceptance.
-Controls, camera, collision, ordinary actors, and explicit absence of tearing,
-flicker, partial frame, duplicate plot, and a permanent-busy frozen frame
-remain unconfirmed. W0 therefore remains `owner gate pending`.
+The owner first stated verbatim: **`I see 6-7 FPS and things look the same`**
+and **`things look and sound good`**. The explicit final acceptance wording is:
+**`I tested the controls; camera, collision, and actors behave normally; there
+is no tearing, flicker, partial/duplicate plotting, or permanent freezing. I
+accept this W0 candidate.`**
+
+Together these observations accept boot/presentation, Mario baseline fidelity
+and animation with no reported regression, controls, camera, collision,
+ordinary actors, audible output, no tearing/flicker/partial-or-duplicate plot,
+no permanent-busy freeze, and a 6–7 FPS observed cadence (above the 4 FPS
+floor). W0 is **`complete; owner-accepted`** for the exact identity below.
+
+| Accepted identity item | Value |
+| --- | --- |
+| Build identity | `id-e8720d58595d9a62` |
+| Frozen product source / manifest provenance | `6697a3ce1c048d007a8d950d18fa1c653ad29923` |
+| Release manifest SHA-256 | `fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990` |
+| CUE SHA-256 | `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7` |
+| ELF SHA-256 | `021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50` |
+| Profile SHA-256 | `a562c98760a893a474092799ba3d52b6feb9312afadb28c967271bd8da1c8b9c` |
+| Review / closed minors | `PASS WITH FINDINGS`; corrected `.lwram_geo_traversal` accounting and strengthened source/scheduler tests |
+| Launch evidence | `w0-vdp1-overwrite-fence-desktop-launch.json`; PID `27380` alive after the 20-second monitor |
+
+Acceptance is backed by the normal 30-event/29-interval identity-bound
+headless observation (6.6923 mean / 6.0 1% low FPS), focused
+`verify-frame-pipeline` and `verify-vdp1-transfer-pipeline` PASS results with
+their mutation checks, and the focused memory-map regression after its observed
+RED. Corrected map accounting is normal `lwram_end=0x002E95E0`, margin
+`0x16A20`, and diagnostic `lwram_end=0x002E9960`, margin `0x166A0`; both are
+above the `0x4000` floor. These remain supporting evidence; the explicit owner
+acceptance above is the product gate.
 
 No diagnostic capture ran: the normal observation neither recorded an
 unclassifiable busy deferral nor received a reviewer requirement for target
 deferral telemetry. The W0 busy branch remains **`host-proven; target-compiled;
 live occurrence unproven`**.
 
-## Remaining gates
+## Closure evidence and retained limitations
 
 - [x] Scheduler deferral host contract, two new mutations, and VDP1 frame-bank
   ownership gate pass.
@@ -431,8 +455,11 @@ live occurrence unproven`**.
 - [x] Exact normal candidate `id-e8720d58595d9a62` launched with desktop Ymir;
   the bounded 20-second monitor observed a live process and preserved stdout,
   stderr, manifest, CUE, and snapshot identity records.
-- [ ] Owner accepts boot, play, fidelity, camera, collision, ordinary actors,
-  audio, presentation, and cadence on the exact W0 artifact. Partial owner
-  evidence is limited to the verbatim `I see 6-7 FPS and things look the same`
-  and `things look and sound good`: >=4 FPS, no obvious visual regression, and
-  audible output only.
+- [x] Owner accepts boot, play, fidelity, camera, collision, ordinary actors,
+  audio, presentation, and cadence on exact candidate `id-e8720d58595d9a62`.
+- Retained limitation, not a W0 gate: `verify-sourceboot-presentation-boundary`
+  still stops at the known pre-W0 null-snapshot bootstrap literal drift before
+  a W0 assertion, and is explicitly not a W0 PASS.
+- Retained limitation, not a W0 gate: busy deferral is
+  `host-proven; target-compiled; live occurrence unproven`. The normal profile
+  did not classify a busy occurrence, so acceptance does not claim one.

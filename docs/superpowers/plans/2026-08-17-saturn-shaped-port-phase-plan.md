@@ -159,7 +159,7 @@ first time — the frame is 2.28 VB shorter with the plot unchanged, so the fenc
 reachable where T2.8 never saw it fire. `STATE.md` records it as "no longer optional";
 T2.8 §9 item 3 already listed it. This is the hang path in the build awaiting observation.
 
-**Status:** `active; live-observed; independent review PASS WITH FINDINGS; desktop launched; owner gate pending`; normal
+**Status:** `complete; owner-accepted`; normal
 mode 0 linked, passed both memory floors, and passed the identity-bound
 headless product observation. The diagnostic mode-2 arm linked and passed both
 floors at a tool/docs-only descendant revision, so it is target-equivalent but
@@ -167,7 +167,9 @@ not artifact-identical to the frozen normal candidate. Independent review
 returned `PASS WITH FINDINGS` and authorized desktop owner launch; the two
 review-evidence findings are closed without a product-code change. The exact
 normal candidate launched on desktop Ymir and remained alive after its bounded
-monitor; owner acceptance remains pending.
+monitor. The owner then explicitly accepted the candidate after controls,
+camera, collision, actor, audio, presentation-integrity, and permanent-freeze
+checks.
 
 **Execution records:**
 
@@ -199,13 +201,13 @@ monitor; owner acceptance remains pending.
   1% low FPS; diagnostic `id-5f27c53e9ae67c9c` linked and passed both floors
   at a tool/docs-only descendant revision. T2.17 remains the owner-accepted
   baseline.
-- [ ] W0.4 independent review and desktop owner observation — independent
-  review `PASS WITH FINDINGS`; `id-e8720d58595d9a62` launched on desktop Ymir
-  and remained alive after the 20-second monitor. Owner observation remains
-  pending; owner wording is `I see 6-7 FPS and things look the same` and
-  `things look and sound good`, supporting the >=4 FPS floor, no obvious visual
-  regression, and audible output only. Explicit acceptance, controls,
-  presentation-failure, and permanent-busy checks remain unconfirmed.
+- [x] W0.4 independent review and desktop owner observation — `complete;
+  owner-accepted`. Review: `PASS WITH FINDINGS` with no critical/important
+  issue and both review-evidence findings closed. `id-e8720d58595d9a62` was
+  identity-bound launched on desktop Ymir. The owner accepted it after stating
+  that controls, camera, collision, and actors behave normally, there is no
+  tearing/flicker/partial-or-duplicate plot/permanent freezing, and that it
+  looks and sounds good at 6–7 FPS.
 
 **Size:** ~1 hour of code plus target build, live observation, review, and owner
 gate time. Not a cadence item.
