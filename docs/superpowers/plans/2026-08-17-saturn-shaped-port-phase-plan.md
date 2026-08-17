@@ -159,7 +159,30 @@ first time — the frame is 2.28 VB shorter with the plot unchanged, so the fenc
 reachable where T2.8 never saw it fire. `STATE.md` records it as "no longer optional";
 T2.8 §9 item 3 already listed it. This is the hang path in the build awaiting observation.
 
-**Size:** ~1 hour. Not a cadence item.
+**Status:** `planned`; design approved; implementation, host, target, live,
+independent-review, and owner gates have not run.
+
+**Execution records:**
+
+- Design:
+  [`2026-08-17-vdp1-overwrite-fence-design.md`](../specs/2026-08-17-vdp1-overwrite-fence-design.md)
+- Implementation plan:
+  [`2026-08-17-vdp1-overwrite-fence.md`](2026-08-17-vdp1-overwrite-fence.md)
+- Active ledger:
+  [`w0-vdp1-overwrite-fence.md`](../../saturn/evidence/reports/w0-vdp1-overwrite-fence.md)
+
+**Gate state:**
+
+- [ ] W0.1 scheduler acknowledgement — planned; no implementation commit or
+  host evidence yet.
+- [ ] W0.2 sourceboot deferral and diagnostics — planned; no source-complete or
+  target-equivalent evidence yet.
+- [ ] W0.3 unique normal build and earliest Ymir product observation — planned;
+  the preserved T2.17 artifact remains the accepted baseline.
+- [ ] W0.4 independent review and desktop owner observation — planned.
+
+**Size:** ~1 hour of code plus target build, live observation, review, and owner
+gate time. Not a cadence item.
 
 **Exit:** the fence performs one busy observation and immediately defers the exact
 `READY` bank/generation to a later observed VBlank. The busy branch starts no DMA,
@@ -169,9 +192,8 @@ unpublished-generation budget: a transient busy state recovers automatically, wh
 permanent busy state retains the last complete framebuffer and pauses with simulation
 advancement capped rather than overrunning snapshot ownership. `verify-frame-pipeline` and
 `verify-vdp1-frame-bank` still pass with no assertion weakened (T2.17 kept all eleven
-passing verbatim — hold that standard). The corrected design contract, pending written
-owner review, is
-[`2026-08-17-vdp1-overwrite-fence-design.md`](../specs/2026-08-17-vdp1-overwrite-fence-design.md).
+passing verbatim — hold that standard). Execute only through the linked implementation
+plan and record each transition in the active ledger.
 
 ---
 

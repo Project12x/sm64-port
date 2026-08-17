@@ -1,9 +1,11 @@
 # VDP1 Overwrite Fence Fail-Soft Design
 
 **Date:** 2026-08-17
-**Status:** Core behavior owner-approved; corrected written-spec review pending
+**Status:** Approved; implementation plan ready
 **Active phase plan:**
 [`2026-08-17-saturn-shaped-port-phase-plan.md`](../plans/2026-08-17-saturn-shaped-port-phase-plan.md)
+**Implementation plan:**
+[`2026-08-17-vdp1-overwrite-fence.md`](../plans/2026-08-17-vdp1-overwrite-fence.md)
 **Scope:** W0 only: remove the unbounded VDP1 command-VRAM overwrite wait
 without changing the normal frame-bank transfer, publication, or plotting path
 
@@ -266,8 +268,8 @@ this revision.
 
 The review did not identify a reason to replace epoch deferral with sprite-end
 DMA or a bounded in-function VBlank wait. The core design remains unchanged.
-Owner review of this corrected written specification is still required before
-the implementation plan is written.
+The owner approved the corrected written specification on 2026-08-17; the
+linked implementation plan is the sole authorized W0 execution sequence.
 
 ## Verification design
 
