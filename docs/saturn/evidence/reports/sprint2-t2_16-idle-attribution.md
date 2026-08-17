@@ -600,8 +600,10 @@ re-run of this tool showing the block gone.
 
 **2. Continue the soft-float purge on the master. 2.0718 VB/frame is float, on
 the critical path.**
-Larger than item 1 and previously mis-priced at 7.5% because the denominator
-pooled in the slave's idle spin. Leaders, in VB/frame: `___mulsf3` 0.627,
+Almost exactly the size of item 1 (2.0718 against 2.1903 VB/frame), equally
+free of constraint tax, and previously mis-priced at 7.5% because the
+denominator pooled in the slave's idle spin. Ranked second only because item 1
+is one file and this is many. Leaders, in VB/frame: `___mulsf3` 0.627,
 `___addsf3` 0.471, `___divsf3` 0.303, `___subsf3` 0.257, `___udiv_qrnnd_16`
 0.149.
 
