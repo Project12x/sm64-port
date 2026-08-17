@@ -103,18 +103,25 @@ again after T2.12 closed `spatial_admit` out**):
   platforming depth cue. SlaveDriver's `COMPO_SHADOW` sprite is emitted immediately
   before its character, which is also the ordering answer this renderer needs
   (it has no depth bias anywhere).
-- **Master/slave handoff — RE-SCOPED BY T2.16.** The "four blocking fork-joins"
-  premise is **dead code**: `_sm64_saturn_dual_worker_run` is absent from the
-  product ELF (its call sites are in two static functions nothing calls, so
-  `--gc-sections` removes it), and the measured barrier cost is **0**. What is
-  really there: the slave is notified **once per frame**, drains the whole
-  4-job render graph in **2.3372 VB/frame**, and then sleeps for **8.8697
-  VB/frame**. That block (6.6794 VB/frame overlapping master *work*) is the
-  largest idle block, but it is the **least safely sizeable** — every VB
-  converted crosses an incoherent cache and a shared bus, and Ymir models
-  neither (`m_emulateSH2Caches = false`), so any figure for it is an upper
-  bound. **Ranked 4th by T2.16, behind the scheduler stall, the float purge and
-  VDP1 command reduction.**
+- ~~**Master/slave handoff**~~ — **CLOSED BY T2.25, and the lever evaporated when
+  T2.17 landed.** T2.16 ranked it 4th on the strength of 8.8697 VB/frame of slave
+  idle. But **master idle is now 0.000000**, so frame time equals master work
+  exactly — the joint table has only two occupied cells. **A wider dispatch
+  window changes *when* the slave runs, not how much the master does; overlap
+  converts zero VB when the critical path contains no stall.** The "four blocking
+  fork-joins" premise was already dead code (T2.16: `_sm64_saturn_dual_worker_run` is
+  absent from the product ELF, measured barrier cost 0).
+  **SlaveDriver validates our current configuration rather than improving it.**
+  Its adaptive controller drives the partition from the master's join spin count,
+  which is identically 0 here, so its rule saturates at "give the slave
+  everything" — **its fixed point is what we already do.** Upstream parallelises
+  exactly one stage and keeps visibility determination and command emission
+  master-only; we split the same stage at 100% rather than `slaveSize`, so we are
+  **already more aggressive than the reference**. The blocking dependencies —
+  the admission BFS over shared visited/queued/seen state (~0.996 VB) and the
+  sequential VDP1 command arena plus shared Gouraud bank (~1.435 VB) — are the
+  same two upstream also leaves serial. Largest genuinely offload-eligible item
+  is **0.367 VB and it is a redesign**.
 - ~~**Frame-pipeline per-field epoch stall — THE ACTIVE LEVER (T2.16).**~~
   **CLOSED by T2.17.** Was 2.1903 VB/frame (19.5% of the frame) at
   `main.c:2013`. Measured after: **6.7181 FPS / 8.9310 VB, -2.2759 VB/frame,
