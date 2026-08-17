@@ -66,7 +66,7 @@ the whole tree for `emulateSH2Cache`, `EnableSH2CacheEmulation`,
 | `apps/ymir-headless/src/main.cpp` | one stderr line reporting the resolved setting |
 
 **Default is off.** Every existing capture, reproduction instruction and
-accepted baseline keeps working with no change — proved by measurement in
+historical comparison baseline keeps working with no change — proved by measurement in
 section 3, not asserted.
 
 ### 1.2 Port capture tooling (worktree)
@@ -155,13 +155,13 @@ mispriced part. What was mispriced is everything else the slave touches.
 ## 3. The control: the flag is genuinely inert when off
 
 Before any caches-on number is quoted, the new binary must reproduce the
-accepted baseline exactly. It does.
+historical headless comparison baseline exactly. It does.
 
 `capture_sourceboot_throughput.py`, `summarize_cadence` only, 30 presentation
 events, 29 intervals, sealed `id-c0352f297034f653`, on-target identity
 **MATCH** (`d88b17a9...23b5`), `status: complete`, route ticks 0-31.
 
-| | Accepted baseline (T2.17/T2.25, old binary) | T2.26 binary, caches off |
+| | Historical headless comparison baseline (T2.17/T2.25, old binary) | T2.26 binary, caches off |
 | :--- | ---: | ---: |
 | FPS mean | 6.7181 | **6.7181** |
 | FPS median | 6.6667 | **6.6667** |
@@ -516,7 +516,8 @@ instrument.**
   equally safe", and 180 clears the >=150 standard. **A tick-150 pair was not
   run.** Cadence is unaffected — `capture_sourceboot_throughput` is
   event-counted and T2.20 section 8 says not to move its default, so all four
-  cadence runs cover route ticks 0-31 as every accepted baseline does.
+  cadence runs cover route ticks 0-31 as every historical comparison baseline
+  does.
 - **One window per basis, not a repeat capture.** Same design as T2.16 and
   T2.20. The caches-off run agrees with the T2.20 reference to four decimals
   (section 3), which is a strong cross-binary check but is not a variance

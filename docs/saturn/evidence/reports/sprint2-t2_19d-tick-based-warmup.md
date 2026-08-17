@@ -279,8 +279,9 @@ against 120). Evidence:
 ### 5.3 The primary FPS tool is unchanged
 
 `capture_sourceboot_throughput.py` on `id-c0352f297034f653`, 30 presentation
-events: `guest_fps_mean = 6.718146718146718` — the accepted baseline, to every
-digit — with the new field `route_span: {start: 0, end: 31}`. Evidence:
+events: `guest_fps_mean = 6.718146718146718` — the historical headless
+comparison baseline, to every digit — with the new field
+`route_span: {start: 0, end: 31}`. Evidence:
 `sprint2-t2_19d-throughput-routespan-c0352f29.json`.
 
 ---

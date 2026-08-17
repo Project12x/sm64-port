@@ -618,7 +618,7 @@ route-counter capture. Reasoning:
    unreachable target before Ymir starts.
 
 **Do not change `capture_sourceboot_throughput.py`'s default.** Its window is
-event-counted and its accepted baselines (5.3538 / 6.7181) are quoted across
+event-counted and its historical cadence baselines (5.3538 / 6.7181) are quoted across
 the sprint; section 5 shows the cadence is flat across the route anyway, so
 moving it would cost comparability and buy nothing.
 

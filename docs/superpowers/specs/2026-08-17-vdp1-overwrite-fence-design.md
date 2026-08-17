@@ -76,8 +76,9 @@ capped rather than running ahead of owned render resources.
 
 ## Baseline and candidate identity
 
-The preserved accepted gameplay artifact remains the T2.17 candidate. It is
-never overwritten by W0:
+The preserved historical/headless T2.17 comparison artifact remains the T2.17
+candidate. It was never GUI-launched, live owner-observed, or owner-accepted,
+and is never overwritten by W0:
 
 | Identity item | Preserved value |
 | --- | --- |

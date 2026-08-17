@@ -36,9 +36,10 @@ for the render path only.
 
 Sprint 2 took cadence **3.8753 → 6.7181, +73.4%**, past A9A's 5.294 / 11.333.
 
-Historical T2.17 comparison build: `id-c0352f297034f653`. It was the prior
-owner-accepted baseline and is preserved for rollback/comparison; its
-unbounded-fence risk motivated W0. The current owner-accepted artifact is W0
+Historical T2.17 headless comparison build: `id-c0352f297034f653`. It was not
+GUI-launched, live owner-observed, or owner-accepted; it is preserved as a
+historical headless comparison/rollback baseline, and its unbounded-fence risk
+motivated W0. The current owner-accepted artifact is W0
 candidate `id-e8720d58595d9a62` (manifest
 `fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, ELF
@@ -204,8 +205,9 @@ checks.
 - [x] W0.3 unique normal build and earliest Ymir product observation —
   `id-e8720d58595d9a62` passed 30 events/29 intervals at 6.6923 mean and 6.0
   1% low FPS; diagnostic `id-5f27c53e9ae67c9c` linked and passed both floors
-  at a tool/docs-only descendant revision. T2.17 remains the preserved prior
-  owner-accepted baseline; W0 `id-e8720d58595d9a62` is the current
+  at a tool/docs-only descendant revision. T2.17 remains the preserved
+  historical/headless comparison baseline and was not owner-observed or
+  owner-accepted; W0 `id-e8720d58595d9a62` is the current
   owner-accepted artifact.
 - [x] W0.4 independent review and desktop owner observation — `complete;
   owner-accepted`. Review: `PASS WITH FINDINGS` with no critical/important

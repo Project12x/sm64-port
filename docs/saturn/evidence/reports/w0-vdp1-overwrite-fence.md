@@ -23,8 +23,9 @@ generation before any destination write, and records deferrals without retaining
 a blocking diagnostic spin. Independent review returned `PASS WITH FINDINGS`
 with no critical or important issue and authorized the desktop owner launch;
 its two review-evidence findings are closed without a product-code change. The
-accepted T2.17 gameplay artifact remains preserved. The exact normal candidate
-was owner-accepted after an identity-bound desktop launch and complete owner
+preserved historical/headless T2.17 comparison artifact remains preserved; it
+was never owner-observed or owner-accepted. The exact normal candidate was
+owner-accepted after an identity-bound desktop launch and complete owner
 observation. This closes W0 without claiming a live busy-branch occurrence.
 
 | Work item | State | Evidence | Remaining gate |
@@ -34,10 +35,11 @@ observation. This closes W0 without claiming a live busy-branch occurrence.
 | W0.3 normal build and live product observation | `complete at evidence level` | Normal `id-e8720d58595d9a62` staged and passed the bounded retry: 30 events/29 intervals, 6.6923 mean, 6.0 1% low, coherent queues and delta 1; diagnostic `id-5f27c53e9ae67c9c` linked/sealed and passed both floors | No diagnostic capture: normal observation did not classify a busy deferral |
 | W0.4 review and owner gate | `complete; owner-accepted` | Review `PASS WITH FINDINGS`, no critical/important issue, closed tool/test findings, identity-bound desktop launch, and explicit owner acceptance | Busy occurrence remains host-proven/target-compiled only; known pre-W0 presentation-boundary literal drift retained |
 
-## Preserved accepted product baseline
+## Preserved historical T2.17 headless comparison baseline
 
-W0 must not overwrite, rebuild into, rename, or present this artifact as
-current work:
+T2.17 was never GUI-launched, live owner-observed, or owner-accepted. W0 must
+not overwrite, rebuild into, rename, or present this historical/headless
+comparison artifact as current work:
 
 | Identity item | Preserved value |
 | --- | --- |
@@ -136,7 +138,8 @@ and excluded from this task. The exact normal profile is
 
 The W0 hypothesis being observed is: a transient VDP1 busy state immediately
 defers its exact ready generation and later retries it, without a hang or an
-incomplete upload. The owner-accepted T2.17 artifact remains immutable:
+incomplete upload. The preserved historical/headless T2.17 comparison artifact
+remains immutable; it was never owner-observed or owner-accepted:
 `id-c0352f297034f653` (CUE SHA-256
 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`);
 the normal build must create and stage a new identity outside that artifact.
@@ -196,7 +199,7 @@ The normal target build is `id-e8720d58595d9a62` from product source
 profile hash `a562c98760a893a474092799ba3d52b6feb9312afadb28c967271bd8da1c8b9c`.
 It links with HWRAM free `0x4A58` (margin `0x2B58` over the required `0x1F00`)
 and LWRAM free `0x16A20` (floor `0x4000`), and was atomically staged outside
-the immutable T2.17 artifact.
+the immutable historical/headless T2.17 comparison artifact.
 
 Attempt 1 is preserved, not overwritten, as
 `w0-vdp1-overwrite-fence-throughput-attempt-1-failed.json` (SHA-256

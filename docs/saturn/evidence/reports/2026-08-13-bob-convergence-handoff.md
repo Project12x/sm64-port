@@ -1,9 +1,12 @@
 # BOB product-recovery handoff — 2026-08-14
 
-## Truth at handoff
+## Historical truth at handoff (2026-08-14)
 
-There is **no owner-accepted current development CUE**.  Do not launch, show,
-or describe the earlier generic-actor image as the current demo.  In
+At this handoff there was **no owner-accepted current development CUE**. This
+historical finding is superseded for W0 by owner-accepted
+`id-e8720d58595d9a62`; it does not close the still-open two-level
+presentation/product gate. Do not launch, show, or describe the earlier
+generic-actor image as the current demo. In
 particular, the prior `id-e3cb8ee1f5a955d6` handoff image is superseded
 diagnostic evidence, not a presentation candidate.
 

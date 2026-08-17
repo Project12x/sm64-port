@@ -623,8 +623,9 @@ T2.17 removed the master's stall.
 - **No emulator GUI was launched and no owner observation was made.** The
   product gate is an owner-observed CUE and this is not one.
   `id-49894e8e2d3ea415` is `source-complete` plus a headless cadence control,
-  not `live-observed`. The accepted artifact remains T2.17's
-  `id-c0352f297034f653` and was not replaced.
+  not `live-observed`. T2.17 `id-c0352f297034f653` remains the preserved
+  historical/headless comparison artifact and was not replaced; it was never
+  GUI-launched, live owner-observed, or owner-accepted.
 - **The build and capture were run once each.** The emulation is
   deterministic, so a literal repeat would be bit-identical and would measure
   nothing; wall-clock run-to-run variance remains unmeasured, the same gap

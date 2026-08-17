@@ -18,10 +18,11 @@ serious engineering effort to close proxy goals—formats, manifests, reviews,
 mutation suites, provenance, and generalized interfaces—while repeatedly
 deferring the only evidence that mattered: a current CUE showing the game.
 
-There is **no owner-accepted current development CUE**. Do not describe the
-current branch as a working demo or a near-complete port. Do not protect its
-architecture because of sunk cost. Preserve the worktree as a donor inventory,
-then reuse components only when they immediately improve a live artifact.
+**Historical statement as of 2026-08-14:** There was **no owner-accepted
+current development CUE**. Do not read that time-scoped finding as current
+status: the later W0 artifact `id-e8720d58595d9a62` is owner-accepted, while
+the two-level presentation/product gate remains open. This handoff's warning
+against protecting architecture because of sunk cost remains applicable.
 
 ## Owner goal that must not be reinterpreted
 

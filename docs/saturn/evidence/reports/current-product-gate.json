@@ -1,8 +1,16 @@
 {
   "schema": "sm64-saturn-current-product-gate-v1",
-  "status": "live-observations-recorded; no-current-cue-accepted",
+  "status": "W0-owner-accepted; two-level-presentation-product-gate-open",
   "authority": "docs/saturn/PRODUCT_GOAL.md",
-  "collection_scope": "Task 1 read-only baseline and donor inventory",
+  "collection_scope": "Historical Task 1 read-only baseline and donor inventory; superseded for current W0 acceptance",
+  "current_owner_accepted_w0": {
+    "identity": "id-e8720d58595d9a62",
+    "manifest_sha256": "fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990",
+    "cue_sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+    "elf_sha256": "021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50",
+    "scope": "W0 overwrite-fence regression gate: boot, play, presentation, audio, and owner-observed 6-7 FPS",
+    "remaining_gate": "The shared-executable BOB plus Whomp's Fortress two-level presentation/product gate remains open."
+  },
   "accepted_baseline": {
     "status": "hash-verified; historical visual/control/performance rollback oracle",
     "path": "build/saturn/baselines/a9a-2026-08-05",
@@ -193,7 +201,7 @@
     }
   },
   "product_gate": {
-    "accepted_current_cue": null,
+    "accepted_current_cue": "id-e8720d58595d9a62",
     "historical_owner_findings": [
       "incorrect Mario color/material association",
       "flat or incorrect Gouraud shading",
@@ -202,6 +210,6 @@
       "no audible game audio",
       "approximately 1 FPS in at least one current run"
     ],
-    "conclusion": "No current development CUE is accepted. The current candidate's exact code/build identity reached Ymir, but its cadence observation failed and no video capture establishes presentation; no Task 1 fact advances the product gate."
+    "conclusion": "Historical Task 1 evidence: the then-current candidate's exact code/build identity reached Ymir, but its cadence observation failed and no video capture established presentation. That finding did not advance the product gate then. It is superseded for current W0 status by owner-accepted id-e8720d58595d9a62; the two-level presentation/product gate remains open."
   }
 }

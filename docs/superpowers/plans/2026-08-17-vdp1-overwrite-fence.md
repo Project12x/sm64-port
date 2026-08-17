@@ -39,10 +39,12 @@ Keep a Changelog documentation.
   Reconcile `git rev-parse HEAD`, the active phase plan, this plan, and the
   ledger before starting each task. Preserve unrelated untracked `.msys-home/`,
   `releases/`, and historical desktop-launch log files.
-- The accepted T2.17 artifact `id-c0352f297034f653` is immutable. Do not
-  rebuild into, overwrite, rename, or present it as W0. Every W0 build and CUE
-  needs a new identity. Record source revision, profile path/hash, build time,
-  ELF/ISO/CUE/manifest hashes, and target identity-probe hash before launch.
+- The preserved historical/headless T2.17 comparison artifact
+  `id-c0352f297034f653` is immutable. It was never GUI-launched, live
+  owner-observed, or owner-accepted. Do not rebuild into, overwrite, rename,
+  or present it as W0. Every W0 build and CUE needs a new identity. Record
+  source revision, profile path/hash, build time, ELF/ISO/CUE/manifest hashes,
+  and target identity-probe hash before launch.
 - Make one causal product behavior change: replace the overwrite wait with
   immediate epoch deferral. Do not add a draw-end interrupt owner, a new DMA
   route, bank cancellation, snapshot drop/coalescing, a new wire format, or a
@@ -829,7 +831,7 @@ W0 is complete only when all conditions below are true:
 - Profile v4 layout is unchanged, raw fields remain decodable, and evidence
   summaries report busy deferrals without inventing zero wait costs.
 - Normal and diagnostic target configurations compile and pass declared memory
-  floors; the accepted T2.17 artifact remains untouched.
+  floors; the preserved historical/headless T2.17 artifact remains untouched.
 - A new identity-bound normal candidate passes the earliest headless product
   observation and independent review.
 - The owner accepts the new desktop artifact for boot, play, presentation,

@@ -4,7 +4,12 @@
 > repository [`STATE.md`](../../STATE.md), and [`HOWTO.md`](../../HOWTO.md)
 > before building or launching. Sections below preserve detailed toolchain and
 > historical release instructions; they do not identify the current accepted
-> product artifact. No current development CUE is owner-accepted.
+> product artifact. The current owner-accepted W0 artifact is
+> `id-e8720d58595d9a62` (manifest
+> `fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
+> `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, ELF
+> `021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`), but
+> it does not close the still-open two-level presentation/product gate.
 
 The Saturn build is intentionally separate from the existing N64 and PC
 Makefile. Its sourceboot profile compiles integrated SM64 game code and can
@@ -13,7 +18,7 @@ remains available as a bring-up diagnostic. The reusable `sm64-saturn-full`
 profile is deliberately non-releasable until its complete content/system
 inventory and game-wide target gates are implemented and reviewed.
 
-The current `sourceboot-bob-demo-v2-manual-candidate` is not a playable manual
+The historical `sourceboot-bob-demo-v2-manual-candidate` is not a playable manual
 candidate despite passing release-manifest and exact-v4 checks. Its sealed
 feature tuple enables `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1`, but the
 production feature-on ACTOR_ADMIT/ACTOR_LOWER cutover is still intentionally

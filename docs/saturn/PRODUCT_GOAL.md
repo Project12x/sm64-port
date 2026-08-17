@@ -40,13 +40,24 @@ candidate must be compared with it.
 
 ## Current truth
 
-No current development CUE is accepted. Recent candidates have reached the
-normal BOB source loop and generic actor records, but owner observation found
-incorrect Mario color/material association, flat or incorrect Gouraud,
-incorrect painter/occlusion order, incorrect Bob-omb textures/placement, no
-audible game audio, and approximately 1 FPS in at least one current run. Stale
-or wrongly profiled artifacts were also launched. Host and target-component
-tests do not override those results.
+W0 candidate `id-e8720d58595d9a62` is the current owner-accepted development
+artifact: manifest SHA-256
+`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
+SHA-256 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`,
+and ELF SHA-256
+`021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`. It
+passed W0's overwrite-fence regression gate for boot, play, presentation,
+audio, and owner-observed 6–7 FPS. This does **not** pass the still-open
+two-level presentation/product gate below: it is not proof that both BOB and
+Whomp's Fortress meet that shared-executable gate.
+
+Historical pre-W0 candidates reached the normal BOB source loop and generic
+actor records, but owner observation found incorrect Mario color/material
+association, flat or incorrect Gouraud, incorrect painter/occlusion order,
+incorrect Bob-omb textures/placement, no audible game audio, and approximately
+1 FPS in at least one run. Stale or wrongly profiled artifacts were also
+launched. Those historical failures remain evidence; host and target-component
+tests did not override them.
 
 The current actor-bank, family-bundle, texture-residency, scene-publication,
 and audio-package stack is **probationary**. It may be reused, transplanted, or
