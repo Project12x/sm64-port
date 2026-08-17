@@ -3,7 +3,7 @@
 **Date opened:** 2026-08-17
 **Status:** `active; W0.1/W0.2 host-contract-passed; normal live-observed;
 diagnostic target-compiled; independent review PASS WITH FINDINGS; desktop
-owner gate pending`
+launched; owner gate pending`
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -23,14 +23,16 @@ a blocking diagnostic spin. Independent review returned `PASS WITH FINDINGS`
 with no critical or important issue and authorized the desktop owner launch;
 its two review-evidence findings are closed without a product-code change. The
 accepted T2.17 gameplay artifact remains the only owner-accepted product
-baseline; owner observation remains open.
+baseline; owner observation remains open. The exact normal candidate launched
+and remained alive through a 20-second desktop monitor; this is process proof,
+not a visual, audio, control, collision, or cadence acceptance claim.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
 | W0.1 scheduler acknowledgement | `host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, VDP1 frame-bank ownership checks, and full-state immutability on wrong/duplicate acknowledgement pass | Normal product observation and owner gate are separately recorded below |
 | W0.2 sourceboot deferral and diagnostics | `host-contract-passed; normal live-observed; diagnostic target-compiled` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed; source contract now proves exactly one busy observation and no busy-branch ownership mutation; normal mode 0 and diagnostic mode 2 links both passed memory floors | Known pre-W0 presentation-boundary literal drift; owner gate |
 | W0.3 normal build and live product observation | `complete at evidence level` | Normal `id-e8720d58595d9a62` staged and passed the bounded retry: 30 events/29 intervals, 6.6923 mean, 6.0 1% low, coherent queues and delta 1; diagnostic `id-5f27c53e9ae67c9c` linked/sealed and passed both floors | No diagnostic capture: condition absent. Owner/review gates remain separately open. |
-| W0.4 review and owner gate | `review PASS WITH FINDINGS; desktop launch pending` | Review found no critical/important issue and authorized desktop owner launch; review-evidence repairs are host/tool/doc only | Identity-bound desktop launch and explicit owner judgment |
+| W0.4 review and owner gate | `review PASS WITH FINDINGS; desktop launched; owner gate pending` | Review found no critical/important issue; `id-e8720d58595d9a62` remained alive after its 20-second identity-bound desktop monitor | Explicit owner judgment; no launch-time visual/audio inference |
 
 ## Preserved accepted product baseline
 
@@ -112,6 +114,7 @@ check.
 | `facb9db7` | `fix(saturn): bound cadence observation retries` — tool-only bounded transient seqlock observation retry; no product source/profile/artifact change |
 | `ebee7e54` | `docs(saturn): record W0 live product evidence` — normal candidate/stage and live-observation evidence |
 | `d347cf61` | `docs(saturn): clarify W0 diagnostic evidence` — documentation/evidence descendant used when the diagnostic arm was built |
+| `e13baf1e9832671efe7c81be4eb29d5b7fc26438` | `test(saturn): close W0 review evidence findings` — corrected LWRAM maximum, focused contracts, review record, and status reconciliation; no product-code change |
 
 Independent review completed after the first identity-bound live product
 observation; see the review-evidence transition below.
@@ -361,6 +364,30 @@ contract checks. No target rebuild or headless Ymir run was performed: this is
 a review/tool/test/documentation transition and the review authorized desktop
 launch on the existing normal candidate.
 
+### Desktop launch record (2026-08-17)
+
+The durable pre-launch transcript
+[`w0-vdp1-overwrite-fence-desktop-prelaunch.json`](w0-vdp1-overwrite-fence-desktop-prelaunch.json)
+was written before the GUI command. It selects exactly one normal staged
+release, `id-e8720d58595d9a62`: manifest SHA-256
+`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990` matches
+the canonical throughput JSON, diagnostic mode is `0`, manifest provenance and
+frozen product source are both `6697a3ce1c048d007a8d950d18fa1c653ad29923`,
+and the expected executable probe is
+`d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5`.
+It records full staged manifest/CUE/ELF/profile paths, UTC build times, and
+SHA-256 identities. T2.17 was not selected or modified.
+
+The bounded desktop launcher wrote
+[`w0-vdp1-overwrite-fence-desktop-launch.json`](w0-vdp1-overwrite-fence-desktop-launch.json)
+at `2026-08-17T21:24:37.029935+00:00` after starting Ymir SDL3 PID `27380`
+with the project profile and the manifest-verified CUE snapshot. At the end of
+its 20-second monitor the process was still alive (`exit_code: null`), and its
+durable stdout/stderr logs are retained beside the JSON. The snapshot CUE and
+ISO hashes equal the staged candidate hashes. No screenshot or video was
+captured, and no visual, audio, control, camera, collision, actor, presentation,
+busy-occurrence, or FPS judgment is inferred from process liveness.
+
 No diagnostic capture ran: the normal observation neither recorded an
 unclassifiable busy deferral nor received a reviewer requirement for target
 deferral telemetry. The W0 busy branch remains **`host-proven; target-compiled;
@@ -389,5 +416,8 @@ live occurrence unproven`**.
 - [x] Independent review `PASS WITH FINDINGS`; no critical/important issue.
   Its memory-accounting and source/scheduler-test findings are closed by the
   focused review-evidence transition above; no product-code change occurred.
+- [x] Exact normal candidate `id-e8720d58595d9a62` launched with desktop Ymir;
+  the bounded 20-second monitor observed a live process and preserved stdout,
+  stderr, manifest, CUE, and snapshot identity records.
 - [ ] Owner observes and accepts boot, play, fidelity, camera, collision,
   ordinary actors, audio, presentation, and cadence on the exact W0 artifact.

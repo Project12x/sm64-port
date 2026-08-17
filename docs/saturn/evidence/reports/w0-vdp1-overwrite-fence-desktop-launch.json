@@ -1,0 +1,45 @@
+{
+  "created_utc": "2026-08-17T21:24:37.029935+00:00",
+  "execution": {
+    "alive_after_monitor": true,
+    "exit_code": null,
+    "monitor_seconds": 20.0,
+    "pid": 27380,
+    "requested": true,
+    "started_utc": "2026-08-17T21:24:37.029935+00:00",
+    "stderr_log": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\docs\\saturn\\evidence\\reports\\w0-vdp1-overwrite-fence-desktop-launch.stderr.log",
+    "stdout_log": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\docs\\saturn\\evidence\\reports\\w0-vdp1-overwrite-fence-desktop-launch.stdout.log",
+    "verified_snapshot": {
+      "cleanup_state": "scheduled-after-process-exit",
+      "owner_pid": 27380,
+      "root": "C:\\Users\\estee\\AppData\\Local\\Temp\\sm64-saturn-release-v4nop9gr"
+    }
+  },
+  "plan": {
+    "command": [
+      "D:\\Code\\RetroDev\\sm64-saturn-port\\ymir-agent\\build-agent2\\apps\\ymir-sdl3\\Release\\ymir-sdl3.exe",
+      "--profile",
+      "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile",
+      "--disc",
+      "C:\\Users\\estee\\AppData\\Local\\Temp\\sm64-saturn-release-v4nop9gr\\sm64-saturn-sourceboot-e2.cue"
+    ],
+    "cue": {
+      "bytes": 88,
+      "modified_utc": "2026-08-17T21:24:36.985437+00:00",
+      "path": "C:\\Users\\estee\\AppData\\Local\\Temp\\sm64-saturn-release-v4nop9gr\\sm64-saturn-sourceboot-e2.cue",
+      "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7"
+    },
+    "gui_stdout_limit": "Ymir SDL3 is interactive. The helper captures only output emitted during its bounded monitor window; after it returns, a still-live GUI process has no attached report writer for later output or exit.",
+    "iso": {
+      "bytes": 5179392,
+      "modified_utc": "2026-08-17T21:24:36.982943+00:00",
+      "path": "C:\\Users\\estee\\AppData\\Local\\Temp\\sm64-saturn-release-v4nop9gr\\sm64-saturn-sourceboot-e2.iso",
+      "sha256": "186f8734944941a6fe2f9f2455483871007e8f11a13a7e86966235be13729846"
+    },
+    "launcher": "desktop-ymir-profile",
+    "profile": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile",
+    "ram_cart": "profile-managed-32-mbit-dram",
+    "working_directory": "D:\\Code\\RetroDev\\sm64-saturn-port\\ymir-agent\\build-agent2\\apps\\ymir-sdl3\\Release"
+  },
+  "release_manifest_sha256": "fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990"
+}

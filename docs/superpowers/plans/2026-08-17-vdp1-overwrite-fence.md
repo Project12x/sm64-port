@@ -749,7 +749,7 @@ compile.
   the fix. This is causal attempt two. A second failed attempt or two elapsed
   hours without new live proof ends W0 for rollback/bypass selection.
 
-- [ ] **Step 3: Reprint exact candidate identity and launch desktop Ymir.**
+- [x] **Step 3: Reprint exact candidate identity and launch desktop Ymir.**
 
   Reprint staged CUE/ELF/manifest/profile full paths, build times, and SHA-256
   hashes immediately before launch. Resolve exactly one staged normal candidate
@@ -791,7 +791,7 @@ compile.
   Any regression blocks advancement and requires the narrow attempt-two loop or
   rollback; host tests and review cannot override it.
 
-- [ ] **Step 5: Close documentation at the strongest actual proof level.**
+- [x] **Step 5: Close documentation at the strongest actual proof level.**
 
   If the owner accepts, mark W0 `complete; owner-accepted` in the phase plan,
   `STATE.md`, `ROADMAP.md`, and ledger. Record the exact accepted identity and

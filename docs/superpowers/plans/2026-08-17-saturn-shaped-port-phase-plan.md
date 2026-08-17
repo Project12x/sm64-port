@@ -159,14 +159,15 @@ first time — the frame is 2.28 VB shorter with the plot unchanged, so the fenc
 reachable where T2.8 never saw it fire. `STATE.md` records it as "no longer optional";
 T2.8 §9 item 3 already listed it. This is the hang path in the build awaiting observation.
 
-**Status:** `active; live-observed; independent review PASS WITH FINDINGS; desktop owner gate pending`; normal
+**Status:** `active; live-observed; independent review PASS WITH FINDINGS; desktop launched; owner gate pending`; normal
 mode 0 linked, passed both memory floors, and passed the identity-bound
 headless product observation. The diagnostic mode-2 arm linked and passed both
 floors at a tool/docs-only descendant revision, so it is target-equivalent but
 not artifact-identical to the frozen normal candidate. Independent review
 returned `PASS WITH FINDINGS` and authorized desktop owner launch; the two
-review-evidence findings are closed without a product-code change. Owner
-acceptance remains pending.
+review-evidence findings are closed without a product-code change. The exact
+normal candidate launched on desktop Ymir and remained alive after its bounded
+monitor; owner acceptance remains pending.
 
 **Execution records:**
 
@@ -199,8 +200,9 @@ acceptance remains pending.
   at a tool/docs-only descendant revision. T2.17 remains the owner-accepted
   baseline.
 - [ ] W0.4 independent review and desktop owner observation — independent
-  review `PASS WITH FINDINGS` (desktop launch authorized); owner observation
-  remains pending.
+  review `PASS WITH FINDINGS`; `id-e8720d58595d9a62` launched on desktop Ymir
+  and remained alive after the 20-second monitor. Owner observation remains
+  pending; launch/process status is not a visual or audio acceptance.
 
 **Size:** ~1 hour of code plus target build, live observation, review, and owner
 gate time. Not a cadence item.

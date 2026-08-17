@@ -1,0 +1,48 @@
+{
+  "schema": "sm64-saturn-w0-desktop-prelaunch-v1",
+  "created_utc": "2026-08-17T21:23:51.6428086Z",
+  "candidate_identity": "id-e8720d58595d9a62",
+  "selection": {
+    "release_directory": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-17_w0-product\\id-e8720d58595d9a62",
+    "diagnostic_mode": 0,
+    "manifest_sha256": "fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990",
+    "throughput_manifest_sha256": "fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990",
+    "manifest_hash_matches_throughput": true,
+    "manifest_provenance_git_revision": "6697a3ce1c048d007a8d950d18fa1c653ad29923",
+    "frozen_product_source": "6697a3ce1c048d007a8d950d18fa1c653ad29923",
+    "current_git_head": "e13baf1e9832671efe7c81be4eb29d5b7fc26438",
+    "t2_17_selected": false
+  },
+  "identity_probe_expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+  "artifacts": {
+    "manifest": {
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-17_w0-product\\id-e8720d58595d9a62\\saturn-release-manifest-v1.json",
+      "last_write_time_utc": "2026-08-17T19:41:10.0677993Z",
+      "sha256": "fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990"
+    },
+    "cue": {
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-17_w0-product\\id-e8720d58595d9a62\\sm64-saturn-sourceboot-e2.cue",
+      "last_write_time_utc": "2026-08-17T19:41:10.0662989Z",
+      "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7"
+    },
+    "elf": {
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-17_w0-product\\id-e8720d58595d9a62\\obj\\sm64-saturn-sourceboot-e2.elf",
+      "last_write_time_utc": "2026-08-17T19:41:10.0437984Z",
+      "sha256": "021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50"
+    },
+    "profile": {
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\tools\\saturn\\profiles\\sourceboot-bob-demo-v1.json",
+      "last_write_time_utc": "2026-08-16T23:24:20.0938243Z",
+      "sha256": "a562c98760a893a474092799ba3d52b6feb9312afadb28c967271bd8da1c8b9c"
+    }
+  },
+  "desktop_command": [
+    "D:\\Code\\RetroDev\\sm64-saturn-port\\ymir-agent\\build-agent2\\apps\\ymir-sdl3\\Release\\ymir-sdl3.exe",
+    "--profile",
+    "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile",
+    "--disc",
+    "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-17_w0-product\\id-e8720d58595d9a62\\sm64-saturn-sourceboot-e2.cue"
+  ],
+  "expected_monitor_seconds": 20,
+  "expected_launch_output": "docs/saturn/evidence/reports/w0-vdp1-overwrite-fence-desktop-launch.json"
+}
