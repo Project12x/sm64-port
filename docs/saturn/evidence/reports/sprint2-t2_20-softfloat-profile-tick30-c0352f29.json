@@ -1,0 +1,1708 @@
+{
+  "schema": "sm64-saturn-softfloat-profile-v1",
+  "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_17-product\\id-c0352f297034f653\\obj\\sm64-saturn-sourceboot-e2.elf",
+  "elf_sha256": "2933c5d5d6d1399243d5b838b63c16f1b3e1a6ba2a79587edd9c3f7cb8c2fecd",
+  "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-16_t2_17-product\\id-c0352f297034f653\\sm64-saturn-sourceboot-e2.cue",
+  "identity": {
+    "address": 574619648,
+    "size": 16,
+    "expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "observed_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "match": true,
+    "startup_vblanks_waited": 681,
+    "startup_identity_attempts": 681
+  },
+  "sampling": {
+    "bursts": 200,
+    "burst_steps": 250,
+    "gap_vblanks": 1,
+    "targets": [
+      "sh2.master",
+      "sh2.slave"
+    ],
+    "startup_vblanks": 4096,
+    "warmup": {
+      "mode": "ticks",
+      "target_tick": 30,
+      "replay_ticks": 30,
+      "global_timer": 30,
+      "vblanks_advanced": 1788,
+      "steps": 120,
+      "start_replay_ticks": 0,
+      "start_global_timer": 0,
+      "max_vblanks": 20000,
+      "addresses": {
+        "replay_ticks": "0x60f0d80",
+        "global_timer": "0x60bcda4"
+      }
+    },
+    "route_position_after_profile": {
+      "replay_ticks": 52,
+      "global_timer": 52
+    },
+    "phases": 1,
+    "phase_vblanks": 0
+  },
+  "raw": {
+    "wall_seconds": 8.97,
+    "total_cycles": 92087,
+    "total_samples": 50000,
+    "unmapped_cycles": 0,
+    "unmapped_samples": 0,
+    "per_target": {
+      "sh2.master": {
+        "cycles": 30125,
+        "samples": 25000
+      },
+      "sh2.slave": {
+        "cycles": 61962,
+        "samples": 25000
+      }
+    }
+  },
+  "summary": {
+    "clock_hz": 26846590.91,
+    "idle_cycles": 52421,
+    "working_cycles": 39666,
+    "float_cycles": 6929,
+    "float_share_of_total": 0.075244,
+    "float_share_of_working": 0.174684,
+    "callers": {
+      "___lshrsi3_r0": {
+        "_demo_prepare_position_owners": 7,
+        "_demo_terrain_queue_world_admit": 6,
+        "___fixsfsi": 5,
+        "___subsf3": 5,
+        "___clzsi2": 3,
+        "___addsf3": 3,
+        "___subdf3": 2,
+        "___fixdfsi": 1
+      },
+      "___ashlsi3_r0": {
+        "___subsf3": 5,
+        "_demo_render_prepare_publish": 5,
+        "_saturn_mtxq_refresh_float_mirror": 5,
+        "___floatsisf": 4,
+        "_demo_terrain_resolved_template": 4,
+        "___addsf3": 3,
+        "_sm64_saturn_render_job_graph_actor_lower_admit_done": 2,
+        "___subdf3": 2
+      },
+      "___udiv_qrnnd_16": {
+        "___divsf3": 25
+      },
+      "___addsf3": {
+        "_sqrtf": 8,
+        "_calc_new_obj_vel_and_pos_y": 2,
+        "_calculate_vertex_xyz": 1,
+        "_vec3f_get_dist_and_angle": 1,
+        "_obj_update_gfx_pos_and_angle": 1
+      },
+      "___mulsf3": {
+        "_sqrtf": 6,
+        "_find_wall_collisions_from_list": 2,
+        "_obj_set_hitbox": 1,
+        "_calculate_vertex_xyz": 1,
+        "_calc_new_obj_vel_and_pos_y": 1,
+        "_dist_between_objects": 1,
+        "_detect_object_hitbox_overlap": 1
+      },
+      "___subsf3": {
+        "_dist_between_objects": 3,
+        "_saturn_geo_enter_object": 3,
+        "_is_point_within_radius_of_mario": 2,
+        "_make_shadow_vertex": 1,
+        "_find_floor_from_list": 1
+      },
+      "___ashrsi3": {
+        "_sm64_saturn_terrain_depth_bins_digit.isra.0": 8
+      },
+      "___divsf3": {
+        "_sqrtf": 7,
+        "_vec3f_normalize": 1
+      },
+      "___fixsfsi": {
+        "_find_floor": 4
+      },
+      "___clzsi2": {
+        "___floatsisf": 3,
+        "___subsf3": 1
+      },
+      "___lesf2": {
+        "_sqrtf": 2,
+        "_find_wall_collisions_from_list": 1,
+        "_cur_obj_update": 1
+      },
+      "___gesf2": {
+        "_saturn_geo_enter_object": 2,
+        "_round_float": 1
+      },
+      "___extendsfdf2": {
+        "_round_float": 2
+      },
+      "___floatsisf": {
+        "_obj_set_hitbox": 1,
+        "_find_floor_from_list": 1
+      },
+      "_sqrtf": {
+        "_vec3f_get_dist_and_angle": 1,
+        "_detect_object_hitbox_overlap": 1
+      },
+      "___adddf3": {
+        "_round_float": 1
+      },
+      "___fixdfsi": {
+        "_round_float": 1
+      }
+    },
+    "vblanks_per_frame": 8.931,
+    "cycles_per_frame": 3996115.1,
+    "classes": {
+      "idle": {
+        "cycles": 52421,
+        "entries_sampled": 0,
+        "cycle_share": 0.56925516,
+        "est_calls_per_frame": 0.0
+      },
+      "application": {
+        "cycles": 30994,
+        "entries_sampled": 413,
+        "cycle_share": 0.33657302,
+        "est_calls_per_frame": 17922.1
+      },
+      "soft-float": {
+        "cycles": 6006,
+        "entries_sampled": 51,
+        "cycle_share": 0.06522093,
+        "est_calls_per_frame": 2213.1
+      },
+      "divide": {
+        "cycles": 879,
+        "entries_sampled": 25,
+        "cycle_share": 0.00954532,
+        "est_calls_per_frame": 1084.9
+      },
+      "shift": {
+        "cycles": 864,
+        "entries_sampled": 71,
+        "cycle_share": 0.00938243,
+        "est_calls_per_frame": 3081.0
+      },
+      "libm": {
+        "cycles": 204,
+        "entries_sampled": 2,
+        "cycle_share": 0.0022153,
+        "est_calls_per_frame": 86.8
+      },
+      "soft-float-convert": {
+        "cycles": 353,
+        "entries_sampled": 6,
+        "cycle_share": 0.00383333,
+        "est_calls_per_frame": 260.4
+      },
+      "soft-double": {
+        "cycles": 155,
+        "entries_sampled": 1,
+        "cycle_share": 0.00168319,
+        "est_calls_per_frame": 43.4
+      },
+      "soft-float-support": {
+        "cycles": 92,
+        "entries_sampled": 4,
+        "cycle_share": 0.00099906,
+        "est_calls_per_frame": 173.6
+      },
+      "soft-double-convert": {
+        "cycles": 119,
+        "entries_sampled": 3,
+        "cycle_share": 0.00129226,
+        "est_calls_per_frame": 130.2
+      }
+    },
+    "symbols": [
+      {
+        "symbol": "___slave_polling_entry",
+        "class": "idle",
+        "cycles": 52421,
+        "samples": 17500,
+        "cycle_share": 0.56925516,
+        "est_cycles_per_frame": 2274809.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 1.32156003
+      },
+      {
+        "symbol": "_demo_render_finalize",
+        "class": null,
+        "cycles": 3390,
+        "samples": 2733,
+        "cycle_share": 0.03681301,
+        "est_cycles_per_frame": 147109.0,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.08546362
+      },
+      {
+        "symbol": "_demo_terrain_queue_world_lower",
+        "class": null,
+        "cycles": 2278,
+        "samples": 1940,
+        "cycle_share": 0.02473748,
+        "est_cycles_per_frame": 98853.8,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.05742954
+      },
+      {
+        "symbol": "_sm64_saturn_matrix_mul.isra.0",
+        "class": null,
+        "cycles": 1969,
+        "samples": 1601,
+        "cycle_share": 0.02138195,
+        "est_cycles_per_frame": 85444.7,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.04963949
+      },
+      {
+        "symbol": "_saturn_geo_enter_object",
+        "class": null,
+        "cycles": 1528,
+        "samples": 1230,
+        "cycle_share": 0.016593,
+        "est_cycles_per_frame": 66307.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.03852166
+      },
+      {
+        "symbol": "___mulsf3",
+        "class": "soft-float",
+        "cycles": 1518,
+        "samples": 1325,
+        "cycle_share": 0.01648441,
+        "est_cycles_per_frame": 65873.6,
+        "entries_sampled": 13,
+        "est_calls_per_frame": 564.1,
+        "working_share": 0.03826955
+      },
+      {
+        "symbol": "___divsf3",
+        "class": "soft-float",
+        "cycles": 1468,
+        "samples": 1250,
+        "cycle_share": 0.01594145,
+        "est_cycles_per_frame": 63703.9,
+        "entries_sampled": 8,
+        "est_calls_per_frame": 347.2,
+        "working_share": 0.03700903
+      },
+      {
+        "symbol": "_sm64_saturn_ztreme_frustum_aabb",
+        "class": null,
+        "cycles": 1403,
+        "samples": 1210,
+        "cycle_share": 0.01523559,
+        "est_cycles_per_frame": 60883.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.03537034
+      },
+      {
+        "symbol": "_actor_meshlet_core",
+        "class": null,
+        "cycles": 1366,
+        "samples": 1105,
+        "cycle_share": 0.0148338,
+        "est_cycles_per_frame": 59277.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.03443755
+      },
+      {
+        "symbol": "___addsf3",
+        "class": "soft-float",
+        "cycles": 1310,
+        "samples": 1153,
+        "cycle_share": 0.01422568,
+        "est_cycles_per_frame": 56847.4,
+        "entries_sampled": 13,
+        "est_calls_per_frame": 564.1,
+        "working_share": 0.03302577
+      },
+      {
+        "symbol": "___subsf3",
+        "class": "soft-float",
+        "cycles": 1256,
+        "samples": 1109,
+        "cycle_share": 0.01363928,
+        "est_cycles_per_frame": 54504.1,
+        "entries_sampled": 10,
+        "est_calls_per_frame": 433.9,
+        "working_share": 0.0316644
+      },
+      {
+        "symbol": "_memset",
+        "class": null,
+        "cycles": 1141,
+        "samples": 1090,
+        "cycle_share": 0.01239046,
+        "est_cycles_per_frame": 49513.7,
+        "entries_sampled": 13,
+        "est_calls_per_frame": 564.1,
+        "working_share": 0.02876519
+      },
+      {
+        "symbol": "_sm64_saturn_scene_admit_with_scratch",
+        "class": null,
+        "cycles": 1058,
+        "samples": 803,
+        "cycle_share": 0.01148914,
+        "est_cycles_per_frame": 45911.9,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.02667272
+      },
+      {
+        "symbol": "_demo_actor_lower_compat_wrapper",
+        "class": null,
+        "cycles": 968,
+        "samples": 784,
+        "cycle_share": 0.0105118,
+        "est_cycles_per_frame": 42006.4,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.02440377
+      },
+      {
+        "symbol": "_demo_actor_queue_vertex_lookup",
+        "class": null,
+        "cycles": 968,
+        "samples": 740,
+        "cycle_share": 0.0105118,
+        "est_cycles_per_frame": 42006.4,
+        "entries_sampled": 28,
+        "est_calls_per_frame": 1215.1,
+        "working_share": 0.02440377
+      },
+      {
+        "symbol": "_memcpy",
+        "class": null,
+        "cycles": 900,
+        "samples": 793,
+        "cycle_share": 0.00977337,
+        "est_cycles_per_frame": 39055.5,
+        "entries_sampled": 9,
+        "est_calls_per_frame": 390.6,
+        "working_share": 0.02268946
+      },
+      {
+        "symbol": "___udiv_qrnnd_16",
+        "class": "divide",
+        "cycles": 879,
+        "samples": 765,
+        "cycle_share": 0.00954532,
+        "est_cycles_per_frame": 38144.2,
+        "entries_sampled": 25,
+        "est_calls_per_frame": 1084.9,
+        "working_share": 0.02216004
+      },
+      {
+        "symbol": "_sm64_saturn_ir_transform_one",
+        "class": null,
+        "cycles": 873,
+        "samples": 543,
+        "cycle_share": 0.00948017,
+        "est_cycles_per_frame": 37883.8,
+        "entries_sampled": 5,
+        "est_calls_per_frame": 217.0,
+        "working_share": 0.02200877
+      },
+      {
+        "symbol": "_demo_projected_read",
+        "class": null,
+        "cycles": 826,
+        "samples": 659,
+        "cycle_share": 0.00896978,
+        "est_cycles_per_frame": 35844.3,
+        "entries_sampled": 33,
+        "est_calls_per_frame": 1432.0,
+        "working_share": 0.02082388
+      },
+      {
+        "symbol": "_actor_position_ref",
+        "class": null,
+        "cycles": 699,
+        "samples": 560,
+        "cycle_share": 0.00759065,
+        "est_cycles_per_frame": 30333.1,
+        "entries_sampled": 23,
+        "est_calls_per_frame": 998.1,
+        "working_share": 0.01762214
+      },
+      {
+        "symbol": "_sm64_saturn_geo_walk_runtime_run",
+        "class": null,
+        "cycles": 644,
+        "samples": 491,
+        "cycle_share": 0.00699339,
+        "est_cycles_per_frame": 27946.4,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.01623557
+      },
+      {
+        "symbol": "_actor_meshlet_live_depth_bounds",
+        "class": null,
+        "cycles": 605,
+        "samples": 493,
+        "cycle_share": 0.00656987,
+        "est_cycles_per_frame": 26254.0,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.01525236
+      },
+      {
+        "symbol": "_demo_render_prepare_publish",
+        "class": null,
+        "cycles": 585,
+        "samples": 461,
+        "cycle_share": 0.00635269,
+        "est_cycles_per_frame": 25386.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.01474815
+      },
+      {
+        "symbol": "_demo_prepare_position_owners",
+        "class": null,
+        "cycles": 530,
+        "samples": 432,
+        "cycle_share": 0.00575543,
+        "est_cycles_per_frame": 22999.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.01336157
+      },
+      {
+        "symbol": "_support_radius_q16",
+        "class": null,
+        "cycles": 505,
+        "samples": 407,
+        "cycle_share": 0.00548394,
+        "est_cycles_per_frame": 21914.5,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.01273131
+      },
+      {
+        "symbol": "_demo_view_read",
+        "class": null,
+        "cycles": 475,
+        "samples": 364,
+        "cycle_share": 0.00515817,
+        "est_cycles_per_frame": 20612.6,
+        "entries_sampled": 17,
+        "est_calls_per_frame": 737.7,
+        "working_share": 0.01197499
+      },
+      {
+        "symbol": "_sm64_saturn_render_job_queue_job",
+        "class": null,
+        "cycles": 412,
+        "samples": 295,
+        "cycle_share": 0.00447403,
+        "est_cycles_per_frame": 17878.7,
+        "entries_sampled": 7,
+        "est_calls_per_frame": 303.8,
+        "working_share": 0.01038673
+      },
+      {
+        "symbol": "_saturn_mtxq_refresh_float_mirror",
+        "class": null,
+        "cycles": 408,
+        "samples": 358,
+        "cycle_share": 0.00443059,
+        "est_cycles_per_frame": 17705.2,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.01028589
+      },
+      {
+        "symbol": "_sm64_saturn_hud_atlas_write_cell",
+        "class": null,
+        "cycles": 406,
+        "samples": 382,
+        "cycle_share": 0.00440887,
+        "est_cycles_per_frame": 17618.4,
+        "entries_sampled": 14,
+        "est_calls_per_frame": 607.5,
+        "working_share": 0.01023547
+      },
+      {
+        "symbol": "_sm64_saturn_ir_project_view",
+        "class": null,
+        "cycles": 403,
+        "samples": 279,
+        "cycle_share": 0.0043763,
+        "est_cycles_per_frame": 17488.2,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.01015983
+      },
+      {
+        "symbol": "_sm64_saturn_terrain_depth_bins_digit.isra.0",
+        "class": null,
+        "cycles": 367,
+        "samples": 264,
+        "cycle_share": 0.00398536,
+        "est_cycles_per_frame": 15926.0,
+        "entries_sampled": 13,
+        "est_calls_per_frame": 564.1,
+        "working_share": 0.00925226
+      },
+      {
+        "symbol": "_sm64_saturn_terrain_depth_bins_scatter",
+        "class": null,
+        "cycles": 362,
+        "samples": 321,
+        "cycle_share": 0.00393107,
+        "est_cycles_per_frame": 15709.0,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.0091262
+      },
+      {
+        "symbol": "___lshrsi3_r0",
+        "class": "shift",
+        "cycles": 357,
+        "samples": 269,
+        "cycle_share": 0.00387677,
+        "est_cycles_per_frame": 15492.0,
+        "entries_sampled": 33,
+        "est_calls_per_frame": 1432.0,
+        "working_share": 0.00900015
+      },
+      {
+        "symbol": "_push",
+        "class": null,
+        "cycles": 352,
+        "samples": 305,
+        "cycle_share": 0.00382247,
+        "est_cycles_per_frame": 15275.0,
+        "entries_sampled": 7,
+        "est_calls_per_frame": 303.8,
+        "working_share": 0.0088741
+      },
+      {
+        "symbol": "_saturn_geo_walk_enter",
+        "class": null,
+        "cycles": 341,
+        "samples": 289,
+        "cycle_share": 0.00370302,
+        "est_cycles_per_frame": 14797.7,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00859678
+      },
+      {
+        "symbol": "_demo_terrain_queue_world_admit",
+        "class": null,
+        "cycles": 318,
+        "samples": 268,
+        "cycle_share": 0.00345326,
+        "est_cycles_per_frame": 13799.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00801694
+      },
+      {
+        "symbol": "___ashlsi3_r0",
+        "class": "shift",
+        "cycles": 316,
+        "samples": 239,
+        "cycle_share": 0.00343154,
+        "est_cycles_per_frame": 13712.8,
+        "entries_sampled": 30,
+        "est_calls_per_frame": 1301.8,
+        "working_share": 0.00796652
+      },
+      {
+        "symbol": "_sm64_saturn_render_job_graph_validate_actor_merge",
+        "class": null,
+        "cycles": 304,
+        "samples": 244,
+        "cycle_share": 0.00330123,
+        "est_cycles_per_frame": 13192.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00766399
+      },
+      {
+        "symbol": "_sm64_saturn_mtxq_rotate_zxy_and_translate",
+        "class": null,
+        "cycles": 292,
+        "samples": 188,
+        "cycle_share": 0.00317091,
+        "est_cycles_per_frame": 12671.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00736147
+      },
+      {
+        "symbol": "_sm64_saturn_geo_walk_runtime_next",
+        "class": null,
+        "cycles": 272,
+        "samples": 234,
+        "cycle_share": 0.00295373,
+        "est_cycles_per_frame": 11803.4,
+        "entries_sampled": 7,
+        "est_calls_per_frame": 303.8,
+        "working_share": 0.00685726
+      },
+      {
+        "symbol": "___lesf2",
+        "class": "soft-float",
+        "cycles": 269,
+        "samples": 235,
+        "cycle_share": 0.00292115,
+        "est_cycles_per_frame": 11673.3,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00678163
+      },
+      {
+        "symbol": "_demo_actor_result_read",
+        "class": null,
+        "cycles": 230,
+        "samples": 184,
+        "cycle_share": 0.00249764,
+        "est_cycles_per_frame": 9980.8,
+        "entries_sampled": 11,
+        "est_calls_per_frame": 477.3,
+        "working_share": 0.00579842
+      },
+      {
+        "symbol": "_sqrtf",
+        "class": "libm",
+        "cycles": 204,
+        "samples": 166,
+        "cycle_share": 0.0022153,
+        "est_cycles_per_frame": 8852.6,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.00514294
+      },
+      {
+        "symbol": "___fixsfsi",
+        "class": "soft-float-convert",
+        "cycles": 202,
+        "samples": 166,
+        "cycle_share": 0.00219358,
+        "est_cycles_per_frame": 8765.8,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00509252
+      },
+      {
+        "symbol": "_demo_terrain_resolved_template",
+        "class": null,
+        "cycles": 196,
+        "samples": 161,
+        "cycle_share": 0.00212842,
+        "est_cycles_per_frame": 8505.4,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 0.00494126
+      },
+      {
+        "symbol": "___ashrsi3",
+        "class": "shift",
+        "cycles": 191,
+        "samples": 165,
+        "cycle_share": 0.00207413,
+        "est_cycles_per_frame": 8288.4,
+        "entries_sampled": 8,
+        "est_calls_per_frame": 347.2,
+        "working_share": 0.00481521
+      },
+      {
+        "symbol": "___gesf2",
+        "class": "soft-float",
+        "cycles": 185,
+        "samples": 157,
+        "cycle_share": 0.00200897,
+        "est_cycles_per_frame": 8028.1,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 0.00466394
+      },
+      {
+        "symbol": "__vt_char_parse.constprop.0",
+        "class": null,
+        "cycles": 176,
+        "samples": 160,
+        "cycle_share": 0.00191124,
+        "est_cycles_per_frame": 7637.5,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00443705
+      },
+      {
+        "symbol": "_sm64_saturn_mtxq_scale_vec3f",
+        "class": null,
+        "cycles": 159,
+        "samples": 107,
+        "cycle_share": 0.00172663,
+        "est_cycles_per_frame": 6899.8,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00400847
+      },
+      {
+        "symbol": "_saturn_lod_select",
+        "class": null,
+        "cycles": 154,
+        "samples": 129,
+        "cycle_share": 0.00167233,
+        "est_cycles_per_frame": 6682.8,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.00388242
+      },
+      {
+        "symbol": "___floatsisf",
+        "class": "soft-float-convert",
+        "cycles": 151,
+        "samples": 134,
+        "cycle_share": 0.00163975,
+        "est_cycles_per_frame": 6552.6,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.00380679
+      },
+      {
+        "symbol": "_sm64_saturn_lod_lifetime_select",
+        "class": null,
+        "cycles": 150,
+        "samples": 124,
+        "cycle_share": 0.00162889,
+        "est_cycles_per_frame": 6509.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00378158
+      },
+      {
+        "symbol": "__action_character_print",
+        "class": null,
+        "cycles": 150,
+        "samples": 123,
+        "cycle_share": 0.00162889,
+        "est_cycles_per_frame": 6509.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 0.00378158
+      },
+      {
+        "symbol": "_sm64_saturn_hud_publish",
+        "class": null,
+        "cycles": 146,
+        "samples": 118,
+        "cycle_share": 0.00158546,
+        "est_cycles_per_frame": 6335.7,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00368073
+      },
+      {
+        "symbol": "_find_floor",
+        "class": null,
+        "cycles": 143,
+        "samples": 123,
+        "cycle_share": 0.00155288,
+        "est_cycles_per_frame": 6205.5,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.0036051
+      },
+      {
+        "symbol": "___movmemSI4",
+        "class": null,
+        "cycles": 138,
+        "samples": 97,
+        "cycle_share": 0.00149858,
+        "est_cycles_per_frame": 5988.5,
+        "entries_sampled": 31,
+        "est_calls_per_frame": 1345.2,
+        "working_share": 0.00347905
+      },
+      {
+        "symbol": "___subdf3",
+        "class": "soft-double",
+        "cycles": 138,
+        "samples": 119,
+        "cycle_share": 0.00149858,
+        "est_cycles_per_frame": 5988.5,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00347905
+      },
+      {
+        "symbol": "_demo_actor_admit_compat_wrapper",
+        "class": null,
+        "cycles": 118,
+        "samples": 84,
+        "cycle_share": 0.0012814,
+        "est_cycles_per_frame": 5120.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00297484
+      },
+      {
+        "symbol": "_cur_obj_update",
+        "class": null,
+        "cycles": 116,
+        "samples": 85,
+        "cycle_share": 0.00125968,
+        "est_cycles_per_frame": 5033.8,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00292442
+      },
+      {
+        "symbol": "_world_bounds",
+        "class": null,
+        "cycles": 114,
+        "samples": 80,
+        "cycle_share": 0.00123796,
+        "est_cycles_per_frame": 4947.0,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.002874
+      },
+      {
+        "symbol": "__buffer_write",
+        "class": null,
+        "cycles": 109,
+        "samples": 88,
+        "cycle_share": 0.00118366,
+        "est_cycles_per_frame": 4730.1,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00274795
+      },
+      {
+        "symbol": "_actor_meshlet_span",
+        "class": null,
+        "cycles": 107,
+        "samples": 92,
+        "cycle_share": 0.00116194,
+        "est_cycles_per_frame": 4643.3,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00269752
+      },
+      {
+        "symbol": "___movmemSI12",
+        "class": null,
+        "cycles": 102,
+        "samples": 62,
+        "cycle_share": 0.00110765,
+        "est_cycles_per_frame": 4426.3,
+        "entries_sampled": 31,
+        "est_calls_per_frame": 1345.2,
+        "working_share": 0.00257147
+      },
+      {
+        "symbol": "___movmemSI8",
+        "class": null,
+        "cycles": 102,
+        "samples": 62,
+        "cycle_share": 0.00110765,
+        "est_cycles_per_frame": 4426.3,
+        "entries_sampled": 31,
+        "est_calls_per_frame": 1345.2,
+        "working_share": 0.00257147
+      },
+      {
+        "symbol": "_sm64_saturn_render_job_graph_actor_lower_admit_done",
+        "class": null,
+        "cycles": 95,
+        "samples": 76,
+        "cycle_share": 0.00103163,
+        "est_cycles_per_frame": 4122.5,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.002395
+      },
+      {
+        "symbol": "___clzsi2",
+        "class": "soft-float-support",
+        "cycles": 92,
+        "samples": 76,
+        "cycle_share": 0.00099906,
+        "est_cycles_per_frame": 3992.3,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00231937
+      },
+      {
+        "symbol": "__do_action.constprop.0",
+        "class": null,
+        "cycles": 88,
+        "samples": 68,
+        "cycle_share": 0.00095562,
+        "est_cycles_per_frame": 3818.8,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00221852
+      },
+      {
+        "symbol": "_saturn_geo_walk_leave",
+        "class": null,
+        "cycles": 73,
+        "samples": 60,
+        "cycle_share": 0.00079273,
+        "est_cycles_per_frame": 3167.8,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 0.00184037
+      },
+      {
+        "symbol": "_saturn_lod_can_suppress",
+        "class": null,
+        "cycles": 72,
+        "samples": 64,
+        "cycle_share": 0.00078187,
+        "est_cycles_per_frame": 3124.4,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00181516
+      },
+      {
+        "symbol": "___extendsfdf2",
+        "class": "soft-double-convert",
+        "cycles": 71,
+        "samples": 67,
+        "cycle_share": 0.00077101,
+        "est_cycles_per_frame": 3081.0,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.00178995
+      },
+      {
+        "symbol": "_saturn_lod_can_degrade_material",
+        "class": null,
+        "cycles": 64,
+        "samples": 60,
+        "cycle_share": 0.00069499,
+        "est_cycles_per_frame": 2777.3,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.00161347
+      },
+      {
+        "symbol": "_sm64_saturn_render_job_queue_claimed_job",
+        "class": null,
+        "cycles": 58,
+        "samples": 43,
+        "cycle_share": 0.00062984,
+        "est_cycles_per_frame": 2516.9,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00146221
+      },
+      {
+        "symbol": "__vt_parser_callback",
+        "class": null,
+        "cycles": 57,
+        "samples": 45,
+        "cycle_share": 0.00061898,
+        "est_cycles_per_frame": 2473.5,
+        "entries_sampled": 4,
+        "est_calls_per_frame": 173.6,
+        "working_share": 0.001437
+      },
+      {
+        "symbol": "_find_floor_from_list",
+        "class": null,
+        "cycles": 56,
+        "samples": 52,
+        "cycle_share": 0.00060812,
+        "est_cycles_per_frame": 2430.1,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.00141179
+      },
+      {
+        "symbol": "_geo_append_display_list",
+        "class": null,
+        "cycles": 55,
+        "samples": 45,
+        "cycle_share": 0.00059726,
+        "est_cycles_per_frame": 2386.7,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00138658
+      },
+      {
+        "symbol": "_sm64_saturn_render_job_queue_done_job",
+        "class": null,
+        "cycles": 51,
+        "samples": 37,
+        "cycle_share": 0.00055382,
+        "est_cycles_per_frame": 2213.1,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00128574
+      },
+      {
+        "symbol": "_sm64_saturn_float_to_q16",
+        "class": null,
+        "cycles": 50,
+        "samples": 37,
+        "cycle_share": 0.00054296,
+        "est_cycles_per_frame": 2169.7,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00126053
+      },
+      {
+        "symbol": "_round_float",
+        "class": null,
+        "cycles": 48,
+        "samples": 39,
+        "cycle_share": 0.00052125,
+        "est_cycles_per_frame": 2083.0,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.0012101
+      },
+      {
+        "symbol": "___fixdfsi",
+        "class": "soft-double-convert",
+        "cycles": 48,
+        "samples": 40,
+        "cycle_share": 0.00052125,
+        "est_cycles_per_frame": 2083.0,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.0012101
+      },
+      {
+        "symbol": "_create_shadow_below_xyz",
+        "class": null,
+        "cycles": 47,
+        "samples": 39,
+        "cycle_share": 0.00051039,
+        "est_cycles_per_frame": 2039.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00118489
+      },
+      {
+        "symbol": "___movmemSI16",
+        "class": null,
+        "cycles": 42,
+        "samples": 22,
+        "cycle_share": 0.00045609,
+        "est_cycles_per_frame": 1822.6,
+        "entries_sampled": 11,
+        "est_calls_per_frame": 477.3,
+        "working_share": 0.00105884
+      },
+      {
+        "symbol": "_saturn_lod_default_thresholds",
+        "class": null,
+        "cycles": 42,
+        "samples": 31,
+        "cycle_share": 0.00045609,
+        "est_cycles_per_frame": 1822.6,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 0.00105884
+      },
+      {
+        "symbol": "_make_shadow_vertex",
+        "class": null,
+        "cycles": 38,
+        "samples": 35,
+        "cycle_share": 0.00041265,
+        "est_cycles_per_frame": 1649.0,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.000958
+      },
+      {
+        "symbol": "_atan2s",
+        "class": null,
+        "cycles": 38,
+        "samples": 28,
+        "cycle_share": 0.00041265,
+        "est_cycles_per_frame": 1649.0,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.000958
+      },
+      {
+        "symbol": "_obj_update_gfx_pos_and_angle",
+        "class": null,
+        "cycles": 33,
+        "samples": 29,
+        "cycle_share": 0.00035836,
+        "est_cycles_per_frame": 1432.0,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00083195
+      },
+      {
+        "symbol": "___cons_write",
+        "class": null,
+        "cycles": 32,
+        "samples": 16,
+        "cycle_share": 0.0003475,
+        "est_cycles_per_frame": 1388.6,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00080674
+      },
+      {
+        "symbol": "_dist_between_objects",
+        "class": null,
+        "cycles": 31,
+        "samples": 27,
+        "cycle_share": 0.00033664,
+        "est_cycles_per_frame": 1345.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00078153
+      },
+      {
+        "symbol": "_saturn_geo_enter_scale",
+        "class": null,
+        "cycles": 30,
+        "samples": 24,
+        "cycle_share": 0.00032578,
+        "est_cycles_per_frame": 1301.8,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00075632
+      },
+      {
+        "symbol": "_saturn_geo_enter_animated_part",
+        "class": null,
+        "cycles": 30,
+        "samples": 24,
+        "cycle_share": 0.00032578,
+        "est_cycles_per_frame": 1301.8,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00075632
+      },
+      {
+        "symbol": "_calculate_vertex_xyz",
+        "class": null,
+        "cycles": 29,
+        "samples": 24,
+        "cycle_share": 0.00031492,
+        "est_cycles_per_frame": 1258.5,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.0007311
+      },
+      {
+        "symbol": "_make_shadow_vertex_at_xyz",
+        "class": null,
+        "cycles": 28,
+        "samples": 26,
+        "cycle_share": 0.00030406,
+        "est_cycles_per_frame": 1215.1,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00070589
+      },
+      {
+        "symbol": "_init_shadow",
+        "class": null,
+        "cycles": 27,
+        "samples": 25,
+        "cycle_share": 0.0002932,
+        "est_cycles_per_frame": 1171.7,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00068068
+      },
+      {
+        "symbol": "_find_wall_collisions_from_list",
+        "class": null,
+        "cycles": 23,
+        "samples": 20,
+        "cycle_share": 0.00024976,
+        "est_cycles_per_frame": 998.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00057984
+      },
+      {
+        "symbol": "_sm64_saturn_geo_state_observer_record_authoritative_geo_decision",
+        "class": null,
+        "cycles": 23,
+        "samples": 15,
+        "cycle_share": 0.00024976,
+        "est_cycles_per_frame": 998.1,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00057984
+      },
+      {
+        "symbol": "_create_shadow_circle_4_verts",
+        "class": null,
+        "cycles": 21,
+        "samples": 20,
+        "cycle_share": 0.00022805,
+        "est_cycles_per_frame": 911.3,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00052942
+      },
+      {
+        "symbol": "_saturn_geo_leave_object_final",
+        "class": null,
+        "cycles": 21,
+        "samples": 17,
+        "cycle_share": 0.00022805,
+        "est_cycles_per_frame": 911.3,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00052942
+      },
+      {
+        "symbol": "_is_point_within_radius_of_mario",
+        "class": null,
+        "cycles": 21,
+        "samples": 19,
+        "cycle_share": 0.00022805,
+        "est_cycles_per_frame": 911.3,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00052942
+      },
+      {
+        "symbol": "_sm64_saturn_gouraud_bank_note_saved",
+        "class": null,
+        "cycles": 19,
+        "samples": 15,
+        "cycle_share": 0.00020633,
+        "est_cycles_per_frame": 824.5,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.000479
+      },
+      {
+        "symbol": "___movmemSI24",
+        "class": null,
+        "cycles": 18,
+        "samples": 6,
+        "cycle_share": 0.00019547,
+        "est_cycles_per_frame": 781.1,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 0.00045379
+      },
+      {
+        "symbol": "___movmemSI20",
+        "class": null,
+        "cycles": 18,
+        "samples": 6,
+        "cycle_share": 0.00019547,
+        "est_cycles_per_frame": 781.1,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 0.00045379
+      },
+      {
+        "symbol": "_alloc_only_pool_alloc",
+        "class": null,
+        "cycles": 18,
+        "samples": 17,
+        "cycle_share": 0.00019547,
+        "est_cycles_per_frame": 781.1,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00045379
+      },
+      {
+        "symbol": "___adddf3",
+        "class": "soft-double",
+        "cycles": 17,
+        "samples": 17,
+        "cycle_share": 0.00018461,
+        "est_cycles_per_frame": 737.7,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00042858
+      },
+      {
+        "symbol": "_sm64_saturn_geo_state_observer_record_geo_decision",
+        "class": null,
+        "cycles": 17,
+        "samples": 14,
+        "cycle_share": 0.00018461,
+        "est_cycles_per_frame": 737.7,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00042858
+      },
+      {
+        "symbol": "_update_objects_starting_at",
+        "class": null,
+        "cycles": 16,
+        "samples": 12,
+        "cycle_share": 0.00017375,
+        "est_cycles_per_frame": 694.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00040337
+      },
+      {
+        "symbol": "_saturn_geo_enter_rotation",
+        "class": null,
+        "cycles": 15,
+        "samples": 14,
+        "cycle_share": 0.00016289,
+        "est_cycles_per_frame": 650.9,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00037816
+      },
+      {
+        "symbol": "_bhv_bobomb_loop",
+        "class": null,
+        "cycles": 15,
+        "samples": 14,
+        "cycle_share": 0.00016289,
+        "est_cycles_per_frame": 650.9,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00037816
+      },
+      {
+        "symbol": "_sm64_saturn_render_job_queue_generation",
+        "class": null,
+        "cycles": 14,
+        "samples": 10,
+        "cycle_share": 0.00015203,
+        "est_cycles_per_frame": 607.5,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00035295
+      },
+      {
+        "symbol": "_graph_current",
+        "class": null,
+        "cycles": 13,
+        "samples": 9,
+        "cycle_share": 0.00014117,
+        "est_cycles_per_frame": 564.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00032774
+      },
+      {
+        "symbol": "_calc_new_obj_vel_and_pos_y",
+        "class": null,
+        "cycles": 13,
+        "samples": 10,
+        "cycle_share": 0.00014117,
+        "est_cycles_per_frame": 564.1,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00032774
+      },
+      {
+        "symbol": "_sm64_saturn_coss_q16",
+        "class": null,
+        "cycles": 13,
+        "samples": 9,
+        "cycle_share": 0.00014117,
+        "est_cycles_per_frame": 564.1,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00032774
+      },
+      {
+        "symbol": "_alloc_display_list",
+        "class": null,
+        "cycles": 13,
+        "samples": 12,
+        "cycle_share": 0.00014117,
+        "est_cycles_per_frame": 564.1,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00032774
+      },
+      {
+        "symbol": "_bhv_cmd_call_native",
+        "class": null,
+        "cycles": 13,
+        "samples": 7,
+        "cycle_share": 0.00014117,
+        "est_cycles_per_frame": 564.1,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00032774
+      },
+      {
+        "symbol": "_vec3f_get_dist_and_angle",
+        "class": null,
+        "cycles": 11,
+        "samples": 9,
+        "cycle_share": 0.00011945,
+        "est_cycles_per_frame": 477.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00027732
+      },
+      {
+        "symbol": "_detect_object_hitbox_overlap",
+        "class": null,
+        "cycles": 11,
+        "samples": 9,
+        "cycle_share": 0.00011945,
+        "est_cycles_per_frame": 477.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00027732
+      },
+      {
+        "symbol": "_saturn_vec3f_to_q16",
+        "class": null,
+        "cycles": 11,
+        "samples": 9,
+        "cycle_share": 0.00011945,
+        "est_cycles_per_frame": 477.3,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00027732
+      },
+      {
+        "symbol": "_saturn_mtxq_write_wire",
+        "class": null,
+        "cycles": 10,
+        "samples": 6,
+        "cycle_share": 0.00010859,
+        "est_cycles_per_frame": 433.9,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.00025211
+      },
+      {
+        "symbol": "_obj_set_hitbox",
+        "class": null,
+        "cycles": 10,
+        "samples": 7,
+        "cycle_share": 0.00010859,
+        "est_cycles_per_frame": 433.9,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00025211
+      },
+      {
+        "symbol": "_find_floor_height_and_data",
+        "class": null,
+        "cycles": 8,
+        "samples": 7,
+        "cycle_share": 8.687e-05,
+        "est_cycles_per_frame": 347.2,
+        "entries_sampled": 1,
+        "est_calls_per_frame": 43.4,
+        "working_share": 0.00020168
+      },
+      {
+        "symbol": "___ashiftrt_r4_1",
+        "class": null,
+        "cycles": 6,
+        "samples": 4,
+        "cycle_share": 6.516e-05,
+        "est_cycles_per_frame": 260.4,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 0.00015126
+      },
+      {
+        "symbol": "_vec3f_normalize",
+        "class": null,
+        "cycles": 6,
+        "samples": 5,
+        "cycle_share": 6.516e-05,
+        "est_cycles_per_frame": 260.4,
+        "entries_sampled": 0,
+        "est_calls_per_frame": 0.0,
+        "working_share": 0.00015126
+      },
+      {
+        "symbol": "___ashiftrt_r4_10",
+        "class": null,
+        "cycles": 3,
+        "samples": 3,
+        "cycle_share": 3.258e-05,
+        "est_cycles_per_frame": 130.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 7.563e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_9",
+        "class": null,
+        "cycles": 3,
+        "samples": 3,
+        "cycle_share": 3.258e-05,
+        "est_cycles_per_frame": 130.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 7.563e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_8",
+        "class": null,
+        "cycles": 3,
+        "samples": 3,
+        "cycle_share": 3.258e-05,
+        "est_cycles_per_frame": 130.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 7.563e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_7",
+        "class": null,
+        "cycles": 3,
+        "samples": 3,
+        "cycle_share": 3.258e-05,
+        "est_cycles_per_frame": 130.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 7.563e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_6",
+        "class": null,
+        "cycles": 3,
+        "samples": 3,
+        "cycle_share": 3.258e-05,
+        "est_cycles_per_frame": 130.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 7.563e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_5",
+        "class": null,
+        "cycles": 3,
+        "samples": 3,
+        "cycle_share": 3.258e-05,
+        "est_cycles_per_frame": 130.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 7.563e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_4",
+        "class": null,
+        "cycles": 3,
+        "samples": 3,
+        "cycle_share": 3.258e-05,
+        "est_cycles_per_frame": 130.2,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 7.563e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_3",
+        "class": null,
+        "cycles": 2,
+        "samples": 2,
+        "cycle_share": 2.172e-05,
+        "est_cycles_per_frame": 86.8,
+        "entries_sampled": 3,
+        "est_calls_per_frame": 130.2,
+        "working_share": 5.042e-05
+      },
+      {
+        "symbol": "___ashiftrt_r4_2",
+        "class": null,
+        "cycles": 2,
+        "samples": 2,
+        "cycle_share": 2.172e-05,
+        "est_cycles_per_frame": 86.8,
+        "entries_sampled": 2,
+        "est_calls_per_frame": 86.8,
+        "working_share": 5.042e-05
+      }
+    ]
+  },
+  "phase_summaries": [
+    {
+      "idle": {
+        "cycles": 52421,
+        "entries_sampled": 0,
+        "cycle_share": 0.56925516,
+        "est_calls_per_frame": 0.0
+      },
+      "application": {
+        "cycles": 30994,
+        "entries_sampled": 413,
+        "cycle_share": 0.33657302,
+        "est_calls_per_frame": 17922.1
+      },
+      "soft-float": {
+        "cycles": 6006,
+        "entries_sampled": 51,
+        "cycle_share": 0.06522093,
+        "est_calls_per_frame": 2213.1
+      },
+      "divide": {
+        "cycles": 879,
+        "entries_sampled": 25,
+        "cycle_share": 0.00954532,
+        "est_calls_per_frame": 1084.9
+      },
+      "shift": {
+        "cycles": 864,
+        "entries_sampled": 71,
+        "cycle_share": 0.00938243,
+        "est_calls_per_frame": 3081.0
+      },
+      "libm": {
+        "cycles": 204,
+        "entries_sampled": 2,
+        "cycle_share": 0.0022153,
+        "est_calls_per_frame": 86.8
+      },
+      "soft-float-convert": {
+        "cycles": 353,
+        "entries_sampled": 6,
+        "cycle_share": 0.00383333,
+        "est_calls_per_frame": 260.4
+      },
+      "soft-double": {
+        "cycles": 155,
+        "entries_sampled": 1,
+        "cycle_share": 0.00168319,
+        "est_calls_per_frame": 43.4
+      },
+      "soft-float-support": {
+        "cycles": 92,
+        "entries_sampled": 4,
+        "cycle_share": 0.00099906,
+        "est_calls_per_frame": 173.6
+      },
+      "soft-double-convert": {
+        "cycles": 119,
+        "entries_sampled": 3,
+        "cycle_share": 0.00129226,
+        "est_calls_per_frame": 130.2
+      }
+    }
+  ]
+}
