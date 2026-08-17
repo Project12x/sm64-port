@@ -224,12 +224,17 @@ What the sprint established, in order:
     T2.10 item 3 made 0.075 VB *worse*.
   - **Perfect packing is ~5.68 VB/frame (~10.6 FPS), not 2.99 VB (~20 FPS)**:
     work is 50.66% of two-CPU capacity, not 26.67%.
-  - **Measurement caveat that binds every number this project holds:** Ymir's
-    headless rig sets `m_emulateSH2Caches = false` and models no inter-SH-2 bus
-    arbitration. **No measurement on this rig can price the cache-through cost
-    of moving work to the slave, or HWRAM contention.** Every "releasable"
-    figure for slave offload is an upper bound; the master-stall figure is not
-    affected, because no data crosses CPUs in it.
+  - **Measurement caveat that binds every number this project holds** --
+    **half of it lifted by T2.26.** Ymir's headless rig defaulted to
+    `m_emulateSH2Caches = false` and models no inter-SH-2 bus arbitration.
+    T2.26 added `--sh2-cache` to `ymir-headless` (default off) and **measured
+    the coherency half for the first time: master-resident work inflates
+    +8.11%, slave-resident work +27.30%.** Bus contention is **still**
+    unmodelled on either basis (`Bus::GetAccessCycles` is a static per-page
+    lookup; `StepMasterSH2Impl` advances the slave by the master's cycle count
+    with no arbitration), so slave-offload figures remain upper bounds -- now
+    for that one named reason. The master-stall figure is unaffected either
+    way, because no data crosses CPUs in it.
 
 - **T2.17 (scheduler)** -- **the epoch stall is collapsed, and it went further
   than predicted.** T2.16 item 1 is **DONE**: **6.7181 FPS / 8.9310 VB**,
@@ -298,10 +303,14 @@ so overlap converts nothing and only *offload* does. What survives of item 4 is
 a single ~0.367 VB candidate (the terrain depth-bin merge as a fifth graph job)
 and a heavy-scene safety valve (SlaveDriver's adaptive controller plus
 unblocking `drain_master` before `slave_retired`), which is inert on this route
-and must not be sold as a cadence change. **Do not start the offload without
-first bounding the coherency cost** -- hardware, or Ymir with
-`m_emulateSH2Caches` enabled -- because a sort reading its input through P2 can
-cost more than the block it removes and this rig reports that as a win. **Shadows remain settled direction, not a
+and must not be sold as a cadence change. **The coherency cost is now bounded (T2.26) and it does not block the
+offload.** `ymir-headless --sh2-cache` prices it: the frame goes 8.9310 ->
+9.6552 VB (6.7181 -> 6.2143 FPS), the 6.11 VB slave-idle window survives at
+6.0632 VB, and the differential penalty for moving a unit of work from master
+to slave is ~1.18x -- so the ~0.367 VB depth-bin candidate keeps its payoff
+(+4.29% -> +4.47%). Bus contention is still unmodelled, so the figure is still
+an upper bound, but for one named reason instead of two.
+`docs/saturn/evidence/reports/sprint2-t2_26-cache-emulation.md`. **Shadows remain settled direction, not a
 cadence item.** **Census items 2 and 5 stay deprioritised -- static phantoms.**
 The Mario double-emit and T2.9's items 5-8 remain open. The BOB bypass stays
 demoted to diagnostic value only. The geo-walk display-list refactor stays

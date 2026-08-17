@@ -83,22 +83,33 @@ class YmirClient:
         ipl: Path,
         game: Path,
         timeout: float,
+        *,
+        sh2_cache: bool = False,
     ) -> None:
+        # sh2_cache selects a DIFFERENT measurement basis, not a more accurate
+        # one: with it on each SH-2 gets a real cache, so peer-written lines
+        # read stale and cached-area accesses are priced by hit/miss instead of
+        # a flat 1 cycle. Default off keeps every prior capture comparable.
+        # Requires a ymir-headless build with --sh2-cache support (T2.26).
+        self.sh2_cache = bool(sh2_cache)
         self._deadline = time.monotonic() + timeout
         self._next_id = 1
         self._messages: queue.Queue[dict[str, Any] | BaseException | None] = queue.Queue()
         self._stderr: deque[str] = deque()
         self._stderr_bytes = 0
         self.notifications: list[dict[str, Any]] = []
+        command = [
+            str(executable),
+            "--ipl",
+            str(ipl),
+            "--game",
+            str(game),
+            "--dram-cart",
+        ]
+        if self.sh2_cache:
+            command.append("--sh2-cache")
         self.process = subprocess.Popen(
-            [
-                str(executable),
-                "--ipl",
-                str(ipl),
-                "--game",
-                str(game),
-                "--dram-cart",
-            ],
+            command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -154,8 +165,30 @@ class YmirClient:
             message = self._next_message()
             if message.get("method") == "instance.ready":
                 self.notifications.append(message)
+                self._assert_cache_basis(message.get("params", {}))
                 return
             self.notifications.append(message)
+
+    def _assert_cache_basis(self, ready_params: dict[str, Any]) -> None:
+        """Fail closed when the emulator did not honour the requested basis.
+
+        A capture that silently ran with caches off while labelling itself
+        caches-on would be worse than no capture, so an old ymir-headless --
+        which does not report the field at all -- is rejected here rather than
+        producing a mislabelled report.
+        """
+        reported = ready_params.get("sh2_cache_emulation")
+        if self.sh2_cache and reported is not True:
+            raise RuntimeError(
+                "requested SH-2 cache emulation but Ymir reported "
+                f"sh2_cache_emulation={reported!r}; rebuild ymir-headless with "
+                "--sh2-cache support"
+            )
+        if not self.sh2_cache and reported is True:
+            raise RuntimeError(
+                "Ymir enabled SH-2 cache emulation without being asked; "
+                "check Ymir.toml/Ymir-dbg.toml for emulate_sh2_cache"
+            )
 
     def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         request_id = self._next_id

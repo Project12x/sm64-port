@@ -923,6 +923,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--nominal-refresh-hz", type=float, default=60.0)
     parser.add_argument("--timeout", type=float, default=180.0)
+    parser.add_argument(
+        "--sh2-cache",
+        action="store_true",
+        help=(
+            "emulate the SH-2 caches (requires a ymir-headless build with "
+            "--sh2-cache support). This is a DIFFERENT measurement basis, not a "
+            "correction to the default one, so cadence taken with it on must "
+            "not be compared against the accepted caches-off baselines"
+        ),
+    )
     args = parser.parse_args(argv)
     report: dict[str, Any] = {
         "schema": SCHEMA,
@@ -987,7 +997,10 @@ def main(argv: list[str] | None = None) -> int:
             if key != "expected_bytes"
         }
         stage = "ymir-start"
-        client = YmirClient(args.ymir, args.ipl, capture_game, args.timeout)
+        report["sh2_cache_emulation"] = bool(args.sh2_cache)
+        client = YmirClient(
+            args.ymir, args.ipl, capture_game, args.timeout, sh2_cache=args.sh2_cache
+        )
         stage = "bios-handoff"
         run_bios_handoff(client, lambda frames: client.call("exec.run_for", {"frames": frames}), lambda _label: None)
         stage = "target-identity"

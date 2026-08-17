@@ -471,6 +471,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--clock-hz", type=float, default=DEFAULT_SH2_CLOCK_HZ)
     parser.add_argument("--vblanks-per-frame", type=float, default=11.2069)
     parser.add_argument("--timeout", type=float, default=5400.0)
+    parser.add_argument(
+        "--sh2-cache",
+        action="store_true",
+        help=(
+            "emulate the SH-2 caches (requires a ymir-headless build with "
+            "--sh2-cache support). This is a DIFFERENT measurement basis, not a "
+            "correction to the default one: cached-area accesses are priced by "
+            "hit/miss and peer-written lines read stale. Figures taken with it "
+            "on are not comparable to figures taken with it off"
+        ),
+    )
     args = parser.parse_args(argv)
 
     symbols = load_symbols(args.nm, args.elf)
@@ -478,7 +489,9 @@ def main(argv: list[str] | None = None) -> int:
     identity_probe = build_elf_identity_probe(args.elf)
     warmup_plan = route_warmup.plan_warmup(args, args.elf)
 
-    client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
+    client = YmirClient(
+        args.ymir, args.ipl, args.game, args.timeout, sh2_cache=args.sh2_cache
+    )
     windows: list[dict[str, Any]] = []
     try:
         run_bios_handoff(
@@ -542,6 +555,7 @@ def main(argv: list[str] | None = None) -> int:
             "startup_vblanks": args.startup_vblanks,
             "warmup": warmup,
             "route_position_after_trace": route_position_after_trace,
+            "sh2_cache_emulation": bool(args.sh2_cache),
         },
         "summary": summary,
         "windows": windows,
