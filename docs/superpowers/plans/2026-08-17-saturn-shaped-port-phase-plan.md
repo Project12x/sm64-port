@@ -159,8 +159,9 @@ first time — the frame is 2.28 VB shorter with the plot unchanged, so the fenc
 reachable where T2.8 never saw it fire. `STATE.md` records it as "no longer optional";
 T2.8 §9 item 3 already listed it. This is the hang path in the build awaiting observation.
 
-**Status:** `active`; scheduler host contract passed; sourceboot, target, live,
-independent-review, and owner gates remain pending.
+**Status:** `active`; W0.1 and W0.2 are source-complete and host-contract-passed.
+Target compilation, memory margins, live observation, independent review, and
+owner acceptance remain pending.
 
 **Execution records:**
 
@@ -175,8 +176,13 @@ independent-review, and owner gates remain pending.
 
 - [x] W0.1 scheduler acknowledgement — host contract passed; exact-generation
   acknowledgement and mutation evidence are recorded in the active ledger.
-- [ ] W0.2 sourceboot deferral and diagnostics — planned; no source-complete or
-  target-equivalent evidence yet.
+- [x] W0.2 sourceboot deferral and diagnostics — `source-complete;
+  host-contract-passed`. `verify-frame-pipeline`, `verify-vdp1-frame-bank`,
+  `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration`
+  passed on 2026-08-17. The presentation-boundary gate remains unchecked only
+  for its known pre-W0 `bootstrap must contain exactly one null-snapshot VDP2
+  begin` literal-drift failure; it did not identify a W0 presentation-path
+  change. Normal/diagnostic target and live evidence remain pending.
 - [ ] W0.3 unique normal build and earliest Ymir product observation — planned;
   the preserved T2.17 artifact remains the accepted baseline.
 - [ ] W0.4 independent review and desktop owner observation — planned.
@@ -194,6 +200,14 @@ advancement capped rather than overrunning snapshot ownership. `verify-frame-pip
 `verify-vdp1-frame-bank` still pass with no assertion weakened (T2.17 kept all eleven
 passing verbatim — hold that standard). Execute only through the linked implementation
 plan and record each transition in the active ledger.
+
+**Design-decision status (2026-08-17):** the historical A8 transfer-runtime
+source test had drifted from the immutable base: the persistent poison flag is
+validly annotated `SOURCEBOOT_LWRAM_STATE`, and the VDP1 pointer conversion is
+initialized in `sourceboot_post_cart_init()`, not `main()`. Its assertions now
+accept that storage annotation and inspect the actual initializer while
+retaining both semantic contracts. Runtime code was not changed to satisfy
+obsolete spelling.
 
 ---
 

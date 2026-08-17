@@ -9,6 +9,14 @@
 **Scope:** W0 only: remove the unbounded VDP1 command-VRAM overwrite wait
 without changing the normal frame-bank transfer, publication, or plotting path
 
+**Implementation status (2026-08-17):** W0.2 is `source-complete;
+host-contract-passed`; target and live gates remain pending. The A8
+transfer-runtime source contract was corrected against immutable base
+`112cd9f8ce0b54229578b6c0e5741ba64e1089a0` to accept the pre-existing
+`SOURCEBOOT_LWRAM_STATE` poison-state annotation and inspect
+`sourceboot_post_cart_init()` for the actual VDP1 pointer conversion. This is
+an acceptance-test repair only, not a runtime design change.
+
 ## Decision
 
 When a completed source command bank reaches its transfer-submission poll and

@@ -290,9 +290,14 @@ What the sprint established, in order:
 
 **Next, ranked by releasable VB/frame per unit of constraint tax
 (T2.16 section 9, as amended by T2.17).** **(1) DONE (T2.17): the per-field
-epoch stall.** **(1a) Give the overwrite fence a deadline** -- `vdp1_sync_wait()`
-is unbounded and T2.17 made it load-bearing for the first time; T2.8 section 9
-item 3 already listed repairing it and it is no longer optional.
+epoch stall.** **(1a) Source-complete / host-contract-passed (W0): bound the
+overwrite fence.** `sourceboot_frame_poll_transfers()` now observes busy once,
+defers the exact `READY` bank through the scheduler, and starts no DMA or
+re-presentation on busy; the old normal/diagnostic wait and spin are gone.
+`verify-frame-pipeline`, `verify-vdp1-frame-bank`,
+`verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` pass.
+The known pre-W0 presentation-boundary literal drift remains unchecked; target
+links, memory margins, and live observation are still pending.
 **(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
 correctly priced, master-local, no constraint tax. **(3) VDP1 command
 reduction -- promoted, but strictly after (1)**; before (1) it is worth zero

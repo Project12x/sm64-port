@@ -1,7 +1,7 @@
 # W0 VDP1 Overwrite Fence Execution Ledger
 
 **Date opened:** 2026-08-17
-**Status:** `active; scheduler host contract passed; sourceboot and target gates pending`
+**Status:** `active; W0.1/W0.2 source-complete and host-contract-passed; target and live gates pending`
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -11,18 +11,17 @@
 
 ## Current proof statement
 
-W0 is active after the scheduler-side exact-generation acknowledgement passed
-the nominal host contract and its two load-bearing mutation checks. Sourceboot
-runtime integration, target compilation, CUE construction, and Ymir observation
-remain pending. The accepted T2.17 gameplay artifact remains the only preserved
-product baseline. The execution plan is committed at
-`530578cc715debc52db295f9617f715dc14744f9`; this evidence-only transition
-records the planning boundary before runtime work started.
+W0.1's scheduler acknowledgement and W0.2's sourceboot integration are
+`source-complete; host-contract-passed`. W0.2 performs one busy observation,
+defers the exact `READY` generation before any destination write, and records
+deferrals without retaining a blocking diagnostic spin. Target compilation,
+CUE construction, and Ymir observation remain pending. The accepted T2.17
+gameplay artifact remains the only preserved product baseline.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
 | W0.1 scheduler acknowledgement | `source-complete; host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, VDP1 frame-bank ownership checks, and finalized commit ledger pass | Sourceboot integration and target gates remain |
-| W0.2 sourceboot deferral and diagnostics | `planned` | Approved one-observation/no-DMA/no-replot contract | RED source/telemetry tests, implementation, focused host gates, normal and diagnostic target compile |
+| W0.2 sourceboot deferral and diagnostics | `source-complete; host-contract-passed` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed | Normal/diagnostic target compile, memory floors, identity-bound live observation; presentation-boundary literal drift remains recorded below |
 | W0.3 normal build and live product observation | `planned` | Preserved baseline and exact build/capture recipe recorded | Unique build, memory check, atomic staging, identity-bound headless Ymir capture |
 | W0.4 review and owner gate | `planned` | Review and desktop acceptance criteria recorded | Independent verdict, identity-bound desktop launch, explicit owner judgment |
 
@@ -60,6 +59,16 @@ the baseline.
 | Owner design decision | Corrected epoch-deferral design approved on 2026-08-17 |
 | Planning tests | PASS: 4 tasks/26 checkbox steps enumerated; required API and mutation types consistent; local Markdown links resolve; placeholder scan found no unresolved planning marker in the new plan/ledger; `git diff --cached --check` passed before commit |
 
+### W0.2 acceptance-test correction
+
+Immutable base `112cd9f8ce0b54229578b6c0e5741ba64e1089a0` proves two stale
+A8 transfer-runtime literals were pre-W0 harness drift: the persistent poison
+flag already carries `SOURCEBOOT_LWRAM_STATE`, and the exact
+`.command_vram = (void *)(uintptr_t)VDP1_VRAM(0),` initializer already lives in
+`sourceboot_post_cart_init()` rather than `main()`. The test now accepts the
+annotation while still requiring a static persistent bool and examines the
+actual initializer. No runtime code was altered for these stale assertions.
+
 ## Memory, ownership, and transport debt record
 
 W0 adds no target buffer, changes no serialized package field, and changes no
@@ -92,7 +101,7 @@ check.
 | Commit | Purpose |
 | --- | --- |
 | `4b66543e850e0b601ea4ec2cfc22062853da5771` | `feat(saturn): acknowledge deferred VDP1 transfers` — rewritten W0.1 implementation with the mandatory same-commit changelog entry |
-| Documentation-only evidence follow-up (this commit) | Records implementation SHA `4b66543e850e0b601ea4ec2cfc22062853da5771`, exact host commands/results, and remaining gates |
+| W0.2 behavior commit | Pending the atomic sourceboot/documentation commit; its exact SHA is recorded only by the permitted documentation-only follow-up |
 
 Independent review is not requested until after the first identity-bound live
 product observation.
@@ -122,9 +131,14 @@ gate compiled and passed its four checks. Planned gates, in order:
 
 - [x] Scheduler deferral host contract, two new mutations, and VDP1 frame-bank
   ownership gate pass.
-- [ ] Sourceboot busy branch is source-complete with no wait, DMA, replot, or
+- [x] Sourceboot busy branch is source-complete with no wait, DMA, replot, or
   bank ownership change.
-- [ ] Focused host gates pass without weakening assertions.
+- [x] `verify-frame-pipeline`, `verify-vdp1-frame-bank`,
+  `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration`
+  pass without weakened assertions. `verify-sourceboot-presentation-boundary`
+  remains unchecked: all seven tests fail at the known pre-W0 bootstrap literal
+  `bootstrap must contain exactly one null-snapshot VDP2 begin`, before any W0
+  path assertion runs.
 - [ ] Normal and diagnostic target configurations link and retain memory floors.
 - [ ] A unique W0 normal artifact is staged with exact identity hashes.
 - [ ] Earliest headless product observation passes the 4 FPS floor and generic

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- W0 sourceboot no longer waits for VDP1 overwrite safety inside its own
+  scheduler action: Yaul clears that busy flag in VBlank-OUT, so the old wait
+  could not retire there. A busy observation now retains the exact `READY`
+  bank and retries it on a later observed field. This trades permanent busy
+  for the existing safe two-tick-bounded pause while transient busy recovers
+  automatically. Profile v4 remains binary-compatible; its historical
+  `vdp1_fence_waits` field now counts busy deferrals rather than blocking
+  waits.
+
 ### Fixed
 
 - W0 scheduler deferral now acknowledges only the exact completed generation

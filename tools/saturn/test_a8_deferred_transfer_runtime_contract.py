@@ -41,6 +41,9 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
         self.source = SOURCEBOOT_C.read_text(encoding="utf-8")
         self.frame_bank_header = FRAME_BANK_H.read_text(encoding="utf-8")
         self.main = extract_c_function(self.source, "main")
+        self.post_cart_init = extract_c_function(
+            self.source, "sourceboot_post_cart_init"
+        )
 
     def test_scheduler_poll_action_services_once_before_wait(self) -> None:
         """Transfer service is bounded to one nonblocking opportunity per field."""
@@ -62,7 +65,8 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
         """Old metadata must never plot over a partially overwritten VDP1 bank."""
         self.assertRegex(
             self.source,
-            r"static\s+bool\s+sourceboot_vdp1_destination_poisoned\s*;",
+            r"static\s+bool\s+sourceboot_vdp1_destination_poisoned\s+"
+            r"(?:SOURCEBOOT_LWRAM_STATE\s*)?;",
             "sourceboot needs a persistent fail-closed destination-poison state",
         )
 
@@ -173,7 +177,7 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
         """Yaul exposes VDP1_VRAM as an integer address on the SH-2 target."""
         self.assertIn(
             ".command_vram = (void *)(uintptr_t)VDP1_VRAM(0),",
-            self.main,
+            self.post_cart_init,
             "the transfer descriptor must compile under the target's integer-address macro",
         )
 

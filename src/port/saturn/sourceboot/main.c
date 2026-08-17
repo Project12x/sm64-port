@@ -865,32 +865,14 @@ static sm64_saturn_gouraud_bank_t sourceboot_gouraud_banks[2]
  * BIOS's own pad handling. */
 #if SATURN_DIAGNOSTIC_MODE != 0
 /* ------------------------------------------------------------------ *
- * Sprint 2 T2.8 -- make the VDP1 draw fence measurable.
+ * Sprint 2 T2.8 -- sample the VDP1 overwrite gate once before submission.
  *
- * WHAT WAS BROKEN.  sourceboot_vdp1_wait_ticks_accum was declared, zeroed
- * and read but never incremented, and vdp1_terminal_fence_wait_ticks_* was
- * hard-assigned 0 immediately after the fence, so the VDP2 HUD's VDP1W cell
- * printed a zero that a reader could only read as "there is no VDP1 wait".
- *
- * WHERE THE FENCE ACTUALLY IS.  Not where the sprint-2 gap study placed it.
- * In vendored libyaul, vdp1_sync() only sets SYNC_FLAG_VDP1_SYNC and returns
- * (third_party/libyaul/libyaul/scu/bus/b/vdp/vdp_sync.c, vdp1_sync), and
- * vdp1_sync_render() spins only on VDP1_FLAG_LIST_XFERRED, i.e. the command
- * DMA, not the plot.  The blocking draw-end fence is vdp1_sync_wait(): the
- * flag it spins on is cleared in _vdp1_mode_variable_vblank_out, which is
- * only reached after the VBlank-IN handler observed EDSR.CEF (draw end) and
- * requested the frame-buffer change.  sourceboot reaches that call in
- * exactly one place -- the overwrite guard at the top of
- * sourceboot_frame_poll_transfers.  All three functions are bracketed below
- * so the measurement, not the assumption, decides.
- *
- * WRAP.  The pre-existing bracket on the overwrite guard used one
- * sourceboot_frt_delta() across the whole wait and returned uint16_t, so any
- * wait past ~18.8 VBlanks aliased silently into a small number.  The fence
- * bracket below instead charges one 16-bit difference per spin iteration: an
- * iteration is a few tens of SH-2 cycles, four orders of magnitude below a
- * wrap, so the 32-bit total is exact.  vdp1_fence_max_raw publishes the
- * largest single inter-probe interval as the witness. */
+ * The guard in sourceboot_frame_poll_transfers observes whether VDP1 is
+ * still plotting and records EDSR/COPR/LOPR around that one observation.  A
+ * busy result is deferred to a later observed field: Yaul clears its sync
+ * flag in VBlank-OUT, so waiting inside this scheduler action could not
+ * retire safely.  The retained v4 tick fields remain zero for decoder ABI
+ * compatibility; EDSR.CEF is the meaningful draw-state observation. */
 #define SOURCEBOOT_VDP1_EDSR_CEF 0x0002u
 
 static volatile vdp1_ioregs_t *sourceboot_vdp1_ioregs(void)
@@ -948,42 +930,6 @@ static void sourceboot_vdp1_vblank_sample(void)
     }
 }
 
-/* Charge one FRT interval per spin iteration.  Returns accumulated ticks and
- * publishes the iteration count so the probe's own cost is measurable rather
- * than assumed. */
-static uint32_t sourceboot_vdp1_fence_spin(uint32_t *iterations_out,
-                                           uint32_t *max_raw_out)
-{
-    uint32_t ticks = 0U;
-    uint32_t iterations = 0U;
-    uint32_t max_raw = 0U;
-    /* Mirror vdp1_sync_wait()'s interrupt discipline exactly (libyaul
-     * vdp_sync.c).  SYNC_FLAG_VDP1_SYNC is cleared by the VBLANK-OUT
-     * handler, so a spin that inherited a masked SR would never terminate;
-     * vdp1_sync_wait() unmasks for the duration of its loop for that
-     * reason and so must this replacement. */
-    const uint32_t sr_mask = cpu_intc_mask_get();
-    cpu_intc_mask_set(0);
-    uint16_t last = cpu_frt_count_get();
-    while (vdp1_sync_busy()) {
-        const uint16_t now = cpu_frt_count_get();
-        const uint16_t raw = (uint16_t)(now - last);
-        last = now;
-        ticks += raw;
-        if ((uint32_t)raw > max_raw) max_raw = raw;
-        iterations++;
-    }
-    {
-        const uint16_t now = cpu_frt_count_get();
-        const uint16_t raw = (uint16_t)(now - last);
-        ticks += raw;
-        if ((uint32_t)raw > max_raw) max_raw = raw;
-    }
-    cpu_intc_mask_set(sr_mask);
-    *iterations_out = iterations;
-    *max_raw_out = max_raw;
-    return ticks;
-}
 #endif /* SATURN_DIAGNOSTIC_MODE != 0 */
 
 static void sourceboot_vblank_out_handler(void *work __unused) {
@@ -1728,63 +1674,35 @@ static void sourceboot_frame_poll_transfers(uint32_t generation)
             sourceboot_fast3d.profile.pipeline_faults++;
             goto finish;
         }
-        const bool overwrite_waited = vdp1_sync_busy();
 #if SATURN_DIAGNOSTIC_MODE != 0
-        /* T2.8.  This is sourceboot's only blocking VDP1 draw-end fence
-         * (see the block comment on sourceboot_vdp1_fence_spin).  Diagnostic
-         * builds replace the single-span uint16 bracket with a spin that
-         * charges one FRT difference per iteration, so a wait longer than
-         * one 16-bit wrap (~18.8 VBlanks) is measured rather than aliased,
-         * and sample EDSR/COPR on both sides so "we waited" becomes "we
-         * waited while VDP1 was still plotting command N". */
+        const uint32_t edsr_entry = sourceboot_vdp1_edsr();
+        const uint32_t copr_entry = sourceboot_vdp1_copr();
+#endif
+        const bool overwrite_busy = vdp1_sync_busy();
+        sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last = 0U;
+#if SATURN_DIAGNOSTIC_MODE != 0
         {
             volatile sm64_saturn_prenotify_profile_t *const record =
                 sm64_saturn_prenotify_profile_visible();
-            const uint32_t edsr_entry = sourceboot_vdp1_edsr();
-            uint32_t fence_iterations = 0U;
-            uint32_t fence_max_raw = 0U;
-            const uint32_t fence_ticks =
-                sourceboot_vdp1_fence_spin(&fence_iterations, &fence_max_raw);
             record->vdp1_fence_events++;
-            if (overwrite_waited) record->vdp1_fence_waits++;
+            if (overwrite_busy) record->vdp1_fence_waits++;
             record->vdp1_edsr_entry_last = edsr_entry;
             if ((edsr_entry & SOURCEBOOT_VDP1_EDSR_CEF) != 0U)
                 record->vdp1_edsr_cef_entry_count++;
-            record->vdp1_copr_entry_last = sourceboot_vdp1_copr();
-            record->vdp1_fence_ticks_last = fence_ticks;
-            record->vdp1_fence_ticks_accum += fence_ticks;
-            if (fence_ticks > record->vdp1_fence_ticks_max)
-                record->vdp1_fence_ticks_max = fence_ticks;
-            record->vdp1_fence_iterations_last = fence_iterations;
-            record->vdp1_fence_iterations_accum += fence_iterations;
-            if (fence_max_raw > record->vdp1_fence_max_raw)
-                record->vdp1_fence_max_raw = fence_max_raw;
+            record->vdp1_copr_entry_last = copr_entry;
             record->vdp1_copr_exit_last = sourceboot_vdp1_copr();
             record->vdp1_lopr_last =
                 (uint32_t)sourceboot_vdp1_ioregs()->lopr;
-            /* Keep the shipped fields honest too: the HUD's VDP1W cell and
-             * the fast3d profile decoder now carry the real fence cost
-             * instead of a truncated span. */
-            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last =
-                fence_ticks;
-            sourceboot_vdp1_overwrite_wait_ticks_accum += fence_ticks;
-            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_accum =
-                sourceboot_vdp1_overwrite_wait_ticks_accum;
-            sourceboot_vdp1_wait_ticks_accum += fence_ticks;
+            record->vdp1_fence_ticks_last = 0U;
+            record->vdp1_fence_iterations_last = 0U;
         }
-#else
-        const uint16_t overwrite_wait_start = cpu_frt_count_get();
-        if (overwrite_waited) vdp1_sync_wait();
-        sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last =
-            overwrite_waited
-                ? sourceboot_frt_delta(overwrite_wait_start,
-                                       cpu_frt_count_get())
-                : 0U;
-        sourceboot_vdp1_overwrite_wait_ticks_accum +=
-            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last;
-        sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_accum =
-            sourceboot_vdp1_overwrite_wait_ticks_accum;
 #endif
+        if (overwrite_busy) {
+            if (!sm64_saturn_frame_pipeline_transfer_deferred(
+                    &sourceboot_frame_pipeline, generation))
+                sourceboot_fast3d.profile.pipeline_faults++;
+            goto finish;
+        }
         if (!sm64_saturn_vdp1_frame_bank_submit_transfers(
                 bank, &sourceboot_vdp1_transfer_targets)) {
             /* Submission can fail after queue ownership changes. Treat the

@@ -497,18 +497,34 @@ def admit_summary(
     }
 
 
+def vdp1_fence_summary(final: dict[str, Any]) -> dict[str, Any]:
+    events = final["vdp1_fence_events"]
+    deferrals = final["vdp1_fence_waits"]
+    return {
+        "events": events,
+        "busy_deferrals": deferrals,
+        "deferral_share_of_events": deferrals / events if events else None,
+        "edsr_entry_last": final["vdp1_edsr_entry_last"],
+        "edsr_cef_entry_count": final["vdp1_edsr_cef_entry_count"],
+        "edsr_cef_entry_share": (
+            final["vdp1_edsr_cef_entry_count"] / events if events else None
+        ),
+        "copr_entry_last": final["vdp1_copr_entry_last"],
+        "copr_exit_last": final["vdp1_copr_exit_last"],
+        "lopr_last": final["vdp1_lopr_last"],
+    }
+
+
 def present_summary(
     final: dict[str, Any],
     ticks_per_vblank_nominal: float | None,
     cycles_per_tick: int,
 ) -> dict[str, Any]:
-    """T2.8: the present path and the VDP1 draw fence.
+    """T2.8: the present path and the VDP1 overwrite-gate observation.
 
-    The fence total is accumulated one FRT difference per spin iteration on
-    the target, so unlike the shipped single-span bracket it cannot alias
-    across a 16-bit wrap.  ``vdp1_fence_max_raw`` is the witness: it is the
-    largest single inter-probe interval the fence ever saw, and a value far
-    below 65,535 is positive evidence that nothing wrapped.
+    W0 performs no wait or spin. Legacy v4 tick fields still decode for ABI
+    compatibility but are not summarized as cost. EDSR.CEF remains the
+    meaningful draw-state observation.
 
     ``vdp1_vblank_cef_share`` is the decisive number.  EDSR.CEF is VDP1's
     draw-end flag; sampled once per VBlank across the whole run it is the
@@ -517,7 +533,6 @@ def present_summary(
     means VDP1 is plotting continuously and the frame is fill-bound.
     """
     presents = final["present_windows"]
-    fence_events = final["vdp1_fence_events"]
     vblank_samples = final["vdp1_vblank_samples"]
 
     def vb(ticks: float | None) -> float | None:
@@ -528,7 +543,6 @@ def present_summary(
     def per_present(field: str) -> float | None:
         return final[field] / presents if presents else None
 
-    fence_mean = final["vdp1_fence_ticks_accum"] / fence_events if fence_events else None
     retired_intervals = final["vdp1_copr_retired_intervals"]
     # COPR counts VDP1 VRAM in 8-byte units; a command table is 32 bytes.
     copr_units_per_command = 4
@@ -545,33 +559,7 @@ def present_summary(
         "vdp2_commit_mean_ticks": per_present("vdp2_commit_ticks_accum"),
         "vdp2_commit_mean_vblank_equiv":
             vb(per_present("vdp2_commit_ticks_accum")),
-        "fence": {
-            "events": fence_events,
-            "waits": final["vdp1_fence_waits"],
-            "wait_share_of_events": (
-                final["vdp1_fence_waits"] / fence_events if fence_events else None
-            ),
-            "mean_ticks": fence_mean,
-            "mean_cycles": fence_mean * cycles_per_tick if fence_mean else None,
-            "mean_vblank_equiv": vb(fence_mean),
-            "max_ticks": final["vdp1_fence_ticks_max"],
-            "max_vblank_equiv": vb(final["vdp1_fence_ticks_max"]),
-            "mean_iterations": (
-                final["vdp1_fence_iterations_accum"] / fence_events
-                if fence_events else None
-            ),
-            "max_raw_interval": final["vdp1_fence_max_raw"],
-            "max_raw_interval_headroom": 65535 - final["vdp1_fence_max_raw"],
-            "edsr_entry_last": final["vdp1_edsr_entry_last"],
-            "edsr_cef_entry_count": final["vdp1_edsr_cef_entry_count"],
-            "edsr_cef_entry_share": (
-                final["vdp1_edsr_cef_entry_count"] / fence_events
-                if fence_events else None
-            ),
-            "copr_entry_last": final["vdp1_copr_entry_last"],
-            "copr_exit_last": final["vdp1_copr_exit_last"],
-            "lopr_last": final["vdp1_lopr_last"],
-        },
+        "fence": vdp1_fence_summary(final),
         "vdp1_vblank_samples": vblank_samples,
         "vdp1_vblank_cef_count": final["vdp1_vblank_cef_count"],
         "vdp1_vblank_cef_share": (

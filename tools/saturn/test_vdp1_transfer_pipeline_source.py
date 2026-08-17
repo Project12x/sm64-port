@@ -20,6 +20,24 @@ def function_body(path: str, name: str) -> str:
     raise AssertionError(f"unterminated function {name} in {path}")
 
 
+def braced_block_after(text: str, pattern: str) -> str:
+    match = re.search(pattern, text, re.S)
+    if match is None:
+        raise AssertionError(f"missing pattern {pattern!r}")
+    start = text.find("{", match.end())
+    if start < 0:
+        raise AssertionError(f"missing braced block after {pattern!r}")
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+    raise AssertionError(f"unterminated braced block after {pattern!r}")
+
+
 class TransferPipelineSourceTests(unittest.TestCase):
     def test_both_emitters_are_construction_only(self):
         for path, name in (
@@ -38,13 +56,23 @@ class TransferPipelineSourceTests(unittest.TestCase):
         publish = function_body(path, "sourceboot_frame_publish")
         dispatch = function_body(path, "sourceboot_frame_pipeline_dispatch")
 
-        safe = transfer.rfind("vdp1_sync_wait()")
+        busy = transfer.find("vdp1_sync_busy()")
+        defer = transfer.find("sm64_saturn_frame_pipeline_transfer_deferred")
         submit = transfer.find("sm64_saturn_vdp1_frame_bank_submit_transfers")
         poll = transfer.find("sm64_saturn_vdp1_frame_bank_poll_transfers")
+        busy_block = braced_block_after(transfer, r"if\s*\(\s*overwrite_busy\s*\)")
         arm = publish.find("sm64_saturn_vdp1_frame_bank_arm_resident_list")
         force = publish.find("vdp1_sync_force_put()")
         bank_publish = publish.find("sm64_saturn_vdp1_frame_bank_publish")
-        self.assertTrue(0 <= safe < submit < poll)
+        self.assertTrue(0 <= busy < defer < submit < poll)
+        self.assertIn("sm64_saturn_frame_pipeline_transfer_deferred", busy_block)
+        self.assertIn("goto finish;", busy_block)
+        self.assertNotIn("sm64_saturn_vdp1_frame_bank_submit_transfers", busy_block)
+        self.assertNotIn("sourceboot_frame_reuse_previous", busy_block)
+        self.assertNotIn("sourceboot_present_generation", busy_block)
+        self.assertNotIn("vdp1_sync_wait()", transfer)
+        self.assertNotRegex(transfer, r"while\s*\(\s*vdp1_sync_busy\s*\(\s*\)\s*\)")
+        self.assertNotIn("sourceboot_vdp1_fence_spin", source)
         self.assertTrue(0 <= arm < force < bank_publish)
         self.assertLess(
             dispatch.index("case SM64_SATURN_FRAME_POLL_TRANSFERS"),

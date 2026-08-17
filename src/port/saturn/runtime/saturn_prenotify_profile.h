@@ -218,13 +218,13 @@ typedef struct {
      * VDP2 shadow-register queue. */
     volatile uint32_t vdp2_commit_ticks_last;
     volatile uint32_t vdp2_commit_ticks_accum;
-    /* The real VDP1 draw-end fence: vdp1_sync_wait() in
-     * sourceboot_frame_poll_transfers.  SYNC_FLAG_VDP1_SYNC is cleared only
-     * in _vdp1_mode_variable_vblank_out, which requires the VBlank-IN
-     * handler to have seen EDSR.CEF, so this wait ends at draw-end plus the
-     * frame-buffer change. */
-    volatile uint32_t vdp1_fence_events;      /* guard reached */
-    volatile uint32_t vdp1_fence_waits;       /* guard actually blocked */
+    /* One pre-submit VDP1 overwrite-gate observation per transfer attempt.
+     * vdp1_fence_waits is a historical ABI name: it counts busy deferrals,
+     * not blocking waits. Tick and iteration fields are retained for decoder
+     * compatibility but remain zero. EDSR/COPR/LOPR sample status around the
+     * one observation. */
+    volatile uint32_t vdp1_fence_events;
+    volatile uint32_t vdp1_fence_waits;
     volatile uint32_t vdp1_fence_ticks_last;
     volatile uint32_t vdp1_fence_ticks_accum;
     volatile uint32_t vdp1_fence_ticks_max;

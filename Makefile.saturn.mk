@@ -1707,6 +1707,7 @@ verify-vdp1-transfer-pipeline: verify-dma-queue
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/vdp1-transfer-pipeline-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/vdp1-transfer-pipeline-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_vdp1_transfer_pipeline_source.py"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_capture_prenotification_profile.py"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_a8_deferred_transfer_runtime_contract.py"
 
 verify-gouraud-transfer:
