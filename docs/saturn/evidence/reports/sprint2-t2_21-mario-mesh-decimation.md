@@ -328,6 +328,12 @@ reproduces the shipped header exactly:
 | `SM64_MARIO_MESHLET_LOD_PRIMITIVE_LIST_COUNT` | 1,369 | **1,369** |
 | `SM64_MARIO_MESHLET_LOD_POSITION_LIST_COUNT` | 1,659 | **1,659** |
 
+**GREEN-twice determinism.** Two independent full runs produce a byte-identical
+report, SHA-256 `81aa00672da7557232c7376c6466750592d58fff45e487bcf6a73f6a1402fa30`,
+matching the committed `sprint2-t2_21-mario-decimation.json`. meshoptimizer's
+collapse queue and this tool's material ordering are both functions of file
+content only.
+
 This is the reason the decimated numbers in section 5 can be quoted as counts
 rather than estimates. It also caught a real defect during development: an
 earlier version emitted textured primitives first and materials in sorted
