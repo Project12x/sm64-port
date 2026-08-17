@@ -3,8 +3,8 @@
 - Date: 2026-08-17. Worktree `.worktrees/saturn-recovery`, branch
   `saturn/recovery`, base HEAD `f93bb4bf`. The emulator tree
   `D:/Code/RetroDev/sm64-saturn-port/ymir-agent` is a **separate tree**; its
-  changes are listed separately in section 1.1 and are not part of any
-  port-tree commit.
+  changes are listed separately in section 1.1, are committed separately as
+  `cbd87caa`, and are not part of any port-tree commit.
 - Task: expose Ymir's `m_emulateSH2Caches` on `ymir-headless`, re-baseline the
   accepted build on that basis, and re-price the slave block T2.25 declined to
   offload because it could not price it.
@@ -43,7 +43,7 @@
 
 ## 1. What was added, and where
 
-### 1.1 Emulator (`ymir-agent`, separate tree, uncommitted)
+### 1.1 Emulator (`ymir-agent`, separate tree, commit `cbd87caa`)
 
 The brief's premise was verified before anything was written.
 `m_emulateSH2Caches` is a runtime toggle, not a compile-time constant:
@@ -535,9 +535,13 @@ instrument.**
 - **No behavioural difference between the pre- and post-fix builds was
   demonstrated**, only the absence of one on this route, with the reason given
   (section 7). Producing one needs a route that generates a job failure.
-- **The emulator changes are uncommitted** in `ymir-agent` at the time of
-  writing, and that tree is outside the port worktree. The port-tree changes are
-  tooling only and change no product behaviour.
+- **The two trees were committed separately, and deliberately so.** The
+  emulator change is `ymir-agent` `cbd87caa` ("feat: expose SH-2 cache
+  emulation on ymir-headless"); the port-tree change is `4a6f3127`
+  ("feat(tools): capture on the SH-2 cache-emulation basis, and re-price the
+  slave block"). No commit mixes them. The port-tree change is tooling and
+  evidence only and changes no product behaviour, so it carries
+  `SKIP_CHANGELOG=1`.
 
 ---
 
@@ -593,5 +597,5 @@ number here.** It is a post-hoc scaling constant, and the caches-on cadence
 
 | Tree | State | Files inspected | Purpose |
 | :--- | :--- | :--- | :--- |
-| `ymir-agent` (the rig) | working tree, HEAD `bf3e4a4a` | `libs/ymir-core/src/ymir/sys/saturn.cpp:140-170,171-200,600-670,698-760,790-810`; `libs/ymir-core/src/ymir/hw/sh2/sh2.cpp:620-745,768-840,955-1010`; `libs/ymir-core/include/ymir/sys/saturn.hpp:185-240,400-430`; `libs/ymir-core/include/ymir/sys/bus.hpp:296-330`; `libs/ymir-core/include/ymir/hw/sh2/sh2_cache.hpp:1-60`; `libs/ymir-core/include/ymir/core/configuration.hpp:65`; `apps/ymir-headless/src/*` | establish what cache emulation does and does not model; add the headless option |
+| `ymir-agent` (the rig) | read at `bf3e4a4a`, changed in `cbd87caa` | `libs/ymir-core/src/ymir/sys/saturn.cpp:140-170,171-200,600-670,698-760,790-810`; `libs/ymir-core/src/ymir/hw/sh2/sh2.cpp:620-745,768-840,955-1010`; `libs/ymir-core/include/ymir/sys/saturn.hpp:185-240,400-430`; `libs/ymir-core/include/ymir/sys/bus.hpp:296-330`; `libs/ymir-core/include/ymir/hw/sh2/sh2_cache.hpp:1-60`; `libs/ymir-core/include/ymir/core/configuration.hpp:65`; `apps/ymir-headless/src/*` | establish what cache emulation does and does not model; add the headless option |
 | this worktree | `f93bb4bf` | `docs/saturn/evidence/reports/sprint2-t2_16-idle-attribution.md` (s7, s9); `sprint2-t2_20-scene-representativeness.md` (s8, s10); `sprint2-t2_25-slave-dispatch.md` (s2-s5) | the claims this task tests |
