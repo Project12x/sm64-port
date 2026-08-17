@@ -69,6 +69,7 @@ static void pipeline_promote_queued_snapshot(
     pipeline->transfer_completed_valid = false;
     pipeline->render_service_started = false;
     pipeline->transfer_started = false;
+    pipeline->transfer_submit_vblank_valid = false;
 }
 
 SM64_SATURN_CART_COLD
@@ -106,6 +107,7 @@ static sm64_saturn_frame_action_t pipeline_run_sim_tick(
         pipeline->transfer_completed_valid = false;
         pipeline->render_service_started = false;
         pipeline->transfer_started = false;
+        pipeline->transfer_submit_vblank_valid = false;
     } else {
         pipeline->queued_snapshot_generation = pipeline->simulation_generation;
         pipeline->queued_snapshot_valid = true;
@@ -141,13 +143,21 @@ sm64_saturn_frame_action_t sm64_saturn_frame_pipeline_step(
         const uint32_t generation = pipeline->render_generation;
         pipeline->publish_pending = true;
         pipeline->publish_generation = generation;
-        /* Publication consumes this field's remaining service opportunities.
-         * A promoted bank cannot start SERVICE/POLL until another VBlank is
-         * actually observed. */
-        pipeline->render_service_vblank = pipeline->last_vblank_count;
-        pipeline->render_service_vblank_valid = true;
+        /* Publication consumes this field's remaining *transfer* opportunity.
+         * A promoted bank cannot submit a command-VRAM overwrite until
+         * another VBlank is actually observed, which is what bounds the
+         * pipeline to one publication -- and therefore one plot start and one
+         * frame-buffer change request -- per observed field.
+         *
+         * Render service is deliberately NOT consumed here. SERVICE builds
+         * into the frame bank this publication just retired; it writes no
+         * VDP1 command VRAM and touches no VDP1 register, so admitting it in
+         * the publication field cannot race the plot that publication just
+         * started. See T2.17 for the full bank-ownership argument. */
+#if !defined(SM64_SATURN_FRAME_PIPELINE_TEST_PUBLISH_OPENS_TRANSFER)
         pipeline->transfer_poll_vblank = pipeline->last_vblank_count;
         pipeline->transfer_poll_vblank_valid = true;
+#endif
         pipeline->action_generation = generation;
         return SM64_SATURN_FRAME_PUBLISH_FRAME;
     }
@@ -188,7 +198,31 @@ sm64_saturn_frame_action_t sm64_saturn_frame_pipeline_step(
         pipeline->render_completed_generation == pipeline->render_generation &&
         (!pipeline->transfer_completed_valid ||
          pipeline->transfer_completed_generation != pipeline->render_generation)) {
+        /* The submitting poll -- the one that fences against VDP1 and starts
+         * the DMA over resident command VRAM -- stays epoch-gated at exactly
+         * one per observed field. Follow-up polls of the same generation only
+         * re-read the DMA queue's status and are admitted freely, but only
+         * inside the field that submitted: a queue that has not retired by
+         * the end of that field falls back to the conservative
+         * one-poll-per-field schedule, keeping its previous-frame
+         * presentations and its guaranteed forward progress. */
+        const bool polling_in_submit_field =
+            pipeline->transfer_started &&
+            pipeline->transfer_generation == pipeline->render_generation
+#if !defined(SM64_SATURN_FRAME_PIPELINE_TEST_FREE_POLL_EVERY_FIELD)
+            && pipeline->transfer_submit_vblank_valid &&
+            pipeline->transfer_submit_vblank == pipeline->last_vblank_count
+#endif
+            ;
+#if defined(SM64_SATURN_FRAME_PIPELINE_TEST_SUBMIT_UNGATED)
+        const bool submit_pending =
+            !pipeline->transfer_started ||
+            pipeline->transfer_generation != pipeline->render_generation;
+#else
+        const bool submit_pending = false;
+#endif
         const bool polled_this_vblank =
+            !polling_in_submit_field && !submit_pending &&
             pipeline->transfer_poll_vblank_valid &&
             pipeline->transfer_poll_vblank == pipeline->last_vblank_count;
         if (pipeline->presentation_pending && polled_this_vblank) {
@@ -200,6 +234,12 @@ sm64_saturn_frame_action_t sm64_saturn_frame_pipeline_step(
         if (polled_this_vblank) {
             pipeline->action_generation = pipeline->displayed_generation;
             return SM64_SATURN_FRAME_WAIT_VBLANK;
+        }
+        if (!pipeline->transfer_started ||
+            pipeline->transfer_generation != pipeline->render_generation) {
+            /* This is the submitting poll for the active generation. */
+            pipeline->transfer_submit_vblank = pipeline->last_vblank_count;
+            pipeline->transfer_submit_vblank_valid = true;
         }
         pipeline->transfer_started = true;
         pipeline->transfer_generation = pipeline->render_generation;
@@ -274,6 +314,7 @@ bool sm64_saturn_frame_pipeline_publish_complete(
     pipeline->displayed_generation = generation;
     pipeline->render_active = false;
     pipeline->transfer_started = false;
+    pipeline->transfer_submit_vblank_valid = false;
     pipeline_finish_presentation(pipeline);
     /* A missed deadline consumes only a display opportunity. The
      * normal+recovery budget belongs to a successfully completed

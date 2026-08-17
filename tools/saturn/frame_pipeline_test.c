@@ -105,7 +105,8 @@ static int test_complete_frame_is_generation_coherent(void)
         return 12;
     }
 
-    /* Publication cannot reopen the field's already-consumed service slot. */
+    /* Field 104's single service slot was already consumed by generation 1,
+     * so publication does not reopen it. */
     failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 13);
     if (failure != 0) return failure;
@@ -255,7 +256,21 @@ static int test_incomplete_bank_is_reused_never_published(void)
     failure = expect_action(&pipeline, 9U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 4U, 33);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 9U,
+    /* T2.17. Follow-up polls of the submitted generation are admitted inside
+     * the submit field: they re-read the DMA queue's status word and write
+     * no VDP1 command VRAM. None of them may publish an incomplete bank. */
+    for (uint32_t retry = 0U; retry < 6U; retry++) {
+        failure = expect_action(&pipeline, 9U,
+                                SM64_SATURN_FRAME_POLL_TRANSFERS, 4U, 136);
+        if (failure != 0) return failure;
+    }
+    /* Once the submit field ends without retirement, the conservative
+     * one-poll-per-field schedule resumes and the missed presentation edge
+     * is consumed by previous-frame reuse. */
+    failure = expect_action(&pipeline, 10U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 4U, 137);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 10U,
                             SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 3U, 34);
     if (failure != 0) return failure;
     if (pipeline.displayed_generation != 3U ||
@@ -266,10 +281,10 @@ static int test_incomplete_bank_is_reused_never_published(void)
     /* Completion after the missed boundary is retained and published at the
      * next observed presentation boundary, with the exact same generation. */
     if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 4U)) return 36;
-    failure = expect_action(&pipeline, 9U,
+    failure = expect_action(&pipeline, 10U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 3U, 37);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 10U,
+    failure = expect_action(&pipeline, 11U,
                             SM64_SATURN_FRAME_PUBLISH_FRAME, 4U, 38);
     if (failure != 0) return failure;
     if (pipeline.displayed_generation != 3U) return 39;
@@ -324,10 +339,21 @@ static int test_transfer_service_precedes_terminal_wait(void)
     failure = expect_action(&pipeline, 22U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 43);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 22U,
+    /* T2.17: the submit field admits follow-up polls ... */
+    for (uint32_t retry = 0U; retry < 4U; retry++) {
+        failure = expect_action(&pipeline, 22U,
+                                SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 138);
+        if (failure != 0) return failure;
+    }
+    /* ... and the next field returns to one poll, then reuse, then the
+     * terminal wait. Transfer service still precedes the terminal wait. */
+    failure = expect_action(&pipeline, 23U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 139);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 23U,
                             SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 0U, 44);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 22U,
+    failure = expect_action(&pipeline, 23U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 45);
     if (failure != 0) return failure;
     return 0;
@@ -502,13 +528,243 @@ static int test_pending_render_spans_fields_and_excludes_queued_generation(void)
         return 124;
     }
 
-    /* Publication cannot reopen service in the same field; the promoted
-     * generation begins only at the next observed field. */
+    /* Field 106's service slot was consumed by generation 1; publication
+     * does not reopen it, so the promoted generation begins at the next
+     * observed field. */
     failure = expect_action(&pipeline, 106U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 125);
     if (failure != 0) return failure;
     failure = expect_action(&pipeline, 107U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 2U, 126);
+    if (failure != 0) return failure;
+    return 0;
+}
+
+/* T2.17. The publication field admits render service for the generation
+ * publication promoted, but never a command-VRAM overwrite and never a second
+ * publication. This is the load-bearing half of the old blanket per-field
+ * epoch: SERVICE builds into the frame bank publication just retired and
+ * touches no VDP1 register, while POLL fences against VDP1 and DMAs over the
+ * resident command list VDP1 is plotting from. */
+static int test_publication_field_admits_service_but_not_transfer(void)
+{
+    sm64_saturn_frame_pipeline_t pipeline;
+    int failure;
+
+    sm64_saturn_frame_pipeline_init(&pipeline, 200U, 0U);
+    failure = expect_action(&pipeline, 204U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 150);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 204U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 151);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 152;
+    failure = expect_action(&pipeline, 204U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 2U, 153);
+    if (failure != 0) return failure;
+    if (!pipeline.queued_snapshot_valid) return 154;
+
+    /* Publication happens in a later field than the one that serviced the
+     * render -- the shipped schedule's shape, where a render spans many
+     * fields and completes near a boundary. */
+    failure = expect_action(&pipeline, 205U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 155);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U))
+        return 156;
+    failure = expect_action(&pipeline, 205U,
+                            SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 157);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, true))
+        return 158;
+    if (pipeline.displayed_generation != 1U ||
+        pipeline.render_generation != 2U || !pipeline.render_active) {
+        return 159;
+    }
+
+    /* Service of the promoted generation is admitted in the publication
+     * field. This is the cycle the per-field epoch used to spend on a raster
+     * spin (T2.16 measured ~0.90 VB/frame of it). */
+    failure = expect_action(&pipeline, 205U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 2U, 160);
+    if (failure != 0) return failure;
+    /* Exactly one: the per-field service epoch is otherwise intact. */
+    failure = expect_action(&pipeline, 205U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 161);
+    if (failure != 0) return failure;
+
+    /* Even with the promoted render complete, the transfer slot publication
+     * consumed stays consumed: no command-VRAM overwrite may start in the
+     * field whose publication started the plot, so no second publication,
+     * plot start, or frame-buffer change can occur in it either. */
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 2U)) return 162;
+    failure = expect_action(&pipeline, 205U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 163);
+    if (failure != 0) return failure;
+    if (pipeline.displayed_generation != 1U) return 164;
+    /* Admitting service in the publication field also makes generation 2's
+     * recovery tick admissible one field earlier -- render_service_started
+     * is the sim arm's gate. The budget itself is unchanged: one normal slot
+     * (already consumed by the queued snapshot) plus one recovery tick. */
+    failure = expect_action(&pipeline, 206U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 3U, 165);
+    if (failure != 0) return failure;
+    if (pipeline.sim_ticks_this_presentation != 2U) return 166;
+    /* The next observed field opens the transfer slot. */
+    failure = expect_action(&pipeline, 206U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 2U, 167);
+    if (failure != 0) return failure;
+    /* And exactly one submit in it. */
+    failure = expect_action(&pipeline, 206U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 2U, 168);
+    if (failure != 0) return failure;
+    return 0;
+}
+
+/* T2.17. The case that isolates publication's own transfer stamp: a frame
+ * whose transfer retires after its last poll publishes in a field that has
+ * had no poll of its own. Nothing but publication's stamp then stands between
+ * the promoted generation and a command-VRAM overwrite issued while VDP1 is
+ * plotting the list publication just started. */
+static int test_publication_field_consumes_the_transfer_slot(void)
+{
+    sm64_saturn_frame_pipeline_t pipeline;
+    int failure;
+
+    sm64_saturn_frame_pipeline_init(&pipeline, 400U, 0U);
+    failure = expect_action(&pipeline, 404U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 190);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 404U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 191);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 192;
+    failure = expect_action(&pipeline, 404U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 2U, 193);
+    if (failure != 0) return failure;
+    if (!pipeline.queued_snapshot_valid) return 194;
+
+    failure = expect_action(&pipeline, 405U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 195);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 406U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 196);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 406U,
+                            SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 0U, 197);
+    if (failure != 0) return failure;
+    /* Retirement lands after field 406's presentation edge was consumed, so
+     * publication happens in field 407, which has issued no poll. */
+    if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U))
+        return 198;
+    failure = expect_action(&pipeline, 406U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 199);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 407U,
+                            SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 200);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, true))
+        return 201;
+
+    /* Service of the promoted generation is admitted here. */
+    failure = expect_action(&pipeline, 407U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 2U, 202);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 2U)) return 203;
+    /* Its command-VRAM overwrite is not. Field 407 issued no poll of its own:
+     * this refusal is publication's transfer stamp and nothing else. */
+    failure = expect_action(&pipeline, 407U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 204);
+    if (failure != 0) return failure;
+    if (pipeline.displayed_generation != 1U) return 205;
+    failure = expect_action(&pipeline, 408U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 3U, 206);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 408U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 2U, 207);
+    if (failure != 0) return failure;
+    return 0;
+}
+
+/* T2.17. The submitting poll -- the one that fences VDP1 and starts the DMA
+ * over resident command VRAM -- stays gated at one per observed field. Its
+ * follow-ups only re-read DMA status, so they are admitted, but only inside
+ * the submit field: a queue that has not retired by the end of that field
+ * falls back to the conservative schedule and its presentation edges. */
+static int test_followup_polls_are_bounded_to_the_submit_field(void)
+{
+    sm64_saturn_frame_pipeline_t pipeline;
+    int failure;
+
+    sm64_saturn_frame_pipeline_init(&pipeline, 300U, 0U);
+    failure = expect_action(&pipeline, 302U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 170);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 302U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 171);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 172;
+
+    /* The submitting poll. */
+    failure = expect_action(&pipeline, 302U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 173);
+    if (failure != 0) return failure;
+    /* Follow-ups in the submit field: admitted, and they never publish an
+     * unretired transfer. */
+    for (uint32_t retry = 0U; retry < 32U; retry++) {
+        failure = expect_action(&pipeline, 302U,
+                                SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 174);
+        if (failure != 0) return failure;
+    }
+    if (pipeline.displayed_generation != 0U) return 175;
+
+    /* Retirement inside the submit field publishes in the submit field --
+     * this is the ~0.96 VB/frame the old rule spent waiting for a field
+     * boundary that carried no work (T2.16 section 3.3). */
+    if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U))
+        return 176;
+    failure = expect_action(&pipeline, 302U,
+                            SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 177);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, true))
+        return 178;
+
+    /* A second generation reaching transfer in a later field submits once in
+     * that field and no more: the submit epoch itself is untouched. */
+    failure = expect_action(&pipeline, 304U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 2U, 179);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 304U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 2U, 180);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 2U)) return 181;
+    failure = expect_action(&pipeline, 304U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 2U, 182);
+    if (failure != 0) return failure;
+    /* Crossing into field 305 without retirement: one poll, then the missed
+     * presentation edge, then the terminal wait. */
+    failure = expect_action(&pipeline, 305U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 2U, 183);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 305U,
+                            SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 1U, 184);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 305U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 185);
+    if (failure != 0) return failure;
+    /* And field 306 admits exactly one poll again (behind the recovery tick
+     * that field's credit made admissible). */
+    failure = expect_action(&pipeline, 306U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 3U, 189);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 306U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 2U, 186);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 306U,
+                            SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 1U, 187);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 306U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 188);
     if (failure != 0) return failure;
     return 0;
 }
@@ -540,6 +796,12 @@ int main(void)
     failure = test_queued_snapshot_counts_against_next_generation_budget();
     if (failure != 0) return failure;
     failure = test_pending_render_spans_fields_and_excludes_queued_generation();
+    if (failure != 0) return failure;
+    failure = test_publication_field_admits_service_but_not_transfer();
+    if (failure != 0) return failure;
+    failure = test_publication_field_consumes_the_transfer_slot();
+    if (failure != 0) return failure;
+    failure = test_followup_polls_are_bounded_to_the_submit_field();
     if (failure != 0) return failure;
     puts("frame pipeline contract: PASS");
     return 0;

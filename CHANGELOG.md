@@ -2,6 +2,78 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Sprint 2 T2.17 (scheduler): the frame pipeline's per-field epoch rule is
+  narrowed from "one SERVICE and one POLL per observed field, and neither for a
+  promoted bank in the publication field" to the two gates that actually carry
+  a hardware guarantee. `src/port/saturn/runtime/saturn_frame_pipeline.c`.
+
+  **Root cause.** T2.16 attributed 24 of 24 master idle entries to one call
+  site -- `sourceboot/main.c:2013`, the `SM64_SATURN_FRAME_WAIT_VBLANK` arm --
+  and measured **2.1903 VB/frame of raster spin interleaving 0.141 VB/frame of
+  transport work, a 1:14 ratio**, in one contiguous block that repeats
+  identically every frame. The master is the critical path with no residue
+  (9.0166 work + 2.1903 idle = 11.2069 exactly), so every VB of that block is
+  a VB of frame time. Two of the three costly waits were the whole of it: one
+  field burned between the poll that *submits* the command-list DMA and the
+  poll that *retires* it, and one field burned because publication stamped the
+  render-service epoch and so refused the promoted snapshot's first service.
+
+  **What the rule guaranteed, and why it existed.** It was added as an
+  independent-review repair during A9 Steps 1--4
+  (`overlapped-render-pipeline-2026-08-03.md:1825-1828`): "Publication also
+  resets generation-local SERVICE/POLL flags, permitting more work for a
+  promoted generation during the same observed VBlank." Field-global epochs
+  bound that. The guarantee they buy on the hardware is that at most one
+  publication -- and therefore one `vdp1_sync_render()` plot start and one
+  frame-buffer change request -- happens per observed field, and that a
+  generation's command-VRAM overwrite never lands in the field whose
+  publication started the plot reading that same resident VRAM.
+
+  **Why the narrowing is safe.** Both guarantees ride on `POLL_TRANSFERS`
+  and `PUBLISH_FRAME`, not on `SERVICE_RENDER_JOBS`. `SERVICE` builds into the
+  frame bank publication has just retired (`sourceboot_frame_publish` publishes
+  the new bank and retires the previous one before presenting, leaving exactly
+  one FREE bank of the two for the promoted generation) and it touches no VDP1
+  register and no VDP1 VRAM, so it cannot race the plot publication started.
+  Publication therefore keeps its transfer stamp -- which alone still bounds
+  publication to one per field -- and drops its service stamp. Separately, only
+  the *submitting* poll fences VDP1 and DMAs over resident command VRAM; its
+  follow-ups re-read a DMA status word. Follow-ups are admitted inside the
+  submit field only, so an unretired queue falls back to the previous
+  one-poll-per-field schedule with its previous-frame presentations, and the
+  free window is bounded by the field itself.
+
+  **Consumer-facing impact.** Presentation cadence and displayed image are
+  unchanged in content; only *when* the master issues each action moves. One
+  visible scheduling consequence: because `render_service_started` gates the
+  simulation arm, admitting service in the publication field also makes that
+  generation's recovery sim tick admissible one field earlier. The
+  normal-plus-recovery budget itself is unchanged.
+
+  **New prerequisite.** This makes the `vdp1_sync_busy()`/`vdp1_sync_wait()`
+  overwrite fence in `sourceboot_frame_poll_transfers` load-bearing for the
+  first time: T2.8 measured 0 waits in 1,349 fence events on a 15.483 VB/frame
+  instrumented build, where slack hid it. At a shorter frame the fence, not the
+  scheduler, becomes what separates the next DMA from the running plot.
+
+### Added
+
+- Sprint 2 T2.17 (tests): three frame-pipeline contract tests and three
+  mutation executables in `verify-frame-pipeline`.
+  `test_publication_field_admits_service_but_not_transfer`,
+  `test_publication_field_consumes_the_transfer_slot` (the case that isolates
+  publication's own stamp -- a frame whose transfer retires after its last poll
+  publishes in a field that issued no poll, so nothing but that stamp refuses
+  the promoted generation's overwrite), and
+  `test_followup_polls_are_bounded_to_the_submit_field`. The new mutations
+  `SM64_SATURN_FRAME_PIPELINE_TEST_PUBLISH_OPENS_TRANSFER`,
+  `..._FREE_POLL_EVERY_FIELD` and `..._SUBMIT_UNGATED` perturb the
+  bank-ownership condition, the swap point and the transport interleave
+  respectively; each must fail, and the first of them survived the suite's
+  first draft, which is why the isolating test exists.
+
 ### Added
 
 - Sprint 2 T2.16 (diagnostics): `tools/saturn/capture_idle_attribution.py`, a

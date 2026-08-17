@@ -25,6 +25,11 @@ typedef struct sm64_saturn_frame_pipeline {
     uint32_t action_generation;
     uint32_t render_service_vblank;
     uint32_t transfer_poll_vblank;
+    /* Field in which the active generation's command-VRAM transfer was
+     * submitted. Follow-up polls inside that one field re-read a DMA status
+     * word and write nothing, so they are not epoch-gated; once the field
+     * ends the conservative one-poll-per-field schedule resumes. */
+    uint32_t transfer_submit_vblank;
     /* Whole 30 Hz simulation-tick credits discarded after the normal plus
      * recovery budget is exhausted. This counter is not measured in fields. */
     uint32_t dropped_sim_tick_credits;
@@ -42,6 +47,7 @@ typedef struct sm64_saturn_frame_pipeline {
     bool publish_pending;
     bool render_service_vblank_valid;
     bool transfer_poll_vblank_valid;
+    bool transfer_submit_vblank_valid;
     uint32_t publish_generation;
 } sm64_saturn_frame_pipeline_t;
 

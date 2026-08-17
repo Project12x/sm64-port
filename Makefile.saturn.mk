@@ -1432,6 +1432,36 @@ verify-frame-pipeline:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-incomplete-mutation$(HOST_EXEEXT)" \
 	  --label "frame pipeline incomplete-bank publication mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_FRAME_PIPELINE_TEST_PUBLISH_OPENS_TRANSFER=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-publish-opens-transfer-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-publish-opens-transfer-mutation$(HOST_EXEEXT)" \
+	  --label "frame pipeline publication-opens-transfer-slot mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_FRAME_PIPELINE_TEST_FREE_POLL_EVERY_FIELD=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-free-poll-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-free-poll-mutation$(HOST_EXEEXT)" \
+	  --label "frame pipeline unbounded follow-up poll mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_FRAME_PIPELINE_TEST_SUBMIT_UNGATED=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-submit-ungated-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-submit-ungated-mutation$(HOST_EXEEXT)" \
+	  --label "frame pipeline ungated transfer-submit mutation"
 
 verify-render-overlap-integration:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
