@@ -21,7 +21,7 @@ records the planning boundary before runtime work started.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
-| W0.1 scheduler acknowledgement | `source-complete; host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler and eight mutation checks pass | Record implementation and evidence-only commit SHAs; sourceboot integration and target gates remain |
+| W0.1 scheduler acknowledgement | `source-complete; host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, VDP1 frame-bank ownership checks, and finalized commit ledger pass | Sourceboot integration and target gates remain |
 | W0.2 sourceboot deferral and diagnostics | `planned` | Approved one-observation/no-DMA/no-replot contract | RED source/telemetry tests, implementation, focused host gates, normal and diagnostic target compile |
 | W0.3 normal build and live product observation | `planned` | Preserved baseline and exact build/capture recipe recorded | Unique build, memory check, atomic staging, identity-bound headless Ymir capture |
 | W0.4 review and owner gate | `planned` | Review and desktop acceptance criteria recorded | Independent verdict, identity-bound desktop launch, explicit owner judgment |
@@ -89,9 +89,13 @@ check.
 
 ## Commits and review
 
-The W0.1 implementation commit and its documentation-only evidence follow-up
-are recorded below after commit. Independent review is not requested until
-after the first identity-bound live product observation.
+| Commit | Purpose |
+| --- | --- |
+| `4b66543e850e0b601ea4ec2cfc22062853da5771` | `feat(saturn): acknowledge deferred VDP1 transfers` — rewritten W0.1 implementation with the mandatory same-commit changelog entry |
+| Documentation-only evidence follow-up (this commit) | Records implementation SHA `4b66543e850e0b601ea4ec2cfc22062853da5771`, exact host commands/results, and remaining gates |
+
+Independent review is not requested until after the first identity-bound live
+product observation.
 
 ## Tests and observations
 
@@ -102,8 +106,8 @@ stopped earlier because `D:\tmp` was not writable, which was environmental.
 The approved-toolchain rerun produced the intended RED. The GREEN scheduler
 gate printed `frame pipeline contract: PASS` and all eight mutation checks were
 caught, including `frame pipeline deferral leaves transfer started mutation`
-and `frame pipeline deferral clears epoch stamp mutation`. The frame-bank gate
-is still required before W0.1 is fully reconciled. Planned gates, in order:
+and `frame pipeline deferral clears epoch stamp mutation`. The VDP1 frame-bank
+gate compiled and passed its four checks. Planned gates, in order:
 
 1. Scheduler RED, nominal test, and eight mutation checks.
 2. VDP1 frame-bank ownership gate.
@@ -116,7 +120,8 @@ is still required before W0.1 is fully reconciled. Planned gates, in order:
 
 ## Remaining gates
 
-- [x] Scheduler deferral host contract and two new mutations pass.
+- [x] Scheduler deferral host contract, two new mutations, and VDP1 frame-bank
+  ownership gate pass.
 - [ ] Sourceboot busy branch is source-complete with no wait, DMA, replot, or
   bank ownership change.
 - [ ] Focused host gates pass without weakening assertions.
