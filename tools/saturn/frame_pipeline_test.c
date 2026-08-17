@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "saturn_frame_pipeline.h"
 
@@ -769,6 +770,106 @@ static int test_followup_polls_are_bounded_to_the_submit_field(void)
     return 0;
 }
 
+static int test_transfer_deferral_is_epoch_gated_and_recoverable(void)
+{
+    sm64_saturn_frame_pipeline_t pipeline;
+    uint32_t dropped_before;
+    int failure;
+
+    sm64_saturn_frame_pipeline_init(&pipeline, 500U, 0U);
+    failure = expect_action(&pipeline, 504U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 208);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 504U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 209);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 210;
+    failure = expect_action(&pipeline, 504U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 2U, 211);
+    if (failure != 0) return failure;
+    if (!pipeline.queued_snapshot_valid ||
+        pipeline.queued_snapshot_generation != 2U) return 212;
+    failure = expect_action(&pipeline, 504U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 213);
+    if (failure != 0) return failure;
+
+    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 2U)) return 214;
+    if (!sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 1U)) return 215;
+    if (pipeline.transfer_started || pipeline.transfer_submit_vblank_valid)
+        return 216;
+    if (!pipeline.transfer_poll_vblank_valid ||
+        pipeline.transfer_poll_vblank != 504U) return 217;
+    if (!pipeline.render_active || !pipeline.render_completed_valid ||
+        pipeline.render_generation != 1U ||
+        pipeline.render_completed_generation != 1U) return 218;
+    if (!pipeline.queued_snapshot_valid ||
+        pipeline.queued_snapshot_generation != 2U ||
+        pipeline.displayed_generation != 0U ||
+        pipeline.sim_ticks_this_presentation != 2U ||
+        pipeline.previous_frame_reuse_count != 1U ||
+        pipeline.presentation_pending) return 219;
+    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 1U)) return 220;
+    failure = expect_action(&pipeline, 504U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 221);
+    if (failure != 0) return failure;
+
+    failure = expect_action(&pipeline, 505U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 222);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 1U)) return 223;
+    failure = expect_action(&pipeline, 505U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 224);
+    if (failure != 0) return failure;
+
+    dropped_before = pipeline.dropped_sim_tick_credits;
+    failure = expect_action(&pipeline, 506U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 225);
+    if (failure != 0) return failure;
+    if (pipeline.sim_ticks_this_presentation != 2U ||
+        pipeline.dropped_sim_tick_credits <= dropped_before) return 226;
+    if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U)) return 227;
+    failure = expect_action(&pipeline, 506U,
+                            SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 228);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, true))
+        return 229;
+    failure = expect_action(&pipeline, 506U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 2U, 230);
+    if (failure != 0) return failure;
+    return 0;
+}
+
+static int test_transfer_deferral_rejects_invalid_state_without_mutation(void)
+{
+    sm64_saturn_frame_pipeline_t pipeline;
+    sm64_saturn_frame_pipeline_t before;
+    int failure;
+
+    sm64_saturn_frame_pipeline_init(&pipeline, 600U, 0U);
+    failure = expect_action(&pipeline, 602U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 231);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 602U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 232);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 233;
+
+    before = pipeline;
+    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 1U) ||
+        memcmp(&pipeline, &before, sizeof(pipeline)) != 0) return 234;
+    failure = expect_action(&pipeline, 602U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 235);
+    if (failure != 0) return failure;
+    before = pipeline;
+    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 0U) ||
+        memcmp(&pipeline, &before, sizeof(pipeline)) != 0) return 236;
+    if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U)) return 237;
+    before = pipeline;
+    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 1U) ||
+        memcmp(&pipeline, &before, sizeof(pipeline)) != 0) return 238;
+    return 0;
+}
+
 int main(void)
 {
     int failure = test_two_fields_produce_one_sim_tick();
@@ -800,6 +901,10 @@ int main(void)
     failure = test_publication_field_admits_service_but_not_transfer();
     if (failure != 0) return failure;
     failure = test_publication_field_consumes_the_transfer_slot();
+    if (failure != 0) return failure;
+    failure = test_transfer_deferral_is_epoch_gated_and_recoverable();
+    if (failure != 0) return failure;
+    failure = test_transfer_deferral_rejects_invalid_state_without_mutation();
     if (failure != 0) return failure;
     failure = test_followup_polls_are_bounded_to_the_submit_field();
     if (failure != 0) return failure;

@@ -159,8 +159,8 @@ first time — the frame is 2.28 VB shorter with the plot unchanged, so the fenc
 reachable where T2.8 never saw it fire. `STATE.md` records it as "no longer optional";
 T2.8 §9 item 3 already listed it. This is the hang path in the build awaiting observation.
 
-**Status:** `planned`; design approved; implementation, host, target, live,
-independent-review, and owner gates have not run.
+**Status:** `active`; scheduler host contract passed; sourceboot, target, live,
+independent-review, and owner gates remain pending.
 
 **Execution records:**
 
@@ -173,8 +173,8 @@ independent-review, and owner gates have not run.
 
 **Gate state:**
 
-- [ ] W0.1 scheduler acknowledgement — planned; no implementation commit or
-  host evidence yet.
+- [x] W0.1 scheduler acknowledgement — host contract passed; exact-generation
+  acknowledgement and mutation evidence are recorded in the active ledger.
 - [ ] W0.2 sourceboot deferral and diagnostics — planned; no source-complete or
   target-equivalent evidence yet.
 - [ ] W0.3 unique normal build and earliest Ymir product observation — planned;

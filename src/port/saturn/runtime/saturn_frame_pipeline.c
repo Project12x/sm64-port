@@ -279,6 +279,37 @@ bool sm64_saturn_frame_pipeline_render_complete(
     return true;
 }
 
+bool sm64_saturn_frame_pipeline_transfer_deferred(
+    sm64_saturn_frame_pipeline_t *pipeline, uint32_t generation)
+{
+    if (pipeline == NULL || generation == 0U ||
+        !pipeline->render_active ||
+        pipeline->render_generation != generation ||
+        !pipeline->render_completed_valid ||
+        pipeline->render_completed_generation != generation ||
+        !pipeline->transfer_started ||
+        pipeline->transfer_generation != generation ||
+        !pipeline->transfer_poll_vblank_valid ||
+        pipeline->transfer_poll_vblank != pipeline->last_vblank_count ||
+        (pipeline->transfer_completed_valid &&
+         pipeline->transfer_completed_generation == generation)) {
+        return false;
+    }
+#if !defined(SM64_SATURN_FRAME_PIPELINE_TEST_DEFER_LEAVES_STARTED)
+    pipeline->transfer_started = false;
+#endif
+    pipeline->transfer_submit_vblank_valid = false;
+#if defined(SM64_SATURN_FRAME_PIPELINE_TEST_DEFER_CLEARS_POLL_STAMP)
+    pipeline->transfer_poll_vblank_valid = false;
+#endif
+    if (pipeline->presentation_pending) {
+        pipeline_finish_presentation(pipeline);
+        pipeline->previous_frame_reuse_count++;
+    }
+    pipeline->action_generation = pipeline->displayed_generation;
+    return true;
+}
+
 bool sm64_saturn_frame_pipeline_transfer_complete(
     sm64_saturn_frame_pipeline_t *pipeline, uint32_t generation)
 {

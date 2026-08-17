@@ -68,6 +68,13 @@ uint32_t sm64_saturn_frame_pipeline_action_generation(
 bool sm64_saturn_frame_pipeline_render_complete(
     sm64_saturn_frame_pipeline_t *pipeline, uint32_t generation);
 
+/* Acknowledge that the exact completed generation found VDP1 busy before
+ * hardware transfer submission. The source bank stays owned and complete;
+ * this consumes at most the current presentation opportunity and preserves
+ * the poll epoch so retry is possible only after another observed VBlank. */
+bool sm64_saturn_frame_pipeline_transfer_deferred(
+    sm64_saturn_frame_pipeline_t *pipeline, uint32_t generation);
+
 bool sm64_saturn_frame_pipeline_transfer_complete(
     sm64_saturn_frame_pipeline_t *pipeline, uint32_t generation);
 

@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- W0 scheduler deferral now acknowledges only the exact completed generation
+  observed during the current VBlank poll. It clears the in-flight transfer
+  ownership and submit stamp while preserving the poll epoch for a later retry,
+  preventing a VDP1-busy observation from overwriting or losing a ready source
+  bank. The sourceboot caller and target/live gates remain pending; consumers
+  should treat this as a scheduler contract addition, not completed hardware
+  integration.
+
 - Sprint 2 T2.25 (coherency): `sm64_saturn_render_job_graph_propagate_failures()`
   read the shared render-job graph through the **cached** P0 alias. Both SH-2s
   call it -- the slave from `poll_slave()`, the master from `drain_master()` --

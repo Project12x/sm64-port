@@ -1,7 +1,7 @@
 # W0 VDP1 Overwrite Fence Execution Ledger
 
 **Date opened:** 2026-08-17
-**Status:** `planned`
+**Status:** `active; scheduler host contract passed; sourceboot and target gates pending`
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -11,17 +11,17 @@
 
 ## Current proof statement
 
-W0 is planned and owner-approved at the design level. No W0 runtime code has
-been implemented, no W0 host gate has run, no W0 target has compiled, no W0
-CUE has been built, and no W0 artifact has been observed in Ymir. The accepted
-T2.17 gameplay artifact remains the only preserved product baseline. The
-execution plan is committed at
+W0 is active after the scheduler-side exact-generation acknowledgement passed
+the nominal host contract and its two load-bearing mutation checks. Sourceboot
+runtime integration, target compilation, CUE construction, and Ymir observation
+remain pending. The accepted T2.17 gameplay artifact remains the only preserved
+product baseline. The execution plan is committed at
 `530578cc715debc52db295f9617f715dc14744f9`; this evidence-only transition
-records that immutable planning boundary before runtime work starts.
+records the planning boundary before runtime work started.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
-| W0.1 scheduler acknowledgement | `planned` | Approved exact-generation contract in the design and implementation plan | RED test, implementation, nominal and mutation PASS, commit |
+| W0.1 scheduler acknowledgement | `source-complete; host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler and eight mutation checks pass | Record implementation and evidence-only commit SHAs; sourceboot integration and target gates remain |
 | W0.2 sourceboot deferral and diagnostics | `planned` | Approved one-observation/no-DMA/no-replot contract | RED source/telemetry tests, implementation, focused host gates, normal and diagnostic target compile |
 | W0.3 normal build and live product observation | `planned` | Preserved baseline and exact build/capture recipe recorded | Unique build, memory check, atomic staging, identity-bound headless Ymir capture |
 | W0.4 review and owner gate | `planned` | Review and desktop acceptance criteria recorded | Independent verdict, identity-bound desktop launch, explicit owner judgment |
@@ -89,14 +89,21 @@ check.
 
 ## Commits and review
 
-No W0 implementation or runtime-evidence commit exists yet. The planning and
-planning-boundary evidence commits change documentation only. Independent
-review is not requested until after the first identity-bound live product
-observation.
+The W0.1 implementation commit and its documentation-only evidence follow-up
+are recorded below after commit. Independent review is not requested until
+after the first identity-bound live product observation.
 
 ## Tests and observations
 
-No W0 tests have run. Planned gates, in order:
+W0.1 scheduler gates run on 2026-08-17. The mandated RED command first failed
+at the compiler with an implicit declaration of
+`sm64_saturn_frame_pipeline_transfer_deferred`; an initial sandbox invocation
+stopped earlier because `D:\tmp` was not writable, which was environmental.
+The approved-toolchain rerun produced the intended RED. The GREEN scheduler
+gate printed `frame pipeline contract: PASS` and all eight mutation checks were
+caught, including `frame pipeline deferral leaves transfer started mutation`
+and `frame pipeline deferral clears epoch stamp mutation`. The frame-bank gate
+is still required before W0.1 is fully reconciled. Planned gates, in order:
 
 1. Scheduler RED, nominal test, and eight mutation checks.
 2. VDP1 frame-bank ownership gate.
@@ -109,7 +116,7 @@ No W0 tests have run. Planned gates, in order:
 
 ## Remaining gates
 
-- [ ] Scheduler deferral host contract and two new mutations pass.
+- [x] Scheduler deferral host contract and two new mutations pass.
 - [ ] Sourceboot busy branch is source-complete with no wait, DMA, replot, or
   bank ownership change.
 - [ ] Focused host gates pass without weakening assertions.

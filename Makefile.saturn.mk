@@ -1470,6 +1470,26 @@ verify-frame-pipeline:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-submit-ungated-mutation$(HOST_EXEEXT)" \
 	  --label "frame pipeline ungated transfer-submit mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_FRAME_PIPELINE_TEST_DEFER_LEAVES_STARTED=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-deferral-leaves-started-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-deferral-leaves-started-mutation$(HOST_EXEEXT)" \
+	  --label "frame pipeline deferral leaves transfer started mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_FRAME_PIPELINE_TEST_DEFER_CLEARS_POLL_STAMP=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/frame_pipeline_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-deferral-clears-epoch-stamp-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-deferral-clears-epoch-stamp-mutation$(HOST_EXEEXT)" \
+	  --label "frame pipeline deferral clears epoch stamp mutation"
 
 verify-render-overlap-integration:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
