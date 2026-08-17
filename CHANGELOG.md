@@ -96,6 +96,59 @@
 
 ### Changed
 
+- Sprint 2 T2.25 (reference): SlaveDriver's dispatch-once slave schedule
+  (`WALLS.C:2246`/`:2273`, pinned `a8986591557b6e680550d3c23970284d3b38ff8f`,
+  GPL-3.0-or-later) was read in full and **deliberately not ported**. Direct
+  GPL reuse is authorised for this component; the objection is a measurement,
+  not a licence.
+
+  **Why.** `capture_idle_attribution` measures master idle at **0.000000** at
+  both route positions T2.20 established, so frame time equals master work
+  exactly and the joint table has only two occupied cells (`work|idle`
+  6.1095 VB, `work|work` 2.8215 VB). A wider dispatch window changes when the
+  slave runs, not how much the master does; **overlap converts zero VB when
+  the critical path contains no stall.** Upstream's adaptive controller
+  (`WALLS.C:2277-2284`) drives its partition from the master's join spin count,
+  which is identically 0 here, so its fixed point is "give the slave
+  everything" -- where this port already is. Upstream parallelises exactly one
+  stage, transform/light over an already-determined draw list, and keeps
+  visibility determination (`WALLS.C:2180-2239`) and command emission
+  (`drawSlaveWalls`) master-only; this port splits the same stage at 100%
+  instead of `slaveSize`, so it is already more aggressive than the reference.
+
+  **What blocks the remainder**, and upstream leaves both serial too: spatial
+  admission is a BFS over a node hierarchy with shared visited/queued/seen
+  state (`saturn_scene_admission.c:487-745`, ~0.996 VB/frame), and VDP1
+  lowering is a sequential bump-allocating command arena plus a shared Gouraud
+  bank (`saturn_demo_render.c:4744-4772`, ~1.435 VB/frame including its merge
+  sort) -- together 2.43 VB of the 6.11 VB window.
+
+  **Consumer-facing consequence.** T2.16 section 9 item 4 ("widen the slave's
+  4-job render graph", 6.6794 VB/frame) is closed as stated and reclassified:
+  it is an *offload* problem, not a *packing* problem, and packing levers do
+  not address it. The soft-float purge on the master moves to first, being the
+  only large block Ymir can size honestly. What survives of item 4 is one
+  ~0.367 VB candidate (the terrain depth-bin merge as a fifth graph job,
+  +4.2% predicted) and a heavy-scene safety valve. **Both figures are upper
+  bounds** -- Ymir sets `m_emulateSH2Caches = false` and models no inter-SH-2
+  bus arbitration, so it prices every cross-CPU handoff at zero.
+
+  **Measured, as a control:** `id-49894e8e2d3ea415`, **6.7181 FPS / 8.9310 VB,
+  bit-identical to the T2.17 baseline on every reported figure** including the
+  interval distribution `{7:1, 8:2, 9:24, 10:2}` and the 28-of-29 concurrency-
+  rail allowance. That is the correct result for a cache-alias change on an
+  emulator that does not model caches, and it is not evidence the fix is free
+  on hardware. `presentation_generation_delta == 1` on all 29 intervals; queue
+  health unchanged.
+
+  New prerequisite recorded: do not start the offload before the coherency cost
+  is bounded on hardware or under a cache-emulating Ymir run. A radix sort
+  reading its input through the P2 alias can cost more than the block it
+  removes, and this rig will report that as a win.
+  `docs/saturn/evidence/reports/sprint2-t2_25-slave-dispatch.md`;
+  `docs/saturn/SLAVEDRIVER_ADAPTATION.md` gains the schedule and coherency
+  sections.
+
 - Sprint 2 T2.22 (build): eight Saturn asset generators now publish
   write-if-changed, through a new shared `tools/saturn/write_if_changed.py`.
   Every build linked the ELF **four times** and wrote four byte-identical

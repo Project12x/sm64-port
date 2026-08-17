@@ -246,6 +246,43 @@ What the sprint established, in order:
   test exists. **The predicted VDP1 cap at ~9.86 VB did not bind** -- see
   `sprint2-t2_17-epoch-stall.md` section 6.
 
+- **T2.25 (reference read + two defect fixes)** -- **SlaveDriver's
+  dispatch-once schedule was read in full at the pin and deliberately NOT
+  ported, because on this build it converts zero VB.** The frame equals the
+  master's work exactly (master idle **0.000000** at both route positions,
+  `sprint2-t2_20-idle-attribution-tick{30,180}`), so a wider dispatch window
+  has no stall to fill; **only moving work off the master shortens the frame.**
+  Upstream's adaptive controller (`WALLS.C:2277-2284`) drives its partition
+  from the master's join spin count, which is always 0 here, so its fixed point
+  is "give the slave everything" -- **where this port already is.** Upstream
+  splits exactly one stage (transform/light of an already-determined list) and
+  keeps visibility determination and command emission master-only; **we split
+  the same stage harder than they do, at 100%.** The two master blocks large
+  enough to matter are the two upstream also leaves serial: our admission BFS
+  with shared visited/queued/seen state (~0.996 VB) and our sequential VDP1
+  command arena (~1.435 VB with its merge sort), **2.43 VB of the 6.11 VB
+  window.** An offload-eligibility census in the report ranks the rest; the
+  largest genuinely eligible item is the terrain depth-bin sort at ~0.367 VB
+  (+4.2% predicted), and it is a redesign, not a port. **Every offload figure
+  is an upper bound: Ymir models neither cache coherency nor bus contention.**
+  Two defects found and fixed instead, both under where a dispatch change would
+  have landed. (a) **A latent cross-SH-2 coherency bug on the dispatch path**
+  (`f25206c7`): `sm64_saturn_render_job_graph_propagate_failures()` -- reached
+  by the slave from `poll_slave()` and the master from `drain_master()` -- read
+  `graph->count`, `graph->queue` and `graph->dependency_mask[]` through the
+  **cached** alias while the master publishes them through cache-through,
+  because the opening `graph_current()` re-aliases only its own parameter.
+  Consequence is bounded to a missed quarantine, but **no emulator run could
+  ever have found it** (`m_emulateSH2Caches = false`); it was found by auditing
+  our discipline against SlaveDriver's `WALLS.C` purge/alias pair. A new
+  `--graph-source` mode of `verify_dual_cpu_coherency.py` now fails on the
+  pre-fix source and self-tests five incoherent variants. (b) **Five host gates
+  over the cross-SH-2 render-job scheduler had not compiled for 130 commits**
+  (`3b6079a1`) -- the same include-path class as `verify-render-clusters`,
+  reintroduced by `73851b3d`. Sprint 2 has been reasoning about master/slave
+  partitioning with the scheduler's own assertions switched off.
+  `docs/saturn/evidence/reports/sprint2-t2_25-slave-dispatch.md`.
+
 **Next, ranked by releasable VB/frame per unit of constraint tax
 (T2.16 section 9, as amended by T2.17).** **(1) DONE (T2.17): the per-field
 epoch stall.** **(1a) Give the overwrite fence a deadline** -- `vdp1_sync_wait()`
@@ -254,9 +291,17 @@ item 3 already listed repairing it and it is no longer optional.
 **(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
 correctly priced, master-local, no constraint tax. **(3) VDP1 command
 reduction -- promoted, but strictly after (1)**; before (1) it is worth zero
-frames. **(4) Widen the slave's 4-job render graph** -- targets the largest
-block (6.6794 VB/frame) but is the least safely sizeable, and needs a way to
-measure the coherency cost first. **Shadows remain settled direction, not a
+frames. **(4) ~~Widen the slave's 4-job render graph~~ -- CLOSED by T2.25 as
+stated.** Window width is not the binding constraint and has not been since
+T2.17 removed the master's stall: the frame is identically the master's work,
+so overlap converts nothing and only *offload* does. What survives of item 4 is
+a single ~0.367 VB candidate (the terrain depth-bin merge as a fifth graph job)
+and a heavy-scene safety valve (SlaveDriver's adaptive controller plus
+unblocking `drain_master` before `slave_retired`), which is inert on this route
+and must not be sold as a cadence change. **Do not start the offload without
+first bounding the coherency cost** -- hardware, or Ymir with
+`m_emulateSH2Caches` enabled -- because a sort reading its input through P2 can
+cost more than the block it removes and this rig reports that as a win. **Shadows remain settled direction, not a
 cadence item.** **Census items 2 and 5 stay deprioritised -- static phantoms.**
 The Mario double-emit and T2.9's items 5-8 remain open. The BOB bypass stays
 demoted to diagnostic value only. The geo-walk display-list refactor stays
@@ -286,6 +331,20 @@ look-and-listened.
 **T2.13's cadence-rail note:** the T2.11 concurrency allowance, needed on 14
 of 29 intervals at T2.12 and flagged there as trending badly, is needed on
 **0 of 29** in this build.
+
+**Host-gate brittleness, updated by T2.25.** Five more gates --
+`verify-render-job-queue`, `verify-render-callback-context`,
+`verify-render-job-bridge`, `verify-render-job-payload-bank`,
+`verify-render-job-graph` -- were found dead since `73851b3d` (2026-08-14) with
+the **same include-path defect** repaired for `verify-render-clusters` at
+`099ce72a`, and are repaired at `3b6079a1`. A seventh instance is reported but
+**not** fixed: on MSYS2 driving a native mingw64 `gcc`, every
+`$(HOST_CC_ENV) $(HOST_CC)` rule dies with `Cannot create temporary file in
+C:\WINDOWS\`; `verify-softfp-bitexact` already carries the local workaround
+(`Makefile.saturn.mk:2106-2113`) and it was never generalised. Until it is,
+append `"HOST_CC_ENV=env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u
+C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS
+TMP=D:/tmp TEMP=D:/tmp"` to any host-gate make invocation.
 
 **Two host gates are silently un-runnable in some shells -- the MSYS path class
 T2.10 flagged, 22 recipes still to go.** `verify-render-clusters`'s include-path
