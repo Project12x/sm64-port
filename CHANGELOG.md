@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Sprint 2 T2.25 (build gates): five host gates over the cross-SH-2 render-job
+  scheduler have been unrunnable for **130 commits** and are now restored.
+  `verify-render-job-queue`, `verify-render-callback-context`,
+  `verify-render-job-bridge`, `verify-render-job-payload-bank` and
+  `verify-render-job-graph` all died at the first compile with
+  `fatal error: port/saturn/platform/saturn_cart_code.h: No such file or
+  directory`.
+
+  **Root cause.** `73851b3d` (2026-08-14, the donor transplant) added
+  `#include "port/saturn/platform/saturn_cart_code.h"` to
+  `saturn_render_job_queue.c`, `saturn_render_job_graph.c` and
+  `saturn_render_payload_bank.c`. That spelling resolves only against
+  `-I<repo>/src`. `verify-render-job-runtime` already passed that flag and
+  kept working; the five rules above pass only
+  `-I<repo>/src/port/saturn/gfx`, so the include could not resolve from any
+  directory on any machine. The failure is a hard compile error, not a
+  skipped assertion, so it was never silent -- it simply was not being run.
+
+  **Why it matters now.** These are precisely the gates that verify the
+  descriptor ABI, the TAS.B exact-once claim, the dependency graph, the
+  lane-owned payload bank and the callback-context handoff -- the machinery
+  any slave-scheduling change touches first. Sprint 2 has been reasoning about
+  master/slave partitioning with its scheduler assertions switched off.
+
+  **Fix.** Add `-I"$(SATURN_REPO_ROOT)/src"` to the five rules, matching what
+  `verify-render-job-runtime` already did. No test source and no product
+  source changed. All five now pass, including the queue's own mutation gate
+  (six unsafe variants rejected) and the graph fixture, which was separately
+  confirmed non-vacuous: a mutation admitting a consumer job before its
+  producer is DONE is caught.
+
+  **Sixth and seventh brittle-host-gate instances**, in the class STATE.md
+  catalogues. The seventh is *not* fixed here and is reported instead: on an
+  MSYS2 shell driving a native mingw64 `gcc`, every rule using
+  `$(HOST_CC_ENV) $(HOST_CC)` dies with
+  `Cannot create temporary file in C:\WINDOWS\: Permission denied`, because
+  MSYS2 rewrites `TMPDIR` on the way across and the recipe shell's `TMP`/`TEMP`
+  do not survive. `verify-softfp-bitexact` already documents this and works
+  around it locally (`Makefile.saturn.mk:2106-2113`); the workaround was never
+  generalised. Until it is, run host gates with
+  `make -f Makefile.saturn.mk <target> "HOST_CC_ENV=env -u GCC_EXEC_PREFIX -u
+  COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u
+  CFLAGS -u CPPFLAGS -u LDFLAGS TMP=D:/tmp TEMP=D:/tmp"`.
+
 ### Changed
 
 - Sprint 2 T2.22 (build): eight Saturn asset generators now publish

@@ -957,6 +957,7 @@ verify-render-job-queue:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_job_queue_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-job-queue-test$(HOST_EXEEXT)"
@@ -969,6 +970,7 @@ verify-render-callback-context: check-host-tools
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_callback_context_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_callback_context.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
@@ -979,6 +981,7 @@ verify-render-job-bridge:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_job_bridge_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_bridge.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_output_bank.c" \
@@ -1022,6 +1025,7 @@ verify-render-job-payload-bank:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_job_payload_bank_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_payload_bank.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_bridge.c" \
@@ -1034,6 +1038,7 @@ verify-render-job-graph:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_job_graph_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
