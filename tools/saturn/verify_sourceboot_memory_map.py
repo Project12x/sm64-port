@@ -287,7 +287,10 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
         capture.address + capture.size if capture is not None else LWRAM_BASE,
         *(
             section.address + section.size
-            for name in (".lwram_actor_runtime", ".lwram_camera_capture")
+            for name in (
+                ".lwram_actor_runtime", ".lwram_camera_capture",
+                ".lwram_geo_traversal",
+            )
             if (section := layout.sections.get(name)) is not None
         ),
     )

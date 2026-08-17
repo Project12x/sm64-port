@@ -2,7 +2,8 @@
 
 **Date opened:** 2026-08-17
 **Status:** `active; W0.1/W0.2 host-contract-passed; normal live-observed;
-diagnostic target-compiled; review and owner gates pending`
+diagnostic target-compiled; independent review PASS WITH FINDINGS; desktop
+owner gate pending`
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -18,16 +19,18 @@ W0.1's scheduler acknowledgement and W0.2's sourceboot integration are
 tool/docs-only descendant revision, not artifact-identical to that frozen normal
 candidate. W0.2 performs one busy observation, defers the exact `READY`
 generation before any destination write, and records deferrals without retaining
-a blocking diagnostic spin. The accepted T2.17 gameplay artifact remains the
-only owner-accepted product baseline; independent review and owner observation
-remain open.
+a blocking diagnostic spin. Independent review returned `PASS WITH FINDINGS`
+with no critical or important issue and authorized the desktop owner launch;
+its two review-evidence findings are closed without a product-code change. The
+accepted T2.17 gameplay artifact remains the only owner-accepted product
+baseline; owner observation remains open.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
-| W0.1 scheduler acknowledgement | `host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, and VDP1 frame-bank ownership checks pass | Sourceboot integration and target gates remain |
-| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; normal live-observed; diagnostic target-compiled` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed; normal mode 0 and diagnostic mode 2 links both passed memory floors | Known pre-W0 presentation-boundary literal drift; review and owner gate |
+| W0.1 scheduler acknowledgement | `host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, VDP1 frame-bank ownership checks, and full-state immutability on wrong/duplicate acknowledgement pass | Normal product observation and owner gate are separately recorded below |
+| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; normal live-observed; diagnostic target-compiled` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed; source contract now proves exactly one busy observation and no busy-branch ownership mutation; normal mode 0 and diagnostic mode 2 links both passed memory floors | Known pre-W0 presentation-boundary literal drift; owner gate |
 | W0.3 normal build and live product observation | `complete at evidence level` | Normal `id-e8720d58595d9a62` staged and passed the bounded retry: 30 events/29 intervals, 6.6923 mean, 6.0 1% low, coherent queues and delta 1; diagnostic `id-5f27c53e9ae67c9c` linked/sealed and passed both floors | No diagnostic capture: condition absent. Owner/review gates remain separately open. |
-| W0.4 review and owner gate | `planned` | Review and desktop acceptance criteria recorded | Independent verdict, identity-bound desktop launch, explicit owner judgment |
+| W0.4 review and owner gate | `review PASS WITH FINDINGS; desktop launch pending` | Review found no critical/important issue and authorized desktop owner launch; review-evidence repairs are host/tool/doc only | Identity-bound desktop launch and explicit owner judgment |
 
 ## Preserved accepted product baseline
 
@@ -78,7 +81,7 @@ actual initializer. No runtime code was altered for these stale assertions.
 W0 adds no target buffer, changes no serialized package field, and changes no
 physical partition. The latest comparison ELF ends HWRAM at `0x060FB588`,
 leaving `0x4A78` bytes and `0x2B78` above the required `0x1F00` final floor.
-LWRAM ends at `0x002E89E0`, leaving `0x17620` bytes against its `0x4000`
+LWRAM ends at `0x002E95E0`, leaving `0x16A20` bytes against its `0x4000`
 floor. Both margins must be remeasured for normal and diagnostic W0 links.
 
 | Resource | Physical regions, maximum, alignment | Lifetime and owner | Producer, first consumer, route | Failure atomicity and stale generation |
@@ -110,8 +113,8 @@ check.
 | `ebee7e54` | `docs(saturn): record W0 live product evidence` — normal candidate/stage and live-observation evidence |
 | `d347cf61` | `docs(saturn): clarify W0 diagnostic evidence` — documentation/evidence descendant used when the diagnostic arm was built |
 
-Independent review is not requested until after the first identity-bound live
-product observation.
+Independent review completed after the first identity-bound live product
+observation; see the review-evidence transition below.
 
 ## Tests and observations
 
@@ -186,7 +189,7 @@ The normal target build is `id-e8720d58595d9a62` from product source
 `6697a3ce1c048d007a8d950d18fa1c653ad29923`, diagnostic mode 0, and normal
 profile hash `a562c98760a893a474092799ba3d52b6feb9312afadb28c967271bd8da1c8b9c`.
 It links with HWRAM free `0x4A58` (margin `0x2B58` over the required `0x1F00`)
-and LWRAM free `0x17620` (floor `0x4000`), and was atomically staged outside
+and LWRAM free `0x16A20` (floor `0x4000`), and was atomically staged outside
 the immutable T2.17 artifact.
 
 Attempt 1 is preserved, not overwritten, as
@@ -324,8 +327,39 @@ normal profile, package/compiler input, or target-behavior change. Thus the
 truthful classification is **`target-equivalent diagnostic arm compiled at
 tool/docs-only descendant revision; not artifact-identical to frozen normal
 candidate`**. Its map verification passed: `___end=0x060FC274`, HWRAM remaining
-`0x3D8C >= 0x1F00`, `lwram_end=0x002E8D60`, and LWRAM remaining
-`0x172A0 >= 0x4000`.
+`0x3D8C >= 0x1F00`, `lwram_end=0x002E9960`, and LWRAM remaining
+`0x166A0 >= 0x4000`.
+
+### Independent review and review-evidence transition (2026-08-17)
+
+Independent review verdict: **`PASS WITH FINDINGS`**; **Ready for desktop
+owner launch: Yes**. It validated the exact-generation predicate, same-field
+epoch preservation, two-tick budget, `READY`-bank ownership, no busy-branch
+DMA/replot, idle-path continuity, diagnostic ABI semantics, final normal
+evidence, and the observer behavior. It found no critical or important issue.
+
+The first narrow review-evidence finding was that
+`verify_sourceboot_memory_map.py` omitted `.lwram_geo_traversal` from the
+LWRAM maximum. A failing regression fixture was observed before the one-name
+accounting correction. Reverification against the unchanged normal build ELF
+now reports `lwram_end=0x002E95E0`, LWRAM remaining `0x16A20 >= 0x4000`; the
+unchanged diagnostic build ELF reports `lwram_end=0x002E9960`, LWRAM remaining
+`0x166A0 >= 0x4000`. Both retain their recorded HWRAM margins (`0x4A58` normal,
+`0x3D8C` diagnostic) and no target rebuild occurred.
+
+The second finding is closed by strengthening
+`test_vdp1_transfer_pipeline_source.py` to require exactly one
+`vdp1_sync_busy()` observation and prohibit transfer/bank-owner/poison/present
+mutations on the busy branch. `frame_pipeline_test.c` now snapshots and
+compares the complete relevant scheduler state for wrong-generation and
+duplicate deferral acknowledgements. Production code is unchanged.
+
+Focused evidence: the new memory-map regression test passed after its observed
+RED; `verify-frame-pipeline` passed with all existing mutations caught; and
+`verify-vdp1-transfer-pipeline` passed its binary, source, profile, and A8
+contract checks. No target rebuild or headless Ymir run was performed: this is
+a review/tool/test/documentation transition and the review authorized desktop
+launch on the existing normal candidate.
 
 No diagnostic capture ran: the normal observation neither recorded an
 unclassifiable busy deferral nor received a reviewer requirement for target
@@ -352,6 +386,8 @@ live occurrence unproven`**.
 - [x] A unique W0 normal artifact is staged with exact identity hashes.
 - [x] Earliest headless product observation passes the 4 FPS floor and generic
   gameplay coherence checks on the exact staged normal candidate.
-- [ ] Independent code review passes or its one narrow repair is re-observed.
+- [x] Independent review `PASS WITH FINDINGS`; no critical/important issue.
+  Its memory-accounting and source/scheduler-test findings are closed by the
+  focused review-evidence transition above; no product-code change occurred.
 - [ ] Owner observes and accepts boot, play, fidelity, camera, collision,
   ordinary actors, audio, presentation, and cadence on the exact W0 artifact.

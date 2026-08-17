@@ -290,7 +290,8 @@ What the sprint established, in order:
 
 **Next, ranked by releasable VB/frame per unit of constraint tax
 (T2.16 section 9, as amended by T2.17).** **(1) DONE (T2.17): the per-field
-epoch stall.** **(1a) Live-observed; owner/review pending (W0): bound the overwrite fence.**
+epoch stall.** **(1a) Live-observed; independent review PASS WITH FINDINGS;
+desktop owner gate pending (W0): bound the overwrite fence.**
 `sourceboot_frame_poll_transfers()` now observes busy once,
 defers the exact `READY` bank through the scheduler, and starts no DMA or
 re-presentation on busy; the old normal/diagnostic wait and spin are gone.
@@ -303,7 +304,9 @@ direct Makefile handoff, at a tool/docs-only descendant revision rather than
 the frozen normal candidate revision; it is target-equivalent, not
 artifact-identical. The busy branch remains `host-proven; target-compiled; live
 occurrence unproven`. No diagnostic capture was needed under its stated
-condition. Owner acceptance and independent review remain pending.
+condition. Independent review found no critical or important issue, authorized
+desktop owner launch, and its two review-evidence findings are closed; owner
+acceptance remains pending.
 **(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
 correctly priced, master-local, no constraint tax. **(3) VDP1 command
 reduction -- promoted, but strictly after (1)**; before (1) it is worth zero

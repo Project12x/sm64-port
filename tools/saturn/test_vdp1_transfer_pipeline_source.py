@@ -65,11 +65,29 @@ class TransferPipelineSourceTests(unittest.TestCase):
         force = publish.find("vdp1_sync_force_put()")
         bank_publish = publish.find("sm64_saturn_vdp1_frame_bank_publish")
         self.assertTrue(0 <= busy < defer < submit < poll)
+        self.assertEqual(transfer.count("vdp1_sync_busy()"), 1)
         self.assertIn("sm64_saturn_frame_pipeline_transfer_deferred", busy_block)
         self.assertIn("goto finish;", busy_block)
-        self.assertNotIn("sm64_saturn_vdp1_frame_bank_submit_transfers", busy_block)
-        self.assertNotIn("sourceboot_frame_reuse_previous", busy_block)
-        self.assertNotIn("sourceboot_present_generation", busy_block)
+        # A busy observation leaves the exact READY bank owned by the frame
+        # bank state machine.  The only allowed state transition here is the
+        # scheduler acknowledgement; no transfer, bank-owner, poison, or
+        # present path may mutate its ownership before the later-epoch retry.
+        for forbidden in (
+            "sm64_saturn_vdp1_frame_bank_submit_transfers",
+            "sm64_saturn_vdp1_frame_bank_poll_transfers",
+            "sm64_saturn_vdp1_frame_bank_quarantine",
+            "sourceboot_vdp1_destination_poisoned",
+            "sourceboot_vdp1_transfer_pending",
+            "sourceboot_vdp1_render_ready",
+            "sourceboot_vdp1_bank_submitted",
+            "sourceboot_vdp1_transfer_faults",
+            "sourceboot_vdp1_transfer_queued_not_started",
+            "sourceboot_frame_reuse_previous",
+            "sourceboot_present_generation",
+            "vdp1_sync_force_put",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, busy_block)
         self.assertNotIn("vdp1_sync_wait()", transfer)
         self.assertNotRegex(transfer, r"while\s*\(\s*vdp1_sync_busy\s*\(\s*\)\s*\)")
         self.assertNotIn("sourceboot_vdp1_fence_spin", source)

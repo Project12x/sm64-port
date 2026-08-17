@@ -63,11 +63,19 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
             "sourceboot_main_pool", 0x00280A30, 0x60000
         )
         layout.symbols["sourceboot_vdp1_cmdts"] = verify.Symbol(
-            "sourceboot_vdp1_cmdts", 0x060CFF80, 0x20000
+            "sourceboot_vdp1_cmdts", 0x060CFF80,
+            verify.VDP1_COMMAND_BANK_BYTES
         )
         layout.sections.pop(".lwram_cmdts")
         layout.sections[".lwram_actor_runtime"] = verify.Section(
             ".lwram_actor_runtime", 0x002EB880, 0x10000, "NOBITS"
+        )
+        # The geometry traversal arena is a distinct LWRAM allocation.  It
+        # ends after the actor-runtime arena, so omitting it would overstate
+        # the final free margin despite every existing required section being
+        # valid on its own.
+        layout.sections[".lwram_geo_traversal"] = verify.Section(
+            ".lwram_geo_traversal", 0x002FB880, 0x400, "NOBITS"
         )
 
         result = verify.validate_layout(
@@ -76,8 +84,8 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
         )
 
         self.assertEqual(result["command_bank_address"], 0x060CFF80)
-        self.assertEqual(result["lwram_end"], 0x002FB880)
-        self.assertEqual(result["lwram_margin"], 0x4780)
+        self.assertEqual(result["lwram_end"], 0x002FBC80)
+        self.assertEqual(result["lwram_margin"], 0x4380)
 
     def test_rejects_uncached_nobits_that_would_omit_slave_entry_bytes(self) -> None:
         layout = image("missing-uncached-bytes", end=0x060F9000, stage=8, scc=False)

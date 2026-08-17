@@ -4,6 +4,16 @@
 
 ### Changed
 
+- The sourceboot memory-map verifier now includes `.lwram_geo_traversal` in
+  its final LWRAM high-water calculation. The section was previously omitted
+  even though it is a live allocation, overstating the reported margin; normal
+  and diagnostic W0 evidence now reports the corrected `0x16A20` and
+  `0x166A0` margins, respectively, while retaining the `0x4000` floor. The
+  focused regression fixture and W0 source/scheduler contracts now also prove
+  that a busy transfer path observes `vdp1_sync_busy()` exactly once, leaves
+  frame-bank ownership untouched, and rejects wrong or duplicate scheduler
+  acknowledgements without any relevant state mutation.
+
 - W0 sourceboot no longer waits for VDP1 overwrite safety inside its own
   scheduler action: Yaul clears that busy flag in VBlank-OUT, so the old wait
   could not retire there. A busy observation now retains the exact `READY`

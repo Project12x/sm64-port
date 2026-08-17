@@ -76,7 +76,7 @@ Keep a Changelog documentation.
   W0-specific failure must be fixed narrowly.
 - No new target buffers or package fields are permitted. The latest comparison
   ELF leaves HWRAM `0x4A78` bytes free with `0x2B78` above the `0x1F00` floor,
-  and LWRAM `0x17620` bytes free against a `0x4000` floor. Remeasure both after
+  and LWRAM `0x16A20` bytes free against a `0x4000` floor. Remeasure both after
   normal and diagnostic target links.
 - Reference-code record is fixed for W0: vendored Yaul/libyaul commit
   `6012f79f237773378c8014e70d8998ad95a38d98` (MIT), inspected
@@ -133,7 +133,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
 - Modify: `docs/superpowers/plans/2026-08-17-saturn-shaped-port-phase-plan.md:155-175`
 - Modify: `docs/saturn/evidence/reports/w0-vdp1-overwrite-fence.md`
 
-- [ ] **Step 1: Reconcile source and documentation before editing.**
+- [x] **Step 1: Reconcile source and documentation before editing.**
 
   Run:
 
@@ -148,7 +148,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   transition. If tracked files differ, reconcile the phase plan and ledger
   before changing runtime code.
 
-- [ ] **Step 2: Write the failing nominal scheduler tests first.**
+- [x] **Step 2: Write the failing nominal scheduler tests first.**
 
   Add `#include <string.h>` and two tests before
   `test_followup_polls_are_bounded_to_the_submit_field()`. Use failure codes
@@ -259,7 +259,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   Register both tests in `main()` immediately before the existing T2.17
   follow-up-poll test.
 
-- [ ] **Step 3: Run the scheduler test and confirm RED for the missing API.**
+- [x] **Step 3: Run the scheduler test and confirm RED for the missing API.**
 
   ```powershell
   $hostGate = 'HOST_CC_ENV=env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS TMP=D:/tmp TEMP=D:/tmp'
@@ -270,7 +270,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   `sm64_saturn_frame_pipeline_transfer_deferred`. A failure in an old test is
   not the intended RED and must be investigated before implementation.
 
-- [ ] **Step 4: Declare and implement the minimal acknowledgement.**
+- [x] **Step 4: Declare and implement the minimal acknowledgement.**
 
   Add this declaration immediately before `transfer_complete` in the header:
 
@@ -322,7 +322,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   `sim_ticks_this_presentation`, `available_sim_credit`, queued-snapshot fields,
   render completion, transfer completion, or generation counters.
 
-- [ ] **Step 5: Add mutations that prove the two load-bearing assignments.**
+- [x] **Step 5: Add mutations that prove the two load-bearing assignments.**
 
   Append two builds to `verify-frame-pipeline`, following the existing mutation
   pattern exactly. Compile one with
@@ -335,7 +335,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   `src/port/saturn/runtime/saturn_frame_pipeline.c` with the nominal includes
   and warnings. Use distinct executables under `build/saturn/host-tests/`.
 
-- [ ] **Step 6: Run the focused scheduler and ownership gates.**
+- [x] **Step 6: Run the focused scheduler and ownership gates.**
 
   ```powershell
   $hostGate = 'HOST_CC_ENV=env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS TMP=D:/tmp TEMP=D:/tmp'
@@ -347,7 +347,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   mutations are rejected; frame-bank binary and source checks pass. This is
   `host-contract-passed`, not target evidence.
 
-- [ ] **Step 7: Update operational state and commit Task 1.**
+- [x] **Step 7: Update operational state and commit Task 1.**
 
   Mark W0 `active; scheduler host contract passed; sourceboot and target gates
   pending` in the phase plan and ledger. Record the exact RED command, PASS
@@ -729,7 +729,7 @@ compile.
 - Modify: `STATE.md:291-299`
 - Modify: `ROADMAP.md:134-138`
 
-- [ ] **Step 1: Request an independent code review after live observation.**
+- [x] **Step 1: Request an independent code review after live observation.**
 
   Invoke `superpowers:requesting-code-review`. Give the reviewer the design,
   this plan, Task 1 and Task 2 commit SHAs, the exact diff from pre-W0 to current
@@ -740,7 +740,7 @@ compile.
   Record `PASS`, `PASS WITH FINDINGS`, or `FAIL` and every actionable finding in
   the ledger.
 
-- [ ] **Step 2: Handle review without opening a repair campaign.**
+- [x] **Step 2: Handle review without opening a repair campaign.**
 
   If review passes, proceed. If it finds a real W0 defect, make one narrow fix,
   update `CHANGELOG.md` and operational docs in the same behavior commit, rerun

@@ -773,6 +773,7 @@ static int test_followup_polls_are_bounded_to_the_submit_field(void)
 static int test_transfer_deferral_is_epoch_gated_and_recoverable(void)
 {
     sm64_saturn_frame_pipeline_t pipeline;
+    sm64_saturn_frame_pipeline_t before;
     uint32_t dropped_before;
     int failure;
 
@@ -793,7 +794,9 @@ static int test_transfer_deferral_is_epoch_gated_and_recoverable(void)
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 213);
     if (failure != 0) return failure;
 
-    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 2U)) return 214;
+    before = pipeline;
+    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 2U) ||
+        memcmp(&pipeline, &before, sizeof(pipeline)) != 0) return 214;
     if (!sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 1U)) return 215;
     if (pipeline.transfer_started || pipeline.transfer_submit_vblank_valid)
         return 216;
@@ -808,7 +811,9 @@ static int test_transfer_deferral_is_epoch_gated_and_recoverable(void)
         pipeline.sim_ticks_this_presentation != 2U ||
         pipeline.previous_frame_reuse_count != 1U ||
         pipeline.presentation_pending) return 219;
-    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 1U)) return 220;
+    before = pipeline;
+    if (sm64_saturn_frame_pipeline_transfer_deferred(&pipeline, 1U) ||
+        memcmp(&pipeline, &before, sizeof(pipeline)) != 0) return 220;
     failure = expect_action(&pipeline, 504U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 221);
     if (failure != 0) return failure;
