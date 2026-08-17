@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+### Added
+
+- Sprint 2 T2.16 (diagnostics): `tools/saturn/capture_idle_attribution.py`, a
+  contiguous dual-CPU trace that attributes idle SH-2 cycles to a wait site and
+  a cause on the shipped ELF, with no rebuild and no instrumentation.
+
+  **Why a new tool and not the T2.13 sampler.** `capture_softfloat_profile.py`
+  answers "what is executing at this PC" and cannot answer "what is this
+  processor waiting on", for three reasons this tool fixes. (1) It samples the
+  two SH-2s in *alternating* bursts, so it never observes the pair
+  (master PC, slave PC) at one emulated instant -- and "is the slave idle
+  because the master is computing, or because the master is idle too?" is a
+  joint question. `Saturn::StepMasterSH2()` advances the slave by exactly the
+  master's cycles, so pausing after a master step and reading both register
+  files is one coherent snapshot. (2) It attributes by PC only.
+  `_sm64_saturn_source_runtime_wait_vblank` is a leaf -- both
+  `vdp2_tvmd_vblank_in_wait` and `..._out_wait` are `__always_inline` in
+  libyaul -- so PR holds the caller's return address for the whole spin, and
+  reading PR attributes the wait to its exact call site at a 100% hit rate,
+  where T2.14 section 7.1 measured call-edge sampling as far too sparse to
+  attribute anything. (3) **Burst sampling after `exec.run_for` is
+  raster-phase-locked**: `Saturn::RunFrameImpl()` runs until the vertical phase
+  *enters* `BlankingAndSync`, so every burst begins at the start of VBlank --
+  precisely where the master's VBlank spin lives. This tool therefore traces
+  contiguously, with no gap and no phase selection.
+
+  **New quantities.** Per-CPU cycle residency normalised per CPU rather than
+  pooled; the run-length structure of every symbol (how many times the master
+  entered its spin and how long each excursion lasted); PR-based wait-site
+  attribution; the master x slave joint contingency table, whose both-idle cell
+  is the pure scheduler stall; an ordered run log that reconstructs the frame's
+  real action sequence; and a strided VDP1/VDP2 register witness (EDSR/LOPR/
+  COPR, TVSTAT) so the VDP1 starvation question is answered on the same build
+  in the same run.
+
+  **Prerequisite for readers of any prior profile.** Ymir's headless rig has
+  `m_emulateSH2Caches = false` (`ymir-core/src/ymir/sys/saturn.cpp:156`) and no
+  inter-SH-2 bus arbitration; per-region access latency *is* modelled. Every
+  cadence and profile number this project holds is therefore blind to the
+  cache-through cost of handing work to the slave and to HWRAM bus contention,
+  and any "releasable cycles" figure derived from this rig is an upper bound on
+  what hardware would return.
+
+
 ### Changed
 
 - Sprint 2 T2.15 (measurement): the geo walk's cadence ceiling is now measured
