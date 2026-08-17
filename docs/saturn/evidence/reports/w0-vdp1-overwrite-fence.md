@@ -101,7 +101,7 @@ check.
 | Commit | Purpose |
 | --- | --- |
 | `4b66543e850e0b601ea4ec2cfc22062853da5771` | `feat(saturn): acknowledge deferred VDP1 transfers` — rewritten W0.1 implementation with the mandatory same-commit changelog entry |
-| W0.2 behavior commit | Pending the atomic sourceboot/documentation commit; its exact SHA is recorded only by the permitted documentation-only follow-up |
+| `da41248f40dd4236147f3c3ea4dbb52225772c35` | `fix(saturn): defer busy VDP1 overwrites` — W0.2 sourceboot busy deferral, profile-summary correction, focused contracts, approved A8 acceptance-test repair, and same-commit behavior documentation |
 
 Independent review is not requested until after the first identity-bound live
 product observation.
@@ -126,6 +126,35 @@ gate compiled and passed its four checks. Planned gates, in order:
 6. Unique normal CUE headless Ymir product observation.
 7. Independent code review.
 8. Identity-bound desktop Ymir owner observation.
+
+### W0.2 exact host evidence
+
+The Task 2 RED command was `with-msys-toolchain.ps1 mingw32-make -f
+Makefile.saturn.mk verify-vdp1-transfer-pipeline` with the documented
+sanitized `HOST_CC_ENV` and `TMP/TEMP=D:/tmp`. After the environmental sandbox
+attempt could not write `D:\tmp`, the approved-toolchain rerun reached the
+intended contract failure: `missing pattern
+'if\\s*\\(\\s*overwrite_busy\\s*\\)'` after the existing DMA and frame-bank
+transfer checks completed.
+
+The GREEN run used that same environment for these commands:
+
+1. `verify-frame-pipeline` — PASS, including the existing mutation fixtures
+   and both deferral mutations.
+2. `verify-vdp1-frame-bank` — PASS; 4 source tests.
+3. `verify-vdp1-transfer-pipeline` — PASS; 3 W0 source tests, 2 new telemetry
+   summary tests, 7 repaired A8 runtime-contract tests, and 5 A9 coherence
+   tests, after the existing DMA/frame-bank executable checks.
+4. `verify-render-overlap-integration` — PASS, nominal integration plus all
+   existing mutation fixtures.
+5. `verify-sourceboot-presentation-boundary` — known pre-W0 literal-drift
+   failure, not a W0-specific result: all 7 tests stop at `bootstrap must
+   contain exactly one null-snapshot VDP2 begin` before their W0 path checks.
+
+Pre-commit scoped review found no actionable W0.2 or A8-correction issue; its
+local wrapper could not rerun tests, so the commands above remain the actual
+test evidence. Independent review remains deferred until the first
+identity-bound live product observation.
 
 ## Remaining gates
 
