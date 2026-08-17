@@ -364,12 +364,12 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
 
 ## Task 2: Replace sourceboot's wait and correct diagnostic semantics
 
-**Task status (2026-08-17):** `host-contract-passed; target compile and live
-gates pending`. The first four focused host gates pass; the presentation-boundary
-gate remains unchecked for the known pre-W0 `bootstrap must contain exactly one
-null-snapshot VDP2 begin` literal drift, before any W0 path assertion. W0.2 is
-not `source-complete` until normal and diagnostic target-equivalent consumers
-compile.
+**Historical Task-2 status (2026-08-17):** At this task transition W0.2 was
+`host-contract-passed; target compile and live gates pending`. It is retained
+as history: W0 subsequently reached `complete; owner-accepted` on
+`id-e8720d58595d9a62`. The known pre-W0 `bootstrap must contain exactly one
+null-snapshot VDP2 begin` literal drift remains a limitation before any W0
+assertion, not an open W0 gate.
 
 **Files:**
 

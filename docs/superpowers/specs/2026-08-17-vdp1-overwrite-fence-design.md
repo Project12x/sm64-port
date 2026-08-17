@@ -9,9 +9,12 @@
 **Scope:** W0 only: remove the unbounded VDP1 command-VRAM overwrite wait
 without changing the normal frame-bank transfer, publication, or plotting path
 
-**Implementation status (2026-08-17):** W0.2 is `host-contract-passed;
-target compile and live gates pending`. The A8
-transfer-runtime source contract was corrected against immutable base
+**Implementation status (2026-08-17):** W0 is `complete; owner-accepted` on
+normal candidate `id-e8720d58595d9a62` (manifest
+`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
+`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, ELF
+`021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`). The
+following A8 contract correction is historical Task-2 evidence against immutable base
 `112cd9f8ce0b54229578b6c0e5741ba64e1089a0` to accept the pre-existing
 `SOURCEBOOT_LWRAM_STATE` poison-state annotation and inspect
 `sourceboot_post_cart_init()` for the actual VDP1 pointer conversion. This is
@@ -208,12 +211,15 @@ drop/coalescing and frame-bank cancellation contract and is outside W0.
 
 ## Memory, ownership, and transport record
 
-W0 allocates no new target buffer and changes no partition size. The latest
-source-complete ELF (`id-49894e8e2d3ea415`) ends HWRAM at `0x060FB588`, leaving
-`0x4A78` (19,064) bytes; the required final floor is `0x1F00` (7,936), leaving
-`0x2B78` (11,128) bytes above that floor before W0's code-size change. LWRAM
-ends at `0x002E89E0`, leaving `0x17620` bytes against its `0x4000` floor. The W0
-target link must remeasure both margins.
+W0 allocates no new target buffer and changes no partition size. The following
+is a **historical pre-W0 planning snapshot**, not current margin evidence:
+source-complete ELF `id-49894e8e2d3ea415` ended HWRAM at `0x060FB588`, leaving
+`0x4A78` bytes and `0x2B78` above the required `0x1F00` final floor. Its former
+LWRAM figure omitted `.lwram_geo_traversal` and must not be used as final
+accounting. The owner-accepted W0 normal ELF instead verifies HWRAM remaining
+`0x4A58` and LWRAM `lwram_end=0x002E95E0`, margin `0x16A20 >= 0x4000`; the
+target-equivalent diagnostic arm verifies `lwram_end=0x002E9960`, margin
+`0x166A0 >= 0x4000`.
 
 | Resource | Physical regions, maximum, alignment | Lifetime and owner | Producer, consumer, and route | Deferral and failure atomicity |
 | --- | --- | --- | --- | --- |

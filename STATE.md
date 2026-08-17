@@ -4,17 +4,24 @@
 **Active branch:** `saturn/recovery` (worktree `.worktrees/saturn-recovery`)
 **Active plan:**
 [`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
-**Status:** **Sprint 1 (R0+R1) COMPLETE and owner-accepted 2026-08-15.**
+**Status:** **W0 COMPLETE and owner-accepted 2026-08-17** on
+`id-e8720d58595d9a62` (manifest
+`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
+`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, ELF
+`021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`).
+Sprint 1 (R0+R1) was historically complete and owner-accepted 2026-08-15.
 **Sprint 2 (cadence recovery) — investigation phase COMPLETE 2026-08-15.**
 
-**Current measured cadence: 6.7181 FPS / 8.9310 VBlanks per frame** on
-`id-c0352f297034f653` (**T2.17**), against A9A's 5.294 FPS / 11.333 VB.
+**Historical T2.17 measured cadence: 6.7181 FPS / 8.9310 VBlanks per frame** on
+`id-c0352f297034f653`, against A9A's 5.294 FPS / 11.333 VB. The current
+owner-accepted W0 candidate is `id-e8720d58595d9a62`, whose identity-bound
+normal observation measured 6.6923 FPS mean and 6.0 FPS 1% low.
 Median 6.6667, 1% low 6.0. Source:
 `docs/saturn/evidence/reports/sprint2-t2_17-epoch-stall.md`, 29 intervals,
 `summarize_cadence`. **+25.5% over T2.13 in one scheduler change** -- the
 per-field epoch stall collapsed onto the two gates that carry a hardware
-guarantee. **Not yet owner-observed:** this is a headless cadence result on a
-frame-scheduler change, and section 8 of that report lists what to look for.
+guarantee. This T2.17 paragraph is historical headless evidence; the W0
+candidate was subsequently desktop-observed and owner-accepted.
 **The T2.11 concurrency rail is now needed on 28 of 29 intervals (0 of 29 at
 T2.13), so the phase decomposition no longer closes and must not be quoted;
 the cadence figures are independent of it and stand.**
@@ -423,9 +430,14 @@ sections 2 and 6 for the full site classification and where to attack instead.
 
 ## Product truth
 
-**There is now an owner-accepted current CUE: `id-86d3880727ed1d10`.**
-ELF `b8754557…b501`, ISO `d952aea4…521a`, preserved at
+**Historical prior owner-accepted CUE: `id-86d3880727ed1d10`.** ELF
+`b8754557…b501`, ISO `d952aea4…521a`, preserved at
 `releases/2026-08-15_0705/id-86d3880727ed1d10/`.
+
+**Current owner-accepted W0 CUE: `id-e8720d58595d9a62`.** Manifest
+`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`; CUE
+`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`; ELF
+`021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`.
 
 Owner-observed and accepted at the gate:
 
