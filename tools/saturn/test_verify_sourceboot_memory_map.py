@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,7 +22,9 @@ def image(name: str, *, end: int, stage: int, scc: bool,
             ".uncached", 0x20000000 | uncached_start,
             max(0, end - uncached_start), "PROGBITS"
         ),
-        ".lwram_cmdts": verify.Section(".lwram_cmdts", 0x00200000, 0x20000, "NOBITS"),
+        ".lwram_cmdts": verify.Section(
+            ".lwram_cmdts", 0x00200000, verify.VDP1_COMMAND_BANK_BYTES, "NOBITS"
+        ),
         ".lwram_bss": verify.Section(".lwram_bss", 0x00240000, 0x8BB20, "NOBITS"),
     }
     symbols = {
@@ -112,14 +115,19 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
             verify.validate_layout(invalid, route=1, stage_sectors=8,
                                    required_final_margin=0x1B00)
 
-    def test_make_verify_passes_the_resolved_readelf_to_native_math_audits(self) -> None:
+    def test_native_math_audits_receive_the_resolved_readelf_tool(self) -> None:
         makefile = (Path(__file__).resolve().parents[2] / "src" / "port" /
                     "saturn" / "sourceboot" / "Makefile").read_text(encoding="utf-8")
-        audit_invocations = makefile.count(
-            '"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_sh2_native_math.py"'
+        audit_invocations = re.findall(
+            r'"\$\(SOURCEBOOT_PYTHON\)" '
+            r'"\$\(ROOT\)/tools/saturn/verify_sh2_native_math\.py"'
+            r'(?P<arguments>.*?)--addr2line "\$\(SOURCEBOOT_SH_ADDR2LINE\)"',
+            makefile,
+            flags=re.DOTALL,
         )
-        self.assertEqual(audit_invocations, 2)
-        self.assertEqual(makefile.count('--readelf "$(SOURCEBOOT_SH_READELF)"'), 2)
+        self.assertEqual(len(audit_invocations), 2)
+        for arguments in audit_invocations:
+            self.assertIn('--readelf "$(SOURCEBOOT_SH_READELF)"', arguments)
 
     def test_selects_stage8_when_it_meets_post_transport_floor(self) -> None:
         baseline = image("baseline", end=0x060FDCB0, stage=16, scc=False)
@@ -217,7 +225,8 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
         mutations = []
         wrong_size = image("wrong-command-size", end=0x060F9000, stage=8, scc=True)
         wrong_size.sections[".lwram_cmdts"] = verify.Section(
-            ".lwram_cmdts", 0x00200000, 0x1FFE0, "NOBITS"
+            ".lwram_cmdts", 0x00200000,
+            verify.VDP1_COMMAND_BANK_BYTES - 0x20, "NOBITS"
         )
         mutations.append(wrong_size)
         unaligned = image("unaligned-command", end=0x060F9000, stage=8, scc=True)
