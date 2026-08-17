@@ -211,6 +211,10 @@ and coherent terminal `notify=qn=qr=retired=58` with failures and qf/qq/qw
 all zero. One transient cadence retry was used. This is `live-observed`; it is
 not desktop owner acceptance.
 
+The W0 busy branch is **`host-proven; target-compiled; live occurrence
+unproven`**: normal live observation proves the product path, but its normal
+profile exposes no deferral counter and did not classify a busy occurrence.
+
 The separate untracked diagnostic profile changed only mode 0 to 2 (SHA-256
 `bf4fed164b24fead55275aefcf750cbdddb85d46d91fc11c97de52ba477f5ca6`). Two
 direct elevated MSYS Bash attempts, using the normal command tuple plus only
@@ -218,6 +222,15 @@ that profile and `SATURN_DIAGNOSTIC_MODE=2`, reached recursive
 `identity-assets`, then had no worker, new identity, CPU/file progress, or
 manifest across a bounded sample. Both stalled process trees were recorded and
 terminated; no diagnostic target link/memory/capture claim is made.
+
+Independent-review fix round 1 isolated `identity-assets` directly at
+2026-08-17T20:17:23Z with the same diagnostic profile, scene generation 15,
+development release mode, and manifest root. Its bounded command completed
+(durable stdout 385078 bytes, stderr 2221 bytes; final output at
+2026-08-17T20:20:04Z). The immediately following exact full Step-6 tuple
+again reached post-assets work, then had no compiler child, identity directory,
+or generated-file progress across the final bounded sample; its remaining
+processes were terminated. Diagnostic link/memory remain blocked.
 
 ## Remaining gates
 
