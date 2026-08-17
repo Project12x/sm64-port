@@ -446,7 +446,38 @@ build and is section 8's remaining lever.
   made about boot, visuals, audio, input or FPS. `SOURCE.DAT` — the cart image
   the console actually reads — is byte-identical before and after.
 
-## 10. Reproduction
+## 10. Commit, gates run, gates not run
+
+- Commit: **`f6a35508`** — `perf(build): publish generator output
+  write-if-changed, killing 3 of 4 links`. Fix, tests, `CHANGELOG.md`,
+  `STATE.md` and this report in one commit. Verified after committing that
+  every closure input's on-disk SHA-256 still matches the sealed closure of
+  `id-bed197e0c5e928d3`, so the identity and every hash here reproduce from
+  the commit.
+- **Gates run and passing:** four full `sourceboot` builds (baseline `-j12`,
+  post-fix `-j12`, post-fix `-j1`, post-fix regeneration re-run) all exit 0,
+  which includes `verify-sealed-inputs`, `seal-release`,
+  `verify-scene-package-schema`, `test_scene_package_determinism` and the rest
+  of the in-build gate set; one no-op re-run, exit 0.
+  `tools/saturn/test_write_if_changed.py` (11 tests, plus three mutations with
+  0% survival), `test_geo_depth_manifest.py`, `test_gen_trig_q16.py`,
+  `release_manifest.py compare`.
+- **Gate not run:** `tools/saturn/test_tools.py` — part of `verify-tools`,
+  exceeded a 2-minute budget and was not waited out, because running host
+  tests concurrently with a verification build would have written into the
+  same `build/` tree. It is unaffected by this change's call sites and should
+  be run in the next quiet window.
+- **Pre-existing failure, not chased:**
+  `test_gen_actor_identity_registry.py::test_sourceboot_registry_does_not_force_rewrite_immutable_bundle_inputs`
+  (see section 9). Fails identically at `51826db0`, before this change.
+- **Known pre-existing failures left untouched**, per the task brief:
+  `verify-render-clusters`, `verify-sourceboot-presentation-boundary`,
+  `verify-vdp1-transfer-pipeline`, `verify-render-snapshot-bank`,
+  `verify-graph-q16-contract`.
+- **No emulator gate was run.** This change has no product behaviour; the
+  cart image the console reads is byte-identical.
+
+## 11. Reproduction
 
 ```
 # Baseline and after builds, each into a fresh tree, via
