@@ -202,7 +202,10 @@ monitor; owner acceptance remains pending.
 - [ ] W0.4 independent review and desktop owner observation — independent
   review `PASS WITH FINDINGS`; `id-e8720d58595d9a62` launched on desktop Ymir
   and remained alive after the 20-second monitor. Owner observation remains
-  pending; launch/process status is not a visual or audio acceptance.
+  pending; owner wording is `I see 6-7 FPS and things look the same` and
+  `things look and sound good`, supporting the >=4 FPS floor, no obvious visual
+  regression, and audible output only. Explicit acceptance, controls,
+  presentation-failure, and permanent-busy checks remain unconfirmed.
 
 **Size:** ~1 hour of code plus target build, live observation, review, and owner
 gate time. Not a cadence item.

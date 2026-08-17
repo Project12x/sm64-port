@@ -309,7 +309,11 @@ desktop owner launch, and its two review-evidence findings are closed; owner
 acceptance remains pending. The exact staged normal candidate launched through
 desktop Ymir and remained alive after the bounded 20-second monitor; that is
 process proof only, not an inferred presentation, input, collision, or audio
-judgment.
+judgment. Owner partial wording is: `I see 6-7 FPS and things look the same`
+and `things look and sound good`. It establishes observed cadence >=4 FPS, no
+obvious visual regression, and audible output only; explicit acceptance,
+controls, tearing/flicker/partial/duplicate presentation, and permanent-busy
+checks remain open.
 **(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
 correctly priced, master-local, no constraint tax. **(3) VDP1 command
 reduction -- promoted, but strictly after (1)**; before (1) it is worth zero

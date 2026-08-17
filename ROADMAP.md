@@ -147,7 +147,10 @@ again after T2.12 closed `spatial_admit` out**):
   accounting and source-contract findings are closed. The exact staged normal
   candidate remained alive after a 20-second desktop Ymir monitor, but launch
   is not an owner visual/audio/gameplay verdict. The known pre-W0
-  presentation-boundary literal drift is explicitly not a W0 PASS.
+  presentation-boundary literal drift is explicitly not a W0 PASS. Owner
+  partial wording, `I see 6-7 FPS and things look the same` and `things look
+  and sound good`, supports the >=4 FPS floor, no obvious visual regression,
+  and audible output only; the rest of the owner checklist remains pending.
 - **VDP1 command reduction — NOW THE ACTIVE LEVER. The stall fix landed (T2.17)
   and VDP1 is the wall.** Re-measured on `id-c0352f297034f653`: `EDSR.CEF` is
   set in **6.33%** of 300 samples, so **VDP1 plots 93.67% of the frame** and

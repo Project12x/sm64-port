@@ -388,6 +388,16 @@ ISO hashes equal the staged candidate hashes. No screenshot or video was
 captured, and no visual, audio, control, camera, collision, actor, presentation,
 busy-occurrence, or FPS judgment is inferred from process liveness.
 
+### Owner partial observation (2026-08-17)
+
+The owner stated verbatim: **`I see 6-7 FPS and things look the same`** and
+**`things look and sound good`**. This is evidence that the observed cadence is
+at least 4 FPS, there is no obvious visual regression against the owner’s
+baseline, and audible output is good. It is not full owner acceptance.
+Controls, camera, collision, ordinary actors, and explicit absence of tearing,
+flicker, partial frame, duplicate plot, and a permanent-busy frozen frame
+remain unconfirmed. W0 therefore remains `owner gate pending`.
+
 No diagnostic capture ran: the normal observation neither recorded an
 unclassifiable busy deferral nor received a reviewer requirement for target
 deferral telemetry. The W0 busy branch remains **`host-proven; target-compiled;
@@ -419,5 +429,8 @@ live occurrence unproven`**.
 - [x] Exact normal candidate `id-e8720d58595d9a62` launched with desktop Ymir;
   the bounded 20-second monitor observed a live process and preserved stdout,
   stderr, manifest, CUE, and snapshot identity records.
-- [ ] Owner observes and accepts boot, play, fidelity, camera, collision,
-  ordinary actors, audio, presentation, and cadence on the exact W0 artifact.
+- [ ] Owner accepts boot, play, fidelity, camera, collision, ordinary actors,
+  audio, presentation, and cadence on the exact W0 artifact. Partial owner
+  evidence is limited to the verbatim `I see 6-7 FPS and things look the same`
+  and `things look and sound good`: >=4 FPS, no obvious visual regression, and
+  audible output only.
