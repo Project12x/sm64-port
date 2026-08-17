@@ -1,0 +1,386 @@
+{
+  "header": "src/port/saturn/gfx/saturn_mario_actor_mesh.h",
+  "levels": [
+    {
+      "bytes": {
+        "sm64_mario_animation_light_intensity": 12720,
+        "sm64_mario_animation_vertices": 76320,
+        "sm64_mario_meshlet_lod_position_list": 3318,
+        "sm64_mario_meshlet_lod_primitive_list": 2738,
+        "sm64_mario_meshlet_metadata": 903,
+        "sm64_mario_primitive_cull_back": 644,
+        "sm64_mario_primitives": 6440,
+        "sm64_mario_texture_tile_start": 1288,
+        "sm64_mario_vertices": 2544,
+        "sm64_mario_walking_animation_light_intensity": 32648,
+        "sm64_mario_walking_animation_vertices": 195888,
+        "total": 335451
+      },
+      "degenerate_dropped": 0,
+      "meshlet_count": 31,
+      "meshlet_position_list_count": 1659,
+      "meshlet_primitive_list_count": 1369,
+      "name": "original",
+      "pairing_report": {
+        "candidate_count": 164,
+        "commands_saved": 144,
+        "pairing_forbidden_triangle_count": 50,
+        "quad_count": 144,
+        "rejection_reasons": {
+          "material_mismatch": 34,
+          "normal_divergence": 443,
+          "projection_not_convex": 436,
+          "textured_pairing_not_implemented": 105
+        },
+        "render_primitive_count": 644,
+        "source_triangle_count": 788,
+        "standalone_triangle_count": 500
+      },
+      "per_material": [],
+      "primitive_count": 644,
+      "quad_count": 144,
+      "ratio": 1.0,
+      "referenced_vertex_count": 424,
+      "textured_primitive_count": 50,
+      "triangle_count": 788,
+      "vdp1_command_count": 694,
+      "worst_relative_error": 0.0
+    },
+    {
+      "bytes": {
+        "sm64_mario_animation_light_intensity": 9900,
+        "sm64_mario_animation_vertices": 59400,
+        "sm64_mario_meshlet_lod_position_list": 2562,
+        "sm64_mario_meshlet_lod_primitive_list": 2186,
+        "sm64_mario_meshlet_metadata": 642,
+        "sm64_mario_primitive_cull_back": 514,
+        "sm64_mario_primitives": 5140,
+        "sm64_mario_texture_tile_start": 1028,
+        "sm64_mario_vertices": 1980,
+        "sm64_mario_walking_animation_light_intensity": 25410,
+        "sm64_mario_walking_animation_vertices": 152460,
+        "total": 261222
+      },
+      "degenerate_dropped": 0,
+      "meshlet_count": 22,
+      "meshlet_position_list_count": 1281,
+      "meshlet_primitive_list_count": 1093,
+      "name": "decimated_75",
+      "pairing_report": {
+        "candidate_count": 104,
+        "commands_saved": 86,
+        "pairing_forbidden_triangle_count": 50,
+        "quad_count": 86,
+        "rejection_reasons": {
+          "material_mismatch": 34,
+          "normal_divergence": 380,
+          "projection_not_convex": 277,
+          "textured_pairing_not_implemented": 105
+        },
+        "render_primitive_count": 514,
+        "source_triangle_count": 600,
+        "standalone_triangle_count": 428
+      },
+      "per_material": [
+        {
+          "input_triangles": 255,
+          "locked_vertices": 35,
+          "material": 0,
+          "output_triangles": 191,
+          "relative_error": 0.0369902477,
+          "requested_triangles": 191,
+          "vertices": 153
+        },
+        {
+          "input_triangles": 196,
+          "locked_vertices": 38,
+          "material": 2,
+          "output_triangles": 146,
+          "relative_error": 0.0226442944,
+          "requested_triangles": 147,
+          "vertices": 129
+        },
+        {
+          "input_triangles": 80,
+          "locked_vertices": 37,
+          "material": 7,
+          "output_triangles": 60,
+          "relative_error": 0.047163669,
+          "requested_triangles": 60,
+          "vertices": 60
+        },
+        {
+          "input_triangles": 27,
+          "locked_vertices": 9,
+          "material": 8,
+          "output_triangles": 19,
+          "relative_error": 0.0616143122,
+          "requested_triangles": 20,
+          "vertices": 19
+        },
+        {
+          "input_triangles": 128,
+          "locked_vertices": 0,
+          "material": 9,
+          "output_triangles": 96,
+          "relative_error": 0.0171576664,
+          "requested_triangles": 96,
+          "vertices": 68
+        },
+        {
+          "input_triangles": 52,
+          "locked_vertices": 0,
+          "material": 10,
+          "output_triangles": 38,
+          "relative_error": 0.0419327393,
+          "requested_triangles": 39,
+          "vertices": 30
+        }
+      ],
+      "primitive_count": 514,
+      "quad_count": 86,
+      "ratio": 0.75,
+      "referenced_vertex_count": 330,
+      "textured_primitive_count": 50,
+      "triangle_count": 600,
+      "vdp1_command_count": 564,
+      "worst_relative_error": 0.0616143122
+    },
+    {
+      "bytes": {
+        "sm64_mario_animation_light_intensity": 7170,
+        "sm64_mario_animation_vertices": 43020,
+        "sm64_mario_meshlet_lod_position_list": 1850,
+        "sm64_mario_meshlet_lod_primitive_list": 1564,
+        "sm64_mario_meshlet_metadata": 526,
+        "sm64_mario_primitive_cull_back": 368,
+        "sm64_mario_primitives": 3680,
+        "sm64_mario_texture_tile_start": 736,
+        "sm64_mario_vertices": 1434,
+        "sm64_mario_walking_animation_light_intensity": 18403,
+        "sm64_mario_walking_animation_vertices": 110418,
+        "total": 189169
+      },
+      "degenerate_dropped": 0,
+      "meshlet_count": 18,
+      "meshlet_position_list_count": 925,
+      "meshlet_primitive_list_count": 782,
+      "name": "decimated_50",
+      "pairing_report": {
+        "candidate_count": 58,
+        "commands_saved": 50,
+        "pairing_forbidden_triangle_count": 50,
+        "quad_count": 50,
+        "rejection_reasons": {
+          "material_mismatch": 34,
+          "normal_divergence": 273,
+          "projection_not_convex": 157,
+          "textured_pairing_not_implemented": 105
+        },
+        "render_primitive_count": 368,
+        "source_triangle_count": 418,
+        "standalone_triangle_count": 318
+      },
+      "per_material": [
+        {
+          "input_triangles": 255,
+          "locked_vertices": 35,
+          "material": 0,
+          "output_triangles": 127,
+          "relative_error": 0.0775002912,
+          "requested_triangles": 127,
+          "vertices": 153
+        },
+        {
+          "input_triangles": 196,
+          "locked_vertices": 38,
+          "material": 2,
+          "output_triangles": 98,
+          "relative_error": 0.0449892767,
+          "requested_triangles": 98,
+          "vertices": 129
+        },
+        {
+          "input_triangles": 80,
+          "locked_vertices": 37,
+          "material": 7,
+          "output_triangles": 40,
+          "relative_error": 0.0904748887,
+          "requested_triangles": 40,
+          "vertices": 60
+        },
+        {
+          "input_triangles": 27,
+          "locked_vertices": 9,
+          "material": 8,
+          "output_triangles": 13,
+          "relative_error": 0.116268642,
+          "requested_triangles": 13,
+          "vertices": 19
+        },
+        {
+          "input_triangles": 128,
+          "locked_vertices": 0,
+          "material": 9,
+          "output_triangles": 64,
+          "relative_error": 0.0229837224,
+          "requested_triangles": 64,
+          "vertices": 68
+        },
+        {
+          "input_triangles": 52,
+          "locked_vertices": 0,
+          "material": 10,
+          "output_triangles": 26,
+          "relative_error": 0.0579088964,
+          "requested_triangles": 26,
+          "vertices": 30
+        }
+      ],
+      "primitive_count": 368,
+      "quad_count": 50,
+      "ratio": 0.5,
+      "referenced_vertex_count": 239,
+      "textured_primitive_count": 50,
+      "triangle_count": 418,
+      "vdp1_command_count": 418,
+      "worst_relative_error": 0.116268642
+    },
+    {
+      "bytes": {
+        "sm64_mario_animation_light_intensity": 4620,
+        "sm64_mario_animation_vertices": 27720,
+        "sm64_mario_meshlet_lod_position_list": 1248,
+        "sm64_mario_meshlet_lod_primitive_list": 948,
+        "sm64_mario_meshlet_metadata": 381,
+        "sm64_mario_primitive_cull_back": 223,
+        "sm64_mario_primitives": 2230,
+        "sm64_mario_texture_tile_start": 446,
+        "sm64_mario_vertices": 924,
+        "sm64_mario_walking_animation_light_intensity": 11858,
+        "sm64_mario_walking_animation_vertices": 71148,
+        "total": 121746
+      },
+      "degenerate_dropped": 0,
+      "meshlet_count": 13,
+      "meshlet_position_list_count": 624,
+      "meshlet_primitive_list_count": 474,
+      "name": "decimated_25",
+      "pairing_report": {
+        "candidate_count": 29,
+        "commands_saved": 25,
+        "pairing_forbidden_triangle_count": 50,
+        "quad_count": 25,
+        "rejection_reasons": {
+          "material_mismatch": 34,
+          "normal_divergence": 112,
+          "projection_not_convex": 74,
+          "textured_pairing_not_implemented": 105,
+          "winding_or_topology": 18
+        },
+        "render_primitive_count": 223,
+        "source_triangle_count": 248,
+        "standalone_triangle_count": 198
+      },
+      "per_material": [
+        {
+          "input_triangles": 255,
+          "locked_vertices": 35,
+          "material": 0,
+          "output_triangles": 63,
+          "relative_error": 0.135606423,
+          "requested_triangles": 63,
+          "vertices": 153
+        },
+        {
+          "input_triangles": 196,
+          "locked_vertices": 38,
+          "material": 2,
+          "output_triangles": 48,
+          "relative_error": 0.0850194618,
+          "requested_triangles": 49,
+          "vertices": 129
+        },
+        {
+          "input_triangles": 80,
+          "locked_vertices": 37,
+          "material": 7,
+          "output_triangles": 36,
+          "relative_error": 0.187351733,
+          "requested_triangles": 20,
+          "vertices": 60
+        },
+        {
+          "input_triangles": 27,
+          "locked_vertices": 9,
+          "material": 8,
+          "output_triangles": 7,
+          "relative_error": 0.154542699,
+          "requested_triangles": 6,
+          "vertices": 19
+        },
+        {
+          "input_triangles": 128,
+          "locked_vertices": 0,
+          "material": 9,
+          "output_triangles": 32,
+          "relative_error": 0.0517642647,
+          "requested_triangles": 32,
+          "vertices": 68
+        },
+        {
+          "input_triangles": 52,
+          "locked_vertices": 0,
+          "material": 10,
+          "output_triangles": 12,
+          "relative_error": 0.106359482,
+          "requested_triangles": 13,
+          "vertices": 30
+        }
+      ],
+      "primitive_count": 223,
+      "quad_count": 25,
+      "ratio": 0.25,
+      "referenced_vertex_count": 154,
+      "textured_primitive_count": 50,
+      "triangle_count": 248,
+      "vdp1_command_count": 273,
+      "worst_relative_error": 0.187351733
+    }
+  ],
+  "locked_vertex_count": 84,
+  "quad_pairing_headroom": {
+    "disjoint_coplanar_pairs_ceiling": 72,
+    "distinct_untextured_edges": 1137,
+    "edges_shared_by_two_untextured_triangles": 1077,
+    "shared_edges_same_material": 1043,
+    "shared_edges_same_material_and_coplanar": 74,
+    "tolerance_degrees": 2.0,
+    "untextured_triangles": 738
+  },
+  "schema": "sm64-saturn-mario-decimation",
+  "shipped_header_counts": {
+    "meshlet_position_list": 1659,
+    "meshlet_primitive_list": 1369,
+    "meshlets": 31,
+    "primitives": 644,
+    "quads": 144
+  },
+  "simplifier": {
+    "commit": "97bbdce4716f6257c9527b051515136882f33e79",
+    "entry_point": "meshopt_simplifyWithAttributes",
+    "license": "MIT",
+    "repo": "https://github.com/zeux/meshoptimizer",
+    "reuse_mode": "dependency (host tool, not vendored)"
+  },
+  "source_counts": {
+    "animation_frames": 30,
+    "materials": 11,
+    "meshlets": 31,
+    "primitives": 644,
+    "textured_primitives": 50,
+    "vertices": 424,
+    "walking_animation_frames": 77
+  },
+  "version": 1
+}
