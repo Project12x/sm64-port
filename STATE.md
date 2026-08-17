@@ -134,6 +134,10 @@ What the sprint established, in order:
   the running build through `exec.stepi` with no rebuild. **The finding that
   outranks the plan: 70.21% of sampled SH-2 cycles are idle**, so the largest
   remaining lever looks like the master/slave handoff, not arithmetic.
+  **T2.16 retires that 70.21% and the 73.33% that followed it** -- both are
+  pooled, raster-phase-locked figures; the measured pair is master 19.54% /
+  slave 79.15%, combined 49.34%. T2.13's *relative* non-idle ranking stands;
+  its absolute shares of the frame are understated roughly twofold.
 - **T2.12** — **the spatial index is a real tree at last: 255 nodes over the
   867 BOB clusters, with the INSIDE short-circuit. 4.9432 FPS / 12.1379 VB,
   −1.7587 VB and +14.5%** against `id-b46f60d0a6d129dd`; −1.2414 VB of that
@@ -155,20 +159,73 @@ What the sprint established, in order:
   correct short-circuit is unobservable in output, which is why the prune and
   descent mutations are the real guards.
 
-**Next: T2.14 moved the target again, and by more than T2.13 did.** **73.33% of
-sampled SH-2 cycles are idle**, so the master/slave handoff remains the largest
-single lever. Newly ranked ahead of everything arithmetic: **the geo walk builds
-a display list that nothing reads** (~10x the shadow path; bounded in one build
-by `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1`). Then
-`_actor_meshlet_live_depth_bounds` at 3.662% of sampled cycles -- the largest
-non-idle symbol, and not floating-point at all -- then the remaining soft-float
-at ~4.6%, led by `_saturn_geo_enter_object`, which has a fully-Q16 sibling
-(`_saturn_geo_enter_camera`) beside it as the template. **Shadows are settled
-direction, not a cadence item:** the owner has chosen a generic painted sprite
-that does not follow light cues, and T2.14 shows the sprite is strictly better
-than deletion. **Census items 2 and 5 stay deprioritised -- static phantoms.**
+- **T2.16 (measurement)** -- **the idle is attributed, and the 73.33% figure it
+  was attributed from is an artifact.** A contiguous 19.6405-VBlank
+  (1.7525-frame) trace with no gap and no phase selection measures **master
+  idle 19.544% = 2.1903 VB/frame** and **slave idle 79.145% = 8.8697
+  VB/frame**, i.e. **combined 49.34%, not 73.33%**. Root cause of the old
+  figure: `capture_softfloat_profile.py` bursts always begin where
+  `Saturn::RunFrameImpl()` stops -- the instant the vertical phase enters
+  `BlankingAndSync` -- which is exactly where the master's spin lives, and a
+  spin instruction costs 8.33 cycles against 1.2 for cached work, so a
+  cycle-weighted phase-locked sampler amplifies it ~7x. **The slave figure
+  survives; the master figure does not.**
+  - **The master's entire idle is one site, one caller, one cause:** 24 of 24
+    PR-attributed entries return to `main.c:2013`, the
+    `SM64_SATURN_FRAME_WAIT_VBLANK` arm. **Zero** from `game_init.c:472`
+    (`display_suppressed`). The cause is the frame pipeline's per-field epoch
+    rule (`saturn_frame_pipeline.c:147,149,180,206`), which forces
+    `WAIT_VBLANK` whenever the one remaining action was already taken this
+    field. **The master burns 2.19 VB/frame to interleave 0.14 VB/frame of
+    transport and publication work -- a 1:14 ratio**, in one contiguous block
+    that repeats identically in consecutive frames.
+  - **The "blanking-gated VRAM/CRAM transfer" hypothesis is refuted.** The wait
+    contains no transfer, and no transfer path in the port contains a blanking
+    gate; `saturn_dma_queue_kick/poll` have exactly one caller, which the
+    scheduler permits once per field.
+  - **The four fork-joins are dead code.** `_sm64_saturn_dual_worker_run` is
+    **absent from the product ELF** -- its three call sites live in two static
+    functions nothing calls, so `--gc-sections` removes it. Measured barrier
+    cost: 0. Any plan premised on widening those windows is planning against
+    code that is not linked.
+  - **The joint contingency table has an empty cell:** the master *never*
+    spins while the slave works (0.00%). Master work + master idle = 11.2069
+    exactly -- **the master is the critical path with no residue.**
+  - **VDP1 is not starved and is the next wall.** Fresh witness: `EDSR.CEF` set
+    in 12.0% of samples -> **VDP1 plots 88% of the frame (~9.86 VB)**, `COPR`
+    sweeping the full list. "552 of 1,664" is *static array occupancy*
+    (`main.c:767,806`), not load. **T2.8's demotion of the fill-rate levers
+    expires the moment the scheduler stall is released**, since master work is
+    9.0166 VB/frame.
+  - **Soft-float is 18.485% of the critical path (2.0718 VB/frame)**, not
+    7.50% -- that figure pooled in the slave's idle spin. Largest application
+    symbol behind the two render-phase bodies:
+    `_sm64_saturn_ztreme_frustum_aabb` at **0.649 VB/frame**, the same function
+    T2.10 item 3 made 0.075 VB *worse*.
+  - **Perfect packing is ~5.68 VB/frame (~10.6 FPS), not 2.99 VB (~20 FPS)**:
+    work is 50.66% of two-CPU capacity, not 26.67%.
+  - **Measurement caveat that binds every number this project holds:** Ymir's
+    headless rig sets `m_emulateSH2Caches = false` and models no inter-SH-2 bus
+    arbitration. **No measurement on this rig can price the cache-through cost
+    of moving work to the slave, or HWRAM contention.** Every "releasable"
+    figure for slave offload is an upper bound; the master-stall figure is not
+    affected, because no data crosses CPUs in it.
+
+**Next, ranked by releasable VB/frame per unit of constraint tax
+(T2.16 section 9).** **(1) Collapse the per-field epoch stall** -- ~1.9-2.19
+VB/frame, the only large block the hard constraints do not tax; expected
+landing ~9.86 VB (~6.09 FPS, +13.7%), capped by VDP1. Cost: 11 `WAIT_VBLANK`
+assertions in `frame_pipeline_test.c` and a bank-ownership safety argument.
+**(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
+correctly priced, master-local, no constraint tax. **(3) VDP1 command
+reduction -- promoted, but strictly after (1)**; before (1) it is worth zero
+frames. **(4) Widen the slave's 4-job render graph** -- targets the largest
+block (6.6794 VB/frame) but is the least safely sizeable, and needs a way to
+measure the coherency cost first. **Shadows remain settled direction, not a
+cadence item.** **Census items 2 and 5 stay deprioritised -- static phantoms.**
 The Mario double-emit and T2.9's items 5-8 remain open. The BOB bypass stays
-demoted to diagnostic value only.
+demoted to diagnostic value only. The geo-walk display-list refactor stays
+declined (T2.15: +0.005 FPS).
 
 **Owner gate CLOSED 2026-08-16.** `id-b46f60d0a6d129dd` was look-and-listened
 on desktop Ymir: **visuals good, sound working,

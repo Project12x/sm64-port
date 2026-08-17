@@ -20,8 +20,13 @@ owner-accepted at 4-5 FPS by eye) -> 4.9432 (`id-05046d9d5d8a5593`) -> 5.3538 --
 
 **The ranking below is substantially superseded by measurement.** T2.13 built a
 cycle profiler (`exec.stepi`, 240,000 samples on the shipped ELF, no rebuild)
-and T2.14 added the route counters. Together they establish: **73.33% of sampled
-SH-2 cycles are idle**; all float is 7.50%; all integer divide is 0.12% with
+and T2.14 added the route counters. Together they establish: ~~**73.33% of
+sampled SH-2 cycles are idle**~~ -- **RETIRED by T2.16**, which traced 19.6405
+VBlanks contiguously and measured **master idle 19.544% / slave idle 79.145%,
+combined 49.34%**; the 73.33% was pooled across both CPUs *and* raster-phase-
+locked, because `exec.run_for` stops exactly where the master's spin lives.
+For the same reason, **all float is 18.485% of the critical path (the master),
+not 7.50%**; all integer divide is 0.12% with
 `___sdivsi3` never appearing; and **the interpreted F3D frontend is not wired
 on this route at all** (`main.c:2151` passes `NULL, NULL` under `SATURN_DEMO_PATH`),
 so every per-triangle cull stage in `saturn_fast3d_frontend.c` is dead code here.
@@ -98,11 +103,30 @@ again after T2.12 closed `spatial_admit` out**):
   platforming depth cue. SlaveDriver's `COMPO_SHADOW` sprite is emitted immediately
   before its character, which is also the ordering answer this renderer needs
   (it has no depth bias anywhere).
-- **Master/slave handoff — THE ACTIVE LEVER (promoted by measurement).** 70.21%
-  of sampled SH-2 cycles are idle. The slave carries ~7% of frame work because
-  it is given a ~3-VB window across four blocking fork-joins; SlaveDriver
-  dispatches once and joins after simulation. Structural, and now the biggest
-  single number in the profile.
+- **Master/slave handoff — RE-SCOPED BY T2.16.** The "four blocking fork-joins"
+  premise is **dead code**: `_sm64_saturn_dual_worker_run` is absent from the
+  product ELF (its call sites are in two static functions nothing calls, so
+  `--gc-sections` removes it), and the measured barrier cost is **0**. What is
+  really there: the slave is notified **once per frame**, drains the whole
+  4-job render graph in **2.3372 VB/frame**, and then sleeps for **8.8697
+  VB/frame**. That block (6.6794 VB/frame overlapping master *work*) is the
+  largest idle block, but it is the **least safely sizeable** — every VB
+  converted crosses an incoherent cache and a shared bus, and Ymir models
+  neither (`m_emulateSH2Caches = false`), so any figure for it is an upper
+  bound. **Ranked 4th by T2.16, behind the scheduler stall, the float purge and
+  VDP1 command reduction.**
+- **Frame-pipeline per-field epoch stall — THE ACTIVE LEVER (T2.16).**
+  **2.1903 VB/frame (19.5% of the frame)**, all of it at `main.c:2013`, all of
+  it caused by `saturn_frame_pipeline.c` returning `WAIT_VBLANK` when the one
+  remaining action was already taken this field. The master burns it to
+  interleave **0.14 VB/frame** of transport and publication work. **The only
+  large idle block the hard constraints do not tax**, because no data crosses
+  CPUs. Expected landing ~9.86 VB (~6.09 FPS), capped by VDP1's plot time.
+- **VDP1 command reduction — PROMOTED by T2.16, strictly after the stall fix.**
+  `EDSR.CEF` is set in only 12.0% of samples: **VDP1 plots 88% of the frame
+  (~9.86 VB)** and is not starved. Master work is 9.0166 VB/frame, so VDP1
+  becomes binding the moment the stall is released — and buys nothing before
+  then. "552 of 1,664" is static array occupancy, not load.
 - **`_actor_meshlet_live_depth_bounds` — 3.662% of sampled cycles: the largest
   single non-idle symbol in the profile, and not floating-point at all.** No
   census item names it; sampling alone found it.
@@ -115,9 +139,16 @@ again after T2.12 closed `spatial_admit` out**):
 - **Command-count LOD** — LOD currently downgrades material but never reduces
   a surviving surface's command count. SlaveDriver halves its tile grid past
   MIPDIST for 4x fewer commands. Generic across levels, so it serves S1/S6.
-- **Slave overlap window** — the slave carries ~7% of frame work because it is
-  given a ~3-VB window across four blocking fork-joins; SlaveDriver dispatches
-  once and joins after simulation. Structural, deferred behind the above.
+- **Slave overlap window** — ~~the slave carries ~7% of frame work because it
+  is given a ~3-VB window across four blocking fork-joins~~ **superseded by
+  T2.16**: the fork-joins are not in the shipped ELF, and the slave measures
+  **2.3372 VB/frame of work against 8.8697 VB/frame idle** in a single
+  once-per-frame window bounded by a 4-job render graph
+  (`saturn_demo_render.c:4534-4562`). The SlaveDriver comparison still holds --
+  it dispatches once and joins after simulation, with a ±1 load controller --
+  but the fix is *more claimable jobs*, not *wider fork-join windows*. Deferred
+  behind the scheduler stall and the float purge, and blocked on a way to price
+  the cache-coherency cost that Ymir does not model.
 - **Occlusion culling — absent entirely.** The portal structure exists with
   full counters (`saturn_scene_admission.h:100`) and a 1,183-node BSP exists,
   but neither is active: nothing is rejected for being *behind* something.
