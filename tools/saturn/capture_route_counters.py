@@ -44,6 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from capture_route_views import YmirClient  # noqa: E402
 from capture_sourceboot_boot_trace import run_bios_handoff  # noqa: E402
+import route_warmup  # noqa: E402
 from capture_sourceboot_throughput import (  # noqa: E402
     build_elf_identity_probe,
     wait_for_target_identity,
@@ -163,17 +164,17 @@ def main(argv: list[str] | None = None) -> int:
         help="address of gNumCalls; omit to skip the collision tally",
     )
     parser.add_argument("--startup-vblanks", type=int, default=4096)
-    parser.add_argument(
-        "--warmup-vblanks",
-        type=int,
-        default=1800,
-        help="free-run VBlanks after identity match; the ELF is resident long "
-        "before the gameplay stage renders",
-    )
+    # T2.19d: the ELF is resident long before the gameplay stage renders, so a
+    # warm-up is still required -- but it is now counted in route ticks, not
+    # VBlanks, so different-speed builds are sampled at the same route
+    # position. --warmup-vblanks remains honoured and deprecated.
+    route_warmup.add_warmup_arguments(parser)
     parser.add_argument("--samples", type=int, default=120)
     parser.add_argument("--gap-vblanks", type=int, default=11)
     parser.add_argument("--timeout", type=float, default=2400.0)
     args = parser.parse_args(argv)
+
+    warmup_plan = route_warmup.plan_warmup(args, args.elf)
 
     client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
     rows: list[dict[str, Any]] = []
@@ -189,11 +190,7 @@ def main(argv: list[str] | None = None) -> int:
             build_elf_identity_probe(args.elf),
             startup_vblanks=args.startup_vblanks,
         )
-        remaining = args.warmup_vblanks
-        while remaining > 0:
-            chunk = min(remaining, 3600)
-            client.call("exec.run_for", {"frames": chunk})
-            remaining -= chunk
+        warmup = route_warmup.execute_warmup(client, warmup_plan)
         for index in range(args.samples):
             row: dict[str, Any] = {
                 "sample": index,
@@ -242,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         },
         "sampling": {
             "startup_vblanks": args.startup_vblanks,
-            "warmup_vblanks": args.warmup_vblanks,
+            "warmup": warmup,
             "samples": args.samples,
             "gap_vblanks": args.gap_vblanks,
         },
@@ -254,6 +251,17 @@ def main(argv: list[str] | None = None) -> int:
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     print(f"route counters: {len(rows)} samples, {report['wall_seconds']}s")
+    print(
+        f"  warm-up: {warmup['mode']} -> replay tick "
+        f"{warmup.get('replay_ticks')} (simulation tick "
+        f"{warmup.get('global_timer')}) after {warmup['vblanks_advanced']} VBlanks"
+    )
+    if rows:
+        print(
+            f"  sampled route span: replay ticks "
+            f"{rows[0]['state']['input_replay_ticks']} -> "
+            f"{rows[-1]['state']['input_replay_ticks']}"
+        )
     for block in ("profile", "state", "numcalls"):
         if not summary[block]:
             continue

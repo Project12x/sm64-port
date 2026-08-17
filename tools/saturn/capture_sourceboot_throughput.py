@@ -23,6 +23,7 @@ from capture_route_views import YmirClient
 from capture_sourceboot_boot_trace import bind_capture_artifacts, run_bios_handoff
 import gen_build_identity as build_identity
 from release_manifest import ReleaseManifestVerification, verify_release_manifest
+import route_warmup
 
 
 SCHEMA = "sm64-saturn-sourceboot-throughput-v1"
@@ -906,6 +907,13 @@ def main(argv: list[str] | None = None) -> int:
         default=600,
         help="separate identity-load wait bound (1..4096)",
     )
+    # T2.19d: this tool counts *presentation events*, not VBlanks, so its
+    # observation window is already simulation-anchored and the default stays
+    # 0 -- turning a warm-up on by default here would move the accepted
+    # 5.3538/6.7181 FPS baselines mid-sprint.  Pass --warmup-ticks N to measure
+    # cadence at a chosen route position instead of at the level-load
+    # transient; the route span actually observed is recorded either way.
+    route_warmup.add_warmup_arguments(parser, default_ticks=0)
     parser.add_argument("--max-vblanks", type=int, default=600, help="observation bound (1..4096)")
     parser.add_argument(
         "--presentation-events",
@@ -962,6 +970,11 @@ def main(argv: list[str] | None = None) -> int:
                 report["artifacts"][name]["path"] = str(verified_release.outputs[name])
         if report["artifacts"]["ymir"] is None:
             raise ValueError("Ymir identity could not be hashed")
+        stage = "warmup-plan"
+        warmup_plan = route_warmup.plan_warmup(args, capture_elf)
+        report["warmup_plan"] = {
+            key: value for key, value in warmup_plan.items() if key != "addresses"
+        }
         stage = "symbol-resolution"
         symbols = resolve_required_symbols(capture_elf)
         report["symbols"] = symbols
@@ -985,7 +998,13 @@ def main(argv: list[str] | None = None) -> int:
         report["target_build_identity"] = prove_loaded_build_identity(
             client, build_identity_probe, expected_label=args.expected_label
         )
+        stage = "warmup"
+        report["warmup"] = route_warmup.execute_warmup(client, warmup_plan)
         stage = "observation"
+        route_span: dict[str, Any] = {
+            "start": report["warmup"].get("replay_ticks"),
+            "start_simulation_tick": report["warmup"].get("global_timer"),
+        }
         report["observation"] = observe_target(
             client,
             symbols,
@@ -993,6 +1012,14 @@ def main(argv: list[str] | None = None) -> int:
             nominal_refresh_hz=args.nominal_refresh_hz,
             presentation_events=args.presentation_events,
         )
+        # The cadence figure belongs to a route span, not to the build alone.
+        # Record it so a cross-build FPS comparison can be checked rather than
+        # assumed (T2.17 section 6.2).
+        if warmup_plan["addresses"] is not None:
+            end = route_warmup.read_route_position(client, warmup_plan["addresses"])
+            route_span["end"] = end["replay_ticks"]
+            route_span["end_simulation_tick"] = end["global_timer"]
+        report["route_span"] = route_span
         client.shutdown()
         report["status"] = "complete"
     except BaseException as error:

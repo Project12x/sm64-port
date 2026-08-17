@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from capture_route_views import YmirClient  # noqa: E402
 from capture_sourceboot_boot_trace import run_bios_handoff  # noqa: E402
+import route_warmup  # noqa: E402
 from capture_sourceboot_throughput import (  # noqa: E402
     build_elf_identity_probe,
     wait_for_target_identity,
@@ -314,16 +315,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--nm", type=Path, required=True, help="sh-elf-nm")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--startup-vblanks", type=int, default=4096)
-    parser.add_argument(
-        "--warmup-vblanks",
-        type=int,
-        default=0,
-        help=(
-            "free-run VBlanks after identity match, before sampling. The ELF is resident "
-            "well before the gameplay stage renders, so sampling immediately after the "
-            "identity match profiles the CD loader instead of the route."
-        ),
-    )
+    # T2.19d: the ELF is resident well before the gameplay stage renders, so
+    # sampling immediately after the identity match profiles the CD loader
+    # instead of the route.  The warm-up is now counted in route ticks, so
+    # builds of different speed are profiled at the same route position.
+    route_warmup.add_warmup_arguments(parser)
     parser.add_argument(
         "--phases",
         type=int,
@@ -347,6 +343,19 @@ def main(argv: list[str] | None = None) -> int:
     symbols = load_symbols(args.nm, args.elf)
     index = SymbolIndex(symbols)
     identity_probe = build_elf_identity_probe(args.elf)
+    warmup_plan = route_warmup.plan_warmup(args, args.elf)
+    if args.phases <= 1 and args.phase_vblanks > 0:
+        # `--phases 1 --phase-vblanks N` is a wall-clock warm-up wearing a
+        # different name, and it carries the same cross-build defect T2.19d
+        # removed from --warmup-vblanks.  T2.13 and T2.14 both profiled this
+        # way.  The multi-phase use of the flag is legitimate; this single-
+        # phase use is not.
+        print(
+            "warning: --phase-vblanks with --phases 1 is a wall-clock warm-up. "
+            "Two builds of different speed will be profiled at different route "
+            "positions. Use --warmup-ticks instead.",
+            file=sys.stderr,
+        )
     targets = tuple(part.strip() for part in args.targets.split(",") if part.strip())
 
     client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
@@ -355,11 +364,13 @@ def main(argv: list[str] | None = None) -> int:
         identity = wait_for_target_identity(
             client, identity_probe, startup_vblanks=args.startup_vblanks
         )
-        warmup_remaining = args.warmup_vblanks
-        while warmup_remaining > 0:
-            chunk = min(warmup_remaining, 3600)
-            client.call("exec.run_for", {"frames": chunk})
-            warmup_remaining -= chunk
+        warmup = route_warmup.execute_warmup(client, warmup_plan)
+        print(
+            f"  warm-up: {warmup['mode']} -> replay tick "
+            f"{warmup.get('replay_ticks')} (simulation tick "
+            f"{warmup.get('global_timer')}) after "
+            f"{warmup['vblanks_advanced']} VBlanks"
+        )
         phase_results = []
         for _phase in range(max(1, args.phases)):
             advance = args.phase_vblanks
@@ -377,6 +388,11 @@ def main(argv: list[str] | None = None) -> int:
                     targets=targets,
                 )
             )
+        route_position_after_profile = (
+            route_warmup.read_route_position(client, warmup_plan["addresses"])
+            if warmup_plan["addresses"] is not None
+            else None
+        )
         result = merge(phase_results)
     finally:
         try:
@@ -397,7 +413,8 @@ def main(argv: list[str] | None = None) -> int:
             "gap_vblanks": args.gap_vblanks,
             "targets": list(targets),
             "startup_vblanks": args.startup_vblanks,
-            "warmup_vblanks": args.warmup_vblanks,
+            "warmup": warmup,
+            "route_position_after_profile": route_position_after_profile,
             "phases": args.phases,
             "phase_vblanks": args.phase_vblanks,
         },

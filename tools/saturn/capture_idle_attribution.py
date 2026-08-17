@@ -64,6 +64,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from capture_route_views import YmirClient  # noqa: E402
 from capture_softfloat_profile import SymbolIndex, load_symbols  # noqa: E402
 from capture_sourceboot_boot_trace import run_bios_handoff  # noqa: E402
+import route_warmup  # noqa: E402
 from capture_sourceboot_throughput import (  # noqa: E402
     build_elf_identity_probe,
     wait_for_target_identity,
@@ -445,7 +446,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--nm", type=Path, required=True, help="sh-elf-nm")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--startup-vblanks", type=int, default=4096)
-    parser.add_argument("--warmup-vblanks", type=int, default=1800)
+    # T2.19d: warm up to a fixed route tick rather than a fixed VBlank count,
+    # so a faster build is traced at the same route position as a slower one.
+    # T2.17 section 6.2 is the measurement this repairs.
+    route_warmup.add_warmup_arguments(parser)
     parser.add_argument("--windows", type=int, default=4)
     parser.add_argument("--window-steps", type=int, default=120000)
     parser.add_argument(
@@ -472,6 +476,7 @@ def main(argv: list[str] | None = None) -> int:
     symbols = load_symbols(args.nm, args.elf)
     index = SymbolIndex(symbols)
     identity_probe = build_elf_identity_probe(args.elf)
+    warmup_plan = route_warmup.plan_warmup(args, args.elf)
 
     client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
     windows: list[dict[str, Any]] = []
@@ -484,11 +489,13 @@ def main(argv: list[str] | None = None) -> int:
         identity = wait_for_target_identity(
             client, identity_probe, startup_vblanks=args.startup_vblanks
         )
-        remaining = args.warmup_vblanks
-        while remaining > 0:
-            chunk = min(remaining, 3600)
-            client.call("exec.run_for", {"frames": chunk})
-            remaining -= chunk
+        warmup = route_warmup.execute_warmup(client, warmup_plan)
+        print(
+            f"  warm-up: {warmup['mode']} -> replay tick "
+            f"{warmup.get('replay_ticks')} (simulation tick "
+            f"{warmup.get('global_timer')}) after "
+            f"{warmup['vblanks_advanced']} VBlanks"
+        )
         for number in range(args.windows):
             if number > 0 and args.window_gap_vblanks > 0:
                 client.call("exec.run_for", {"frames": args.window_gap_vblanks})
@@ -505,6 +512,13 @@ def main(argv: list[str] | None = None) -> int:
                 f"  window {number}: {window['steps']} steps, "
                 f"{window['total_cycles']} cycles, {window['wall_seconds']}s"
             )
+        # Record where the trace actually ended on the route, so the traced
+        # span is stated rather than inferred from a VBlank count.
+        route_position_after_trace = (
+            route_warmup.read_route_position(client, warmup_plan["addresses"])
+            if warmup_plan["addresses"] is not None
+            else None
+        )
     finally:
         try:
             client.shutdown()
@@ -526,7 +540,8 @@ def main(argv: list[str] | None = None) -> int:
             "io_stride": args.io_stride,
             "run_log_min_cycles": args.run_log_min_cycles,
             "startup_vblanks": args.startup_vblanks,
-            "warmup_vblanks": args.warmup_vblanks,
+            "warmup": warmup,
+            "route_position_after_trace": route_position_after_trace,
         },
         "summary": summary,
         "windows": windows,
