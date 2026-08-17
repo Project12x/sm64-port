@@ -1889,19 +1889,52 @@ compile-actor-scene-package: verify-scene-package-schema
 verify-hot-promotion:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
-	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/hot-promotion-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/hot-promotion-test$(HOST_EXEEXT)"
-	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror 	  -DSM64_SATURN_LOD_TEST_SHIFT_FAR_BOUNDARY=1 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" 	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-shift-far-boundary-mutation$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-shift-far-boundary-mutation$(HOST_EXEEXT)" 	  --label "LOD shifted far-tier boundary mutation"
-	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror 	  -DSM64_SATURN_LOD_TEST_INVERT_DEPTH_COMPARE=1 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" 	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-invert-depth-compare-mutation$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-invert-depth-compare-mutation$(HOST_EXEEXT)" 	  --label "LOD inverted distance comparison mutation"
-	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror 	  -DSM64_SATURN_LOD_TEST_INVERT_TIER_ORDER=1 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" 	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-invert-tier-order-mutation$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-invert-tier-order-mutation$(HOST_EXEEXT)" 	  --label "LOD inverted tier-order mutation"
-	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror 	  -DSM64_SATURN_LOD_TEST_NO_HYSTERESIS=1 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" 	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-no-hysteresis-mutation$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-no-hysteresis-mutation$(HOST_EXEEXT)" 	  --label "LOD collapsed enter/exit hysteresis band mutation"
+# T2.19c: the LOD tier-selection mutation gates.  A command-count LOD makes
+# the tier function decide what is drawn, so each of these deliberately-broken
+# compilations must make the nominal contract FAIL.  The last one collapses the
+# enter/exit hysteresis band, which is the only thing preventing distant
+# terrain from snapping as the camera drifts across a tier boundary.
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_LOD_TEST_SHIFT_FAR_BOUNDARY=1 \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-shift-far-boundary-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-shift-far-boundary-mutation$(HOST_EXEEXT)" \
+	  --label "LOD shifted far-tier boundary mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_LOD_TEST_INVERT_DEPTH_COMPARE=1 \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-invert-depth-compare-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-invert-depth-compare-mutation$(HOST_EXEEXT)" \
+	  --label "LOD inverted distance comparison mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_LOD_TEST_INVERT_TIER_ORDER=1 \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-invert-tier-order-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-invert-tier-order-mutation$(HOST_EXEEXT)" \
+	  --label "LOD inverted tier-order mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_LOD_TEST_NO_HYSTERESIS=1 \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-no-hysteresis-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/lod-no-hysteresis-mutation$(HOST_EXEEXT)" \
+	  --label "LOD collapsed enter/exit hysteresis band mutation"
 
 # Task 2's fixed-point projection differential gate.  The corpus begins with
 # real Bob-omb Battlefield source vertices and is intentionally separate from
