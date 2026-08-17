@@ -1,7 +1,7 @@
 # W0 VDP1 Overwrite Fence Execution Ledger
 
 **Date opened:** 2026-08-17
-**Status:** `active; W0.1/W0.2 source-complete and host-contract-passed; target and live gates pending`
+**Status:** `active; W0.1/W0.2 host-contract-passed; target compile and live gates pending`
 **Active plan:**
 [`2026-08-17-vdp1-overwrite-fence.md`](../../../superpowers/plans/2026-08-17-vdp1-overwrite-fence.md)
 **Approved design:**
@@ -12,7 +12,8 @@
 ## Current proof statement
 
 W0.1's scheduler acknowledgement and W0.2's sourceboot integration are
-`source-complete; host-contract-passed`. W0.2 performs one busy observation,
+`host-contract-passed`; W0.2 is not source-complete until the normal and
+diagnostic target-equivalent consumers compile. W0.2 performs one busy observation,
 defers the exact `READY` generation before any destination write, and records
 deferrals without retaining a blocking diagnostic spin. Target compilation,
 CUE construction, and Ymir observation remain pending. The accepted T2.17
@@ -20,8 +21,8 @@ gameplay artifact remains the only preserved product baseline.
 
 | Work item | State | Evidence | Remaining gate |
 | --- | --- | --- | --- |
-| W0.1 scheduler acknowledgement | `source-complete; host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, VDP1 frame-bank ownership checks, and finalized commit ledger pass | Sourceboot integration and target gates remain |
-| W0.2 sourceboot deferral and diagnostics | `source-complete; host-contract-passed` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed | Normal/diagnostic target compile, memory floors, identity-bound live observation; presentation-boundary literal drift remains recorded below |
+| W0.1 scheduler acknowledgement | `host-contract-passed` | Exact-generation acknowledgement implemented; nominal scheduler, eight mutations, and VDP1 frame-bank ownership checks pass | Sourceboot integration and target gates remain |
+| W0.2 sourceboot deferral and diagnostics | `host-contract-passed; target compile and live gates pending` | RED source contract failed on missing busy branch; GREEN `verify-frame-pipeline`, `verify-vdp1-frame-bank`, `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration` passed | Normal/diagnostic target-equivalent compile, memory floors, identity-bound live observation; presentation-boundary literal drift remains recorded below |
 | W0.3 normal build and live product observation | `planned` | Preserved baseline and exact build/capture recipe recorded | Unique build, memory check, atomic staging, identity-bound headless Ymir capture |
 | W0.4 review and owner gate | `planned` | Review and desktop acceptance criteria recorded | Independent verdict, identity-bound desktop launch, explicit owner judgment |
 
@@ -160,8 +161,8 @@ identity-bound live product observation.
 
 - [x] Scheduler deferral host contract, two new mutations, and VDP1 frame-bank
   ownership gate pass.
-- [x] Sourceboot busy branch is source-complete with no wait, DMA, replot, or
-  bank ownership change.
+- [x] Sourceboot busy branch has host-contract evidence for no wait, DMA,
+  replot, or bank ownership change; target-equivalent compile is still pending.
 - [x] `verify-frame-pipeline`, `verify-vdp1-frame-bank`,
   `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration`
   pass without weakened assertions. `verify-sourceboot-presentation-boundary`

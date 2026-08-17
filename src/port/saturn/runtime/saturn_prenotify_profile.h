@@ -177,7 +177,7 @@ typedef struct {
     volatile uint32_t slave_busy_max;
     volatile uint32_t slave_frt_tcr;
     /* ---------------------------------------------------------------- *
-     * T2.8 present path and VDP1 draw fence.
+     * T2.8 present path and VDP1 overwrite-gate observation.
      *
      * WHY THESE LIVE HERE AND NOT IN A SECOND RIG.  The pre-notification
      * window closes at the NOTIFIED marker (sourceboot/main.c), so the
@@ -190,13 +190,10 @@ typedef struct {
      * by the VBlank-OUT handler; none of them participates in the node
      * stack, so they cannot perturb the T2.4/T2.5/T2.6 numbers.
      *
-     * WRAP.  Every span here is accumulated from per-iteration or
-     * per-call-site 16-bit FRT differences, never one delta across a whole
-     * blocking wait, because at phi/128 a 16-bit FRT wraps at ~312 ms ~=
-     * 18.8 VBlanks and a stalled frame can exceed that even though the
-     * healthy frame is ~15.  vdp1_fence_max_raw publishes the
-     * largest single inter-probe interval the fence ever saw; a value well
-     * below 0xFFFF is the positive evidence that nothing aliased.
+     * ABI. The legacy fence tick, iteration, and max-raw fields retain their
+     * v4 positions for old decoders, but W0 does not accumulate or interpret
+     * them as wait cost: they remain zero. EDSR/COPR/LOPR are the status
+     * samples associated with the one observation.
      * ---------------------------------------------------------------- */
     /* Completed sourceboot_present_generation calls. */
     volatile uint32_t present_windows;
@@ -225,12 +222,12 @@ typedef struct {
      * one observation. */
     volatile uint32_t vdp1_fence_events;
     volatile uint32_t vdp1_fence_waits;
-    volatile uint32_t vdp1_fence_ticks_last;
-    volatile uint32_t vdp1_fence_ticks_accum;
-    volatile uint32_t vdp1_fence_ticks_max;
-    volatile uint32_t vdp1_fence_iterations_last;
-    volatile uint32_t vdp1_fence_iterations_accum;
-    volatile uint32_t vdp1_fence_max_raw;
+    volatile uint32_t vdp1_fence_ticks_last;       /* legacy: remains zero */
+    volatile uint32_t vdp1_fence_ticks_accum;      /* legacy: remains zero */
+    volatile uint32_t vdp1_fence_ticks_max;        /* legacy: remains zero */
+    volatile uint32_t vdp1_fence_iterations_last;  /* legacy: remains zero */
+    volatile uint32_t vdp1_fence_iterations_accum; /* legacy: remains zero */
+    volatile uint32_t vdp1_fence_max_raw;          /* legacy: remains zero */
     /* VDP1 status at the fence.  EDSR bit 1 is CEF (draw end). */
     volatile uint32_t vdp1_edsr_entry_last;
     volatile uint32_t vdp1_edsr_cef_entry_count;

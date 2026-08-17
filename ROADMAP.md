@@ -131,7 +131,8 @@ again after T2.12 closed `spatial_admit` out**):
   `sprint2-t2_17-epoch-stall.md` section 6. The reviewed epoch invariant was
   narrowed to its two hardware-carrying gates rather than removed, with the full
   bank-ownership argument in section 2 of that report.
-- **Bound the VDP1 overwrite fence — source-complete; host-contract-passed.**
+- **Bound the VDP1 overwrite fence — host-contract-passed; target compile and
+  live gates pending.**
   `sourceboot_frame_poll_transfers()` now observes busy once and defers the
   exact `READY` bank to a later observed field instead of waiting. The busy
   branch starts no DMA or re-presentation, and profile v4 reports its

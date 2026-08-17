@@ -159,9 +159,9 @@ first time — the frame is 2.28 VB shorter with the plot unchanged, so the fenc
 reachable where T2.8 never saw it fire. `STATE.md` records it as "no longer optional";
 T2.8 §9 item 3 already listed it. This is the hang path in the build awaiting observation.
 
-**Status:** `active`; W0.1 and W0.2 are source-complete and host-contract-passed.
-Target compilation, memory margins, live observation, independent review, and
-owner acceptance remain pending.
+**Status:** `active`; W0.1 and W0.2 are host-contract-passed. Target-equivalent
+normal/diagnostic compilation, memory margins, live observation, independent
+review, and owner acceptance remain pending.
 
 **Execution records:**
 
@@ -176,8 +176,8 @@ owner acceptance remain pending.
 
 - [x] W0.1 scheduler acknowledgement — host contract passed; exact-generation
   acknowledgement and mutation evidence are recorded in the active ledger.
-- [x] W0.2 sourceboot deferral and diagnostics — `source-complete;
-  host-contract-passed`. `verify-frame-pipeline`, `verify-vdp1-frame-bank`,
+- [x] W0.2 sourceboot deferral and diagnostics — `host-contract-passed;
+  target compile and live gates pending`. `verify-frame-pipeline`, `verify-vdp1-frame-bank`,
   `verify-vdp1-transfer-pipeline`, and `verify-render-overlap-integration`
   passed on 2026-08-17. The presentation-boundary gate remains unchecked only
   for its known pre-W0 `bootstrap must contain exactly one null-snapshot VDP2

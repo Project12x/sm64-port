@@ -364,6 +364,13 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
 
 ## Task 2: Replace sourceboot's wait and correct diagnostic semantics
 
+**Task status (2026-08-17):** `host-contract-passed; target compile and live
+gates pending`. The first four focused host gates pass; the presentation-boundary
+gate remains unchecked for the known pre-W0 `bootstrap must contain exactly one
+null-snapshot VDP2 begin` literal drift, before any W0 path assertion. W0.2 is
+not `source-complete` until normal and diagnostic target-equivalent consumers
+compile.
+
 **Files:**
 
 - Modify: `src/port/saturn/sourceboot/main.c:879-993,1720-1791`
@@ -378,7 +385,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
 - Modify: `docs/superpowers/plans/2026-08-17-saturn-shaped-port-phase-plan.md:155-175`
 - Modify: `docs/saturn/evidence/reports/w0-vdp1-overwrite-fence.md`
 
-- [ ] **Step 1: Write the failing source contract before editing sourceboot.**
+- [x] **Step 1: Write the failing source contract before editing sourceboot.**
 
   Add a general `braced_block_after(text, pattern)` helper to
   `test_vdp1_transfer_pipeline_source.py`. It must find `pattern`, locate the
@@ -411,7 +418,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   `vdp1_sync_force_put()`, no `wait_for_publish`, and the CPU-DMAC channel-zero
   ownership test.
 
-- [ ] **Step 2: Write the failing telemetry-summary tests.**
+- [x] **Step 2: Write the failing telemetry-summary tests.**
 
   Create `tools/saturn/test_capture_prenotification_profile.py` using
   `unittest`. Import `vdp1_fence_summary` from
@@ -430,7 +437,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_capture_prenotification_profile.py"
   ```
 
-- [ ] **Step 3: Run the transfer gate and confirm RED against old semantics.**
+- [x] **Step 3: Run the transfer gate and confirm RED against old semantics.**
 
   ```powershell
   $hostGate = 'HOST_CC_ENV=env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS TMP=D:/tmp TEMP=D:/tmp'
@@ -442,7 +449,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   `vdp1_fence_summary`. Existing DMA/frame-bank tests must reach their normal
   result before the intended new RED.
 
-- [ ] **Step 4: Remove the diagnostic spin and implement immediate deferral.**
+- [x] **Step 4: Remove the diagnostic spin and implement immediate deferral.**
 
   Delete `sourceboot_vdp1_fence_spin()` and rewrite its T2.8 block comment to
   document one pre-submit gate observation rather than a blocking fence. In
@@ -489,7 +496,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   accumulation from this gate; legacy accumulated fields remain zero from
   initialization because no W0 wait occurs.
 
-- [ ] **Step 5: Preserve profile ABI while correcting field meaning.**
+- [x] **Step 5: Preserve profile ABI while correcting field meaning.**
 
   In `saturn_prenotify_profile.h`, keep every field in place and leave profile
   version 4 unchanged. Replace the blocking-fence comment with: events count
@@ -525,7 +532,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   tick fields decode for ABI compatibility but are not summarized as cost;
   EDSR CEF remains the meaningful draw-state observation.
 
-- [ ] **Step 6: Run all focused host gates without weakening assertions.**
+- [x] **Step 6: Run all focused host gates without weakening assertions.**
 
   ```powershell
   $hostGate = 'HOST_CC_ENV=env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS TMP=D:/tmp TEMP=D:/tmp'
@@ -541,7 +548,7 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   the ledger with that reason. If it detects a W0-specific presentation-path
   change, fix that change before proceeding.
 
-- [ ] **Step 7: Update behavior documentation and commit Task 2 atomically.**
+- [x] **Step 7: Update behavior documentation and commit Task 2 atomically.**
 
   Add a Keep a Changelog `[Unreleased]` `Changed` entry explaining: the old
   wait could not retire inside its own scheduler action because Yaul clears the
@@ -549,8 +556,8 @@ It has the same measured cadence but is neither owner-accepted nor the baseline.
   observed field; the tradeoff is a safe two-tick-bounded pause under permanent
   busy; transient busy recovers automatically; profile v4 remains compatible
   but its historical wait count is now a deferral count. Update phase plan,
-  `STATE.md`, `ROADMAP.md`, and ledger to `source-complete;
-  host-contract-passed; target and live gates pending`, including exact tests
+  `STATE.md`, `ROADMAP.md`, and ledger to `host-contract-passed; target compile
+  and live gates pending`, including exact tests
   and any known pre-existing gate failure.
 
   ```powershell

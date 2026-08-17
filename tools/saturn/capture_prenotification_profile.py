@@ -63,9 +63,9 @@ PROFILE_SYMBOL = "g_sm64_saturn_prenotify_profile"
 PROFILE_MAGIC = 0x46505246  # 'FPRF'
 PROFILE_VERSION = 4
 PROFILE_NODES = 24
-# T2.8 appended a 66-word present-path / VDP1-fence section; T2.9 appended a
-# 36-word spatial-admission section.  The node table is UNCHANGED at 24, so
-# every T2.4-T2.7 ranked table stays directly comparable.
+# T2.8 appended a 66-word present-path / VDP1 overwrite-observation section;
+# T2.9 appended a 36-word spatial-admission section. The node table is
+# UNCHANGED at 24, so every T2.4-T2.7 ranked table stays directly comparable.
 PROFILE_COPR_RING = 32
 PROFILE_WORDS = 215
 PROFILE_BYTES = PROFILE_WORDS * 4
@@ -185,7 +185,7 @@ def decode_profile(raw: bytes) -> dict[str, Any]:
         "slave_busy_last": tail[2],
         "slave_busy_max": tail[3],
         "slave_frt_tcr": tail[4],
-        # --- T2.8 present path / VDP1 draw fence -----------------------
+        # --- T2.8 present path / VDP1 overwrite observation ------------
         "present_windows": tail[5],
         "present_ticks_last": tail[6],
         "present_ticks_accum": tail[7],
@@ -199,6 +199,8 @@ def decode_profile(raw: bytes) -> dict[str, Any]:
         "vdp2_commit_ticks_accum": tail[15],
         "vdp1_fence_events": tail[16],
         "vdp1_fence_waits": tail[17],
+        # v4 compatibility fields: W0 leaves these former wait/spin metrics
+        # zero and does not summarize them as a cost or wrap witness.
         "vdp1_fence_ticks_last": tail[18],
         "vdp1_fence_ticks_accum": tail[19],
         "vdp1_fence_ticks_max": tail[20],

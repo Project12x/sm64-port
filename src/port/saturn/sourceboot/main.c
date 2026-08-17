@@ -1293,12 +1293,10 @@ static void sourceboot_present_generation(
     sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_SYNC_AFTER,
                                 presentation_generation);
 #if SATURN_DIAGNOSTIC_MODE != 0
-    /* T2.8: these two fields were hard-assigned zero here and printed on the
-     * HUD as VDP1W, which is why every reader concluded there was no VDP1
-     * wait.  Publish the real fence total measured in
-     * sourceboot_frame_poll_transfers instead; the terminal fields carry the
-     * per-present vdp1_sync_render + vdp1_sync cost, which is what this call
-     * site actually spends. */
+    /* W0 keeps these legacy HUD/profile ABI fields but performs no overwrite
+     * wait. The sourceboot poll records busy deferrals separately; this copy
+     * therefore remains zero. The terminal fields below are the per-present
+     * vdp1_sync_render + vdp1_sync call-site cost, not a draw-fence cost. */
     sourceboot_fast3d.profile.vdp1_wait_ticks_last =
         sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last;
     sourceboot_fast3d.profile.vdp1_wait_ticks_accum =

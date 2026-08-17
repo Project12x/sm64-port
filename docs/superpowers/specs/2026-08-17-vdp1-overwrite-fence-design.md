@@ -9,8 +9,8 @@
 **Scope:** W0 only: remove the unbounded VDP1 command-VRAM overwrite wait
 without changing the normal frame-bank transfer, publication, or plotting path
 
-**Implementation status (2026-08-17):** W0.2 is `source-complete;
-host-contract-passed`; target and live gates remain pending. The A8
+**Implementation status (2026-08-17):** W0.2 is `host-contract-passed;
+target compile and live gates pending`. The A8
 transfer-runtime source contract was corrected against immutable base
 `112cd9f8ce0b54229578b6c0e5741ba64e1089a0` to accept the pre-existing
 `SOURCEBOOT_LWRAM_STATE` poison-state annotation and inspect
@@ -321,8 +321,9 @@ The minimum target gate is a compile and link through
 `tools/saturn/with-msys-toolchain.ps1` with the established 27-variable
 toolchain environment, followed by sourceboot memory-map verification against
 the HWRAM/LWRAM floors. This establishes target-equivalent consumption and
-updated memory margin, but remains `source-complete` until an identity-bound
-Ymir run observes the real normal-level consumer.
+updated memory margin, and is the earliest point W0.2 may be called
+`source-complete`. An identity-bound Ymir run is separately required for
+`live-observed` evidence.
 
 The earliest live observation is the generic standard scene-package path in
 BOB, using the normal registry, queue, residency, frame-bank, DMA, renderer,
