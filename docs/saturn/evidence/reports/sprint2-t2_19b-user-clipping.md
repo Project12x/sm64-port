@@ -72,6 +72,13 @@ Sega's SGL manual states the same three states in prose —
 specified window", WindowOut "Display outside a specified window", NoWindow
 "Display without regard to windows (default)".
 
+A third engine agrees independently, with the semantics spelled out in the
+comment — Jo Engine's `jo/sgl_prototypes.h:79`:
+
+```c
+#define     Window_In   (2 << 9)   /* Clip everything outside bounds */
+```
+
 **So the field value the port would want is `2` — draw inside — and bit 10 is
 the enable, bit 9 the invert.** Both references set exactly that on nearly
 every command.
@@ -136,6 +143,37 @@ Also worth recording because it is the opposite of what one would assume:
 **both engines leave hardware pre-clipping on** — neither sets
 `pre_clipping_disable` / `PCLP_ENABLE` — and so does this port, by default.
 There is no gap there.
+
+### 3.1 Why the references set the bit and we need not — they are not in our configuration
+
+The obvious objection to §3 is that every Saturn engine sets this bit, so it
+must buy something. Two in-tree facts answer it.
+
+**Z-Treme's system clip does not bound the visible screen; ours does.**
+`ZT_LOADING.c:540` pokes VDP1 VRAM directly —
+`*(Uint16*)(VDP1_VRAM+20)=511; //Patches the system clipping (It stays in
+VRAM)`. Offset `0x14` into command 0 is `CMDXC`, the system clip's lower-right
+X (confirmed against Ymir's decoder,
+`vdp_renderer_sw.cpp:1960-1965`, which reads `sysClipH` from `cmdAddress +
+0x14`). The patch sits in a single-player branch that has just configured NBG0
+as a 512×256 bitmap transparency buffer, so Z-Treme **deliberately widens
+VDP1's drawing area to 511** to fill that buffer. With the system clip opened
+past the screen, its per-command `Window_In` bit and its two SGL windows are
+doing real work. **Our system clip is already exactly the visible screen** —
+we start in the state Z-Treme has to use windows to reach. (This also refines
+`sprint2-reference-technique-gaps.md` §2.3, which states Z-Treme "never emits a
+user-clip or system-clip command at all": true of the command list, but it
+edits the resident system-clip command in VRAM instead.)
+
+**Jo Engine ships the exact redundant pair this task proposed.** Its default
+pipeline emits a system-clip command and then immediately a user-clip command
+built from the *same* `JO_TV_WIDTH` / `JO_TV_HEIGHT` constants
+(`work/upstream/joengine/jo_engine/vdp1_command_pipeline.c:100-112`), so the
+two rectangles coincide by construction, and it has a per-command clipping
+attribute to match (`jo/sprites.h:440`). That is precisely the inert
+configuration proved above. Its presence in a widely used engine is evidence
+that the pattern is copied rather than measured — not evidence that it saves
+fill.
 
 ## 4. The clip rectangle, and why
 
@@ -318,5 +356,7 @@ reduction.
 | `work/upstream/sonic-z-treme/Compiler/SGL_302j/INC/SL_DEF.H:190-192` | Sega SGL, in-tree reference | pattern-only | `Window_In`/`Window_Out` numeric encoding |
 | `work/upstream/sonic-z-treme/Documentation/DOC/210A_US/SPRITE.TXT:392-394` | Sega SGL docs | documentation | WindowIn/WindowOut/NoWindow semantics |
 | `work/upstream/slavedriver-engine/SPR.H:87-88`, `WALLS.C:2247-2253` | GPL | pattern-only | clip constant values; per-sector box arrangement, not adopted |
+| `work/upstream/sonic-z-treme/.../ZTE/ZT_LOADING.c:540` | GPL | pattern-only | evidence that Z-Treme widens its system clip to 511, so its `Window_In` is not redundant the way ours would be |
+| `work/upstream/joengine/jo_engine/vdp1_command_pipeline.c:100-112`, `jo/sgl_prototypes.h:79`, `jo/sprites.h:440` | MIT | pattern-only | third-party confirmation of the `(2 << 9)` encoding, and an in-the-wild instance of the redundant system+user clip pair |
 | `ymir-agent` (Ymir) `vdp_renderer_sw.cpp:965-1050`, `vdp.cpp:265-273,1013-1220` | GPL-3.0 | cross-check / behaviour-only | clip polarity confirmation; cost-model reading. No code copied. |
 | `work/upstream/libretro-kronos` (Kronos/Yabause) `vdp1_prog_compute.h:42-53` | GPL-2.0 | cross-check / behaviour-only | clip mode encoding confirmation. No code copied. |

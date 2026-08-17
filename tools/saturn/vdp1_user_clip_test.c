@@ -54,6 +54,13 @@
  *     yabause/src/core/video/opengl/compute_shader/include/vdp1_prog_compute.h
  *     :42-53, whose shader branches on `((CMDPMOD >> 9) & 0x3) == 2` for
  *     "Draw inside" and `== 3` for "Draw outside".
+ * Jo Engine (MIT) states the same encoding with the semantics spelled out in
+ * its comment -- `#define Window_In (2 << 9)` commented "Clip everything
+ * outside bounds", work/upstream/joengine/jo_engine/jo/sgl_prototypes.h:79.
+ * Jo Engine also emits a user clip box built from the same JO_TV_WIDTH /
+ * JO_TV_HEIGHT constants as its system clip
+ * (jo_engine/vdp1_command_pipeline.c:100-112) -- i.e. exactly the redundant
+ * pair this fixture proves is inert.
  * `mode_encoding_matches_references()` below pins that encoding so a future
  * edit cannot silently swap draw-inside for draw-outside, which is the
  * mutation that blanks the screen.
