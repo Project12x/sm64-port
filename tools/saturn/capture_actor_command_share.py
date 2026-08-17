@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from capture_route_views import YmirClient  # noqa: E402
 from capture_sourceboot_boot_trace import run_bios_handoff  # noqa: E402
+import route_warmup  # noqa: E402
 from capture_sourceboot_throughput import (  # noqa: E402
     build_elf_identity_probe,
     wait_for_target_identity,
@@ -143,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         help="address of sourceboot_fast3d (frame_serial is its first member)",
     )
     parser.add_argument("--startup-vblanks", type=int, default=4096)
-    parser.add_argument("--warmup-vblanks", type=int, default=1800)
+    route_warmup.add_warmup_arguments(parser)
     parser.add_argument("--samples", type=int, default=150)
     parser.add_argument(
         "--gap-vblanks",
@@ -154,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--timeout", type=float, default=2400.0)
     args = parser.parse_args(argv)
+    # Rejects an unreachable tick target before an emulator frame is spent.
+    warmup_plan = route_warmup.plan_warmup(args, args.elf)
 
     client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
     rows: list[dict[str, Any]] = []
@@ -169,11 +172,9 @@ def main(argv: list[str] | None = None) -> int:
             build_elf_identity_probe(args.elf),
             startup_vblanks=args.startup_vblanks,
         )
-        remaining = args.warmup_vblanks
-        while remaining > 0:
-            chunk = min(remaining, 3600)
-            client.call("exec.run_for", {"frames": chunk})
-            remaining -= chunk
+        # T2.19d: warm up to a route tick, not a VBlank count.  A warm-up
+        # that does not reach its target raises rather than sampling early.
+        warmup = route_warmup.execute_warmup(client, warmup_plan)
         for index in range(args.samples):
             actor = decode_u16(peek(client, args.actor_address, ACTOR_BYTES), ACTOR_U16)
             backend = decode_u16(
@@ -238,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         },
         "sampling": {
             "startup_vblanks": args.startup_vblanks,
-            "warmup_vblanks": args.warmup_vblanks,
+            "warmup": warmup,
             "samples": args.samples,
             "gap_vblanks": args.gap_vblanks,
         },

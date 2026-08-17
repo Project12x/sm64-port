@@ -48,6 +48,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from capture_route_counters import decode_u32, peek  # noqa: E402
+import route_warmup  # noqa: E402
 from capture_route_views import YmirClient  # noqa: E402
 from capture_sourceboot_boot_trace import run_bios_handoff  # noqa: E402
 from capture_sourceboot_throughput import (  # noqa: E402
@@ -119,13 +120,15 @@ def main(argv: list[str] | None = None) -> int:
         "--profile-address", required=True,
         help="address of sourceboot_fast3d (hex or decimal)")
     parser.add_argument("--startup-vblanks", type=int, default=4096)
-    parser.add_argument("--warmup-vblanks", type=int, default=1800)
+    route_warmup.add_warmup_arguments(parser)
     parser.add_argument("--samples", type=int, default=120)
     parser.add_argument("--gap-vblanks", type=int, default=11)
     parser.add_argument("--timeout", type=float, default=2400.0)
     args = parser.parse_args(argv)
 
     profile_address = int(str(args.profile_address), 0)
+    # Rejects an unreachable tick target before an emulator frame is spent.
+    warmup_plan = route_warmup.plan_warmup(args, args.elf)
     probe = build_elf_identity_probe(args.elf)
     started = time.time()
     rows: list[dict[str, Any]] = []
@@ -142,13 +145,9 @@ def main(argv: list[str] | None = None) -> int:
         if not identity.get("match"):
             print("identity mismatch; refusing to report", file=sys.stderr)
             return 2
-        # exec.run_for silently no-ops above Ymir's 3600-frame cap, so the
-        # warm-up is chunked.  See the retracted "Boo hang" investigation.
-        remaining = args.warmup_vblanks
-        while remaining > 0:
-            chunk = min(remaining, 3600)
-            client.call("exec.run_for", {"frames": chunk})
-            remaining -= chunk
+        # T2.19d: warm up to a route tick, not a VBlank count.  A warm-up
+        # that does not reach its target raises rather than sampling early.
+        warmup = route_warmup.execute_warmup(client, warmup_plan)
         for index in range(args.samples):
             rows.append({
                 "sample": index,
@@ -156,6 +155,11 @@ def main(argv: list[str] | None = None) -> int:
                     peek(client, profile_address, PROFILE_BYTES), PROFILE_U32),
             })
             client.call("exec.run_for", {"frames": args.gap_vblanks})
+        route_position = (
+            route_warmup.read_route_position(client, warmup_plan["addresses"])
+            if warmup_plan["addresses"] is not None
+            else None
+        )
     finally:
         try:
             client.shutdown()
@@ -197,7 +201,8 @@ def main(argv: list[str] | None = None) -> int:
         "profile_address": f"{profile_address:#010x}",
         "sampling": {
             "startup_vblanks": args.startup_vblanks,
-            "warmup_vblanks": args.warmup_vblanks,
+            "warmup": warmup,
+            "route_position_after_census": route_position,
             "samples": args.samples,
             "gap_vblanks": args.gap_vblanks,
         },
