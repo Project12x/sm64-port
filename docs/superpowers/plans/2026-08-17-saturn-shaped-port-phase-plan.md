@@ -49,45 +49,44 @@ candidate `id-e8720d58595d9a62` (manifest
 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, ELF
 `021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`).
 
-> **STRUCTURAL CHANGE, W6a (2026-08-21): the master is no longer saturated.**
-> Idle went from exactly **0.000000 to 5.22%**. W6a shed **398,163 soft-float
-> cycles/frame** but the frame shortened by only **200,589** — and the **197,574
-> residual is independently confirmed by the new idle share** (5.2248% x 3,810,963 =
-> 199,115, agreeing to 0.8%). **The master converted almost exactly half its saving
-> into VBlank waiting.**
+> **~~STRUCTURAL CHANGE, W6a: the master is no longer saturated.~~ WITHDRAWN by W7
+> (2026-08-21, same day). The 5.22% was a short-window measurement artifact, and I
+> wrote it into this plan as a structural finding without checking the window length
+> or whether its two inputs came from the same route position. They did not.**
 >
-> Two consequences, both of which change this plan:
+> W7 re-measured master idle at three route ticks on both arms:
 >
-> 1. **Roughly half of any further arithmetic win will be absorbed the same way** until
->    we find what the master now waits on. That discounts W2 and W6b directly.
-> 2. **The argument that closed the slave workstream is partially reopened.** T2.25
->    declined offload because "overlap converts zero VB when the critical path has no
->    stall in it" — which was true at 0.000000 idle and **is no longer true at 5.22%**.
->    The non-goal below is amended accordingly.
+> | route tick | window | candidate master idle |
+> |---|---|---:|
+> | 30 | 3.84 frames | **0.000000** |
+> | 150 | 1.98 frames | 5.2248% *(the figure I quoted)* |
+> | 150 | **4.83 frames** | **2.1450%** |
+> | 210 | 2.63 frames | **0.000000** |
+> | 150, `--sh2-cache` | 26.55 VB | **0.000000** |
 >
-> **BOTH CONSEQUENCES ARE WITHDRAWN BY W7 (2026-08-21).** See
-> `docs/saturn/evidence/reports/w7-master-wait-attribution.md`.
+> **The wait is one event, not a per-frame cost** — a 4.83-frame trace found the same
+> five entries and the same 399,412 cycles as a 1.98-frame trace, with no additional
+> excursion. Normalising that by a short window inflates it.
 >
-> - **The 5.22% does not survive a longer window or a second route position.** The
->   same route position traced for **4.83 contiguous frames** instead of 1.98 contains
->   the **same single wait block** and reports **2.1450%**; route tick 210 reports
->   **exactly 0.000000** over 2.63 frames; **route tick 30 — the position the +5.26%
->   cadence pair was measured at — reports 0.000000 over 3.84 frames**; `--sh2-cache`
->   at tick 150 reports **0.000000** over 26.55 VB. The master is still essentially
->   saturated on most of the route.
-> - **Consequence 1 is wrong.** Absorption is 27.7% at tick 150 and **≤ 0% at ticks
->   30 and 210**, where the frame shortened by 200,577 and 262,294 cycles with zero
->   candidate idle — and tick 210, the heaviest scene sampled, is where W6a's FPS gain
->   is *largest* (+6.30%, against +5.60% at tick 150 and +5.26% at tick 30).
->   **W2 and W6b are worth 80–100% of face value, not 50%.**
-> - **Consequence 2 is wrong.** The wait is a `transfer-epoch` stall on an
->   already-submitted DMA, waiting for the next field to be allowed to poll it again.
->   Offloading master work does not make that poll arrive sooner, and at tick 210
->   there is no stall to overlap into at all. **The slave non-goal is closed again.**
-> - **The W6a residual arithmetic mixed route positions**: a tick-30 cadence against a
->   tick-150 idle share. Single-route pairs are in W7 §3.2.
+> **And tick 30 — where W6a's +5.26% was actually measured — has no waiting at all.**
+> W6a's residual argument paired a **tick-30 cadence** with a **tick-150 idle share**.
+> Single-route cadence pairs at matched ticks give **+5.60%** and **+6.30%**: the gain
+> *rises* with scene weight rather than being halved.
 >
-> **Finding what the master now waits on is the highest-value next measurement.**
+> **Planning figure for W2 and W6b: 80–100% of face value, not 50%.** The discount is
+> withdrawn. W7's own top-ranked release is *do nothing* — continue the arithmetic
+> programme at full expected value.
+>
+> **The wait that does exist is real but small and not offloadable.** It is a
+> **dependency stall, not hardware-gated** — 100% of idle cycles are the
+> `transfer-epoch` arm at `sourceboot/main.c:1929`, the only reachable one of two call
+> sites in the ELF. Render is complete and the DMA is submitted; the master is waiting
+> for the next observed field to poll an in-flight queue again, and **VDP1 does not
+> move during the wait** (`EDSR 0x0001`, `LOPR/COPR 2092` byte-identical across 119
+> strided samples). But it is 82,738 cycles/frame at *one* of three route positions and
+> exactly 0 at the other two, **its release is an observed VBlank rather than master
+> availability, and where the master has slack, offload deepens it.** See
+> `w7-master-wait-attribution.md`.
 
 ## 2. The finding this plan is built on
 
