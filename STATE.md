@@ -4,30 +4,46 @@
 **Active branch:** `saturn/recovery` (worktree `.worktrees/saturn-recovery`)
 **Active plan:**
 [`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
-**Status:** **W0 COMPLETE and owner-accepted 2026-08-17** on
-`id-e8720d58595d9a62` (manifest
-`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
-`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, ELF
-`021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`).
-Sprint 1 (R0+R1) was historically complete and owner-accepted 2026-08-15.
-**Sprint 2 (cadence recovery) — investigation phase COMPLETE 2026-08-15.**
+**Status:** **W6a COMPLETE and owner-accepted 2026-08-22** on
+`id-57fb7312058b7f2e` (manifest
+`2d66f95fd871abc3b2a8e74e2d39559cca50ff39cec9aa85fbb52d4ce51b2c57`, ELF
+`4a287b769d94978007840ca08d2a1ae594aa1e3a287e5cad2c3574891779b66b`, ISO
+`fc007092b2429ff9844dd34fb1b4874c4ddac97b6bccdb1250a62a38b1d68f6e`,
+`provenance.closure_clean: true` at `git_revision 996487b9`). Preserved at
+`releases/2026-08-22_w6a-rebuild/id-57fb7312058b7f2e/`.
+W0 was owner-accepted 2026-08-17 on `id-e8720d58595d9a62`; Sprint 1 (R0+R1)
+historically 2026-08-15.
 
-**W6a landed 2026-08-21 (evidence level, not owner-accepted):** the soft-float
-implementation for `__addsf3`/`__subsf3`/`__mulsf3`/`__divsf3` was replaced with
-LLVM `compiler-rt`, bit-identically -- `verify-softfp-bitexact` **43,333,704,485
-checks, 0 failures**. Candidate `id-586944bb637a920f` (ELF
-`03e6f55e2667e7559c8c68e0862b099448a6bd41e9f46fe4f4c9308c93eca8d7`) measures
-**7.0445 FPS mean / 6.6667 1% low / 8.5172 VB per frame**, caches off, against
-the accepted `id-e8720d58595d9a62`'s 6.6923 / 6.0 / 8.9655: **+5.26% mean,
-+11.1% on the 1% low.** Soft-float fell from 33.55% to 24.87% of master cycles.
-**The master is no longer saturated** -- idle went from exactly 0.000000 to
-5.22%, so about half the arithmetic saving is currently absorbed by VBlank
-waiting rather than frame time; find what it now waits on before spending more
-on arithmetic. This candidate is headless evidence and has **not** been
-owner-observed; it does not replace `id-e8720d58595d9a62` as the accepted
-baseline, and its manifest records `closure_clean: false` (built from an
-uncommitted worktree), so any promotion should use a post-commit rebuild.
-Source: `docs/saturn/evidence/reports/w6a-softfloat-implementation.md`.
+**Current accepted cadence: 7.0445 FPS mean / 6.6667 median / 6.6667 1% low /
+8.5172 VBlanks per frame**, caches off, 30 presentation events, 29 intervals,
+`summarize_cadence`, identity probe MATCH. Against the previous accepted
+`id-e8720d58595d9a62` (6.6923 / 6.0 / 8.9655): **+5.26% mean, +11.1% on the
+1% low.** **Owner observation 2026-08-22: "hitting between 6 and 8 fps", visuals
+and audio good** -- which corroborates the measured distribution directly.
+
+**What earned it (W6a, 2026-08-21):** the soft-float implementation for
+`__addsf3`/`__subsf3`/`__mulsf3`/`__divsf3` was replaced with LLVM `compiler-rt`,
+**bit-identically** -- `verify-softfp-bitexact` **43,333,704,485 checks, 0
+failures**. Soft-float fell from 33.55% to 24.87% of master cycles.
+Source: `docs/saturn/evidence/reports/w6a-softfloat-implementation.md` and
+`w6a-rebuild-sealed.md`.
+
+> **Retracted: "the master is no longer saturated."** W6a reported master idle
+> 0.000000 -> 5.22% and this file recorded a ~50% absorption of further arithmetic
+> wins. **W7 withdrew it** (`w7-master-wait-attribution.md`): 5.22% was a
+> **short-window artifact** -- 2.1450% over a 4.83-frame window at the same tick, and
+> **0.000000 at ticks 30 and 210** and under `--sh2-cache`. The wait is **one event,
+> not a per-frame cost**, and W6a's residual argument paired a tick-30 cadence with a
+> tick-150 idle share. **Arithmetic work is worth 80-100% of face value, not 50%.**
+> Standing protocol: **>=4-frame windows, and local cadence at the same route tick as
+> the profile.**
+
+**The rebuild reproduced W6a's cadence to the full IEEE double** (7.044534412955466
+both times) from committed source in 487 s at `-j12`, one attempt. The identity
+tag differs from W6a's `id-586944bb637a920f` only because the two ELFs differ in
+**exactly 64 bytes**, all inside the identity blob: W6a had sealed an intermediate
+`Makefile.saturn.mk` edit existing in no commit, which is what `closure_clean: false`
+recorded. The linked code is byte-identical.
 
 **Historical T2.17 measured cadence: 6.7181 FPS / 8.9310 VBlanks per frame** on
 `id-c0352f297034f653`, against A9A's 5.294 FPS / 11.333 VB. The current

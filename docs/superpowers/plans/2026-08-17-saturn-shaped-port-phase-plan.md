@@ -43,11 +43,13 @@ Sprint 2 took cadence **3.8753 → 6.7181, +73.4%**, past A9A's 5.294 / 11.333.
 Historical T2.17 headless comparison build: `id-c0352f297034f653`. It was not
 GUI-launched, live owner-observed, or owner-accepted; it is preserved as a
 historical headless comparison/rollback baseline, and its unbounded-fence risk
-motivated W0. The current owner-accepted artifact is W0
-candidate `id-e8720d58595d9a62` (manifest
-`fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
-`cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, ELF
-`021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`).
+motivated W0. The current owner-accepted artifact is **W6a rebuild `id-57fb7312058b7f2e`**,
+accepted 2026-08-22 at **7.0445 FPS mean / 6.6667 1% low / 8.5172 VB** (owner
+observation: "hitting between 6 and 8 fps", visuals and audio good), ELF
+`4a287b769d94978007840ca08d2a1ae594aa1e3a287e5cad2c3574891779b66b`,
+`provenance.closure_clean: true` at `996487b9`. It supersedes W0
+candidate `id-e8720d58595d9a62` (6.6923 / 6.0), which remains the
+rollback point.
 
 > **~~STRUCTURAL CHANGE, W6a: the master is no longer saturated.~~ WITHDRAWN by W7
 > (2026-08-21, same day). The 5.22% was a short-window measurement artifact, and I
