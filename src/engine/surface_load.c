@@ -21,8 +21,32 @@ s32 unused8038BE90;
 /**
  * Partitions for course and object surfaces. The arrays represent
  * the 16x16 cells that each level is split into.
+ *
+ * On Saturn these two 6,144 B arrays live in LWRAM, not HWRAM. They are the
+ * collision spatial *index* -- 16x16x3 list heads holding pointers into the
+ * surface node/pool storage -- so a query reads a few words here and then
+ * follows pointers into whatever tier the nodes themselves occupy. They are
+ * pure CPU state that is never an SCU-DMA source, which is the constraint
+ * that pins the VDP1 command tables and gouraud staging to HWRAM (the
+ * DMA-from-LWRAM lockup class documented in saturn_gouraud_bank.h).
+ *
+ * This is the "move bulk CPU-only state to LWRAM" that sourceboot-cart.x:188
+ * asks for when HWRAM overflows. It buys 12,288 B, which is what lets the
+ * generic actor draw path (SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE, +3,560 B of
+ * HWRAM code) link at all. .lwram_bss is NOLOAD, which is safe here: both
+ * arrays are zero-initialised and then populated by clear_static_surfaces /
+ * clear_dynamic_surfaces before any query reads them.
  */
+#ifdef TARGET_SATURN
+#define SM64_SATURN_COLLISION_PARTITION_LWRAM \
+    __attribute__((section(".lwram_bss"), used, aligned(4)))
+#else
+#define SM64_SATURN_COLLISION_PARTITION_LWRAM
+#endif
+
+SM64_SATURN_COLLISION_PARTITION_LWRAM
 SpatialPartitionCell gStaticSurfacePartition[NUM_CELLS][NUM_CELLS];
+SM64_SATURN_COLLISION_PARTITION_LWRAM
 SpatialPartitionCell gDynamicSurfacePartition[NUM_CELLS][NUM_CELLS];
 
 /**

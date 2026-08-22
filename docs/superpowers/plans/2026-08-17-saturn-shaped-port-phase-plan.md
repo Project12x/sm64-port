@@ -747,6 +747,37 @@ attempted as one conversion.
 
 ---
 
+## W7 — Runtime location switching from the pause menu *(owner directive 2026-08-22)*
+
+Owner: *"we should be able to change locations from a pause menu rather than a
+compile flag."*
+
+Today the location is `SCENE_LEVEL ?= bob` / `SCENE_AREA ?= 1` in
+`Makefile.saturn.mk` — one scene package is baked, staged to the cart, and
+linked per image. Changing levels means rebuilding. The directive replaces that
+with: pause (START) → level select → the runtime re-stages the chosen scene
+package from CD into cart/LWRAM and warps.
+
+What it needs, in dependency order:
+
+1. **A second baked level** (any one — castle lobby or WF area 1). Until two
+   packages exist there is nothing to switch between; the menu is gated on the
+   level-bake campaign, not the other way round.
+2. **Multi-package disc layout** — the ISO carries every baked scene package;
+   the manifest names them all. Today the image embeds exactly one.
+3. **A runtime scene-load path** — tear down live actors (the pose pool's
+   release machinery already handles despawn), re-stage `.cart_rodata`-class
+   scene data from CD, re-init terrain/collision/actor closures for the new
+   package, respawn Mario at the level's entry. The CD→cart staging path that
+   boot uses is the same machinery; it needs to be callable again post-boot.
+4. **The menu itself** — VDP2 layer (same budget class as the HUD work in R3),
+   START to open, d-pad to pick. Saturn-shaped: a static tilemap list, no
+   N64 pause rendering ported.
+
+Not scoped here: save state across switches, star counts, doors/paintings as
+the in-fiction switcher. The pause menu is the development vehicle; painting
+warps can reuse the same scene-load path later.
+
 ## Explicit non-goals
 
 - **Further renderer micro-optimization.** Four consecutive investigations at 0.07–0.5%.

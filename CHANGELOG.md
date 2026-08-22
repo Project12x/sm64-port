@@ -2,6 +2,55 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **The collision spatial index moved from HWRAM to LWRAM, which is what lets
+  the generic actor draw path link at all** (`src/engine/surface_load.c`).
+  `gStaticSurfacePartition` + `gDynamicSurfacePartition` are 12,288 B of pure
+  CPU state -- 16x16x3 list heads holding pointers into the surface pools, so a
+  query reads a few words and then follows pointers into whatever tier the nodes
+  occupy. They are never an SCU-DMA source, which is the constraint that pins
+  the VDP1 command tables and gouraud staging to HWRAM (the DMA-from-LWRAM
+  lockup class in `saturn_gouraud_bank.h`). Safe under NOLOAD `.lwram_bss`:
+  `clear_spatial_partition` NULLs all 256 cells x 3 lists for both arrays before
+  any query, and queries only ever read `.next` from the head.
+- **Sealed build `id-637d40d09148932f` is the first with
+  `features.dynamic_actor_closure = 1`, and coins render on hardware-accurate
+  emulation.** Owner-observed. Two known defects: coins do not animate and the
+  colours are wrong (see below). Cadence about 5 FPS, down from 6.9 -- expected
+  for a first cut with an entire actor pipeline newly switched on.
+
+### Fixed
+
+- **Corrected an understated figure from the previous entry.** The closure's
+  HWRAM cost was reported as +3,560 B; that was `saturn_demo_render.o` `.text`
+  alone. Measured across all translation units it is about **+11,488 B**, so
+  freeing 12,288 B nets only **-800 B** of HWRAM (1,018,030 -> 1,017,230).
+  LWRAM 968,642 -> 980,930. The build links, but the remaining margin is thin.
+
+### Added
+
+- **Full memory-residency audit, so tier decisions stop being guesswork.**
+  HWRAM 1,018,030 B used (552 KB code, 466 KB data) against 8,664 B free;
+  LWRAM 968,642 B against 79,920 B free; CART 2,630,241 B against ~1.67 MB free.
+  - **Pinned to HWRAM, cannot move** (SCU-DMA lockup class): `sourceboot_vdp1_cmdts`
+    106,496 B, `sourceboot_gouraud_staging` 24,576 B, `s_actor_gouraud*` 5,152 B.
+  - **HWRAM -> LWRAM candidates:** `gObjectPool` 126,464 B (pure game state; does
+    not fit in LWRAM's current free space), `gGfxPools` 32,844 B, and the
+    collision partitions already moved here.
+  - **`gSineTable` 20,480 B is the f32 table serving 508 `sins()`/`coss()` call
+    sites in unconverted simulation code.** The renderer's `gSaturnSineTableQ16`
+    already lives in CART, so this is a W6b (Q16 the simulation) artefact, not a
+    renderer cost.
+  - **LWRAM -> CART is a latency question, not an immutability one** -- the cart
+    is 4 MB of writable DRAM. Nothing large in LWRAM is obviously free:
+    `sourceboot_main_pool` 388 KB, terrain command buffers 111 KB and
+    `s_clipped_projected` 35 KB are all per-frame hot, and
+    `s_bob_terrain_resolved_templates` 88 KB is a resolve-once cache written at
+    runtime and read per frame, not baked data. Only `complete_actor_cold_arena`
+    7,168 B is already named cold. **Per-case measurement required; do not move
+    anything here blind.**
+
 ### Added
 
 - **`tools/saturn/build-sourceboot.ps1` - the canonical sourceboot build, as a

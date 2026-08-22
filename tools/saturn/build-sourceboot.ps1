@@ -28,11 +28,16 @@
 # .superpowers/sdd/2026-08-17-vdp1-overwrite-fence/task-3-brief.md.
 # Override any of it with -ExtraFlags, and point at a forked profile with
 # -Profile.
-[CmdletBinding()]
+# PositionalBinding=$false is REQUIRED: without it, bare `FOO=1` make flags bind
+# to -Worktree/-YaulInstallRoot instead of -ExtraFlags, and the build fails with
+# a nonsense "No installed libyaul build fragments found under .../FOO=1/share".
+# -ProfilePath is spelled out rather than -Profile because $Profile shadows the
+# PowerShell automatic variable.
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$Worktree = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
     [string]$YaulInstallRoot = 'D:\Code\RetroDev\sm64-saturn-port\work\yaul-install',
-    [string]$Profile,
+    [string]$ProfilePath,
     [string]$Log,
     [int]$Jobs = 8,
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -94,8 +99,8 @@ $flags = @(
   'SATURN_CAMERA_RANGE_CAPTURE=0',
   'SATURN_FAST3D_Q16_TRACE=0'
 )
-if ($Profile) {
-    $flags += "SOURCEBOOT_TARGET_PROFILE=$(ConvertTo-MsysPath $Profile)"
+if ($ProfilePath) {
+    $flags += "SOURCEBOOT_TARGET_PROFILE=$(ConvertTo-MsysPath $ProfilePath)"
 }
 if ($ExtraFlags) { $flags += $ExtraFlags }
 
