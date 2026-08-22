@@ -25,6 +25,47 @@
 
 ### Changed
 
+- **W2: `sqrtf` is now an integer digit-by-digit square root instead of four
+  Newton iterations in soft float.** **Reasoning:** the re-derived exact
+  master census (`capture_idle_attribution --warmup-ticks 150`, one
+  contiguous **4.83-frame** window on the accepted baseline
+  `id-57fb7312058b7f2e`, with the new call-site attribution) puts `_sqrtf` at
+  **7.894% of master cycles in soft-float it causes, plus 0.568% in its own
+  body -- 8.46% of the master, 326,395 cycles/frame, 0.729 VBlank/frame** --
+  and the next call site down, `_saturn_geo_enter_object`, at 2.707%. Each
+  call ran `value / estimate` four times: on a CPU with no FPU that is four
+  `__divsf3`, four `__addsf3` and four `__mulsf3`, measured at 1,559 cycles
+  per call over 209 calls/frame. The replacement halves the exponent by
+  arithmetic on the exponent field and takes the significand from a 24-step
+  restoring integer square root, reaching no soft-float routine at all; every
+  shift count is a compile-time constant because the SH-2 has no barrel
+  shifter and a variable shift is a libgcc call. **Root cause of the waste:**
+  nothing about a square root needs floating-point division -- the four
+  divides existed only because the seed and the iteration were expressed in
+  float. **Tradeoff, stated:** this is **not** bit-exact, and cannot be. The
+  four-iteration version was itself up to 1 ulp away from the correctly
+  rounded square root on 25.0% of normal inputs, so no exact implementation
+  reproduces it. **Consumer-facing impact:** the new result is *the*
+  correctly rounded IEEE-754 single-precision square root on every one of the
+  2^32 bit patterns, so it moves by at most **1 ulp (worst relative
+  1.192e-07)** against what shipped, on normal inputs. That is simulation
+  arithmetic, so it can perturb gameplay state; downstream movement is
+  measured and reported in
+  `docs/saturn/evidence/reports/w2-softfloat-call-sites.md` rather than
+  gated on. Two behaviours change outside the reachable domain of "sums of
+  squares of world coordinates", both strictly more correct: `+INFINITY`
+  returns `+INFINITY` where the second Newton iteration used to evaluate
+  `inf/inf` and return NaN, and subnormal inputs are now correctly rounded
+  where the old seed did not converge in four iterations (it returned
+  2.03e-21 for the smallest subnormal against a true 1.05e-22). The non-IEEE
+  contract callers depend on is preserved deliberately: a negative input
+  still returns `+0.0f`, not NaN. **New prerequisite:** `verify-sqrtf-fixed`
+  and `verify-sqrtf-fixed-mutation` are new members of `verify-all`; the
+  first sweeps all 2^32 float bit patterns at `SQRTF_TEST_STRIDE=1` and
+  demands exact equality with the correctly rounded reference, and the second
+  requires five mutations to fail it, including a **1-ulp** perturbation --
+  the tightest mutation that can exist against an exact-equality bound.
+
 - **W6a: `__addsf3`, `__subsf3`, `__mulsf3` and `__divsf3` now come from LLVM
   `compiler-rt` instead of GCC `soft-fp`, bit-identically, for +5.26% FPS.**
   Measured `6.6923 -> 7.0445` mean and `6.0 -> 6.6667` 1% low
