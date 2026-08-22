@@ -38,4 +38,22 @@ bool sm64_saturn_actor_pose_evaluate(
     sm64_saturn_actor_pose_work_t *work,
     sm64_saturn_actor_pose_view_t *pose);
 
+/* Same evaluation, with the two per-frame-invariant bank slices supplied by
+ * the caller instead of decoded out of the bank bytes on every frame.  The
+ * actor bank itself lives in CART, so the vertex and joint tables would
+ * otherwise be re-read across the A-bus 424 and 20 times per frame even
+ * though neither ever changes.  Passing NULL for either table restores the
+ * in-bank read for that table, so this is a strict superset of
+ * `sm64_saturn_actor_pose_evaluate`.  Staged tables must hold at least
+ * `bank->bank.vertex_count` / `bank->bank.joint_count` entries and must be a
+ * faithful copy of the bank's own records; they are trusted, not revalidated,
+ * because the boot-time staging pass validated them once. */
+bool sm64_saturn_actor_pose_evaluate_staged(
+    const sm64_saturn_actor_bank_view_t *bank,
+    int16_t animation_id, int16_t animation_frame,
+    sm64_saturn_actor_pose_work_t *work,
+    const sm64_saturn_actor_vertex_t *staged_vertices,
+    const sm64_saturn_actor_joint_t *staged_joints,
+    sm64_saturn_actor_pose_view_t *pose);
+
 #endif

@@ -61,6 +61,18 @@ bool sm64_saturn_actor_pose_evaluate(
     sm64_saturn_actor_pose_work_t *work,
     sm64_saturn_actor_pose_view_t *pose)
 {
+    return sm64_saturn_actor_pose_evaluate_staged(
+        bank, animation_id, animation_frame, work, NULL, NULL, pose);
+}
+
+bool sm64_saturn_actor_pose_evaluate_staged(
+    const sm64_saturn_actor_bank_view_t *bank,
+    int16_t animation_id, int16_t animation_frame,
+    sm64_saturn_actor_pose_work_t *work,
+    const sm64_saturn_actor_vertex_t *staged_vertices,
+    const sm64_saturn_actor_joint_t *staged_joints,
+    sm64_saturn_actor_pose_view_t *pose)
+{
     sm64_saturn_actor_animation_record_t record;
     sm64_saturn_mtx_t *matrices;
     int32_t frame;
@@ -102,8 +114,11 @@ bool sm64_saturn_actor_pose_evaluate(
         int16_t angles[3] = {0, 0, 0};
         int32_t translation[3];
         sm64_saturn_mtx_t local;
-        if (!sm64_saturn_actor_bank_joint(bank, joint, &source_joint) ||
-            source_joint.parent_ordinal >= (int16_t)joint ||
+        if (staged_joints != NULL)
+            source_joint = staged_joints[joint];
+        else if (!sm64_saturn_actor_bank_joint(bank, joint, &source_joint))
+            return false;
+        if (source_joint.parent_ordinal >= (int16_t)joint ||
             source_joint.parent_ordinal < -1) {
             return false;
         }
@@ -138,8 +153,11 @@ bool sm64_saturn_actor_pose_evaluate(
     }
     for (vertex = 0U; vertex < bank->bank.vertex_count; vertex++) {
         sm64_saturn_actor_vertex_t source_vertex;
-        if (!sm64_saturn_actor_bank_vertex(bank, vertex, &source_vertex) ||
-            source_vertex.joint_ordinal >= bank->bank.joint_count) {
+        if (staged_vertices != NULL)
+            source_vertex = staged_vertices[vertex];
+        else if (!sm64_saturn_actor_bank_vertex(bank, vertex, &source_vertex))
+            return false;
+        if (source_vertex.joint_ordinal >= bank->bank.joint_count) {
             return false;
         }
         matrix_apply(&matrices[source_vertex.joint_ordinal], source_vertex.local,

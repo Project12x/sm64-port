@@ -52,6 +52,18 @@ static uint8_t complete_actor_bank_ready;
  * It is always present in the bake list. */
 #define COMPLETE_ACTOR_FALLBACK_ANIMATION_ID ((int16_t)MARIO_ANIM_IDLE_HEAD_CENTER)
 
+/* Per-frame-invariant bank slices, staged once out of CART into LWRAM.  The
+ * bank lives in `.cart_rodata`; without this the pose evaluator re-reads 424
+ * vertex records and 20 joint records across the A-bus every frame for data
+ * that never changes.  HWRAM has 2,552 B of slack and LWRAM has 92,704 B
+ * free, so the copy is funded from the idle pool. */
+static sm64_saturn_actor_vertex_t complete_actor_staged_vertices[
+    SM64_MARIO_VERTEX_COUNT]
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+static sm64_saturn_actor_joint_t complete_actor_staged_joints[20U]
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+static uint8_t complete_actor_slices_staged;
+
 /* Live-observable evidence for the reduced bake and the LWRAM staging.  Kept
  * in LWRAM so it costs no HWRAM, and `used` so --gc-sections cannot discard
  * it.  `probe_*` are filled once from the shipped bank; the counters are the
@@ -64,6 +76,7 @@ typedef struct sm64_saturn_complete_actor_probe {
     uint16_t probe_frame_count[COMPLETE_ACTOR_PROBE_ID_COUNT];
     uint16_t bank_animation_count;
     uint16_t bank_vertex_count;
+    uint16_t staged_slices;
     uint16_t evaluate_calls;
     uint16_t fallback_hits;
     uint16_t last_fallback_requested_id;
@@ -77,12 +90,36 @@ static const uint16_t complete_actor_probe_ids[COMPLETE_ACTOR_PROBE_ID_COUNT] = 
     114U, /* MARIO_ANIM_RUNNING         - baked; requested by the route      */
 };
 
+static void complete_actor_stage_slices(void)
+{
+    uint16_t index;
+    if (complete_actor_bank.bank.vertex_count > SM64_MARIO_VERTEX_COUNT ||
+        complete_actor_bank.bank.joint_count > 20U)
+        return;
+    for (index = 0U; index < complete_actor_bank.bank.vertex_count; index++) {
+        if (!sm64_saturn_actor_bank_vertex(&complete_actor_bank, index,
+                                           &complete_actor_staged_vertices[index]) ||
+            complete_actor_staged_vertices[index].joint_ordinal >=
+                complete_actor_bank.bank.joint_count)
+            return;
+    }
+    for (index = 0U; index < complete_actor_bank.bank.joint_count; index++) {
+        if (!sm64_saturn_actor_bank_joint(&complete_actor_bank, index,
+                                          &complete_actor_staged_joints[index]) ||
+            complete_actor_staged_joints[index].parent_ordinal >= (int16_t)index ||
+            complete_actor_staged_joints[index].parent_ordinal < -1)
+            return;
+    }
+    complete_actor_slices_staged = 1U;
+}
+
 static void complete_actor_publish_probe(void)
 {
     sm64_saturn_complete_actor_probe.bank_animation_count =
         complete_actor_bank.bank.animation_count;
     sm64_saturn_complete_actor_probe.bank_vertex_count =
         complete_actor_bank.bank.vertex_count;
+    sm64_saturn_complete_actor_probe.staged_slices = complete_actor_slices_staged;
     for (uint16_t index = 0U; index < COMPLETE_ACTOR_PROBE_ID_COUNT; index++) {
         sm64_saturn_actor_animation_record_t record;
         sm64_saturn_complete_actor_probe.probe_animation_id[index] =
@@ -105,8 +142,10 @@ static const sm64_saturn_actor_bank_view_t *complete_bank(void)
         complete_actor_bank_ready = (uint8_t)sm64_saturn_actor_bank_validate(
             sm64_saturn_mario_actor_bank_data, sm64_saturn_mario_actor_bank_size,
             &complete_actor_bank);
-        if (complete_actor_bank_ready != 0U)
+        if (complete_actor_bank_ready != 0U) {
+            complete_actor_stage_slices();
             complete_actor_publish_probe();
+        }
     }
     return complete_actor_bank_ready != 0U ? &complete_actor_bank : NULL;
 }
@@ -125,14 +164,18 @@ static uint8_t complete_actor_evaluate(
         .light_capacity = SM64_MARIO_VERTEX_COUNT,
     };
     const sm64_saturn_actor_bank_view_t *const bank = complete_bank();
+    const sm64_saturn_actor_vertex_t *const staged_vertices =
+        complete_actor_slices_staged != 0U ? complete_actor_staged_vertices : NULL;
+    const sm64_saturn_actor_joint_t *const staged_joints =
+        complete_actor_slices_staged != 0U ? complete_actor_staged_joints : NULL;
     sm64_saturn_complete_actor_probe.evaluate_calls++;
     if (bank == NULL) {
         slot->valid = 0U;
         return 0U;
     }
-    if (!sm64_saturn_actor_pose_evaluate(
+    if (!sm64_saturn_actor_pose_evaluate_staged(
             bank, snapshot->animation_id, snapshot->animation_frame,
-            &work, &slot->evaluated)) {
+            &work, staged_vertices, staged_joints, &slot->evaluated)) {
         /* Constitution 6: degrade at the smallest safe unit.  The reduced
          * bake already aliases every unbaked ID onto a baked neighbour, so
          * reaching here means the bank cannot serve the requested ID at all.
@@ -143,9 +186,10 @@ static uint8_t complete_actor_evaluate(
         sm64_saturn_complete_actor_probe.fallback_hits++;
         sm64_saturn_complete_actor_probe.last_fallback_requested_id =
             (uint16_t)snapshot->animation_id;
-        if (!sm64_saturn_actor_pose_evaluate(
+        if (!sm64_saturn_actor_pose_evaluate_staged(
                 bank, COMPLETE_ACTOR_FALLBACK_ANIMATION_ID,
-                snapshot->animation_frame, &work, &slot->evaluated)) {
+                snapshot->animation_frame, &work, staged_vertices,
+                staged_joints, &slot->evaluated)) {
             slot->valid = 0U;
             return 0U;
         }

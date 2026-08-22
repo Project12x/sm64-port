@@ -4,6 +4,30 @@
 
 ### Changed
 
+- **The pose evaluator's two per-frame-invariant bank slices are now staged
+  once into LWRAM instead of being re-read from CART every frame.** 424 vertex
+  records (4,240 B) and 20 joint records (240 B), 4,480 B total, into
+  `.lwram_bss` against 92,704 B of free LWRAM. **Reasoning:** the actor bank
+  lives in `.cart_rodata`, so `sm64_saturn_actor_bank_vertex` and
+  `sm64_saturn_actor_bank_joint` were crossing the A-bus 444 times per frame
+  for two tables that never change for the life of the bank. HWRAM is the
+  phase's binding constraint at 2,552 B of slack while LWRAM sits at 92,704 B
+  free -- we are starving in one pool while another is idle, and the staging
+  buffer is funded from the idle one. **What was deliberately left in CART:**
+  the animation channel index and value streams. They are *addressed* by a
+  frame, so their storage is invariant but the read is not -- and at 209,944 B
+  they do not fit in free LWRAM anyway. The two pose slots stay in HWRAM for
+  the same reason inverted: they are written and read every frame by the
+  evaluator and the render worker, and LWRAM is 16-bit and slower, so moving
+  them would trade the 8,560 B for cycles on the hot path. **Consumer-facing
+  impact:** `sm64_saturn_actor_pose_evaluate` is unchanged and still reads the
+  bank; the new `sm64_saturn_actor_pose_evaluate_staged` takes the two tables
+  as optional arguments and the old entry point forwards NULL/NULL, so the
+  meshlet and demo-render callers are byte-for-byte unaffected. Staged tables
+  are validated once during staging and trusted per frame; a failed staging
+  pass leaves `complete_actor_slices_staged` at 0 and the evaluator silently
+  falls back to reading the bank, which is correct but slower.
+
 - **The Mario actor bank now bakes 104 core-play animation IDs instead of all
   209, and aliases the other 105 onto their nearest baked neighbour.** The
   `.s64b` payload falls 596,896 -> 232,564 B (compact channel bytes
