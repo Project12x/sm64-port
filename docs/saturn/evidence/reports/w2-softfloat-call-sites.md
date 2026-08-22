@@ -506,7 +506,7 @@ by this task.
 | :--- | :--- | :--- |
 | identity | `id-57fb7312058b7f2e` | **`id-28b8cb0e531f8476`** |
 | `identity_sha256` | `d45cbc253c7a9dbf…b7b3c5` | `2c7d54085dd94b57…d405ea` |
-| `effective_config_sha256` | `57fb7312058b7f2e…35bb95` | `28b8cb0e531f8476…` |
+| `effective_config_sha256` | `57fb7312058b7f2e…35bb95` | `28b8cb0e531f8476…a022c` |
 | ELF SHA-256 | `4a287b769d94978007840ca08d2a1ae594aa1e3a287e5cad2c3574891779b66b` | `5f60ba879918893bfec7eea8fbd10572f42330a8f90b73859e7e403b61c91c63` |
 | ELF size | 9,983,384 | 9,984,436 (+1,052) |
 | ISO SHA-256 | `fc007092b2429ff9844dd34fb1b4874c4ddac97b6bccdb1250a62a38b1d68f6e` | `4c14dd0efbda96a18c60c0dc2c5e915e98f8345a759bb7cdfb6174fc438ca3d1` |
