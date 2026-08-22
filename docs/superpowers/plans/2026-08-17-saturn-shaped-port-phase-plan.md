@@ -32,6 +32,7 @@ for the render path only.
 | FPS mean / median / 1% low | 6.7181 / 6.6667 / 6.0 | 6.2143 / 6.0000 / 5.4545 |
 | VB per frame | 8.9310 | 9.6552 |
 | master idle | **0.000000** | **0.000000** |
+| master idle *(W6a, `id-586944bb637a920f`)* | **5.22%** — see below | not measured |
 | slave idle | 6.1095 VB (68.41%) | 6.0632 VB (62.80%) |
 
 Sprint 2 took cadence **3.8753 → 6.7181, +73.4%**, past A9A's 5.294 / 11.333.
@@ -44,6 +45,24 @@ candidate `id-e8720d58595d9a62` (manifest
 `fd9e1ffbf2b2e23e2f14706a6173b1e72cf207f36b4328c02636cb109cc01990`, CUE
 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`, ELF
 `021f5fee2e0d5a24a1077bc7c41728453e9dc6fc4f4d1cc4c595bdf108b96c50`).
+
+> **STRUCTURAL CHANGE, W6a (2026-08-21): the master is no longer saturated.**
+> Idle went from exactly **0.000000 to 5.22%**. W6a shed **398,163 soft-float
+> cycles/frame** but the frame shortened by only **200,589** — and the **197,574
+> residual is independently confirmed by the new idle share** (5.2248% x 3,810,963 =
+> 199,115, agreeing to 0.8%). **The master converted almost exactly half its saving
+> into VBlank waiting.**
+>
+> Two consequences, both of which change this plan:
+>
+> 1. **Roughly half of any further arithmetic win will be absorbed the same way** until
+>    we find what the master now waits on. That discounts W2 and W6b directly.
+> 2. **The argument that closed the slave workstream is partially reopened.** T2.25
+>    declined offload because "overlap converts zero VB when the critical path has no
+>    stall in it" — which was true at 0.000000 idle and **is no longer true at 5.22%**.
+>    The non-goal below is amended accordingly.
+>
+> **Finding what the master now waits on is the highest-value next measurement.**
 
 ## 2. The finding this plan is built on
 
@@ -561,10 +580,19 @@ attempted as one conversion.
   **⚠ OPEN — external research not done.** A survey of how other Saturn projects broke
   shared-state dependencies was dispatched and died on a transient 529. Until it runs, we
   know only what our two in-tree references do.
-- **Widening the slave dispatch window.** Closed by T2.25: master idle is 0.000000, so
-  overlap converts zero VB. SlaveDriver's adaptive controller partitions from the master's
-  join spin count — identically 0 here — so **its fixed point is our current configuration**,
-  and we already split at 100% rather than its tuned fraction.
+- **Widening the slave dispatch window — PARTIALLY REOPENED by W6a.** T2.25 closed
+  this because master idle was **0.000000**, so overlap converted zero VB. **W6a moved
+  master idle to 5.22%**, so that premise no longer holds as stated. What still stands
+  from T2.25: SlaveDriver's adaptive controller partitions from the master's join spin
+  count and **its fixed point is our current configuration**; we already split at 100%
+  rather than its tuned fraction; and the two blocking dependencies (admission BFS over
+  shared visited/queued/seen state, ~0.996 VB; sequential VDP1 command arena with its
+  shared Gouraud bank, ~1.435 VB) are the same two **upstream also leaves serial**.
+  **What changed is only that there is now stall to overlap into.** Do not reopen this
+  on the idle number alone — first establish *what* the master waits on, because if it
+  is a hardware-gated wait rather than a dependency stall, offload still converts
+  nothing. T2.26's measurement stands: 99.24% of the slave window survives the
+  coherency tax at ~1.18x transfer cost, and bus contention remains unmodelled.
 - **User clipping / HSS.** System clipping is already the full screen rect
   (`main.c:2328` → `saturn_vdp1_backend.h:69-70`), so a screen-sized user clip removes zero
   pixels; and `VDP1CalcCommandTiming` (`ymir-agent/.../vdp.cpp:1101`) never consults
