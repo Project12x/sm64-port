@@ -17,6 +17,37 @@
  * exploits array sizes for range analysis-based optimizations as well).
  * Thus, for non-IDO compilers we use the standard-compliant version.
  */
+#ifdef TARGET_SATURN
+/* Saturn stores only the first quadrant: 1025 entries (4,100 B) instead of
+ * 5120 (20,480 B), returning 16,380 B of HWRAM -- the table was the largest
+ * tenant there after the object pool and the VDP1 command tables.
+ *
+ * The literals in trig_tables_quarter.inc.c are copied verbatim from the full
+ * table, and quarter-wave symmetry was verified bit-exact against the shipped
+ * values for all 4,096 sine indices. There is exactly one difference in the
+ * whole table: at index 2048 (sin 180 degrees) the full table holds +0.0 and
+ * the fold yields -0.0. They compare equal and behave identically under every
+ * arithmetic operation this codebase performs on them.
+ *
+ * The index decomposes into two flag bits and an offset, so no division,
+ * no modulo and no variable shift is needed -- SH-2 has no barrel shifter,
+ * so only the compile-time-constant shifts used here are cheap:
+ *   bit 10 -> mirror the offset about 90 degrees
+ *   bit 11 -> negate
+ * The table is exactly periodic over 4,096 indices (verified), which is why
+ * coss() is just sins() advanced by a quarter turn.
+ */
+extern f32 gSineQuarterTable[1025];
+
+static inline f32 saturn_sine_index(u16 index) {
+    const u16 offset = index & 0x3FF;
+    const f32 value = gSineQuarterTable[(index & 0x400) ? (1024 - offset) : offset];
+    return (index & 0x800) ? -value : value;
+}
+
+#define sins(x) saturn_sine_index((u16) ((u16) (x) >> 4) & 0xFFF)
+#define coss(x) saturn_sine_index((u16) ((((u16) (x) >> 4) + 0x400) & 0xFFF))
+#else
 extern f32 gSineTable[];
 #ifdef AVOID_UB
 #define gCosineTable (gSineTable + 0x400)
@@ -26,6 +57,7 @@ extern f32 gCosineTable[];
 
 #define sins(x) gSineTable[(u16) (x) >> 4]
 #define coss(x) gCosineTable[(u16) (x) >> 4]
+#endif
 
 #define min(a, b) ((a) <= (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))

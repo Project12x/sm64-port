@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **The f32 sine table is now quarter-wave on Saturn: -13,646 B of HWRAM, at
+  no measurable cadence cost.** `gSineTable` was 5,120 f32 entries (20,480 B)
+  and the largest HWRAM tenant after the object pool and the VDP1 command
+  tables. **Reasoning:** it is the *simulation* table serving 508
+  `sins()`/`coss()` call sites in unconverted game/engine code - the renderer's
+  `gSaturnSineTableQ16` already lives in CART - so it is a W6b artefact rather
+  than a rendering cost, and shrinking it is the cheap interim while the Q16
+  simulation purge is outstanding.
+- **Only the first quadrant is stored** (1,025 entries, 4,100 B). The literals
+  in `include/trig_tables_quarter.inc.c` are **copied verbatim** from the full
+  table rather than recomputed, so no float re-printing can perturb a value.
+  The index decomposes into two flag bits and an offset - bit 10 mirrors about
+  90 degrees, bit 11 negates - so there is no division, no modulo and no
+  variable shift, which matters because SH-2 has no barrel shifter and only
+  compile-time-constant shifts are cheap. `coss(x)` becomes `sins()` advanced
+  a quarter turn, which is valid because the shipped table was verified
+  exactly periodic over 4,096 indices.
+- **Equivalence proven, not assumed.** An oracle re-derives all 4,096 sine and
+  all 4,096 cosine indices from the quarter table and compares IEEE-754 bit
+  patterns against the full shipped table. **Exactly one difference exists in
+  the whole table**: at sine index 2048 (and the cosine index 1024 that lands
+  on it) the full table holds `+0.0` and the fold yields `-0.0`. They compare
+  equal and behave identically under every operation this codebase performs.
+  The oracle initially failed the cosine arm because the *test* expected zero
+  mismatches; the fold was right and the assertion was wrong.
+- **Measured cadence: 4.9857 -> 5.0000 mean**, median and 1%-low unchanged
+  (29 intervals each, captured through the repaired harness on
+  `id-6716686164114403` and `id-fe3b1dbab4c135db`). The net saving is below the
+  16,380 B the table itself returns because the fold adds code at 508 call
+  sites; that code costs no measurable frame time.
+- `gArctanTable` is carried verbatim into the same file - it shared
+  `trig_tables.inc.c` with the sine table but has no quarter-wave redundancy
+  to exploit. `src/game/ingame_menu.c` indexed `gSineTable` directly; it now
+  calls `sins()`, which is what that expression already meant.
+- **Cumulative HWRAM this session: 1,018,030 -> 1,002,736 B**, with the entire
+  generic actor pipeline switched on rather than off.
+
 ### Fixed
 
 - **Coins are grey because the bake discards their colour, not because the

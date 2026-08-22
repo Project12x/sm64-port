@@ -23,7 +23,12 @@
 #include "saturn_math_route_capture.h"
 #endif
 
+#ifdef TARGET_SATURN
+/* Quarter-wave only: 4,100 B instead of 20,480 B. See math_util.h. */
+#include "trig_tables_quarter.inc.c"
+#else
 #include "trig_tables.inc.c"
+#endif
 
 // Variables for a spline curve animation (used for the flight path in the grand star cutscene)
 Vec4s *gSplineKeyframe;
