@@ -27,14 +27,50 @@ not compiled out.
 > animation set.** Walk, jump and others all play. That was the risk that would have
 > turned R3 from a flag change into a bake task; it did not.
 
-**Cadence cost: measured but not yet reported** — the R3 scoping task was still
-running its censuses when the owner observed and accepted the build. The owner's
-read is *"a little slower... not meaningfully bad"* against the previous accepted
-`id-28b8cb0e531f8476` (7.3109 mean / 7.5000 median at tick 30; 7.2803 /
-7.5000 at tick 150). **The number, and the costed middle options — fewer pose slots,
-an animation subset, lower joint precision, sub-frame-rate pose updates — are still
-owed.** Accepted on function, per plan §2b; the figure refines the record rather
-than deciding it.
+**Cadence cost: reported.** −6.64% mean at route tick 150 (7.2803 → 6.7969)
+and −5.93% at tick 30 (7.3109 → 6.8775) against the previous accepted
+`id-28b8cb0e531f8476`, with the median frame moving a whole grid step from
+7.5000 to 6.6667 — 8 VBlanks to 9. Full costing, including the middle options,
+is in [`docs/saturn/evidence/reports/r3-mario-animation-scoping.md`](docs/saturn/evidence/reports/r3-mario-animation-scoping.md).
+Accepted on function, per plan §2b.
+
+**R3 options C and F landed 2026-08-22 on `id-8e643f9cc3e9fdee`
+(`live-observed`, owner gate OPEN — nobody has watched this build move yet).**
+`closure_clean: true`, `git_revision 4efa7082`, `verify-memory-map` RESULT OK.
+
+- **C — the baked animation set is now 104 core-play ids, not 209.** Chosen by
+  evidence: the two ids the replay route measurably requests, plus every
+  animation an action handler reachable in the shipped BOB tuple can set, plus
+  the held-light-object family for R2's Bob-omb. The other 105 ids keep their
+  record, enum name, source path and source hash but **alias the nearest baked
+  id's channel streams**, so no requested id can fail to evaluate and Mario can
+  never vanish for a frame. Verified exhaustively on host (all 209 ids
+  evaluable, 0 failures) and live on target (unbaked id 29 reads
+  `frame_count 10` at the same `values_offset` as baked id 28).
+- **F — the two per-frame-invariant bank slices are staged CART → LWRAM.** The
+  actor bank lives in `.cart_rodata`, so 424 vertex records and 20 joint
+  records were crossing the A-bus every frame for data that never changes.
+  4,480 B into `.lwram_bss`, confirmed in the symbol table at `0x0020xxxx`.
+- **Cart free 117,840 → 482,160 B (2.81% → 11.50%)** — more headroom than the
+  pre-animation baseline's 409,888 B, which unblocks S1 and S6.
+  **Recovery is 364,320 B, not the ~495 KB R3 projected**; the difference is
+  the price of 104 ids of coverage instead of 38, and the per-tier cost curve
+  is in the report.
+- **No cadence cost.** Tick 30 is 6.8775 mean / 6.6667 median / 8.7241 VB per
+  frame — identical to the baseline to four decimals. Tick 150 is 6.8235 /
+  6.6667 / 8.7931, **+0.39%**. The bridge's fallback never ran: 0 hits in 239
+  evaluate calls.
+- **HWRAM did not improve and F never promised it would: 10,488 → 9,944 B
+  free, i.e. 544 B of `.text`,** leaving **2,008 B over the link's 7,936 B
+  floor**. LWRAM 92,704 → 88,176 B free. **The HUD does not fit in 2,008 B**;
+  mesh decimation (R3 option G, the next task) or an HWRAM→LWRAM eviction has
+  to come first.
+- Package generation moved **15 → 16**: the reduced bake changes the actor
+  package class from 596,896 to 232,564 source bytes, which is exactly the
+  byte-changing follow-up an immutable generation must not absorb. The target
+  profile did **not** move.
+- Evidence: [`docs/saturn/evidence/reports/r3-c-f-memory-recovery.md`](docs/saturn/evidence/reports/r3-c-f-memory-recovery.md).
+  Artifacts at `releases/2026-08-22_r3-cf-product/id-8e643f9cc3e9fdee/`.
 
 **Prior accepted artifacts, newest first:** `id-28b8cb0e531f8476` (W2,
 7.3109), `id-57fb7312058b7f2e` (W6a, 7.0445), `id-e8720d58595d9a62`

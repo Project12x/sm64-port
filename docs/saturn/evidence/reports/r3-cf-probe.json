@@ -1,0 +1,132 @@
+{
+ "bank_payload_sha256": "e86b5c14bc7694873264036e8dcba7f58c51bb29ef8d0658f74bde8e1aa9c8ae",
+ "bank_selection": "core-play-v1",
+ "checks": {
+  "bridge_fallback_never_used": true,
+  "evaluate_ran": true,
+  "lwram_slices_staged": true,
+  "probe_magic_ok": true,
+  "route_ids_are_all_baked": true,
+  "target_bank_matches_report": true,
+  "unbaked_id_aliases_its_substitute": true,
+  "unbaked_id_has_frames_on_target": true
+ },
+ "created_utc": "2026-08-22T16:02:16.625837+00:00",
+ "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\sourceboot\\e2-bob-identity-id-8e643f9cc3e9fdee\\obj\\sm64-saturn-sourceboot-e2.elf",
+ "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\sourceboot\\e2-bob-identity-id-8e643f9cc3e9fdee\\sm64-saturn-sourceboot-e2.cue",
+ "probe": {
+  "bank_animation_count": 209,
+  "bank_vertex_count": 424,
+  "evaluate_calls": 239,
+  "fallback_hits": 0,
+  "last_fallback_requested_id": 0,
+  "magic": 1396788813,
+  "magic_ok": true,
+  "probe_animation_id": [
+   29,
+   28,
+   195,
+   114
+  ],
+  "probe_frame_count": [
+   10,
+   10,
+   30,
+   72
+  ],
+  "probe_values_offset": [
+   76446,
+   76446,
+   197518,
+   128110
+  ],
+  "staged_slices": 1
+ },
+ "probe_agreement": [
+  {
+   "animation_id": 29,
+   "baked": false,
+   "enum_name": "MARIO_ANIM_CREDITS_WAVING",
+   "match": true,
+   "report_frame_count": 10,
+   "report_values_offset": 76446,
+   "substitute_animation_id": 28,
+   "target_frame_count": 10,
+   "target_values_offset": 76446
+  },
+  {
+   "animation_id": 28,
+   "baked": true,
+   "enum_name": "MARIO_ANIM_CLIMB_DOWN_LEDGE",
+   "match": true,
+   "report_frame_count": 10,
+   "report_values_offset": 76446,
+   "substitute_animation_id": null,
+   "target_frame_count": 10,
+   "target_values_offset": 76446
+  },
+  {
+   "animation_id": 195,
+   "baked": true,
+   "enum_name": "MARIO_ANIM_IDLE_HEAD_LEFT",
+   "match": true,
+   "report_frame_count": 30,
+   "report_values_offset": 197518,
+   "substitute_animation_id": null,
+   "target_frame_count": 30,
+   "target_values_offset": 197518
+  },
+  {
+   "animation_id": 114,
+   "baked": true,
+   "enum_name": "MARIO_ANIM_RUNNING",
+   "match": true,
+   "report_frame_count": 72,
+   "report_values_offset": 128110,
+   "substitute_animation_id": null,
+   "target_frame_count": 72,
+   "target_values_offset": 128110
+  }
+ ],
+ "requested_animation_ids": {
+  "114": 119,
+  "195": 22
+ },
+ "schema": "sm64-saturn-r3-cf-probe-v1",
+ "status": "complete",
+ "symbols": {
+  "_sm64_saturn_complete_actor_probe": {
+   "address": 2097224,
+   "size": 48
+  },
+  "_sourceboot_mario_snapshot": {
+   "address": 2943904,
+   "size": 56
+  }
+ },
+ "target_identity": {
+  "address": 574619648,
+  "expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+  "match": true,
+  "observed_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+  "size": 16,
+  "startup_identity_attempts": 683,
+  "startup_vblanks_waited": 683
+ },
+ "vblanks_advanced": 1247,
+ "warmup": {
+  "addresses": {
+   "global_timer": "0x60bcf04",
+   "replay_ticks": "0x60f3110"
+  },
+  "global_timer": 100,
+  "max_vblanks": 20000,
+  "mode": "ticks",
+  "replay_ticks": 100,
+  "start_global_timer": 0,
+  "start_replay_ticks": 0,
+  "steps": 128,
+  "target_tick": 100,
+  "vblanks_advanced": 2380
+ }
+}

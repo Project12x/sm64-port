@@ -258,7 +258,7 @@ says *which* criterion applies per subsystem; 2b says what the criterion is ulti
 | Charter phase | Relationship to this plan |
 |---|---|
 | **R2** Normal Bob-omb | Costs frames. Wants W1 headroom first. |
-| **R3** Mario animation + HUD | **Animated Mario ACCEPTED 2026-08-22** on `id-36ebaa12184cd661` — the complete path existed behind `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION`, which defaulted to 0; walk, jump and others confirmed working, pose data covers the set. **HUD outstanding.** Cadence cost measured but unreported. |
+| **R3** Mario animation + HUD | **Animated Mario ACCEPTED 2026-08-22** on `id-36ebaa12184cd661` — the complete path existed behind `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION`, which defaulted to 0; walk, jump and others confirmed working, pose data covers the set. Cadence cost reported: −6.64% at tick 150, −5.93% at tick 30, median 8→9 VBlanks (`r3-mario-animation-scoping.md`). **Options C and F landed 2026-08-22 on `id-8e643f9cc3e9fdee`, live-observed, owner gate open**: reduced 104-id bake + CART→LWRAM staging of the invariant bank slices, cart free 117,840 → 482,160 B at **no cadence cost** (6.8775 tick 30 unchanged, 6.8235 tick 150, +0.39%) — `r3-c-f-memory-recovery.md`. **HUD outstanding, and it does not fit in the remaining 2,008 B of HWRAM: decimation (option G) or an HWRAM→LWRAM eviction must come first.** |
 | **S1** Any-level cart loader | Needs W3's generalized bake. |
 | **S2** Shrink & degrade pipeline | **Is W3.** Pull forward. |
 | **S6** All levels | Depends on S1 + W3. |

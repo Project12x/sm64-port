@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/saturn/evidence/reports/r3-c-f-memory-recovery.md` and its evidence
+  set** — the measured result of R3 options C and F on
+  `id-8e643f9cc3e9fdee`, plus `r3_probe_cf.py`, the two cadence captures and
+  the on-target probe JSON. **Reasoning:** R3 §8 costed both options from a
+  table; this records what they actually cost, including the two places the
+  table was optimistic. Cart recovery is **364,320 B, not the projected
+  ~495 KB**, because the baked set is 104 evidence-derived ids rather than the
+  estimated 38 — the report prices that choice and gives the per-tier curve so
+  the owner can trim it in one line. HWRAM free falls **10,488 → 9,944 B**: F
+  costs 544 B of `.text` and relieves no HWRAM, which R3's own option table
+  already said but the task framing did not. Cadence is unchanged at tick 30
+  (6.8775 mean, 8.7241 VB per frame, identical to the baseline to four
+  decimals) and **+0.39% at tick 150** (6.8235). `verify-memory-map` RESULT
+  OK; `closure_clean: true`. **The per-frame census did not finish inside the
+  task budget and is recorded as missing rather than substituted with the
+  burst profiler, which is not admissible.** **Consumer-facing impact:** the
+  build is `live-observed`, not `owner-accepted` — no human has watched it
+  move — and the HUD still does not fit in the remaining 2,008 B of HWRAM, so
+  mesh decimation or an HWRAM→LWRAM eviction has to precede it.
+
 ### Changed
 
 - **The BOB scene package generation moves 15 -> 16.** **Root cause, found by
