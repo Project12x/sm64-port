@@ -12,6 +12,23 @@
 Sprint 1 (R0+R1) was historically complete and owner-accepted 2026-08-15.
 **Sprint 2 (cadence recovery) — investigation phase COMPLETE 2026-08-15.**
 
+**W6a landed 2026-08-21 (evidence level, not owner-accepted):** the soft-float
+implementation for `__addsf3`/`__subsf3`/`__mulsf3`/`__divsf3` was replaced with
+LLVM `compiler-rt`, bit-identically -- `verify-softfp-bitexact` **43,333,704,485
+checks, 0 failures**. Candidate `id-586944bb637a920f` (ELF
+`03e6f55e2667e7559c8c68e0862b099448a6bd41e9f46fe4f4c9308c93eca8d7`) measures
+**7.0445 FPS mean / 6.6667 1% low / 8.5172 VB per frame**, caches off, against
+the accepted `id-e8720d58595d9a62`'s 6.6923 / 6.0 / 8.9655: **+5.26% mean,
++11.1% on the 1% low.** Soft-float fell from 33.55% to 24.87% of master cycles.
+**The master is no longer saturated** -- idle went from exactly 0.000000 to
+5.22%, so about half the arithmetic saving is currently absorbed by VBlank
+waiting rather than frame time; find what it now waits on before spending more
+on arithmetic. This candidate is headless evidence and has **not** been
+owner-observed; it does not replace `id-e8720d58595d9a62` as the accepted
+baseline, and its manifest records `closure_clean: false` (built from an
+uncommitted worktree), so any promotion should use a post-commit rebuild.
+Source: `docs/saturn/evidence/reports/w6a-softfloat-implementation.md`.
+
 **Historical T2.17 measured cadence: 6.7181 FPS / 8.9310 VBlanks per frame** on
 `id-c0352f297034f653`, against A9A's 5.294 FPS / 11.333 VB. The current
 owner-accepted W0 candidate is `id-e8720d58595d9a62`, whose identity-bound

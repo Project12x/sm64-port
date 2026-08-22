@@ -803,6 +803,16 @@ SOFTFP_FUNCS := \
   fixdfsi fixunsdfsi floatsidf floatunsidf \
   fixdfdi fixunsdfdi floatdidf floatundidf \
   extendsfdf2 truncdfsf2
+# W6a: four of the routines above are LLVM compiler-rt builtins rather than
+# GCC soft-fp. Same ABI, same entry-point names, same archive -- only the
+# source file differs, so the link story below is unchanged. Both arms are
+# held to the same host differential gate (Makefile.saturn.mk's
+# verify-softfp-bitexact, whose SOFTFP_FAST_FUNCS must stay identical to
+# this list) and both produce bit-identical results for every input.
+# Provenance, licence and the local changes: third_party/llvm-compiler-rt.
+SOFTFP_FAST_DIR := $(ROOT)/third_party/llvm-compiler-rt/builtins
+SOFTFP_FAST_FUNCS := addsf3 subsf3 mulsf3 divsf3
+SOFTFP_FAST_OBJS := $(patsubst %,$(SOFTFP_BUILD_DIR)/%.o,$(SOFTFP_FAST_FUNCS))
 SOFTFP_OBJS := $(patsubst %,$(SOFTFP_BUILD_DIR)/%.o,$(SOFTFP_FUNCS))
 SOFTFP_CFLAGS := $(SOURCEBOOT_GCC_TOOL_PREFIX) -O2 -g -std=gnu11 -m2 -mb -fno-lto -ffreestanding \
   -fomit-frame-pointer -ffunction-sections -fdata-sections \
@@ -810,6 +820,11 @@ SOFTFP_CFLAGS := $(SOURCEBOOT_GCC_TOOL_PREFIX) -O2 -g -std=gnu11 -m2 -mb -fno-lt
   -I$(SOFTFP_DIR)/soft-fp -I$(SOFTFP_DIR)/config/sh -I$(SOFTFP_DIR)/include
 SOFTFP_HEADERS := $(wildcard $(SOFTFP_DIR)/soft-fp/*.h) \
   $(SOFTFP_DIR)/config/sh/sfp-machine.h $(SOFTFP_DIR)/include/longlong.h
+SOFTFP_FAST_CFLAGS := $(SOURCEBOOT_GCC_TOOL_PREFIX) -O2 -g -std=gnu11 -m2 -mb -fno-lto -ffreestanding \
+  -fomit-frame-pointer -ffunction-sections -fdata-sections \
+  -ffile-prefix-map=$(ROOT)=. -fdebug-prefix-map=$(ROOT)=. -fmacro-prefix-map=$(ROOT)=. \
+  -I$(SOFTFP_FAST_DIR)
+SOFTFP_FAST_HEADERS := $(wildcard $(SOFTFP_FAST_DIR)/*.h) $(wildcard $(SOFTFP_FAST_DIR)/*.inc)
 
 # LINK ORDER, and this is the whole trick -- it is not where you would guess.
 # Putting `-lsm64softfp` into sourceboot.specs' `*lib` line does NOT work:
@@ -825,6 +840,12 @@ SOFTFP_HEADERS := $(wildcard $(SOFTFP_DIR)/soft-fp/*.h) \
 # ___ashlsi3_r0, ___lshrsi3_r0, ___udiv_qrnnd_16) resolve forward out of the
 # later libgcc, which is a normal archive-ordering resolution.
 SH_LDFLAGS += -L$(SOFTFP_BUILD_DIR) -lsm64softfp
+
+# Static pattern rule: it names its targets explicitly, so it wins over the
+# implicit soft-fp rule below for exactly these four objects and nothing else.
+$(SOFTFP_FAST_OBJS): $(SOFTFP_BUILD_DIR)/%.o: $(SOFTFP_FAST_DIR)/%.c $(SOFTFP_FAST_HEADERS) | $(SOURCEBOOT_TOOL_TMPDIR)
+	@mkdir -p "$(@D)"
+	$(ECHO)$(SH_CC) $(SOFTFP_FAST_CFLAGS) -c "$<" -o "$@"
 
 $(SOFTFP_BUILD_DIR)/%.o: $(SOFTFP_DIR)/soft-fp/%.c $(SOFTFP_HEADERS) | $(SOURCEBOOT_TOOL_TMPDIR)
 	@mkdir -p "$(@D)"

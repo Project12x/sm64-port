@@ -4,6 +4,52 @@
 
 ### Changed
 
+- **W6a: `__addsf3`, `__subsf3`, `__mulsf3` and `__divsf3` now come from LLVM
+  `compiler-rt` instead of GCC `soft-fp`, bit-identically, for +5.26% FPS.**
+  Measured `6.6923 -> 7.0445` mean and `6.0 -> 6.6667` 1% low
+  (`summarize_cadence`, 30 events, caches off), baseline `id-e8720d58595d9a62`
+  vs candidate `id-586944bb637a920f`. **Reasoning:** the exact master census
+  (`capture_idle_attribution`, `--warmup-ticks 150`) put soft-float at 33.55%
+  of master cycles with those four routines alone at 23.5%, and every
+  double-precision routine put together at 0.77% -- so single precision was
+  the entire addressable target. `soft-fp` is GCC's portable *reference*: its
+  class-combination dispatch over macro fraction arrays costs register
+  pressure and a long path to the first useful arithmetic on a 16-register
+  CPU with no barrel shifter. `compiler-rt` is fast-path-first, and on
+  `sh-elf-gcc 14.3.0 -O2 -m2` compiles to 1,780 bytes against 4,624 for the
+  same four routines -- its `__subsf3` is a 16-byte thunk onto `__addsf3`
+  rather than a second full copy of the addition path, and its `__divsf3`
+  uses a Newton-Raphson reciprocal instead of calling libgcc's
+  `__udiv_qrnnd_16` twice per divide. Soft-float fell to 24.87% of master
+  cycles, 1,345,842 -> 947,679 cycles/frame. **Tradeoff, stated:** the master
+  was saturated (idle exactly 0.000000) and is now 5.22% idle, so it converted
+  about half the 398,163-cycle/frame saving into VBlank waiting rather than
+  frame time; roughly half of any further arithmetic win will be absorbed the
+  same way until whatever the master now waits for moves too.
+  **Consumer-facing impact: none.** `verify-softfp-bitexact` passes unchanged
+  at full volume -- **43,333,704,485 checks, 0 failures**, 97,742 of them
+  NaN-producing -- because six returns in `fp_{add,mul,div}_impl.inc` were
+  patched to yield the canonical `0x7FC00000` quiet NaN that `sfp-machine.h`'s
+  `_FP_CHOOSENAN` mandates, instead of upstream's payload propagation. That
+  makes the substitution bit-identical to what it replaces on **every** input,
+  not merely IEEE-754-equivalent. A seventh local change inlines `fp_mode.h`'s
+  `__fe_getround`/`__fe_raise_inexact` as the same constants `fp_mode.c`
+  returns, so no call survives per operation. **New prerequisite:**
+  `SOFTFP_FAST_FUNCS` now exists in both `Makefile.saturn.mk` and
+  `src/port/saturn/sourceboot/Makefile` and the two lists must be kept
+  identical -- if they drift, the gate stops testing what the target links.
+  Provenance, licence (Apache-2.0 WITH LLVM-exception), pinned commit
+  `llvm/llvm-project@05486e3049ba8666287794fc7d4f9780edf702e9` and all local
+  changes: `third_party/llvm-compiler-rt/README.md`,
+  `THIRD_PARTY_LICENSES.md`, `docs/saturn/UPSTREAM_CODE_LEDGER.md`. Full
+  evidence: `docs/saturn/evidence/reports/w6a-softfloat-implementation.md`.
+  **Correction to a standing premise:** `soft-fp` was *not* leaving SH-2
+  widening multiply unused -- `third_party/gcc-soft-fp/include/longlong.h:1117`
+  already defined `umul_ppmm` as inline `dmulu.l`, and the shipped baseline's
+  `___mulsf3` disassembly contains it on the fast path. The win was
+  structural, not instruction selection.
+
+
 - The sourceboot memory-map verifier now includes `.lwram_geo_traversal` in
   its final LWRAM high-water calculation. The section was previously omitted
   even though it is a live allocation, overstating the reported margin; normal
@@ -24,6 +70,27 @@
   waits.
 
 ### Fixed
+
+- **`verify-softfp-bitexact` is runnable again**, and no longer creates a
+  stray `<drive>:\d\Code\...` mirror tree every time it is invoked. **Root
+  cause:** `SATURN_REPO_ROOT` (`Makefile.saturn.mk:1`) is derived from
+  `$(realpath ...)`, which under MSYS2 Make is the MSYS spelling `/d/Code/...`.
+  The recipe's first step passed that string to the repo's *native-Windows*
+  venv Python as a `pathlib.Path(...).mkdir()` literal; a native Python
+  resolves a leading `/d/` against the current drive, so instead of creating
+  its own build directory it built a mirror of the checkout elsewhere on disk
+  and the target then died on the directory it still did not have. Every other
+  path in that recipe was always fine, because MSYS2 converts argv paths on
+  the way to a native `gcc` -- only the Python `-c` string literal escaped
+  that conversion. **Fix:** the step is now `mkdir -p` in the recipe shell,
+  which is the MSYS shell and understands both spellings. The target now runs
+  end-to-end from one `make` invocation rather than needing the manual
+  reconstruction T2.13 used. The litter already on disk is reported in the
+  W6a evidence report and left for the owner to remove; nothing recreates it.
+  **Known sibling, not fixed here:** `verify-bob-bsp-header`
+  (`Makefile.saturn.mk:727`) has the identical defect and fails with
+  `FileNotFoundError: [WinError 2]`; it is in a target W6a does not touch.
+
 
 - The headless sourceboot throughput observer now treats an unstable cadence
   seqlock snapshot as a bounded observation race rather than a product failure.

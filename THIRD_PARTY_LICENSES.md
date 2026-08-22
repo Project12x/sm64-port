@@ -226,6 +226,43 @@ unmodified, no change notice is required; if any is ever modified, the LGPL's
 modification terms apply to that file and a change note must be added there and
 in `docs/saturn/PROVENANCE.md`.
 
+## LLVM `compiler-rt` builtins (`third_party/llvm-compiler-rt/`)
+
+As of 2026-08-21 (W6a) four of the soft-float entry points above come from
+LLVM's `compiler-rt` builtins instead of GCC's `soft-fp`: `__addsf3`,
+`__subsf3`, `__mulsf3` and `__divsf3`. They are vendored in source form,
+compiled by the same pinned `sh-elf-gcc 14.3.0`, and archived into the same
+`libsm64softfp.a`. Every other soft-float routine is still `soft-fp`.
+
+| Files | Upstream | Version | Terms |
+|---|---|---|---|
+| `builtins/{addsf3,subsf3,mulsf3,divsf3}.c`, `builtins/fp_{add,mul,div}_impl.inc`, `builtins/fp_lib.h`, `builtins/fp_mode.h`, `builtins/int_{lib,types,endianness,util,math}.h`, `builtins/assembly.h` | `compiler-rt/lib/builtins/` in `llvm/llvm-project` | commit `05486e3049ba8666287794fc7d4f9780edf702e9`, verified 2026-08-21 | **Apache-2.0 WITH LLVM-exception** |
+
+Apache-2.0 with the LLVM exception is permissive and imposes no copyleft
+obligation on the ROM. The obligations that do apply are discharged as
+follows:
+
+- **§4(a) licence copy** — `third_party/llvm-compiler-rt/LICENSE.TXT`, taken
+  from the same commit.
+- **§4(b) attribution** — every vendored file retains its upstream header and
+  `SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception` line.
+- **§4(b) change notice** — **three files are modified**, unlike the `soft-fp`
+  subset above. Each change is marked in place with a
+  `LOCAL CHANGE (sm64-saturn-port, 2026-08-21)` comment quoting the upstream
+  line it replaced, and all three are described in
+  `third_party/llvm-compiler-rt/README.md`:
+  1. `fp_add_impl.inc`, `fp_mul_impl.inc`, `fp_div_impl.inc` — a NaN result is
+     canonicalised to `0x7FC00000` rather than propagating the operand payload,
+     so the substitution is bit-identical to the `soft-fp` implementation it
+     replaces rather than merely IEEE-754-equivalent;
+  2. `fp_mode.h` — `__fe_getround` / `__fe_raise_inexact` become `static
+     inline` constants returning exactly what upstream's `fp_mode.c` returns,
+     which is therefore not vendored.
+
+Bit-exactness against the host FPU, over both arms and every routine, is
+enforced by `make -f Makefile.saturn.mk verify-softfp-bitexact`.
+
+
 ## Permissive visual-slice studies (not included code)
 
 The following repositories are reviewed as pattern-only or external-tool

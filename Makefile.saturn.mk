@@ -2109,6 +2109,12 @@ verify-mtxq-conversion-assembly:
 # Override SOFTFP_HOST_CC to use a different 32-bit-long compiler.
 SOFTFP_HOST_CC ?= $(firstword $(wildcard /mingw64/bin/gcc.exe C:/msys64/mingw64/bin/gcc.exe) $(CC))
 SOFTFP_VENDOR := $(SATURN_REPO_ROOT)/third_party/gcc-soft-fp
+# W6a: the four hot single-precision routines are LLVM compiler-rt builtins
+# instead of soft-fp (third_party/llvm-compiler-rt/README.md). Keep this list
+# identical to SOFTFP_FAST_FUNCS in src/port/saturn/sourceboot/Makefile: this
+# gate is worth nothing unless it compiles exactly the source the target links.
+SOFTFP_FAST_DIR := $(SATURN_REPO_ROOT)/third_party/llvm-compiler-rt/builtins
+SOFTFP_FAST_FUNCS := addsf3 subsf3 mulsf3 divsf3
 SOFTFP_HOST_BUILD := $(SATURN_REPO_ROOT)/build/saturn/host-tests/softfp
 # Same list as SOFTFP_FUNCS in src/port/saturn/sourceboot/Makefile: the test is
 # worth nothing unless it covers exactly what the target links. Keep in step.
@@ -2130,7 +2136,18 @@ SOFTFP_TEST_PAIRS ?= 12000000
 SOFTFP_TEST_STRIDE ?= 1
 
 verify-softfp-bitexact:
-	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SOFTFP_HOST_BUILD)').mkdir(parents=True, exist_ok=True)"
+# Do NOT hand $(SOFTFP_HOST_BUILD) to a native-Windows Python here. Line 1
+# derives SATURN_REPO_ROOT from $(realpath ...), which under MSYS2 Make is the
+# MSYS spelling (/d/Code/...); a native Python resolves that against the
+# current drive and silently creates a mirror tree at <drive>:\d\Code\...
+# instead of the build directory -- which is why this target was un-runnable.
+# A stray mirror of four worktrees (27 directories, 6 stray .bin files) was
+# found at D:\d\Code\... by W6a and left in place for the owner to remove;
+# nothing recreates it now.
+# The recipe shell is the MSYS shell and understands both spellings, so it
+# does the mkdir. Every path below reaches the native mingw64 gcc through
+# MSYS2's argv path conversion, which is why only the Python step was wrong.
+	@mkdir -p "$(SOFTFP_HOST_BUILD)"
 # A native-Windows mingw64 gcc launched from an MSYS2 shell inherits neither a
 # usable TMPDIR (MSYS2 rewrites it on the way across, and the recipe shell's
 # TMP/TEMP may be empty) nor a writable fallback -- it lands on C:\WINDOWS and
@@ -2140,8 +2157,12 @@ verify-softfp-bitexact:
 	@tmp="$$(cd '$(SOFTFP_HOST_BUILD)' && { pwd -W 2>/dev/null || pwd; })"; \
 	export TMP="$$tmp" TEMP="$$tmp" TMPDIR="$$tmp"; \
 	for f in $(SOFTFP_TEST_FUNCS); do \
-	  $(HOST_CC_ENV) "$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -w -c "$(SOFTFP_VENDOR)/soft-fp/$$f.c" \
-	    -I"$(SOFTFP_VENDOR)/soft-fp" -I"$(SOFTFP_VENDOR)/config/sh" -I"$(SOFTFP_VENDOR)/include" \
+	  src="$(SOFTFP_VENDOR)/soft-fp/$$f.c"; \
+	  inc="-I$(SOFTFP_VENDOR)/soft-fp -I$(SOFTFP_VENDOR)/config/sh -I$(SOFTFP_VENDOR)/include"; \
+	  case " $(SOFTFP_FAST_FUNCS) " in \
+	    *" $$f "*) src="$(SOFTFP_FAST_DIR)/$$f.c"; inc="-I$(SOFTFP_FAST_DIR)";; \
+	  esac; \
+	  $(HOST_CC_ENV) "$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -w -c "$$src" $$inc \
 	    -o "$(SOFTFP_HOST_BUILD)/$$f.o" || exit 1; \
 	done; \
 	$(HOST_CC_ENV) "$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -Wall -Wextra -Werror -fno-builtin \
