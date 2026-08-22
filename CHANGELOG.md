@@ -4,6 +4,45 @@
 
 ### Added
 
+- **`tools/saturn/build-sourceboot.ps1` - the canonical sourceboot build, as a
+  script instead of tribal knowledge**, plus
+  `tools/saturn/profiles/sourceboot-bob-coins-v1.json` (the demo profile with
+  `features.dynamic_actor_closure = 1`). **Reasoning:** building by hand
+  repeatedly costs an hour of rediscovery because five separate traps each
+  produce a misleading error. Documented in the script header and now encoded
+  in it: (1) `make` launched from an agent shell imports **no** environment
+  into make variables - even `FOO=bar make` yields an empty `$(FOO)` - so
+  sourcing `.yaul.env` never satisfies `check-sdk`; (2) `$(OS)` is therefore
+  unset, Yaul's `ifeq '$(OS)' "Windows_NT"` fails, `EXE_EXT` comes out blank
+  and every toolchain path loses its `.exe`, killing
+  `gen_toolchain_attestation.py`; (3) toolchain env vars must be MSYS-style
+  because recipes run through `/bin/sh`, which eats backslashes as escapes
+  (`D:\Code\...` arrives as `D:CodeRetroDev...`); (4) but the toolchain bin must
+  **also** be on `PATH` in Windows form or the link dies with `collect2: cannot
+  find 'ld'`; (5) the target profile is a sealed contract that rejects any
+  config deviation, including flags never passed, and a forked profile must be
+  written with `hermetic_manifest.canonical_json_bytes` or it is rejected as
+  "target profile is stale or invalid". The canonical flag list is copied from
+  the W0 task brief rather than reconstructed.
+
+### Changed
+
+- **Measured: enabling `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE` does not fit in
+  HWRAM.** A full sealed build (`id-3afce64a4c1a59b6`, scene generation 17 with
+  the 18-variant coin bundle) compiles cleanly and fails only at the final
+  link: `sh-elf-ld: HWRAM sections extend past the physical top of work RAM`.
+  `saturn_demo_render.o` `.text` grows **252,050 -> 255,610 (+3,560 B)** with
+  `.data`/`.bss` unchanged, so the cost is pure code, against **728 B** of
+  slack (HEAD `hwram_remaining` 8,664 minus the `0x1F00` = 7,936 B required
+  heap margin asserted at `sourceboot-cart.x:186`). **Roughly 2.8 KB over.**
+  **Consumer-facing impact: coins cannot be shown by flipping the flag** - the
+  generic actor draw path needs an HWRAM budget decision first (move the emit
+  path cold, relocate bulk state to LWRAM, or shrink another HWRAM tenant).
+  This is the same hazard already recorded for the rigid-part lane, which was
+  linked `CART_COLD` because it did not fit either.
+
+### Added
+
 - **`tools/saturn/ymir_binary.py` — a checked-in answer to "which ymir-headless
   should this capture use?", wired into all 22 headless capture/probe tools.**
   **Reasoning:** the binary-selection trap fixed in the previous entry was only
