@@ -537,9 +537,20 @@ S1 and S6 infrastructure rather than a BOB optimization.
 Owner judges **75% near-identical, 50% visibly degraded**. Quad remeshing was evaluated
 and **rejected on evidence** (T2.24): floor 452 cmds against a 418 target, open material
 boundaries not preserved, every patch shrinking to ~84% of its bbox diagonal. **Open
-recommendation: per-material decimation ratios in meshoptimizer** — protect the face,
-coarsen the limbs — no new dependency, no rebake, and it keeps the
-collapse-to-existing-endpoint property that made pose survival free.
+decision (owner, 2026-08-22): decimate at 75% using PER-MATERIAL ratios in
+meshoptimizer** rather than a uniform ratio -- protect the face and hands, coarsen
+the limbs. Materials 1, 3, 4, 5 and 6 are *exactly* the 50 texture-locked primitives
+(T2.19a), so they are cleanly holdable. Uniform 75% gives 694 -> 564 commands
+(-18.7%) and the owner judged it visually free; per-material spends the same budget
+where it is least visible, and plausibly approaches 50%'s command count at 75%'s
+appearance -- the question quad remeshing failed to answer (T2.24).
+**Sequencing: this runs AFTER R3, not alongside it.** Both touch the actor pipeline,
+and T2.21 established that meshlet records are contiguous primitive-index spans, so
+removing primitives regenerates the meshlet, render-cluster and tile-start tables
+together. R3's complete pose path also holds full per-vertex position and light
+arrays per slot, so decimating 424 -> ~330 vertices *changes what R3 costs* --
+running decimation first would invalidate R3's measurements, running it second only
+improves them.
 
 **Constraint:** the 50 textured primitives are `pairing_forbidden`, exactly one source
 triangle each, and **both their Gouraud polygon and their distorted sprite are visible**
