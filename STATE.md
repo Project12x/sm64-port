@@ -4,52 +4,41 @@
 **Active branch:** `saturn/recovery` (worktree `.worktrees/saturn-recovery`)
 **Active plan:**
 [`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
-**Status:** **W2 COMPLETE and owner-accepted 2026-08-22** on
-`id-28b8cb0e531f8476` (manifest `8c31fefa...cfb4fe`, ELF
-`5f60ba87...c91c63`, ISO `4c14dd0e...8ca3d1`, `provenance.closure_clean: true`
-at `git_revision da071fb7`). Staged at `releases/2026-08-22_w2-product/`.
-Owner: **"it looks and runs fine. getting closer and closer to a playable frame
-rate and frame timing."** W6a was accepted 2026-08-22 on `id-57fb7312058b7f2e`;
-W0 on `id-e8720d58595d9a62`; Sprint 1 (R0+R1) historically 2026-08-15.
+**Status:** **ANIMATED MARIO ACCEPTED 2026-08-22 on `id-36ebaa12184cd661`** —
+**the first charter-phase progress since R1 on 2026-08-15.** `closure_clean: true`.
+Owner: **"animation is working... a little slower - it is not meaningfully bad,
+and this should be our future baseline. jump animation and others are working as
+well."**
 
-**Current accepted cadence**, caches off, `summarize_cadence`, 30 presentation
-events, identity MATCH, **bit-deterministic across five repetitions per arm**:
+**This is half of charter R3's gate** (*"Owner accepts animated Mario, then HUD"*).
+**Animated Mario: accepted. HUD: outstanding.**
 
-| route tick | mean | median | 1% low |
-|---|---:|---:|---:|
-| 30 | **7.3109** | 7.5000 | 6.0000 |
-| 150 | **7.2803** | 7.5000 | 6.6667 |
+**What it took:** enabling `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION`, which had
+defaulted to **0** at `saturn_actor_bridge.c:26`. Under that default the bridge
+collapsed Mario to a **two-bank selector — walking versus neutral** — with
+`pose_from_selector` returning 0 unconditionally, which is why walk and jump
+appeared broken. **The complete path was already implemented behind the flag, not
+stubbed** — a two-slot pose cache holding full per-vertex positions, per-vertex
+lights, a 20x16 joint-matrix array and an evaluated pose view. Confirmed linked in
+the sealed ELF (`_complete_actor_bank`, `_complete_actor_pose_slots`, et al),
+not compiled out.
 
-Against the previous accepted `id-57fb7312058b7f2e` (7.0445 / 6.6667 /
-6.6667 at tick 30): **+3.78% to +4.60% mean, +12.5% median.**
+> **Open question now answered by observation: the baked pose data DOES cover the
+> animation set.** Walk, jump and others all play. That was the risk that would have
+> turned R3 from a flag change into a bake task; it did not.
 
-> **The tick-30 1% low reads 6.0000, down from 6.6667 — documented as an accepted,
-> understood artifact. Never quote it alone.** At n=29 that statistic resolves to
-> `rates[0]` — the single slowest interval on a 60/k grid — so **-10.0% is the
-> smallest movement it can express**, and one 10-VBlank frame moves it as much as two.
-> It is **route-locked to five frames in 219** and its sign is
-> **window-position dependent**: worse at 4 of 13 swept starts, unchanged at 3,
-> **better at 6 — including +22.2% at tick 210** (5.4545 -> 6.6667). Route-wide the
-> accepted build is the steadier one: longest frame **166.7 ms vs 183.3 ms**, **5
-> frames >=10 VB against 14**, it never produces the predecessor's 5.4545, and it
-> finishes **83 VB (1.38 s) ahead**. **Cause measured:** the long frames are the
-> master *waiting*, not working — baseline idle `0.000000` against 0.2108
-> VB/frame, matching the cadence excess of 0.2069 to 1.9% — on the presentation
-> loop's `SM64_SATURN_FRAME_SIM_VBLANK_DIVISOR == 2`, which grants simulation
-> credit per *field pair* and drops unspent credit, so missing a boundary costs two
-> fields. **That lives in the scheduler, not in W2's change.** Source:
-> `w2-onepercent-low-recheck.md`.
+**Cadence cost: measured but not yet reported** — the R3 scoping task was still
+running its censuses when the owner observed and accepted the build. The owner's
+read is *"a little slower... not meaningfully bad"* against the previous accepted
+`id-28b8cb0e531f8476` (7.3109 mean / 7.5000 median at tick 30; 7.2803 /
+7.5000 at tick 150). **The number, and the costed middle options — fewer pose slots,
+an animation subset, lower joint precision, sub-frame-rate pose updates — are still
+owed.** Accepted on function, per plan §2b; the figure refines the record rather
+than deciding it.
 
-**What earned it (W2, 2026-08-22):** `sqrtf` — the port's own compat shim — was
-**8.462% of master cycles**, running four Newton iterations in float (1,559
-cycles/call, 209 calls/frame). Replaced with a 24-step restoring integer root, all
-32-bit, every shift a compile-time constant because the SH-2 has no barrel shifter.
-**Exact equality with the correctly-rounded IEEE-754 root, 0 ulp, verified over all
-4,294,967,296 bit patterns.** Downstream movement **zero** — Mario's action, face
-angle, position and velocity identical on all 196 complete route ticks. Source:
-`docs/saturn/evidence/reports/w2-softfloat-call-sites.md`.
-
-**Journey: 3.8753 -> 7.3109 FPS, +88.7%.**
+**Prior accepted artifacts, newest first:** `id-28b8cb0e531f8476` (W2,
+7.3109), `id-57fb7312058b7f2e` (W6a, 7.0445), `id-e8720d58595d9a62`
+(W0, 6.6923). The W2 build is the rollback point.
 
 **Historical T2.17 measured cadence: 6.7181 FPS / 8.9310 VBlanks per frame** on
 `id-c0352f297034f653`, against A9A's 5.294 FPS / 11.333 VB. The current

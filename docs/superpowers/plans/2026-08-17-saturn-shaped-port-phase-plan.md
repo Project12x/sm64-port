@@ -258,7 +258,7 @@ says *which* criterion applies per subsystem; 2b says what the criterion is ulti
 | Charter phase | Relationship to this plan |
 |---|---|
 | **R2** Normal Bob-omb | Costs frames. Wants W1 headroom first. |
-| **R3** Mario animation + HUD | Costs frames. Blocked on the two-bank selector (below). |
+| **R3** Mario animation + HUD | **Animated Mario ACCEPTED 2026-08-22** on `id-36ebaa12184cd661` — the complete path existed behind `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION`, which defaulted to 0; walk, jump and others confirmed working, pose data covers the set. **HUD outstanding.** Cadence cost measured but unreported. |
 | **S1** Any-level cart loader | Needs W3's generalized bake. |
 | **S2** Shrink & degrade pipeline | **Is W3.** Pull forward. |
 | **S6** All levels | Depends on S1 + W3. |
