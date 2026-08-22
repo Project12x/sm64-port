@@ -2,6 +2,53 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Coins are grey because the bake discards their colour, not because the
+  runtime mishandles it** (`actor_material_v2.py`, `actor_variant_bank.py`).
+  **This retracts the previous entry's claim that both coin defects share one
+  root cause - they do not.** Evidence: the yellow coin's baked CLUT decoded as
+  pure greyscale, every entry R=G=B (`0x9ce7` -> 7,7,7; `0xffff` -> 31,31,31).
+  **Root cause:** the coin textures are **IA16** - intensity plus alpha, no
+  colour at all - and the display list is `gsDPSetCombineMode(G_CC_MODULATEIA)`,
+  i.e. texture-intensity **times shade**. The coin's yellow lives only in its
+  Vtx shade bytes (`{0xff, 0xff, 0x00, 0xff}`), and `_target_material` mapped
+  `G_CC_MODULATEIA` to `CLUT16_REPLACE`, which ignores shade outright. Neither
+  VDP1 recipe can reproduce the multiply: the pinned policy already records
+  that *"VDP1 textured Gouraud is additive, not N64 texture-times-shade"*.
+- **Fix: fold the shade into the palette at bake time.** The tint is constant
+  across each source triangle, so premultiplying the intensity ramp by the
+  shade yields the exact N64 product, keeps the cheap `CLUT16_REPLACE` runtime
+  path, and spends no Gouraud table - correct *and* free, rather than trading
+  one approximation for another. Verified: the yellow coin's CLUT is now a
+  yellow ramp (`(28,28,0) (29,29,0) (30,30,0) (31,31,0)`).
+- **Blast radius measured, not assumed: 3 of 19 banks changed** - yellow
+  (`0x74`), blue (`0x76`) and red (`0xd7`) coins. **16 stay byte-identical**,
+  including smoke, the only other `G_CC_MODULATEIA` model: its shade is
+  `{0xff,0xff,0xff,0xb4}`, whose RGB fold is the identity.
+- **Shade alpha is deliberately not folded.** CLUT16 carries transparency as
+  index zero against a fixed threshold, so a fractional shade alpha has nowhere
+  to live in a palette. Leaving it alone keeps alpha behaviour exactly as it
+  was rather than inventing a new approximation, and is why smoke's bank is
+  unchanged. A shade that **varies** across a triangle fails closed, since a
+  constant CLUT cannot represent it.
+- Sealed build `id-d80f82577c3bc261`. 13 host tests, **7/7 mutations caught,
+  0 escaped** (transparent-texel passthrough, rounding, 5-bit clamp, combiner
+  gating, varying-shade refusal, channel offsets, opaque-bit preservation).
+
+### Known issues
+
+- **Coins still do not animate**, and that defect is unrelated to the colour
+  one. Each coin bakes 8 switch cases across 16 draw records; the runtime
+  enforces `draw_records_per_instance == primitive_count` and has no switch
+  filtering, so all 8 rotation phases emit every frame. The selector is already
+  captured (`geo_process_switch` writes `selectedCase` into `switch_state[0]`)
+  but the S64B binary carries no switch-to-primitive mapping, so consuming it
+  is a bank-format addition. Fixing it is also a **performance** win: coins
+  currently draw 8x the primitives they need.
+- **`test_actor_material_v2` has 12 failures and 1 error that predate this
+  work** - confirmed identical with and without this change by stashing it.
+
 ### Removed
 
 - **The per-tick pose-pool alias witness** (`saturn_actor_bridge.c`). It

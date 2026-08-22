@@ -315,6 +315,59 @@ def _triangle_period_span(triangle: Mapping[str, object]) -> float:
     return max(span_s / tile_s, span_t / tile_t) / 8.0
 
 
+MODULATE_IA_COMBINER = ("G_CC_MODULATEIA", "G_CC_MODULATEIA")
+
+
+def _folded_shade(triangle: Mapping[str, object]) -> tuple[int, int, int] | None:
+    """The constant shade colour to fold into this tile's CLUT, or None.
+
+    `G_CC_MODULATEIA` is texture-intensity times shade.  The source textures
+    are IA16 -- greyscale plus alpha -- so the actor's only colour lives in
+    the Vtx shade bytes.  Neither VDP1 recipe reproduces a multiply: REPLACE
+    ignores shade outright, and textured Gouraud on VDP1 is *additive*, not
+    texture-times-shade (POLICY_DOCUMENT["fidelity"]).
+
+    Folding the shade into the CLUT at bake time gives the exact N64 product
+    for free: the intensity ramp is premultiplied once, the runtime keeps its
+    cheap CLUT16_REPLACE path, and no Gouraud table is spent.  This is only
+    representable when the shade is constant across the source triangle, so a
+    varying shade fails closed rather than silently picking one vertex.
+    """
+    if triangle["signature"].combine_mode != MODULATE_IA_COMBINER:
+        return None
+    shade = triangle.get("shade")
+    if not shade:
+        raise ActorMaterialV2Error(
+            "G_CC_MODULATEIA source triangle carries no shade colour")
+    first = tuple(int(value) for value in shade[0][0:3])
+    if any(tuple(int(value) for value in row[0:3]) != first for row in shade):
+        raise ActorMaterialV2Error(
+            "G_CC_MODULATEIA shade varies across the source triangle; a "
+            "constant CLUT cannot represent it")
+    if any(not 0 <= value <= 0xFF for value in first):
+        raise ActorMaterialV2Error("shade colour is outside byte range")
+    # Shade ALPHA is deliberately not folded.  CLUT16 carries transparency as
+    # index zero against a fixed threshold (POLICY_DOCUMENT["transparency"]),
+    # so a fractional shade alpha has nowhere to live in the palette.  Leaving
+    # it alone keeps alpha behaviour exactly as it was before this fold
+    # existed rather than inventing a new approximation: smoke is
+    # {0xff,0xff,0xff,0xb4}, whose RGB fold is the identity, so only its
+    # unfoldable alpha differs and its bank stays byte-identical.
+    return first
+
+
+def _modulate_rgb1555(pixel: int, shade: tuple[int, int, int]) -> int:
+    """Multiply one RGB1555 texel by a 0..255 shade, preserving the MSB."""
+    if not pixel & 0x8000:
+        return pixel
+    out = pixel & 0x8000
+    for index, offset in enumerate((0, 5, 10)):
+        component = (pixel >> offset) & 0x1F
+        scaled = (component * shade[index] + 127) // 255
+        out |= (scaled if scaled <= 0x1F else 0x1F) << offset
+    return out
+
+
 def _bake_tile(triangle: Mapping[str, object]) -> TextureTileV2:
     span = _triangle_period_span(triangle)
     if span <= 2:
@@ -328,6 +381,9 @@ def _bake_tile(triangle: Mapping[str, object]) -> TextureTileV2:
     tile_state = triangle["tile"]
     pixels = [sample_triangle(texture, uv, tile_state, x, y, tile_size, 1)
               for y in range(tile_size) for x in range(tile_size)]
+    shade = _folded_shade(triangle)
+    if shade is not None:
+        pixels = [_modulate_rgb1555(pixel, shade) for pixel in pixels]
     palette, mapping = quantize_clut16(pixels)
     packed = bytes(pack_clut16([mapping[value] for value in pixels]))
     clut = struct.pack(">16H", *palette)

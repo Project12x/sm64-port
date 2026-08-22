@@ -1430,6 +1430,12 @@ class _Fast3DCompiler:
                         "texture": texture,
                         "tile": tile,
                         "uv": [list(row[0][4:6]) for row in rows],
+                        # Vtx colour/normal (values[6:10]).  Carried because
+                        # G_CC_MODULATEIA multiplies an intensity-only texture
+                        # by shade: without it a coin's yellow -- which lives
+                        # nowhere else -- is lost at bake time and the CLUT
+                        # comes out greyscale.
+                        "shade": [list(row[0][6:10]) for row in rows],
                         "signature": signature,
                     })
                     local_ordinal += 1
