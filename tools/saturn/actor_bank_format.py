@@ -528,7 +528,13 @@ def _validate_v2(payload: bytes) -> ActorBankView:
             _mul(index, 10, "S64B v2 primitive record"),
             "S64B v2 primitive record")
         primitive_material = struct.unpack_from(">H", payload, primitive_record)[0]
-        if material_id != primitive_material or material_id >= len(materials) or flags or reserved:
+        # `flags` carries the switch selector: 0 is unconditional, otherwise
+        # (switch << 8) | (case + 1). The case is stored plus one so that a
+        # zero record can mean "always draw", which keeps every switch-free
+        # bank byte-identical; a non-zero record with a zero case field is
+        # therefore malformed.
+        if (material_id != primitive_material or material_id >= len(materials)
+                or reserved or (flags and not flags & 0xFF)):
             raise ValueError("S64B v2 binding material/reserved")
         recipe = materials[material_id]
         if recipe == ActorMaterialRecipeV2.FLAT_GOURAUD:

@@ -33,6 +33,12 @@ _TILE = struct.Struct(">IIHHHBB")
 class RenderBindingV2:
     material_id: int
     tile_id: int
+    # Switch-case selector, packed into the record's third u16.
+    #   0                      -> unconditional; draw every frame.
+    #   (switch << 8) | (case+1) -> draw only when the instance's
+    #                            switch_state[switch] equals case.
+    # Zero keeps every bank without a GEO_SWITCH_CASE byte-identical.
+    switch_selector: int = 0
 
 
 @dataclass(frozen=True)
@@ -255,8 +261,15 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
         if material_id >= len(materials):
             raise ValueError(f"binding {index} material is outside input")
         tile_id = _integer(binding.tile_id, 0, 0xFFFF, f"binding {index} tile")
+        selector = _integer(binding.switch_selector, 0, 0xFFFF,
+                            f"binding {index} switch selector")
+        if selector != 0 and (selector & 0xFF) == 0:
+            raise ValueError(
+                f"binding {index} switch selector has a zero case field; the "
+                "case is stored plus one so that zero can mean unconditional")
         if tile_id == 0xFFFF:
-            packed_bindings.append(RenderBindingV2(material_id, tile_id))
+            packed_bindings.append(
+                RenderBindingV2(material_id, tile_id, selector))
             continue
         if tile_id >= len(source_tiles):
             raise ValueError(f"binding {index} tile is outside input")
@@ -265,7 +278,8 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
         if tile not in tile_ids:
             tile_ids[tile] = len(canonical_tiles)
             canonical_tiles.append(tile)
-        packed_bindings.append(RenderBindingV2(material_id, tile_ids[tile]))
+        packed_bindings.append(
+            RenderBindingV2(material_id, tile_ids[tile], selector))
     if referenced_inputs != set(range(len(source_tiles))):
         raise ValueError("unused source tile")
 
@@ -378,7 +392,7 @@ def pack_actor_bank_v2(core_v1: bytes, source_sha256: bytes,
 
     for binding, (offset, end) in zip(packed_bindings, binding_spans):
         payload[offset:end] = _BINDING.pack(
-            binding.material_id, binding.tile_id, 0, 0)
+            binding.material_id, binding.tile_id, binding.switch_selector, 0)
     for material, (offset, end) in zip(materials, material_spans):
         payload[offset:end] = _MATERIAL.pack(
             material.recipe, material.layer, material.alpha_mode,

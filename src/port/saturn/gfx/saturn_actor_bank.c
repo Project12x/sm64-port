@@ -494,7 +494,12 @@ static bool validate_v2_tail(const uint8_t *bytes, uint32_t byte_count,
         if (!sm64_saturn_actor_bank_render_binding(parsed, index, &binding) ||
             binding.material_id != primitive_material ||
             binding.material_id >= parsed->material_count ||
-            binding.flags != 0U || binding.reserved != 0U ||
+            /* `flags` now carries the switch selector: zero is
+             * unconditional, otherwise (switch << 8) | (case + 1).  A zero
+             * case field with a non-zero record is malformed, because the
+             * case is stored plus one precisely so zero can mean "always". */
+            (binding.flags != 0U && (binding.flags & 0xFFU) == 0U) ||
+            binding.reserved != 0U ||
             !sm64_saturn_actor_bank_target_material(parsed, binding.material_id,
                                                      &material))
             return false;

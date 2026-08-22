@@ -126,5 +126,51 @@ class FoldedShadeSelectionTests(unittest.TestCase):
             material._folded_shade(_triangle(MODULATE_IA, [[0x1FF, 0, 0, 0xFF]] * 3))
 
 
+class SwitchSelectorTests(unittest.TestCase):
+    """The Saturn bank bakes every GEO_SWITCH_CASE branch, so each primitive
+    carries the case that selects it or the runtime draws all of them at once."""
+
+    @staticmethod
+    def _tri(part):
+        return {"branch_ordinal": part}
+
+    def test_case_zero_is_not_encoded_as_zero(self) -> None:
+        """Zero means 'unconditional'. Without the +1 bias every case-zero
+        primitive would draw in every case -- for a coin, one of its eight
+        spin phases would be permanently superimposed on the others."""
+        self.assertEqual(
+            material._switch_selector(self._tri(0), {0: (0, 0)}), 0x0001)
+
+    def test_case_and_switch_pack_into_their_own_bytes(self) -> None:
+        self.assertEqual(
+            material._switch_selector(self._tri(5), {5: (0, 7)}), 0x0008)
+        self.assertEqual(
+            material._switch_selector(self._tri(9), {9: (2, 3)}), 0x0204)
+
+    def test_a_part_outside_any_switch_is_unconditional(self) -> None:
+        self.assertEqual(material._switch_selector(self._tri(4), {7: (0, 1)}), 0)
+
+    def test_a_bank_without_switches_tags_nothing(self) -> None:
+        """This is what keeps switch-free banks byte-identical."""
+        self.assertEqual(material._switch_selector(self._tri(0), {}), 0)
+
+    def test_out_of_range_switch_or_case_fails_closed(self) -> None:
+        with self.assertRaises(material.ActorMaterialV2Error):
+            material._switch_selector(self._tri(0), {0: (0x100, 0)})
+        with self.assertRaises(material.ActorMaterialV2Error):
+            material._switch_selector(self._tri(0), {0: (0, 0xFF)})
+
+    def test_every_encodable_case_keeps_a_non_zero_case_field(self) -> None:
+        """The runtime and both validators treat a zero case field in a
+        non-zero record as malformed, so the encoder must never emit one."""
+        for switch in (0, 1, 255):
+            for case in (0, 1, 127, 254):
+                selector = material._switch_selector(
+                    self._tri(0), {0: (switch, case)})
+                self.assertNotEqual(selector & 0xFF, 0)
+                self.assertEqual(selector >> 8, switch)
+                self.assertEqual((selector & 0xFF) - 1, case)
+
+
 if __name__ == "__main__":
     raise SystemExit(unittest.main())

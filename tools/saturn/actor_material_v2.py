@@ -391,6 +391,42 @@ def _bake_tile(triangle: Mapping[str, object]) -> TextureTileV2:
                          ActorTileFormatV2.CLUT16, clut)
 
 
+MAX_SWITCH_ORDINAL = 0xFF
+MAX_SWITCH_CASE = 0xFE
+
+
+def _switch_selector(triangle: Mapping[str, object],
+                     switch_case_by_part: Mapping[int, object]) -> int:
+    """Pack the switch case that selects this primitive, or 0 for always.
+
+    A GEO_SWITCH_CASE child is its own GEO_DISPLAY_LIST node and therefore its
+    own part, so a primitive belongs to exactly one case. A coin declares
+    GEO_SWITCH_CASE(8, geo_switch_anim_state) over four display lists listed
+    twice each -- eight parts, eight cases -- which is why the part ordinal
+    rather than the display-list name is the key.
+
+    Encoding is (switch << 8) | (case + 1). The case is stored plus one so
+    that a zero record means "unconditional", which keeps every bank without a
+    switch byte-identical to its previous bake.
+    """
+    if not switch_case_by_part:
+        return 0
+    part = triangle.get("branch_ordinal")
+    if part is None:
+        return 0
+    entry = switch_case_by_part.get(int(part))
+    if entry is None:
+        return 0
+    switch, case = (int(value) for value in entry)
+    if not 0 <= switch <= MAX_SWITCH_ORDINAL:
+        raise ActorMaterialV2Error(
+            f"switch ordinal {switch} exceeds the selector field")
+    if not 0 <= case <= MAX_SWITCH_CASE:
+        raise ActorMaterialV2Error(
+            f"switch case {case} exceeds the selector field")
+    return (switch << 8) | (case + 1)
+
+
 def compile_materials_v2(
     index: object,
     display_lists: Mapping[str, object],
@@ -406,6 +442,7 @@ def compile_materials_v2(
     category_hashes = _verify_exact_capture(family_ordinal, model_id, display_lists)
     materials = tuple(display_lists["materials"])
     triangles = tuple(display_lists["triangles"])
+    switch_cases = display_lists.get("switch_case_by_part") or {}
     targets = tuple(_target_material(item["signature"]) for item in materials)
     tiles: list[TextureTileV2] = []
     bindings: list[RenderBindingV2] = []
@@ -418,7 +455,7 @@ def compile_materials_v2(
         signature = materials[material_id]["signature"]
         sources = tuple(int(item) for item in primitive["source_triangles"])
         if signature.texture_path is None:
-            bindings.append(RenderBindingV2(material_id, 0xFFFF))
+            bindings.append(RenderBindingV2(material_id, 0xFFFF, 0))
             continue
         if len(sources) != 1 or sources[0] < 0 or sources[0] >= len(triangles):
             raise ActorMaterialV2Error(
@@ -427,7 +464,8 @@ def compile_materials_v2(
         if triangle["signature"] != signature:
             raise ActorMaterialV2Error(
                 f"textured primitive {primitive_index} material signature mismatch")
-        bindings.append(RenderBindingV2(material_id, len(tiles)))
+        bindings.append(RenderBindingV2(
+            material_id, len(tiles), _switch_selector(triangle, switch_cases)))
         tiles.append(_bake_tile(triangle))
         textured_count += 1
     identity_sources = {item.path: item.sha256 for item in source_identity_inputs}

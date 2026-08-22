@@ -75,6 +75,11 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t reject_near_far;
     uint32_t reject_backface;
     uint32_t reject_degenerate;
+    /* Primitives skipped because they belong to a GEO_SWITCH_CASE branch the
+     * instance did not select this frame.  For a coin this is 14 of its 16
+     * draw records every frame -- the eight spin phases the N64 walk would
+     * never have descended into. */
+    uint32_t reject_switch_case;
     uint32_t reject_vertex_range;
     uint32_t reject_command_capacity; /* the frontend's resolved-triangle
                                         * buffer (this file) filling up --

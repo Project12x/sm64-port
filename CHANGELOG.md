@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **GEO_SWITCH_CASE branches are now selected at draw time instead of all
+  being drawn at once** - the second, unrelated coin defect. The N64 geo walk
+  descends into exactly one switch child; the Saturn bank bakes every branch,
+  and nothing filtered them, so every case emitted every frame. For a coin
+  that is all eight spin phases superimposed, which is simultaneously why
+  coins did not appear to animate and why they cost 8x the VDP1 commands they
+  need.
+- **Encoding: the render binding's previously-reserved `flags` u16 now carries
+  `(switch << 8) | (case + 1)`,** with zero meaning unconditional. The `+1`
+  bias is what lets zero mean "always draw", which keeps every switch-free
+  bank byte-identical; a non-zero record with a zero case field is therefore
+  malformed and is refused by the host validator, the target parser and the
+  material binder alike. No format version bump and no new section were needed.
+- **A part belongs to exactly one case**, because each GEO_SWITCH_CASE child
+  is its own GEO_DISPLAY_LIST node and therefore its own part. A coin declares
+  `GEO_SWITCH_CASE(8, geo_switch_anim_state)` over four display lists listed
+  *twice each* - eight parts, eight cases - so the mapping is keyed on the part
+  ordinal rather than the display-list name, which would have aliased the
+  repeats onto one another.
+- **The filter runs before any projection work**, so an unselected branch costs
+  neither vertex transforms nor a VDP1 command, and is counted in a new
+  `reject_switch_case` profile counter. The selector needed no new plumbing:
+  `geo_process_switch` already records `selectedCase` into the observation, and
+  it already reaches the instance snapshot as `switch_state[]`.
+- **Reach is far wider than coins: 192 of 334 primitives across 13 of 18 models
+  carry a selector** - all three coins (16 primitives, 8 cases, 2 per case),
+  sparkles, smoke, explosion, number, bubble, wave trail and both water
+  effects, **and 8 primitives across 2 cases on MODEL_BLACK_BOBOMB**, which is
+  a candidate cause for the Bob-omb rendering incorrectly. Five switch-free
+  banks are unchanged.
+- **Measured cadence: 5.0000 -> 5.0144 mean** (median and 1%-low unchanged) on
+  the capture route. The gain is small *on this route* because its measurement
+  window sits at spawn where few switched actors are on screen; the saving
+  scales with how many are visible, so this figure is a floor, not the
+  expected benefit in play.
+- Sealed build `id-6d8182f15ffd30d9`. 17 bank tests plus 19 material/selector
+  tests; **5/5 selector mutations caught** after adding direct coverage for the
+  `+1` bias, which initially escaped.
+
 ### Changed
 
 - **The f32 sine table is now quarter-wave on Saturn: -13,646 B of HWRAM, at

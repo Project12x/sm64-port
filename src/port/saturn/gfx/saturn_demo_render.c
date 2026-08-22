@@ -4226,6 +4226,33 @@ static void demo_emit_mario(
 }
 
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+/* True when this primitive belongs to a GEO_SWITCH_CASE branch the instance
+ * has not selected this frame.
+ *
+ * The N64 walk descends into exactly one switch child; the Saturn bank bakes
+ * every branch, so without this every case is drawn at once.  For a coin that
+ * is all eight spin phases superimposed -- simultaneously the reason coins do
+ * not appear to animate and eight times the VDP1 commands they need.
+ *
+ * `binding.flags` is zero for unconditional primitives, otherwise
+ * (switch << 8) | (case + 1).  `switch_state` is captured by the observer
+ * from geo_process_switch's selectedCase, so no new plumbing is involved.
+ * A selector naming a switch the instance never reported is treated as
+ * unselected: drawing an unresolvable branch is what the bug already did. */
+static bool demo_generic_actor_switch_rejects(
+    const sm64_saturn_actor_instance_snapshot_t *snapshot,
+    const sm64_saturn_actor_render_binding_t *binding)
+{
+    if (snapshot == NULL || binding == NULL || binding->flags == 0U)
+        return false;
+    const uint16_t switch_ordinal = (uint16_t)(binding->flags >> 8);
+    const uint16_t selected_case = (uint16_t)((binding->flags & 0xFFU) - 1U);
+    if (switch_ordinal >= snapshot->switch_count ||
+        switch_ordinal >= SM64_SATURN_ACTOR_MAX_SWITCHES)
+        return true;
+    return snapshot->switch_state[switch_ordinal] != selected_case;
+}
+
 static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
 {
     uint16_t emitted = 0U, gouraud_ordinal = 0U;
@@ -4306,6 +4333,16 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                     sm64_saturn_actor_bank_material_color(
                         &resolution.bank, binding.material_id, &color) &&
                     painter_bin < SM64_SATURN_TERRAIN_DEPTH_BIN_COUNT;
+                /* Skip before any projection work: an unselected switch
+                 * branch costs neither vertex transforms nor a VDP1 command.
+                 * The record still counts as emitted so the descriptor's
+                 * output accounting stays exact. */
+                if (valid &&
+                    demo_generic_actor_switch_rejects(snapshot, &binding)) {
+                    transaction->profile->reject_switch_case++;
+                    emitted++;
+                    continue;
+                }
                 for (uint16_t corner = 0U; valid && corner < 4U; corner++) {
                     sm64_saturn_vec3i_t world, view_position;
                     valid = demo_generic_actor_world_vertex(

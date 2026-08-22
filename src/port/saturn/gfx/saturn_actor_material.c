@@ -192,7 +192,9 @@ bool sm64_saturn_actor_material_bind(
         !actor_mapping_valid(partitions, bank, mapping, active_generation) ||
         primitive_id >= bank->bank.primitive_count ||
         !sm64_saturn_actor_bank_render_binding(bank, primitive_id, &binding) ||
-        binding.flags != 0U || binding.reserved != 0U ||
+        /* flags carries the switch selector; see saturn_actor_bank.c. */
+        (binding.flags != 0U && (binding.flags & 0xFFU) == 0U) ||
+        binding.reserved != 0U ||
         binding.material_id >= bank->material_count ||
         !sm64_saturn_actor_bank_target_material(
             bank, binding.material_id, &material) ||

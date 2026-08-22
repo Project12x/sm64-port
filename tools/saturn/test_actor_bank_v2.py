@@ -353,13 +353,35 @@ class ActorBankV2Test(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "overflow"):
             validate_actor_bank(bytes(corrupt))
 
+    def test_binding_switch_selector_round_trips_and_rejects_a_zero_case(self) -> None:
+        """The selector must survive validation, or switch-case filtering
+        could never ship; and its one malformed encoding -- a non-zero record
+        naming case zero, which the +1 bias makes unrepresentable -- must
+        still fail closed."""
+        ext = V2_EXTENSION.unpack_from(self.textured, 104)
+        binding_offset = ext[4]
+        good = bytearray(self.textured)
+        struct.pack_into(">H", good, binding_offset + 4, (0 << 8) | (3 + 1))
+        validate_actor_bank(bytes(good))          # switch 0, case 3
+        struct.pack_into(">H", good, binding_offset + 4, (2 << 8) | (0 + 1))
+        validate_actor_bank(bytes(good))          # switch 2, case 0
+        bad = bytearray(self.textured)
+        struct.pack_into(">H", bad, binding_offset + 4, 0x0200)
+        with self.assertRaises(ValueError):
+            validate_actor_bank(bytes(bad))
+
     def test_validator_rejects_noncanonical_spans_padding_ordinals_and_trailing_bytes(self) -> None:
         """Catches gaps, aliases, reordered first use, nonzero padding, and suffixes."""
         valid = self.textured
         ext = V2_EXTENSION.unpack_from(valid, 104)
         binding_offset, tile_offset, texture_offset = ext[4], ext[8], ext[10]
         cases: list[tuple[str, int, bytes, str]] = [
-            ("binding flags", binding_offset + 4, b"\x00\x01", "binding"),
+            # `flags` now carries the switch selector: (switch << 8) |
+            # (case + 1), with zero meaning unconditional. A non-zero record
+            # whose case field is zero is unrepresentable and must be refused.
+            # The accepting direction is asserted in the selector test below.
+            ("binding selector with zero case", binding_offset + 4,
+             b"\x01\x00", "binding"),
             ("binding reserved", binding_offset + 6, b"\x00\x01", "binding"),
             ("first-use tile ordinal", binding_offset + 2, b"\x00\x01", "ordinal"),
             ("tile payload gap", tile_offset + 16, b"\x00\x00\x00\x10", "payload"),

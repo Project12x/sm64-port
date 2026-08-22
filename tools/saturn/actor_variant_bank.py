@@ -763,6 +763,8 @@ class _GeoCompiler:
         self.parts: list[dict[str, object]] = []
         self.switches: list[dict[str, object]] = []
         self.switch_joints: dict[int, tuple[int, int, tuple[int, int, int]]] = {}
+        # part branch_ordinal -> (switch ordinal, case ordinal)
+        self.switch_case_by_part: dict[int, tuple[int, int]] = {}
         self.billboards: list[dict[str, object]] = []
         self.reductions: list[dict[str, object]] = []
 
@@ -802,6 +804,14 @@ class _GeoCompiler:
         billboard = context.billboard if context.billboard is not None else self.scope.billboard
         if switch is not None:
             values = self.switches[switch]["variant_display_lists"]
+            # Each GEO_SWITCH_CASE child is a separate GEO_DISPLAY_LIST node
+            # and therefore a separate part, so a part belongs to exactly one
+            # case -- the position of this bind within the switch's children.
+            # A coin declares GEO_SWITCH_CASE(8, ...) over four display lists
+            # each listed twice, which is eight parts, not four.  Recording the
+            # part ordinal (rather than the display-list name) keeps the two
+            # occurrences of a repeated list distinguishable.
+            self.switch_case_by_part[part["branch_ordinal"]] = (switch, len(values))
             values.append(name)
         if billboard is not None:
             values = self.billboards[billboard]["display_lists"]
@@ -1666,6 +1676,11 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         "primitives": list(serialized_primitives), "meshlets": meshlets,
         "mesh_ir_report": pairing,
         "switches": geo.switches, "billboards": geo.billboards,
+        # part branch_ordinal -> [switch ordinal, case ordinal], so the
+        # material compiler can tag each primitive with the switch case
+        # that selects it.  JSON keys must be strings.
+        "switch_case_by_part": {str(part): list(pair)
+                                for part, pair in sorted(geo.switch_case_by_part.items())},
         "saturn_reductions": geo.reductions,
         "layers": [{"part_ordinal": int(item["branch_ordinal"]),
                     "layer": str(item["layer"]), "opacity": str(item["opacity"])}
@@ -1682,6 +1697,10 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         "actual_sites": tuple(actual_sites),
         "expected_sites": tuple(expected_sites),
         "primitives": tuple(primitive_documents),
+        # part branch_ordinal -> (switch ordinal, case ordinal).  The material
+        # compiler tags each primitive's render binding with this so the
+        # runtime can emit only the selected switch case.
+        "switch_case_by_part": dict(geo.switch_case_by_part),
     }
     return joints, tuple(vertices), geometry, metadata, capture
 
