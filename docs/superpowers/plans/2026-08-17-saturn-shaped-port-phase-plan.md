@@ -538,46 +538,86 @@ search (T2.24), so expect to do live verification rather than lookup.
 
 ### W6b — Q16 the simulation
 
-**The premise is sound and the codebase already half-agrees.** SM64's rotations are
-**already fixed-point**: angles are s16 binary (BAM), `atan2s` returns an exact s16, and
-90 degrees is exactly `0x4000`. T2.13's finding makes the point sharply — the shadow path
-was taking an angle `atan2s` had **already produced exactly**, scaling it to degrees, then
-back to radians, to call a double-precision polynomial. **The float was the detour.**
-Positions, velocities and collision are the f32 remainder.
+> **PREMISE INVERTED by the PS1-port study (2026-08-22). Read this before scoping.**
+> **The most successful no-FPU SM64 port did not convert the simulation. It made
+> floats cheap instead** — a hand-written, deliberately non-IEEE soft-float, plus
+> fixed point applied only where the *storage representation* had to change anyway
+> (render matrices, object fields, surface normals) or where cost was concentrated
+> (camera, collision queries, shadows).
+>
+> `malucard/sm64-psx` keeps `MarioState.pos/vel/forwardVel/floorHeight` as `f32`, and
+> `mario_actions_airborne.c` — the jump arcs — is **untouched**. **Second independent
+> data point:** the Nintendo DS port (`Hydr8gon/sm64`, ARM9, no FPU, **CC0-1.0**) did
+> **zero** fixed-point conversion of game logic and relies on stock soft-float. Two
+> no-FPU ports, both playable, both declined to convert the tuned simulation.
+>
+> **That is the strategy W6a already executed here**, independently — replacing the
+> soft-float library rather than call sites. W6a is therefore not merely a first step;
+> it is the same primary move both reference ports made. **W6b's core deliverable
+> should shrink to a soft-float quality bar plus a small set of representation
+> changes, not a math conversion.**
 
-**The real cost is verification, not conversion.** Unlike render-path float (T2.13:
-bounded error, sub-pixel movement, owner ruled byte-identity irrelevant), simulation
-arithmetic decides **what the game does** — jump arcs, floor-detection epsilons,
-wall-push distances. A divergence here is not a fidelity tradeoff; it is Mario falling
-through a floor or failing a gap he used to clear.
+**What transfers (no-FPU-driven):**
 
-**The harness this needs, and why it is tractable here:** a **dual-run state-divergence
-comparison over the deterministic replay route**. Run the f32 simulation and the Q16
-simulation against the same route and compare `gMarioState` and object state
-**per tick**, reporting divergence as a curve rather than a boolean. The infrastructure
-already exists: the route is deterministic, `sState.input_replay_ticks` indexes it exactly
-(T2.19d proved it is the index, not a correlate), and captures are tick-addressable.
+- **The parallel-twin migration architecture, and it is the single best idea in the
+  reference.** Every converted function gets a `q`-suffixed twin; the original float
+  name survives as a one-line shim converting in and out. Call sites migrate
+  individually, there is never a flag day, and an unmigrated caller is always correct
+  — just slower.
+- **Storage representation as a compile-time switch.** `FIXED_POINT_FIELDS` flips
+  object fields between `f32` and `q32` storage, with fixed/float/integer accessor
+  triads all defined in *both* configurations so nothing breaks at the flip.
+- **A per-function float/fixed equivalence oracle** (`USE_FLOATS`) that delegates to
+  the float original in the same running build. **Note the reference let this rot** —
+  its Makefile says "hasn't been needed for a while" — and it has no CI. **We have PC
+  source-state traces already, so we can hold this to a standard they never did.**
+- **Bake precision offline, quantise exactly once.** Surface plane constants and
+  normals are computed in full float at level load and stored already converted;
+  per-frame collision never touches a float.
+- **Rescaling both sides of a sign-only predicate**, which cannot change the answer but
+  buys large headroom against intermediate saturation.
 
-**Acceptance depends on whether a given subsystem is ported or recreated (see 2a) —
-and that decision is design work owed before any conversion starts.**
+**What does NOT transfer (GTE-driven) — and the trap:**
 
-- **Where the algorithm already fits** — anything already keyed to s16 angles, integer
-  positions, or Q16 quantities on a detour through float — treat as a **port**. Accept on
-  bounded, **non-accumulating** divergence, the same standard T2.13's memoryless
-  substitution met. **Divergence that compounds across ticks is a defect at any starting
-  size**, because simulation state feeds itself forward; design the harness to detect
-  compounding specifically rather than magnitude.
-- **Where the algorithm does not fit** — f32 collision epsilons, physics tuned to float
-  rounding — **recreate**, and accept on **behaviour**: does Mario clear the gap he used to,
-  does the floor hold him, does the jump feel right. **Per-tick divergence is the wrong
-  measure here and will reject good work.** This needs owner play-testing, not a
-  bit-comparison, and it should be scoped so the owner is asked a small number of
-  answerable questions rather than handed a diff.
+- **`FRACT_BITS = 12` is a GTE constant**, not a considered precision choice: the
+  GTE's `SF` flag shifts by exactly 12 and its rotation registers are 1.3.12.
+  **Inheriting Q19.12 for Saturn would be copying a PS1 hardware detail for no
+  reason.** W6b must include an explicit **range analysis of SM64 world-space values**
+  before picking a fraction width. A 16-bit fraction is arguably cheaper on SH-2 (the
+  high word of a 32x32->64 product is the answer with no shift) but halves the integer
+  headroom the reference *relies on* for its truncate-to-integer-units shortcuts.
+- `ShortMatrix`'s `s16[3][3]` union with `u32[5]` is literally the GTE control-register
+  file; their matrix multiply is four coprocessor ops. **All of that is CPU work for
+  us, so the *renderer* half of W6b is strictly bigger than theirs.**
+- **Their soft-float uses a GTE register as a count-leading-zeros instruction.** The
+  SH-2 has no CLZ at all, so **every cycle intuition taken from their soft-float is
+  optimistic for us.** Measure an SH-2 `__addsf3`/`__mulsf3` before committing to
+  "make floats cheap" as the primary strategy.
+- Their `s8` normals (scale 120) and `s16` whole-unit matrix translations are **2 MB
+  memory-pressure decisions**, not precision decisions. We have the 4 MB cart. Adopt
+  the principle; **re-derive the numbers.**
 
-**The dual-run harness is still worth building** — the route is deterministic,
-`sState.input_replay_ticks` indexes it exactly (T2.19d), and captures are
-tick-addressable — but as an **instrument for the ported parts and a change-detector for
-the recreated ones**, not as the gate for both.
+**Scope recommendation:** do **not** convert Mario's step, action state machine or
+airborne physics. Convert the *data they read* — surfaces, object fields, camera — and
+for each interface state the quantisation introduced and its worst-case effect on a
+named observable (slope classification threshold, wall push distance, ledge-grab
+reach, object interaction radius). **This is gated on the SH-2 soft-float measurement
+above:** if our soft-float is too slow, leaving Mario in float may not be affordable
+and this scope grows back.
+
+**Budget for one specific bug class.** The reference's "fix floating trees" commit is
+a **one-character sign error** in a hand-converted matrix expression that shipped and
+persisted. Hand-transcribed fixed-point compiles cleanly and looks plausible; only
+looking at the screen finds it. The equivalence oracle above is the mitigation.
+
+**Verification note:** the reference has **no test suite, no reference trace and no
+N64 cross-check**. It also ships SM64's attract-mode demos — a free determinism
+oracle — but cannot run them because its title screen is unfinished. **We should run
+ours.**
+
+**Source:** `malucard/sm64-psx` at `b8d1c550a0d2` (archived; migrated to
+`codeberg.org/malucart/sm64-psx`), `Hydr8gon/sm64` (CC0-1.0). Study is
+behaviour/architecture only — no code transcribed. **See the D8 note below.**
 
 **Sequencing:** after W6a (free speedup on the same code) and after W5a (so the category
 is measurable and the win is attributable). W5b's actor-scaling curve tells you which
@@ -631,6 +671,32 @@ attempted as one conversion.
   pixels; and `VDP1CalcCommandTiming` (`ymir-agent/.../vdp.cpp:1101`) never consults
   `sysClip`, `userClip` or `CMDPMOD`, so this class of lever is **unmeasurable on this rig**
   regardless (T2.19b).
+
+---
+
+## Charter D8 should be re-decided — the licence blocker has changed
+
+D8 records `malucard/sm64-psx` as **behaviour-only because "License not
+established."** That was accurate when written. It is now out of date:
+
+- The repo is a **fork of `n64decomp/sm64`, which is CC0-1.0** — the substrate is
+  already public-domain-dedicated.
+- On **2026-08-05**, after the prior study, the owner stated publicly in
+  [issue #34](https://github.com/malucard/sm64-psx/issues/34) (`author_association:
+  OWNER`) that he does not claim ownership of the whole, that his own work "can be
+  considered to be in the public domain and not enforceable by me", and that he has
+  "no interest in limiting it further". The vendored `ps1-bare-metal` is MIT.
+
+**Why this is not automatically a green light:** it is an issue comment, not an SPDX
+file or a CC0 deed, and it is one contributor's statement about a repo with merged
+third-party PRs — it does not by itself relicense anyone else's commits. The repo is
+also now archived on GitHub.
+
+**The 2026-08-22 study was conducted behaviour-only regardless**, so nothing in this
+plan depends on the answer. But the owner should re-decide D8 deliberately rather than
+leaving it resting on a superseded fact. **And note `Hydr8gon/sm64` is CC0-1.0 with a
+real licence field — unencumbered, and a legitimate architectural comparison for our
+platform boundary.**
 
 ---
 
