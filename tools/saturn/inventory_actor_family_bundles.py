@@ -26,8 +26,18 @@ class ResourceLimits:
     output_share: int = 2718
     command_share: int = 1351
     gouraud_share: int = 892
-    actor_texture_bytes: int = 18048
-    actor_clut_bytes: int = 2976
+    # Actor VDP1 residency ceiling.  These are a *budget*, not a measurement:
+    # they are checked against the bundle's actual residency, and they are
+    # only affordable because they are drawn from `existing_vdp1_remaining_bytes`
+    # (52,672 B of unallocated VDP1 that no current binder owns).
+    #
+    # 2026-08-22: raised from 18,048 / 2,976 to admit the three BOB coin
+    # variants (red/blue/yellow), which cost 1,024 B of texture and 256 B of
+    # CLUT each -- 3,072 B + 768 B in total.  After the raise the actor
+    # residency is 24,864 B against the 52,672 B remaining, leaving 27,808 B
+    # (`future_repartition_margin_bytes`) still unclaimed.
+    actor_texture_bytes: int = 21120
+    actor_clut_bytes: int = 3744
     shared_post_command_gouraud_bytes: int = 446432
     terrain_texture_bytes: int = 333696
     mario_texture_bytes: int = 25600

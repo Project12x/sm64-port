@@ -39,7 +39,7 @@ SUPPORTED_COSTS = (
 class InventoryActorFamilyBundlesTest(unittest.TestCase):
     def test_exact_profile_shares_diagnostic_and_guaranteed_floor(self) -> None:
         report = prove_resource_inventory(
-            SUPPORTED_COSTS, texture_bytes=18048, clut_bytes=2976,
+            SUPPORTED_COSTS, texture_bytes=21120, clut_bytes=3744,
             bundle_bytes=50000, workspace_bytes=2915,
             package_class_bytes={name: 1 for name in AUTHORITATIVE_LIMITS.package_classes},
         )
@@ -78,10 +78,10 @@ class InventoryActorFamilyBundlesTest(unittest.TestCase):
             },
             "current_binders_own_remaining": False,
             "existing_yaul_remaining_bytes": 52672,
-            "actor_texture_bytes": 18048,
-            "actor_clut_bytes": 2976,
-            "future_repartition_bytes": 21024,
-            "future_repartition_margin_bytes": 31648,
+            "actor_texture_bytes": 21120,
+            "actor_clut_bytes": 3744,
+            "future_repartition_bytes": 24864,
+            "future_repartition_margin_bytes": 27808,
         })
         self.assertEqual(report["workspace"], {
             "used_bytes": 2915,
@@ -99,13 +99,13 @@ class InventoryActorFamilyBundlesTest(unittest.TestCase):
         self.assertEqual(zero["service_floors"]["gouraud_tables"], 64)
 
         baseline = dict(
-            costs=SUPPORTED_COSTS, texture_bytes=18048, clut_bytes=2976,
+            costs=SUPPORTED_COSTS, texture_bytes=21120, clut_bytes=3744,
             bundle_bytes=50000, workspace_bytes=2915,
             package_class_bytes={name: 1 for name in AUTHORITATIVE_LIMITS.package_classes},
         )
         injections = {
-            "texture budget exceeded": replace(AUTHORITATIVE_LIMITS, actor_texture_bytes=18047),
-            "CLUT budget exceeded": replace(AUTHORITATIVE_LIMITS, actor_clut_bytes=2975),
+            "texture budget exceeded": replace(AUTHORITATIVE_LIMITS, actor_texture_bytes=21119),
+            "CLUT budget exceeded": replace(AUTHORITATIVE_LIMITS, actor_clut_bytes=3743),
             "cart budget exceeded": replace(AUTHORITATIVE_LIMITS, cart_bytes=50009),
             "workspace budget exceeded": replace(
                 AUTHORITATIVE_LIMITS, workspace_capacity_bytes=2914),

@@ -715,6 +715,33 @@ _REPRESENTABLE_LAYERS = {
 }
 
 
+# Saturn reductions are a *policy*, not a per-actor exception.  Phase plan
+# section 2b: this port descends a generation, so every subsystem is a
+# degradation decision and the question is which degradation is invisible in
+# play.  Three GeoLayout nodes are answered by a Saturn-native subsystem that
+# already exists, so carrying the N64 node itself buys nothing:
+#
+#   GEO_SHADOW          the shadow is *recreated* (plan section 2a) as a Saturn
+#                       painted sprite driven by the object's own position, not
+#                       by a scene-graph shadow node.  The node's type/solidity/
+#                       size are recorded as evidence and the subtree is walked
+#                       normally.
+#   GEO_SCALE           a constant scale on a rigid subtree folds into the baked
+#                       vertex positions.  Non-constant parameters still reject.
+#   GEO_CULLING_RADIUS  a per-object frustum cull sphere.  Scene admission
+#                       already culls at cluster granularity (T2.9/T2.12), so
+#                       the per-object sphere is redundant with work that has
+#                       already happened by the time an actor is submitted.
+#                       Treating the object as always visible is the
+#                       degradation; admission does the culling.
+#
+# This is deliberately NOT a blanket "accept anything" switch.  Every reduction
+# validates its own arguments, `_UNSUPPORTED` still fails closed, and an
+# unknown node still fails closed.  The constant exists so a test can build a
+# compiler with reductions disabled and prove the fail-closed arm.
+SATURN_REDUCTIONS_ENABLED = True
+
+
 class _GeoCompiler:
     _LAYERS = _REPRESENTABLE_LAYERS
     _UNSUPPORTED = {
@@ -810,6 +837,27 @@ class _GeoCompiler:
                     return
                 continue
             if macro == "GEO_NODE_START":
+                self._register(self.scope)
+                continue
+            if macro == "GEO_CULLING_RADIUS":
+                if not self.allow_saturn_reductions:
+                    raise UnsupportedActorSourceError(
+                        "unsupported GeoLayout node: GEO_CULLING_RADIUS")
+                fields = _arguments(args)
+                if len(fields) != 1:
+                    raise MalformedActorSourceError("malformed GEO_CULLING_RADIUS")
+                try:
+                    radius = int(fields[0], 0)
+                except ValueError as error:
+                    raise MalformedActorSourceError(
+                        "GEO_CULLING_RADIUS value must be an integer") from error
+                if not 0 < radius <= 32767:
+                    raise MalformedActorSourceError(
+                        "GEO_CULLING_RADIUS value is out of range")
+                self.reductions.append({
+                    "node": "GEO_CULLING_RADIUS", "mode": "scene-admission-culls",
+                    "radius": radius,
+                })
                 self._register(self.scope)
                 continue
             if macro == "GEO_SHADOW":
@@ -1489,9 +1537,13 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         _collect_lists(index, geo_root, geo_path, lists, list_paths, declared=True)
     else:
         raise ActorSourceSelectionError("selected model binding kind is incomplete")
+    # Reductions used to be whitelisted to a single (family, model) pair, which
+    # made a generic degradation look like a Bob-omb special case and blocked
+    # every prop behind it.  The policy is now generic; see
+    # SATURN_REDUCTIONS_ENABLED.
     geo = _GeoCompiler(
         layouts, entry,
-        allow_saturn_reductions=(family_ordinal, model_id) == (7, 0x00BC))
+        allow_saturn_reductions=SATURN_REDUCTIONS_ENABLED)
     geo.walk(entry)
     joints, source_parts = geo.finish()
     try:

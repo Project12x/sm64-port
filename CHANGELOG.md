@@ -2,6 +2,82 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Saturn geo reductions are now a policy, not a one-actor exception — coins
+  are drawable.** `actor_variant_bank._compile_geometry` gated its
+  `GEO_SHADOW`/`GEO_SCALE` reduction handlers on
+  `(family_ordinal, model_id) == (7, 0x00BC)`: the Bob-omb, and nothing else.
+  Every other actor in BOB carrying a `GEO_SHADOW` node — 17 model variants
+  including all three coins, Goomba, Koopa, the star, the 1-Up, the heart and
+  Bob-omb Buddy — was rejected as "unsupported GeoLayout node" even though a
+  validated reduction for that exact node sat in the same function.
+  **Root cause: a generic degradation was expressed as a per-actor whitelist**,
+  so the first tenant to need it took the decision and nothing after it could.
+  Replaced with the documented module policy `SATURN_REDUCTIONS_ENABLED`.
+  **Rationale, per phase plan 2a/2b:** shadows were *recreated* as a Saturn
+  painted sprite, so the N64 scene-graph shadow node has nothing left to drive;
+  carrying it buys nothing and dropping it is invisible in play. This is **not**
+  a blanket accept — each reduction still validates its own arguments, records
+  a named `saturn_reductions` entry, and `GEO_ASM` (3 variants) plus
+  out-of-range `GEO_SCALE` (1) still fail closed with specific reasons.
+- **`GEO_CULLING_RADIUS` is answered by scene admission.** It was unknown to
+  two separate vocabularies — raising `unknown GeoLayout node` in
+  `actor_variant_bank._GeoCompiler` and poisoning the rigid-group walk in
+  `dl_rigid_groups` — blocking 13 further variants. It is a per-object frustum
+  cull sphere, and cluster-level admission (867 clusters, 230-353 admitted per
+  frame, T2.9/T2.12) already culls before an actor is submitted, so the sphere
+  is redundant with work that has already happened. Now recorded as reduction
+  mode `scene-admission-culls` with the radius preserved as evidence, and added
+  to `_GEO_NEUTRAL_NODES` (it carries no transform and hides no child at rest,
+  which is exactly what a rigid-group walk asserts about).
+  **Tradeoff:** objects that would have been sphere-culled are now submitted
+  and rely on admission. Measured cost today is **zero frames and zero bytes**,
+  because all 13 remain held out by a separate material approval.
+- **The three BOB coin variants are admitted to the direct-textured material
+  path.** `BOB_DIRECT_TEXTURED_KEYS` gains `(5, 0x00D7)` red, `(9, 0x0076)`
+  blue and `(45, 0x0074)` yellow, each with a pinned `_EXPECTED_CAPTURE_HASHES`
+  digest over its measured Fast3D capture, so a source or state change still
+  cannot gain admission by staying syntactically valid. Coin per-frame state is
+  one integer (a `GEO_SWITCH_CASE` selector) — **no pose slot is involved.**
+  The S64F bundle goes from **15 to 18** drawable variants.
+- **Actor VDP1 residency budget raised** in
+  `inventory_actor_family_bundles.ResourceLimits`: `actor_texture_bytes`
+  18,048 to **21,120**, `actor_clut_bytes` 2,976 to **3,744**. Coins cost
+  1,024 B of texture and 256 B of CLUT each. Drawn from
+  `existing_vdp1_remaining_bytes` (52,672 B no current binder owns); after the
+  raise **27,808 B remain unclaimed**. These constants are a ceiling checked
+  against real residency, so admitting any future actor requires raising them
+  deliberately — that is the intended gate, not an obstacle.
+
+  **Measured cost of the whole change:** CART bundle 171,548 to **180,584 B**
+  (+9,036), cart margin 1,682,320 to 1,673,284 B, VDP1 actor residency 21,024
+  to 24,864 B. **Workspace unchanged** at 2,915/3,072 B, actor command and
+  Gouraud shares unchanged, `guaranteed_any_mix_count` unchanged at 15.
+  **All 15 pre-existing actor banks are byte-identical** (payload SHA-256
+  compared one by one) — an existing bank compiles today precisely because it
+  contains none of these three nodes, so the reductions cannot reach it.
+  **Not yet built to target:** publishing a bundle requires a
+  `SCENE_PACKAGE_GENERATION` bump, so no sourceboot ELF and no cadence figure
+  exists for this change; the effect is a CART data delta and HWRAM/LWRAM are
+  untouched by construction.
+- **Known limitations recorded, not fixed:** BOB's 17 trees never reach the
+  closure at all, and `GEO_CULLING_RADIUS` was never the reason —
+  `collect_scene_closure` reads `OBJECT`/`MACRO_OBJECT` but **not**
+  `SPECIAL_OBJECT`, and BOB's trees are `SPECIAL_OBJECT(special_bubble_tree, ...)`
+  rows in `collision.inc.c`. Also recorded: `BOB_DIRECT_TEXTURED_KEYS` and the
+  capture-digest tables are keyed by **family ordinal**, so adding any closure
+  family renumbers and invalidates all of them at once. Both are written up in
+  `docs/saturn/evidence/reports/r2-generic-actor-closure.md` section 7.
+
+### Added
+
+- `docs/saturn/evidence/reports/r2-generic-actor-closure.md` — the two distinct
+  capability censuses and why only one of them gates drawability, the
+  disposition and rationale for every unsupported capability, the measured cost
+  of each degradation, byte-identity proof for the 15 shipping banks, and
+  exactly what the draw path still needs to render a coin.
+
 ### Fixed
 
 - **`tools/saturn/capture_sourceboot_throughput.py` — the live capture harness,

@@ -87,6 +87,13 @@ _GEO_NEUTRAL_NODES = {
     # Shadows are emitted by the source scene's existing shadow/effect path;
     # omitting that separate primitive does not alter child actor geometry.
     "GEO_SHADOW",
+    # A per-object frustum cull sphere. It carries no transform and hides no
+    # child at rest; it only decides whether the subtree is submitted at all.
+    # Saturn scene admission already culls at cluster granularity before an
+    # actor is submitted, so dropping the sphere changes what is *considered*,
+    # never what a considered subtree looks like -- which is exactly what a
+    # rigid-group walk is asserting about.
+    "GEO_CULLING_RADIUS",
 }
 
 # GEO_SWITCH_CASE selects exactly one of its direct children. Its cases are

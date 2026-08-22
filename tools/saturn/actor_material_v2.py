@@ -25,11 +25,17 @@ from actor_family_bundle import SourceRecord
 from bake_castle_uv import pack_clut16, quantize_clut16, sample_triangle
 
 
+# (family_ordinal, model_id) keys admitted to the direct-textured material
+# path.  family_ordinal is the 1-based position of the family in the sorted
+# closure-derived family report, so this table is only valid for one closure
+# shape: adding or removing a closure family renumbers it and every key here
+# must be re-derived together with the capture digests below.
 BOB_DIRECT_TEXTURED_KEYS = (
-    (4, 0x00CD), (6, 0x00DB), (7, 0x00BC), (8, 0x008F), (13, 0x00A3),
+    (4, 0x00CD), (5, 0x00D7), (6, 0x00DB), (7, 0x00BC), (8, 0x008F),
+    (9, 0x0076), (13, 0x00A3),
     (18, 0x00A4), (19, 0x00C9), (21, 0x00A8), (24, 0x007F),
     (28, 0x0084), (29, 0x0080), (32, 0x0096), (39, 0x00A5),
-    (40, 0x0095), (46, 0x00A6),
+    (40, 0x0095), (45, 0x0074), (46, 0x00A6),
 )
 
 BAKE_POLICY_ID = 0x53423601
@@ -84,9 +90,16 @@ _CATEGORY_LABELS = {
 # admission merely by remaining syntactically valid.
 _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
     (4, 0x00CD): "5effdad14956faaf30891aa37c1a749334b2eec6c86561a3521bc789456636de",
+    # The three BOB coin variants.  Same actors/coin/geo.inc.c GEO_SWITCH_CASE
+    # over four flat display lists; the per-frame state is one integer, so no
+    # pose slot is involved.  Admitted 2026-08-22 with the generic Saturn
+    # reduction policy (their GEO_SHADOW node is answered by the recreated
+    # Saturn shadow sprite, not by a scene-graph shadow node).
+    (5, 0x00D7): "698ac125a783301e67e24a4d455da613b28926fa4c527dda072b41a952ed67b8",
     (6, 0x00DB): "dec1090d31a6109f0103cc88ee950d35f6e186e726981a3a9a1829c3d414510f",
     (7, 0x00BC): "623a659fb8bf030d8fa7ceb371c333809ebfef8f0e339261b13fdba679a22413",
     (8, 0x008F): "ab424ba6e19a80f0d0fcf86efbfb063ad750674a35f71c2ed54c47006eb9232c",
+    (9, 0x0076): "809f4b989a7151d34c42fadce6ab5349ba1a821692ff0d7ffd95c419a618fc9c",
     (13, 0x00A3): "d8f2d5208b0e3df4c256e74138fb6c9160b5de9bea512001990d6938d66492d2",
     (18, 0x00A4): "c3561e3b23d73e251b09d617a0c3d4b21593b2c663f0094d6937a32ee0afaa77",
     (19, 0x00C9): "f9153e587b41473b28ea6ba145926d1a0b17d8eb4bf28ee7b280aea44313b6ee",
@@ -97,6 +110,7 @@ _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
     (32, 0x0096): "4db45f30e715f7ffe8f18a8830337b8e60aa36f9709f09ed7025ca8e2afea7b4",
     (39, 0x00A5): "9aebb9ed6f67e1e315570ca109e572ed0fba24ab7de250c627ada93f57bf59c9",
     (40, 0x0095): "92357dc51fcc0b157596b9df97455eb30a949ff860111c4b569e7c8d2974628f",
+    (45, 0x0074): "896d859e2628e0c93e76934a7bfb0d9eff737ef4ebb14e81ffc1e348bb40870d",
     (46, 0x00A6): "a9a763a4ca33fac8c6dea8dbe4fd6f5dda773d462762b50d9d3e86ada407a45d",
 }
 _EXPECTED_CATEGORY_HASHES: dict[tuple[int, int], dict[str, str]] = {
