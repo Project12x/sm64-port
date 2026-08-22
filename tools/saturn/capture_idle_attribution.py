@@ -80,6 +80,46 @@ MASTER_IDLE_SYMBOLS = frozenset({"_sm64_saturn_source_runtime_wait_vblank"})
 SLAVE_IDLE_SYMBOLS = frozenset({"___slave_polling_entry"})
 BARRIER_SYMBOLS = frozenset({"_sm64_saturn_dual_worker_run"})
 
+# W2: the soft-float and integer-helper entry points whose *callers* we want.
+# Residency alone says how much soft-float runs; it cannot say which call sites
+# to convert.  PR read at the first instruction of a callee still holds the
+# caller's return address (these routines have not pushed PR yet), so entering
+# them is an exact, 100%-hit-rate call-site sample -- the same mechanism the
+# wait-site attribution already uses, applied to arithmetic instead of idle.
+SOFTFLOAT_CALLEE_SYMBOLS = frozenset(
+    {
+        "___addsf3",
+        "___subsf3",
+        "___mulsf3",
+        "___divsf3",
+        "___negsf2",
+        "___eqsf2",
+        "___nesf2",
+        "___gesf2",
+        "___lesf2",
+        "___gtsf2",
+        "___ltsf2",
+        "___unordsf2",
+        "___floatsisf",
+        "___floatunsisf",
+        "___fixsfsi",
+        "___fixunssfsi",
+        "___extendsfdf2",
+        "___truncdfsf2",
+        "___adddf3",
+        "___subdf3",
+        "___muldf3",
+        "___divdf3",
+        "___udiv_qrnnd_16",
+        "___ashlsi3_r0",
+        "___lshrsi3_r0",
+        "___clzsi2",
+        "___sdivsi3",
+        "___udivsi3",
+        "_sqrtf",
+    }
+)
+
 VDP1_EDSR = 0x25D00010  # EDSR, LOPR, COPR are three consecutive 16-bit regs
 VDP2_TVSTAT = 0x25F80004
 
@@ -150,12 +190,27 @@ def trace_window(
     slave_stride: int,
     io_stride: int,
     run_log_min_cycles: int,
+    attribute_callees: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     master = RunTracker()
     slave = RunTracker()
     run_log: list[dict[str, Any]] = []
     run_open_cycle = 0
     run_open_symbol: str | None = None
+    # callee -> caller label -> {"entries", "cycles"}
+    caller_attr: dict[str, dict[str, dict[str, int]]] = {}
+    # The origin call site of the call currently executing in each callee, so a
+    # run that reopens after the callee itself called a helper (___divsf3 ->
+    # ___clzsi2 -> back) is charged to the original caller and is not counted as
+    # a second entry.
+    callee_origin: dict[str, str] = {}
+    pending_attr: tuple[str, str] | None = None
+
+    def charge(callee: str, label: str, cycles: int) -> None:
+        bucket = caller_attr.setdefault(callee, {}).setdefault(
+            label, {"entries": 0, "cycles": 0}
+        )
+        bucket["cycles"] += cycles
     joint: dict[str, int] = {}
     wait_sites: dict[str, int] = {}
     wait_site_entries: dict[str, int] = {}
@@ -189,8 +244,30 @@ def trace_window(
                         "cycles": span,
                     }
                 )
+            if pending_attr is not None:
+                charge(pending_attr[0], pending_attr[1], span)
+                pending_attr = None
             run_open_symbol = master_symbol
             run_open_cycle = total_cycles - cost
+
+        if opened and master_symbol in attribute_callees:
+            regs = client.call("regs.read", {"target": "sh2.master"})
+            pr = int(regs["pr"])
+            site = index.lookup(pr)
+            if site is None:
+                label = f"<0x{pr:08x}>"
+            elif site[0] == master_symbol:
+                # A resume after the callee called a helper of its own: the work
+                # still belongs to the call site that entered it.
+                label = callee_origin.get(master_symbol, "<resume-unknown>")
+            else:
+                label = f"{site[0]}+0x{pr - site[1]:x}"
+            if site is None or site[0] != master_symbol:
+                caller_attr.setdefault(master_symbol, {}).setdefault(
+                    label, {"entries": 0, "cycles": 0}
+                )["entries"] += 1
+                callee_origin[master_symbol] = label
+            pending_attr = (master_symbol, label)
 
         if opened and master_symbol in MASTER_IDLE_SYMBOLS:
             regs = client.call("regs.read", {"target": "sh2.master"})
@@ -229,8 +306,12 @@ def trace_window(
 
     master.finish()
     slave.finish()
+    if pending_attr is not None:
+        charge(pending_attr[0], pending_attr[1], total_cycles - run_open_cycle)
+        pending_attr = None
     return {
         "wall_seconds": round(time.monotonic() - started, 2),
+        "caller_attribution": caller_attr,
         "steps": steps,
         "total_cycles": total_cycles,
         "master_cycles": master.cycles,
@@ -287,6 +368,15 @@ def summarise(windows: list[dict[str, Any]], clock_hz: float, vblanks_per_frame:
             master_runs.setdefault(name, []).extend(values)
         for name, values in window["slave_runs"].items():
             slave_runs.setdefault(name, []).extend(values)
+
+    caller_attr: dict[str, dict[str, dict[str, int]]] = {}
+    for window in windows:
+        for callee, sites in window.get("caller_attribution", {}).items():
+            target = caller_attr.setdefault(callee, {})
+            for label, value in sites.items():
+                bucket = target.setdefault(label, {"entries": 0, "cycles": 0})
+                bucket["entries"] += value["entries"]
+                bucket["cycles"] += value["cycles"]
 
     master_total = sum(master_cycles.values())
     slave_total = sum(slave_cycles.values())
@@ -434,7 +524,65 @@ def summarise(windows: list[dict[str, Any]], clock_hz: float, vblanks_per_frame:
         ],
         "vdp_witness": io_summary,
         "per_window": per_window,
+        "callee_call_sites": {
+            callee: {
+                "total_cycles": sum(v["cycles"] for v in sites.values()),
+                "total_entries": sum(v["entries"] for v in sites.values()),
+                "sites": dict(
+                    sorted(sites.items(), key=lambda item: -item[1]["cycles"])[:24]
+                ),
+            }
+            for callee, sites in sorted(
+                caller_attr.items(),
+                key=lambda item: -sum(v["cycles"] for v in item[1].values()),
+            )
+        },
+        "caller_rollup": [
+            {
+                "caller": caller,
+                "cycles": data["cycles"],
+                "entries": data["entries"],
+                "share_of_master": round(data["cycles"] / master_total, 6)
+                if master_total
+                else 0.0,
+                "cycles_per_frame": round(
+                    (data["cycles"] / master_total) * cycles_per_frame, 1
+                )
+                if master_total
+                else 0.0,
+                "callees": dict(
+                    sorted(data["callees"].items(), key=lambda item: -item[1])[:8]
+                ),
+            }
+            for caller, data in sorted(
+                rollup_callers(caller_attr).items(), key=lambda item: -item[1]["cycles"]
+            )[:30]
+        ],
     }
+
+
+def rollup_callers(
+    caller_attr: dict[str, dict[str, dict[str, int]]]
+) -> dict[str, dict[str, Any]]:
+    """Aggregate per-call-site attribution up to the calling *function*.
+
+    W2's question is which function to convert, not which instruction, so every
+    `f+0x1a`/`f+0x2e` site collapses into `f` and every callee it reaches is
+    summed.  Attribution reaches the immediate caller only: a routine that
+    tail-calls (`___subsf3` -> `___addsf3`) is billed to whichever site PR
+    named, which for a tail call is the original application caller.
+    """
+    rolled: dict[str, dict[str, Any]] = {}
+    for callee, sites in caller_attr.items():
+        for label, value in sites.items():
+            caller = label.split("+0x")[0]
+            entry = rolled.setdefault(
+                caller, {"cycles": 0, "entries": 0, "callees": {}}
+            )
+            entry["cycles"] += value["cycles"]
+            entry["entries"] += value["entries"]
+            entry["callees"][callee] = entry["callees"].get(callee, 0) + value["cycles"]
+    return rolled
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -468,6 +616,17 @@ def main(argv: list[str] | None = None) -> int:
         help="record contiguous master runs at least this long, in order, so the "
         "frame's real action sequence is readable instead of only its histogram",
     )
+    parser.add_argument(
+        "--attribute-callers-of",
+        default="",
+        help=(
+            "comma-separated callee symbols whose call sites to attribute by "
+            "reading PR at entry, or the keyword 'softfloat' for the built-in "
+            "soft-float/integer-helper set. Off by default; it costs one extra "
+            "regs.read per call into a listed callee and does not advance the "
+            "machine, so it cannot perturb the cycle census"
+        ),
+    )
     parser.add_argument("--clock-hz", type=float, default=DEFAULT_SH2_CLOCK_HZ)
     parser.add_argument("--vblanks-per-frame", type=float, default=11.2069)
     parser.add_argument("--timeout", type=float, default=5400.0)
@@ -483,6 +642,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+
+    requested = [item.strip() for item in args.attribute_callers_of.split(",") if item.strip()]
+    attribute_callees: frozenset[str] = frozenset()
+    for item in requested:
+        if item == "softfloat":
+            attribute_callees |= SOFTFLOAT_CALLEE_SYMBOLS
+        else:
+            attribute_callees |= {item}
 
     symbols = load_symbols(args.nm, args.elf)
     index = SymbolIndex(symbols)
@@ -519,6 +686,7 @@ def main(argv: list[str] | None = None) -> int:
                 slave_stride=args.slave_stride,
                 io_stride=args.io_stride,
                 run_log_min_cycles=args.run_log_min_cycles,
+                attribute_callees=attribute_callees,
             )
             windows.append(window)
             print(
@@ -556,6 +724,7 @@ def main(argv: list[str] | None = None) -> int:
             "warmup": warmup,
             "route_position_after_trace": route_position_after_trace,
             "sh2_cache_emulation": bool(args.sh2_cache),
+            "attributed_callees": sorted(attribute_callees),
         },
         "summary": summary,
         "windows": windows,

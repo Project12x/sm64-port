@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`capture_idle_attribution.py` can now attribute soft-float *call sites*,
+  not just residency.** `--attribute-callers-of softfloat` reads PR at every
+  entry to a listed callee and rolls the result up to the calling function,
+  producing `callee_call_sites` and `caller_rollup` in the JSON.
+  **Reasoning:** residency answers "how much soft-float runs" and W2 needed
+  "which call site to convert", and the only instrument that had ever answered
+  that -- `capture_softfloat_profile.py`'s caller edges -- is the burst sampler
+  T2.20 measured at +/-2.6 pp per symbol and caught reporting soft-float's
+  trend with the wrong sign. PR at the first instruction of these routines
+  still holds the caller's return address, exactly as the existing wait-site
+  attribution relies on, so this is a 100%-hit-rate sample rather than an
+  edge-sampling estimate; the tool's own output confirms it, with attributed
+  cycles equal to measured residency for every callee. A run that reopens a
+  callee after it called a helper of its own is charged to the call site that
+  entered it and is not counted as a second entry. **Consumer-facing impact:
+  none** -- the flag is off by default, `regs.read` does not advance the
+  machine so the cycle census cannot be perturbed, and existing reproduction
+  commands are unchanged.
+
 ### Changed
 
 - **W6a: `__addsf3`, `__subsf3`, `__mulsf3` and `__divsf3` now come from LLVM
