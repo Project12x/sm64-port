@@ -32,7 +32,10 @@ for the render path only.
 | FPS mean / median / 1% low | 6.7181 / 6.6667 / 6.0 | 6.2143 / 6.0000 / 5.4545 |
 | VB per frame | 8.9310 | 9.6552 |
 | master idle | **0.000000** | **0.000000** |
-| master idle *(W6a, `id-586944bb637a920f`)* | **5.22%** — see below | not measured |
+| master idle *(W6a, `id-586944bb637a920f`, tick 150, 1.98-frame window)* | ~~5.22%~~ **superseded by W7** | — |
+| master idle *(W7, same build, tick 150, **4.83-frame** window)* | **2.1450%** | **0.000000** (`--sh2-cache`, 26.55 VB) |
+| master idle *(W7, same build, **tick 210**, 2.63-frame window)* | **0.000000** | not measured |
+| master idle *(W7, same build, **tick 30**, 3.84-frame window)* | **0.000000** | not measured |
 | slave idle | 6.1095 VB (68.41%) | 6.0632 VB (62.80%) |
 
 Sprint 2 took cadence **3.8753 → 6.7181, +73.4%**, past A9A's 5.294 / 11.333.
@@ -61,6 +64,28 @@ candidate `id-e8720d58595d9a62` (manifest
 >    declined offload because "overlap converts zero VB when the critical path has no
 >    stall in it" — which was true at 0.000000 idle and **is no longer true at 5.22%**.
 >    The non-goal below is amended accordingly.
+>
+> **BOTH CONSEQUENCES ARE WITHDRAWN BY W7 (2026-08-21).** See
+> `docs/saturn/evidence/reports/w7-master-wait-attribution.md`.
+>
+> - **The 5.22% does not survive a longer window or a second route position.** The
+>   same route position traced for **4.83 contiguous frames** instead of 1.98 contains
+>   the **same single wait block** and reports **2.1450%**; route tick 210 reports
+>   **exactly 0.000000** over 2.63 frames; **route tick 30 — the position the +5.26%
+>   cadence pair was measured at — reports 0.000000 over 3.84 frames**; `--sh2-cache`
+>   at tick 150 reports **0.000000** over 26.55 VB. The master is still essentially
+>   saturated on most of the route.
+> - **Consequence 1 is wrong.** Absorption is 27.7% at tick 150 and **≤ 0% at ticks
+>   30 and 210**, where the frame shortened by 200,577 and 262,294 cycles with zero
+>   candidate idle — and tick 210, the heaviest scene sampled, is where W6a's FPS gain
+>   is *largest* (+6.30%, against +5.60% at tick 150 and +5.26% at tick 30).
+>   **W2 and W6b are worth 80–100% of face value, not 50%.**
+> - **Consequence 2 is wrong.** The wait is a `transfer-epoch` stall on an
+>   already-submitted DMA, waiting for the next field to be allowed to poll it again.
+>   Offloading master work does not make that poll arrive sooner, and at tick 210
+>   there is no stall to overlap into at all. **The slave non-goal is closed again.**
+> - **The W6a residual arithmetic mixed route positions**: a tick-30 cadence against a
+>   tick-150 idle share. Single-route pairs are in W7 §3.2.
 >
 > **Finding what the master now waits on is the highest-value next measurement.**
 
@@ -580,7 +605,14 @@ attempted as one conversion.
   **⚠ OPEN — external research not done.** A survey of how other Saturn projects broke
   shared-state dependencies was dispatched and died on a transient 529. Until it runs, we
   know only what our two in-tree references do.
-- **Widening the slave dispatch window — PARTIALLY REOPENED by W6a.** T2.25 closed
+- **Widening the slave dispatch window — CLOSED AGAIN by W7 (2026-08-21).** The
+  "partially reopened" text below stands as history only. W7 established that the
+  master's wait is a `transfer-epoch` stall on an already-submitted DMA (VDP1's
+  `EDSR`/`COPR` are unchanged across the whole wait), that it is worth
+  **82,738 cycles/frame at route tick 150 and 0 at ticks 30 and 210**, and that offload
+  cannot convert it because the release is an observed VBlank, not master
+  availability. `docs/saturn/evidence/reports/w7-master-wait-attribution.md` §5.
+- ~~**Widening the slave dispatch window — PARTIALLY REOPENED by W6a.**~~ T2.25 closed
   this because master idle was **0.000000**, so overlap converted zero VB. **W6a moved
   master idle to 5.22%**, so that premise no longer holds as stated. What still stands
   from T2.25: SlaveDriver's adaptive controller partitions from the master's join spin
