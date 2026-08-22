@@ -4,6 +4,64 @@
 
 ### Added
 
+- **`src/port/saturn/gfx/saturn_actor_rigid_pose.{h,c}` — a rigid-part pose
+  evaluator, the second producer lane, so non-Mario jointed actors can
+  animate.** **Reasoning:** the existing evaluator produces *skinned* vertices,
+  a §2a recreation built for exactly one actor whose cost grows with mesh
+  density. Every other jointed actor in SM64 (56 of 130 classes; 8 of the BOB
+  closure's 86 records carry an animation table) is a **rigid-part hierarchy** —
+  each `GEO_ANIMATED_PART` carries a whole display list on one matrix — so its
+  published pose is an array of part transforms, O(parts) and independent of
+  mesh density. Mario keeps the skinned path, byte-identical. **The published
+  layout is 24 B per part** — a 3x3 rotation in Q1.15 plus an int16 translation
+  triple — **not the 48 B `r2-pose-slot-pooling.md` §2 assumed and not the 12 B
+  §8.2 floated.** 12 B was rejected on cost: Euler angles do not compose, so it
+  would force either a per-frame hierarchy walk on the consumer or an
+  `asin`/`atan2` decomposition per part on the producer. 24 B was chosen because
+  the host fixture **measures** the quantisation penalty as zero: 2.890 units of
+  divergence from a double-precision oracle on an oversized 1,000-unit probe
+  vertex at depth 5, against 2.890 units for the Q16.16 composition it
+  quantises. The error is a fixed within-frame offset recomputed from the
+  animation channels every frame, never the accumulating kind plan §2b calls a
+  defect at any size. Composition reuses the proven
+  `sm64_saturn_mtxq_rotate_xyz_and_translate` and `sm64_saturn_matrix_mul` in
+  the existing shared 1,280 B joint workspace, so the lane adds **no new
+  numeric path and no new HWRAM data**. **Consumer-facing:** `rotation` is
+  row-major under the same row-vector convention the skinned lane's
+  `matrix_apply` uses, and `translation` is already model space, so a consumer
+  never walks the hierarchy. **Prerequisite for a real tenant:** the lane is
+  linked `SM64_SATURN_CART_COLD` because it does **not** fit in HWRAM — see the
+  Changed entry below.
+- **`src/port/saturn/gfx/saturn_actor_pose_owner.h` — the pose-pool owner-key
+  contract and its key-space partition.** **Reasoning:**
+  `r2-pose-slot-pooling.md` §8.4 asked for a per-instance key stable across
+  both in-flight render generations. No new identity was needed: the runtime
+  already publishes `instance_key = (incarnation << 16) | pool_slot`, which is
+  non-zero for any live actor, written only on a dead-to-live edge (so it is
+  frame-stable while the actor lives), unique between simultaneous actors
+  (one object per pool slot, `seen[]` deduplicates), and unique across pool
+  recycling (the incarnation bumps). This header names that coupling as a call
+  site rather than leaving it a convention. **Root cause of a latent defect
+  found and fixed:** the pool's synthetic tenants used keys `0xE00000xx` whose
+  low halves (1, 2, 16-23, 32, 64, 80) sit **inside** the source pool slot
+  range, so a real actor in pool slot 1 reaching incarnation 0xE000 would have
+  named the scaffolding's block. The partition now discriminates on the low
+  half — the half a generic key is *bounded* on by two independent
+  `pool_slot < SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY` checks — which makes the
+  reservation structural rather than probabilistic; reserving on the high half
+  would not be sound because `incarnation` can reach any 16-bit value.
+- **`verify-actor-rigid-pose`, `verify-actor-rigid-pose-mutation`,
+  `verify-actor-pose-owner`, `verify-actor-pose-owner-mutation`** — four new
+  host gates. The rigid fixture checks the published form against two oracles
+  (the rotation formula written longhand, and an independent double-precision
+  composition), covers zero-part and one-part degenerates, six fail-closed
+  rejections, and a real-data arm against the shipped `mario.s64b`. The owner
+  fixture drives the **real** observer and the **real** pool through 40
+  spawn/despawn waves. **6 of 6 mutations caught, 0 escaped:** a transposed part
+  matrix, skipped parent composition, two actors' evaluations aliasing, a
+  despawn edge that never fires, a sticky incarnation, and an off-by-one
+  incarnation at the despawn edge.
+
 - **`src/port/saturn/gfx/saturn_actor_pose_pool.{h,c}` — a pose-slot pool, so
   the port can animate more than one actor.** **Reasoning:** the complete
   animation path shipped `complete_actor_pose_slots[2]`, a fixed 8,560 B HWRAM
@@ -73,6 +131,46 @@
 
 ### Changed
 
+- **The pose pool leaks no more: `release_owner` is now reached from the object
+  lifecycle.** **Root cause:** `release_owner` shipped tested and *uncalled*
+  (`r2-pose-slot-pooling.md` §8.5), so the pool would have leaked one block per
+  enemy per despawn until exhaustion, and the symptom — enemies quietly going
+  stiff — looks like nothing. The edge already existed and was simply not
+  connected: `sm64_saturn_geo_state_observer_end_frame` already detects a pool
+  slot that was live and was not seen this frame. It now calls an optional
+  despawn sink, and `saturn_actor_bridge.c` registers one that composes the
+  owner key and releases. **The sink takes `(pool_slot, incarnation)` rather
+  than the composed key** so the observer keeps no dependency on the pose pool.
+  **Tradeoff, deliberate:** the release is immediate, not deferred by a render
+  generation. The pool's generation check kills every outstanding handle, so a
+  consumer still holding last frame's handle resolves NULL and skips an actor
+  that is despawning anyway — correct, and it can never show the next tenant's
+  pose. Deferring would buy one frame of a corpse and cost a block.
+  **Consumer-facing impact:** on target the edge fired **13 times over 200
+  route ticks**, so against a 16-block arena the leak was a real defect on a
+  real route, not a hypothetical. **Known behaviour:** if the observer overflows
+  its capacity, a still-live actor is treated as despawned and re-claims next
+  frame under a new incarnation — safe (no aliasing), but claim churn under
+  pressure.
+- **The cold pool class plan re-derived: 256 B / 640 B, arena 7,168 B (was
+  10,240 B), returning 3,072 B of LWRAM.** **Reasoning:** the plan was sized
+  against an assumed 48 B part; the shipped part is 24 B, so a 640 B class holds
+  a 24-part hierarchy where 1,024 B held 21. Block count is unchanged at 16 —
+  still eight enemies at two in-flight render generations, which is pipeline
+  depth, not actor count.
+- **The rigid lane is linked into `.cart_cold_text`, not HWRAM. This is a
+  prerequisite a real enemy scene must remove.** **Root cause:** the first link
+  with it in ordinary `.text` was refused by
+  `sh-elf-ld` ("HWRAM margin below libyaul's TLSF control-block floor"). The
+  cost is *duplication*, not bloat: `sm64_saturn_mtxq_rotate_xyz_and_translate`
+  and `sm64_saturn_matrix_mul` are `static inline` in headers, so a second
+  matrix-composing translation unit gets its own copy of both. **Migration note
+  for whoever wires the first enemy:** the annotation must come off, and the
+  measured requirement is ~1,698 B against 824 B of margin — **deleting the
+  pool's evidence scaffolding (~1.1 KB, `r2-pose-slot-pooling.md` §8.7) is not
+  sufficient on its own.** The likely right fix is one out-of-line copy of each
+  helper shared by both lanes, which pays twice; that touches Mario's evaluator
+  and so needs its own byte-identical proof.
 - **`complete_actor_pose_slot_t` no longer carries the joint matrices, and
   Mario's slots are now let by the pool.** **Root cause of the waste, found by
   reading the consumer rather than the producer:** the 1,280 B `joints[20*16]`

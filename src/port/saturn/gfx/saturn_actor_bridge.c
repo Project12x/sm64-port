@@ -8,8 +8,11 @@
  * source animation until their source pose bank is promoted.
  */
 #include "saturn_actor_bridge.h"
+#include "saturn_actor_pose_owner.h"
 #include "saturn_actor_pose_pool.h"
+#include "saturn_actor_rigid_pose.h"
 #include "saturn_render_native_math.h"
+#include "port/saturn/platform/saturn_cart_code.h"
 
 #include <string.h>
 
@@ -33,7 +36,14 @@ extern const uint32_t sm64_saturn_mario_actor_bank_size;
 /* One published pose per in-flight render generation.  This is a pipeline
  * depth (`sm64_saturn_render_snapshot_bank_t.slot[2]`), not an actor count. */
 #define COMPLETE_ACTOR_POSE_SLOT_COUNT 2U
+/* Mario's key is outside the generic key space by construction: its low
+ * half is 0x524F, and a generic key's low half is a source pool slot
+ * bounded by SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY.  See
+ * saturn_actor_pose_owner.h for the partition. */
 #define COMPLETE_ACTOR_OWNER_MARIO 0x4D41524FUL /* 'MARO' */
+_Static_assert((COMPLETE_ACTOR_OWNER_MARIO & 0xFFFFUL) >=
+                   SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY,
+               "Mario pose owner key is reachable from a source pool slot");
 
 /* The joint matrices are workspace, not published state: nothing downstream
  * of the evaluator reads them (`sm64_saturn_actor_pose_view_t` carries only
@@ -67,12 +77,27 @@ static uint8_t complete_actor_bank_ready;
  *
  * Memory record: hot arena = 2 * sizeof(complete_actor_pose_slot_t) = 6,000 B
  * of HWRAM (the shipped build spent 8,560 B on the same two slots), plus
- * 1,280 B of shared joint workspace.  Cold arena = 10,240 B of LWRAM.
+ * 1,280 B of shared joint workspace.  Cold arena = 7,168 B of LWRAM.
  * Lifetime is the process; the owner is this file; reset happens only at bank
  * re-validation, which is once. */
-#define COMPLETE_ACTOR_COLD_ARENA_BYTES 10240U
+/* The class plan, re-derived once the published rigid-part layout was
+ * settled at 24 B per part (saturn_actor_rigid_pose.h).
+ * r2-pose-slot-pooling.md section 2 sized these against a 48 B part and
+ * section 8.2 asked for the plan to be re-derived if a smaller part was
+ * chosen.  It was.
+ *
+ *   small 256 B = a 10-part pose exactly.  Goomba scale.
+ *   large 640 B = a 24-part pose (592 B) with room for the header.  It
+ *                 covers every jointed actor in the BOB closure, and
+ *                 the shipped 20-joint Mario hierarchy at 496 B.
+ *
+ * Sixteen blocks is still eight enemies at two in-flight render
+ * generations, which is what the pipeline depth demands; the arena is
+ * 7,168 B instead of 10,240 B, so the smaller part layout returns
+ * 3,072 B of LWRAM. */
+#define COMPLETE_ACTOR_COLD_ARENA_BYTES 7168U
 #define COMPLETE_ACTOR_COLD_SMALL_BYTES 256U
-#define COMPLETE_ACTOR_COLD_LARGE_BYTES 1024U
+#define COMPLETE_ACTOR_COLD_LARGE_BYTES 640U
 
 static int32_t complete_actor_joint_workspace[COMPLETE_ACTOR_JOINT_CAPACITY * 16U];
 static uint8_t complete_actor_hot_arena[
@@ -149,6 +174,18 @@ typedef struct sm64_saturn_complete_actor_probe {
     uint16_t pool_frames_checked;
     uint16_t pool_alias_faults;
     uint16_t pool_cold_arena_bytes;
+    /* Rigid-part lane (the second evaluator) and the despawn release path.
+     * `rigid_selftest_mask` is a boot-time exercise of the real evaluator
+     * against the real bank, publishing into a real cold-LWRAM block.
+     * `despawn_releases` is the counter that would have sat at zero for the
+     * whole session while the pool leaked: it counts pose slots actually
+     * handed back by the object lifecycle. */
+    uint16_t rigid_selftest_mask;
+    uint16_t rigid_part_count;
+    uint16_t rigid_pose_bytes;
+    uint16_t rigid_part_bytes;
+    uint16_t despawn_edges;
+    uint16_t despawn_releases;
 } sm64_saturn_complete_actor_probe_t;
 sm64_saturn_complete_actor_probe_t sm64_saturn_complete_actor_probe
     __attribute__((section(".lwram_bss"), used, aligned(4)));
@@ -211,6 +248,26 @@ static void complete_actor_publish_probe(void)
  * do not alias -- the failure this pool exists to prevent, and the one that
  * would otherwise ship silently because it looks like nothing until an enemy
  * wears another enemy pose. */
+/* The synthetic tenants sit in the reserved key band so that no generic
+ * actor key -- at any incarnation, including the wrap value -- can ever
+ * name one of them.  The old 0xE00000xx constants had low halves inside
+ * the source pool slot range and would have collided with a real actor
+ * whose incarnation reached the matching high half. */
+#define COMPLETE_ACTOR_OWNER_EXERCISE_A \
+    sm64_saturn_pose_owner_reserved(0xE000U, 1U)
+#define COMPLETE_ACTOR_OWNER_EXERCISE_B \
+    sm64_saturn_pose_owner_reserved(0xE000U, 2U)
+#define COMPLETE_ACTOR_OWNER_DRAIN \
+    sm64_saturn_pose_owner_reserved(0xE002U, 0U)
+#define COMPLETE_ACTOR_OWNER_PAST_END \
+    sm64_saturn_pose_owner_reserved(0xE003U, 0U)
+#define COMPLETE_ACTOR_OWNER_REUSE \
+    sm64_saturn_pose_owner_reserved(0xE004U, 0U)
+#define COMPLETE_ACTOR_OWNER_OVERSIZE \
+    sm64_saturn_pose_owner_reserved(0xE005U, 0U)
+#define COMPLETE_ACTOR_OWNER_RIGID \
+    sm64_saturn_pose_owner_reserved(0xE006U, 0U)
+
 #define COMPLETE_ACTOR_EXERCISE_TENANTS 2U
 #define COMPLETE_ACTOR_EXERCISE_STRIPE 32U
 static sm64_saturn_pose_handle_t complete_actor_exercise[
@@ -264,10 +321,10 @@ static uint16_t complete_actor_pool_selftest(void)
     uint16_t index;
 
     complete_actor_exercise[0] = sm64_saturn_pose_pool_claim(
-        &complete_actor_cold_pool, 0xE0000001UL,
+        &complete_actor_cold_pool, COMPLETE_ACTOR_OWNER_EXERCISE_A,
         COMPLETE_ACTOR_COLD_LARGE_BYTES);
     complete_actor_exercise[1] = sm64_saturn_pose_pool_claim(
-        &complete_actor_cold_pool, 0xE0000002UL,
+        &complete_actor_cold_pool, COMPLETE_ACTOR_OWNER_EXERCISE_B,
         COMPLETE_ACTOR_COLD_SMALL_BYTES);
     if (sm64_saturn_pose_handle_is_valid(complete_actor_exercise[0]) &&
         sm64_saturn_pose_handle_is_valid(complete_actor_exercise[1]))
@@ -283,7 +340,8 @@ static uint16_t complete_actor_pool_selftest(void)
      * rather than an eviction. */
     for (index = 0U; index < 8U; index++) {
         filler[index] = sm64_saturn_pose_pool_claim(
-            &complete_actor_cold_pool, 0xE0000010UL + index,
+            &complete_actor_cold_pool,
+            sm64_saturn_pose_owner_reserved(0xE001U, index),
             COMPLETE_ACTOR_COLD_SMALL_BYTES);
         if (!sm64_saturn_pose_handle_is_valid(filler[index])) break;
         filled++;
@@ -291,12 +349,12 @@ static uint16_t complete_actor_pool_selftest(void)
     while (sm64_saturn_pose_pool_largest_free_extent(&complete_actor_cold_pool)
            != 0U) {
         if (!sm64_saturn_pose_handle_is_valid(sm64_saturn_pose_pool_claim(
-                &complete_actor_cold_pool, 0xE0000020UL,
+                &complete_actor_cold_pool, COMPLETE_ACTOR_OWNER_DRAIN,
                 COMPLETE_ACTOR_COLD_SMALL_BYTES)))
             break;
     }
     if (!sm64_saturn_pose_handle_is_valid(sm64_saturn_pose_pool_claim(
-            &complete_actor_cold_pool, 0xE0000030UL,
+            &complete_actor_cold_pool, COMPLETE_ACTOR_OWNER_PAST_END,
             COMPLETE_ACTOR_COLD_SMALL_BYTES)))
         mask |= POOL_SELFTEST_EXHAUSTION_FAILS;
     if (complete_actor_stripe_ok(complete_actor_exercise[0], 0xA5U) &&
@@ -311,7 +369,7 @@ static uint16_t complete_actor_pool_selftest(void)
                 NULL)
             mask |= POOL_SELFTEST_RELEASE_KILLS_HANDLE;
         reused = sm64_saturn_pose_pool_claim(&complete_actor_cold_pool,
-                                             0xE0000040UL,
+                                             COMPLETE_ACTOR_OWNER_REUSE,
                                              COMPLETE_ACTOR_COLD_SMALL_BYTES);
         if (sm64_saturn_pose_handle_is_valid(reused) &&
             sm64_saturn_pose_pool_resolve(&complete_actor_cold_pool, reused) !=
@@ -323,18 +381,18 @@ static uint16_t complete_actor_pool_selftest(void)
 
     /* Nothing may be larger than the largest class. */
     if (!sm64_saturn_pose_handle_is_valid(sm64_saturn_pose_pool_claim(
-            &complete_actor_cold_pool, 0xE0000050UL, 0xFFFFU)))
+            &complete_actor_cold_pool, COMPLETE_ACTOR_OWNER_OVERSIZE, 0xFFFFU)))
         mask |= POOL_SELFTEST_OVERSIZE_FAILS;
 
     /* Hand the arena back to the two long-lived tenants. */
     for (index = 0U; index < 8U; index++) {
         (void)sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
-                                                  0xE0000010UL + index);
+                                                  sm64_saturn_pose_owner_reserved(0xE001U, index));
     }
     (void)sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
-                                              0xE0000020UL);
+                                              COMPLETE_ACTOR_OWNER_DRAIN);
     (void)sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
-                                              0xE0000040UL);
+                                              COMPLETE_ACTOR_OWNER_REUSE);
     if (complete_actor_stripe_ok(complete_actor_exercise[0], 0xA5U) &&
         complete_actor_stripe_ok(complete_actor_exercise[1], 0x5AU))
         mask |= POOL_SELFTEST_TENANTS_DISJOINT;
@@ -354,6 +412,133 @@ static void complete_actor_pool_tick_check(uint16_t tick)
         sm64_saturn_complete_actor_probe.pool_frames_checked++;
     else
         sm64_saturn_complete_actor_probe.pool_alias_faults++;
+}
+
+enum {
+    RIGID_SELFTEST_CLAIMED = 1U << 0,
+    RIGID_SELFTEST_EVALUATED = 1U << 1,
+    RIGID_SELFTEST_PART_COUNT = 1U << 2,
+    RIGID_SELFTEST_FRAMES_DIFFER = 1U << 3,
+    RIGID_SELFTEST_UNDERSIZE_REFUSED = 1U << 4,
+    RIGID_SELFTEST_RELEASED = 1U << 5
+};
+
+/* Boot-time exercise of the rigid-part lane on the real SH-2: claim a cold
+ * block, evaluate a real hierarchy out of the real bank into it, and prove
+ * the published bytes are what the layout says they are.  Cold code -- it
+ * runs once, so it must not spend HWRAM.
+ *
+ * The bank used is the shipped Mario bank because it is the only actor bank
+ * that exists today.  This is NOT how Mario is drawn: he keeps the skinned
+ * lane untouched.  It is a 20-joint hierarchy with a real animation stream,
+ * which is the input the rigid lane has to survive when enemy banks arrive. */
+SM64_SATURN_CART_COLD
+static uint16_t complete_actor_rigid_selftest(
+    const sm64_saturn_actor_bank_view_t *bank)
+{
+    sm64_saturn_pose_handle_t handle;
+    sm64_saturn_rigid_pose_t *pose;
+    sm64_saturn_mtx_t *const workspace =
+        (sm64_saturn_mtx_t *)(void *)complete_actor_joint_workspace;
+    const sm64_saturn_actor_joint_t *const staged_joints =
+        complete_actor_slices_staged != 0U ? complete_actor_staged_joints : NULL;
+    uint16_t mask = 0U;
+    uint32_t extent;
+    sm64_saturn_rigid_part_t first_part;
+
+    /* The composition workspace is shared with the skinned lane, so the rigid
+     * lane is capped by that array, not by the published layout: a hierarchy
+     * deeper than COMPLETE_ACTOR_JOINT_CAPACITY needs 64 B more of HWRAM per
+     * extra part before it can be evaluated here. */
+    if (bank == NULL || bank->bank.joint_count == 0U ||
+        bank->bank.joint_count > COMPLETE_ACTOR_JOINT_CAPACITY)
+        return mask;
+    extent = SM64_SATURN_RIGID_POSE_BYTES(bank->bank.joint_count);
+    if (extent > COMPLETE_ACTOR_COLD_LARGE_BYTES)
+        return mask;
+
+    handle = sm64_saturn_pose_pool_claim(&complete_actor_cold_pool,
+                                         COMPLETE_ACTOR_OWNER_RIGID, extent);
+    if (!sm64_saturn_pose_handle_is_valid(handle))
+        return mask;
+    mask |= RIGID_SELFTEST_CLAIMED;
+    pose = (sm64_saturn_rigid_pose_t *)sm64_saturn_pose_pool_resolve(
+        &complete_actor_cold_pool, handle);
+    if (pose == NULL)
+        return mask;
+
+    if (sm64_saturn_actor_rigid_pose_evaluate(
+            bank, COMPLETE_ACTOR_FALLBACK_ANIMATION_ID, 0, staged_joints,
+            workspace, pose, extent) &&
+        pose->flags == SM64_SATURN_RIGID_POSE_VALID) {
+        mask |= RIGID_SELFTEST_EVALUATED;
+        if (pose->part_count == bank->bank.joint_count)
+            mask |= RIGID_SELFTEST_PART_COUNT;
+        first_part = pose->part[bank->bank.joint_count - 1U];
+        /* A second frame of the same animation must move at least the last
+         * part, or the lane is publishing a bind pose and calling it
+         * animation. */
+        if (sm64_saturn_actor_rigid_pose_evaluate(
+                bank, COMPLETE_ACTOR_FALLBACK_ANIMATION_ID, 3, staged_joints,
+                workspace, pose, extent) &&
+            memcmp(&first_part, &pose->part[bank->bank.joint_count - 1U],
+                   sizeof(first_part)) != 0)
+            mask |= RIGID_SELFTEST_FRAMES_DIFFER;
+    }
+
+    /* A block that cannot hold the hierarchy must be refused, not
+     * overrun -- this is the check that keeps a deep actor from writing past
+     * its pool block into its neighbour's pose. */
+    if (!sm64_saturn_actor_rigid_pose_evaluate(
+            bank, COMPLETE_ACTOR_FALLBACK_ANIMATION_ID, 0, staged_joints,
+            workspace, pose, extent - 1U) &&
+        pose->flags == 0U)
+        mask |= RIGID_SELFTEST_UNDERSIZE_REFUSED;
+
+    sm64_saturn_complete_actor_probe.rigid_part_count = pose->part_count;
+    sm64_saturn_complete_actor_probe.rigid_pose_bytes = (uint16_t)extent;
+    sm64_saturn_complete_actor_probe.rigid_part_bytes =
+        (uint16_t)sizeof(sm64_saturn_rigid_part_t);
+
+    /* Hand the block back: this exercise is scaffolding and must not hold a
+     * block a real enemy could use. */
+    if (sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
+                                            COMPLETE_ACTOR_OWNER_RIGID) == 1U &&
+        sm64_saturn_pose_pool_resolve(&complete_actor_cold_pool, handle) == NULL)
+        mask |= RIGID_SELFTEST_RELEASED;
+    return mask;
+}
+
+/* The despawn release path, wired to the object lifecycle.
+ *
+ * r2-pose-slot-pooling.md section 8.5: `release_owner` shipped tested and
+ * uncalled, so the pool would have leaked to exhaustion inside a level the
+ * moment enemies started claiming.  The geo observer already knows exactly
+ * when an actor leaves -- a pool slot that was live and was not seen this
+ * frame -- and it already carries the incarnation that makes the key unique
+ * across recycling.  This turns that edge into a release.
+ *
+ * Releasing immediately, rather than deferring a generation, is deliberate:
+ * the pool's generation check kills every outstanding handle to the block, so
+ * a render consumer still holding last frame's handle resolves NULL and skips
+ * the actor.  The actor is despawning, so skipping it is the correct picture,
+ * and it can never be shown wearing the next tenant's pose. */
+static void complete_actor_despawn_sink(uint16_t pool_slot,
+                                        uint16_t incarnation, void *context)
+{
+    const uint32_t owner =
+        sm64_saturn_pose_owner_compose(pool_slot, incarnation);
+    uint16_t released;
+    (void)context;
+    if (sm64_saturn_complete_actor_probe.despawn_edges != UINT16_MAX)
+        sm64_saturn_complete_actor_probe.despawn_edges++;
+    released = sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
+                                                   owner);
+    if (sm64_saturn_complete_actor_probe.despawn_releases <=
+        (uint16_t)(UINT16_MAX - released))
+        sm64_saturn_complete_actor_probe.despawn_releases =
+            (uint16_t)(sm64_saturn_complete_actor_probe.despawn_releases +
+                       released);
 }
 
 static void complete_actor_pools_bring_up(void)
@@ -412,8 +597,18 @@ static void complete_actor_pools_bring_up(void)
         }
     }
 
-    if ((mask & POOL_SELFTEST_COLD_INIT) != 0U)
+    if ((mask & POOL_SELFTEST_COLD_INIT) != 0U) {
+        /* The rigid lane runs before the pool self-test drains the arena, so
+         * it is exercised against a pool that still has blocks. */
+        sm64_saturn_complete_actor_probe.rigid_selftest_mask =
+            complete_actor_rigid_selftest(&complete_actor_bank);
         mask |= complete_actor_pool_selftest();
+    }
+
+    /* Wire despawn to release.  Without this the cold pool leaks a block per
+     * enemy per level. */
+    sm64_saturn_geo_state_observer_set_despawn_sink(
+        complete_actor_despawn_sink, NULL);
 
     sm64_saturn_complete_actor_probe.pool_selftest_mask = mask;
     sm64_saturn_complete_actor_probe.pool_ready = complete_actor_pools_ready;

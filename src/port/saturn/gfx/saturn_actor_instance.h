@@ -137,6 +137,29 @@ void sm64_saturn_geo_state_observer_record_geo_decision(
 void sm64_saturn_geo_state_observer_record_authoritative_geo_decision(
     bool rendered);
 
+/* Despawn sink.
+ *
+ * `end_frame` is where an actor's disappearance becomes observable: a pool
+ * slot that was live and was not seen this frame is a despawn.  Anything that
+ * holds per-instance resources keyed on that actor -- today, its pose slot --
+ * must be told, or it leaks until the resource is exhausted.
+ *
+ * The sink is handed the two halves of the instance key rather than the key
+ * itself so this header does not have to depend on the pose pool; the
+ * composition lives in saturn_actor_pose_owner.h.  It is called exactly once
+ * per live->dead edge, *before* any later `begin_object` bumps the slot's
+ * incarnation, so the values always name the departing actor.
+ *
+ * Phase: `end_frame` runs on the master inside the render-snapshot capture,
+ * after the authoritative source tick and before the frame's poses are
+ * published.  That is the same phase a claim happens in, so a sink may
+ * release pool blocks here without racing a render consumer. */
+typedef void (*sm64_saturn_geo_despawn_fn)(uint16_t pool_slot,
+                                           uint16_t incarnation,
+                                           void *context);
+void sm64_saturn_geo_state_observer_set_despawn_sink(
+    sm64_saturn_geo_despawn_fn sink, void *context);
+
 /* Bind the authoritative observer used by the simple capture entry point. */
 void sm64_saturn_actor_instances_set_observer(
     sm64_saturn_geo_state_observer_t *observer);

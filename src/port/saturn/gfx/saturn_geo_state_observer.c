@@ -3,8 +3,29 @@
 
 #include <string.h>
 
+/* Mutation hooks for verify-actor-pose-owner-mutation.  Each must make the
+ * owner-key / leak fixture fail; see Makefile.saturn.mk. */
+#ifndef SM64_SATURN_GEO_MUTATE_NO_DESPAWN
+#define SM64_SATURN_GEO_MUTATE_NO_DESPAWN 0
+#endif
+#ifndef SM64_SATURN_GEO_MUTATE_STICKY_INCARNATION
+#define SM64_SATURN_GEO_MUTATE_STICKY_INCARNATION 0
+#endif
+#ifndef SM64_SATURN_GEO_MUTATE_LATE_DESPAWN
+#define SM64_SATURN_GEO_MUTATE_LATE_DESPAWN 0
+#endif
+
 static sm64_saturn_geo_state_observer_t *s_observer;
 static sm64_saturn_actor_source_observation_t *s_current;
+static sm64_saturn_geo_despawn_fn s_despawn_sink;
+static void *s_despawn_context;
+
+void sm64_saturn_geo_state_observer_set_despawn_sink(
+    sm64_saturn_geo_despawn_fn sink, void *context)
+{
+    s_despawn_sink = sink;
+    s_despawn_context = context;
+}
 
 SM64_SATURN_CART_COLD
 void sm64_saturn_geo_state_observer_init(
@@ -69,7 +90,9 @@ bool sm64_saturn_geo_state_observer_begin_object(
     incarnation = observer->incarnation[slot];
     if (!observer->live[slot]) {
         if (incarnation != 0U) observer->pool_reuse_count++;
+#if !SM64_SATURN_GEO_MUTATE_STICKY_INCARNATION
         incarnation++;
+#endif
         if (incarnation == 0U) incarnation = 1U;
         observer->incarnation[slot] = incarnation;
     }
@@ -146,7 +169,26 @@ void sm64_saturn_geo_state_observer_end_frame(
     if (observer == NULL) return;
     for (slot = 0U; slot < SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY; slot++) {
         if (!observer->seen[slot]) {
-            if (observer->live[slot]) observer->despawned_count++;
+            if (observer->live[slot]) {
+                observer->despawned_count++;
+                /* The despawn edge.  `incarnation[slot]` still names the
+                 * actor that just left -- the next `begin_object` on this
+                 * slot is what bumps it -- so a sink keyed on
+                 * (slot, incarnation) releases the departing actor's
+                 * resources and can never reach its successor's. */
+#if !SM64_SATURN_GEO_MUTATE_NO_DESPAWN
+                if (s_despawn_sink != NULL) {
+#if SM64_SATURN_GEO_MUTATE_LATE_DESPAWN
+                    s_despawn_sink(slot,
+                                   (uint16_t)(observer->incarnation[slot] + 1U),
+                                   s_despawn_context);
+#else
+                    s_despawn_sink(slot, observer->incarnation[slot],
+                                   s_despawn_context);
+#endif
+                }
+#endif
+            }
             observer->live[slot] = 0U;
         }
     }
