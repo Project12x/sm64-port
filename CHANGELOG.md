@@ -4,6 +4,32 @@
 
 ### Added
 
+- **The first non-Mario actor evaluated through the rigid-part lane — a
+  Bob-omb, at zero additional cart cost.** **Reasoning:**
+  `r2-rigid-part-evaluator.md` §8.1 named "a Bob-omb or Goomba `.s64b` bake" as
+  blocker 1 of 3 and recorded that "`mario.s64b` is the only bank in the tree".
+  **That is true of the standalone bank *files* and false of the shipped
+  package.** `bob-area1-actors-v3.s64f` (package generation 15/16) already
+  carries a validated S64B **v2** bank for `MODEL_BLACK_BOBOMB` — family
+  ordinal 7, model `0x00BC`, **13 joints, 2 animations (25 and 10 frames),
+  6,288 B** — produced by `tools/saturn/actor_variant_bank.py`, which is a
+  *generic* geo/animation/material compiler, not the Mario-specific
+  `extract_mario_actor.py`. So the first enemy bank did not have to be authored;
+  it had to be **reached**. **Consumer-facing:** the bridge now borrows the
+  resident bundle (`sm64_saturn_complete_actor_set_enemy_bundle`, called once
+  per scene by the sourceboot scene owner) and exercises the rigid lane against
+  that bank at bring-up: claim a cold block, evaluate animation 0 at frame 0 and
+  at frame *n*−1, evaluate animation 1 at frame 0, refuse an undersized block,
+  release. **13 parts is 328 B**, inside the 640 B cold class and inside the
+  20-part shared-workspace ceiling, so **no class-plan or workspace edit was
+  needed**. **Cart cost is zero** — the bank is read where it already lives
+  rather than linked a second time. **Tradeoff:** the joint table is read
+  straight out of CART because no staged slice exists for this bank; that is
+  right for a boot-time exercise and is exactly what a per-frame caller would
+  have to stage. **Not wired:** nothing per-frame, and nothing draws — the
+  generic actor closure (`dynamic_actor_closure = 0`) and a rigid draw path
+  remain blockers 2 and 3.
+
 - **`src/port/saturn/gfx/saturn_actor_rigid_pose.{h,c}` — a rigid-part pose
   evaluator, the second producer lane, so non-Mario jointed actors can
   animate.** **Reasoning:** the existing evaluator produces *skinned* vertices,

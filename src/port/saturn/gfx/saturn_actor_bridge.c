@@ -8,6 +8,7 @@
  * source animation until their source pose bank is promoted.
  */
 #include "saturn_actor_bridge.h"
+#include "saturn_actor_bundle.h"
 #include "saturn_actor_pose_owner.h"
 #include "saturn_actor_pose_pool.h"
 #include "saturn_actor_rigid_pose.h"
@@ -186,6 +187,18 @@ typedef struct sm64_saturn_complete_actor_probe {
     uint16_t rigid_part_bytes;
     uint16_t despawn_edges;
     uint16_t despawn_releases;
+    /* The first non-Mario actor bank, evaluated through the rigid lane.
+     * `enemy_bank_*` are read straight out of the bank header resolved from
+     * the resident S64F actor bundle -- no second copy is linked, so this
+     * costs zero cart bytes.  `enemy_rigid_*` are the same six checks the
+     * Mario arm runs, against a 13-joint Bob-omb hierarchy and a real
+     * two-animation stream. */
+    uint16_t enemy_bank_ready;
+    uint16_t enemy_bank_joint_count;
+    uint16_t enemy_bank_animation_count;
+    uint16_t enemy_rigid_selftest_mask;
+    uint16_t enemy_rigid_part_count;
+    uint16_t enemy_rigid_pose_bytes;
 } sm64_saturn_complete_actor_probe_t;
 sm64_saturn_complete_actor_probe_t sm64_saturn_complete_actor_probe
     __attribute__((section(".lwram_bss"), used, aligned(4)));
@@ -267,6 +280,21 @@ static void complete_actor_publish_probe(void)
     sm64_saturn_pose_owner_reserved(0xE005U, 0U)
 #define COMPLETE_ACTOR_OWNER_RIGID \
     sm64_saturn_pose_owner_reserved(0xE006U, 0U)
+
+/* The resident S64F actor bundle, handed over by the sourceboot scene owner
+ * once it has validated it.  The bundle already ships in CART for the generic
+ * actor path, so the first enemy bank costs *zero* additional cart bytes: this
+ * lane reads the copy that is already there rather than linking a second one.
+ * Set once at scene bring-up, read once on the first bank use; never per
+ * frame. */
+static const uint8_t *complete_actor_enemy_bundle
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+static uint32_t complete_actor_enemy_bundle_bytes
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+static uint16_t complete_actor_enemy_family
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+static uint16_t complete_actor_enemy_model
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
 
 #define COMPLETE_ACTOR_EXERCISE_TENANTS 2U
 #define COMPLETE_ACTOR_EXERCISE_STRIPE 32U
@@ -420,7 +448,10 @@ enum {
     RIGID_SELFTEST_PART_COUNT = 1U << 2,
     RIGID_SELFTEST_FRAMES_DIFFER = 1U << 3,
     RIGID_SELFTEST_UNDERSIZE_REFUSED = 1U << 4,
-    RIGID_SELFTEST_RELEASED = 1U << 5
+    RIGID_SELFTEST_RELEASED = 1U << 5,
+    /* Only the enemy arm asks for this: a second baked animation ID must
+     * decode as well as the first. */
+    RIGID_SELFTEST_ALT_ANIMATION = 1U << 6
 };
 
 /* Boot-time exercise of the rigid-part lane on the real SH-2: claim a cold
@@ -434,14 +465,15 @@ enum {
  * which is the input the rigid lane has to survive when enemy banks arrive. */
 SM64_SATURN_CART_COLD
 static uint16_t complete_actor_rigid_selftest(
-    const sm64_saturn_actor_bank_view_t *bank)
+    const sm64_saturn_actor_bank_view_t *bank, uint32_t owner,
+    int16_t animation_id, int16_t second_frame, int16_t alt_animation_id,
+    const sm64_saturn_actor_joint_t *staged_joints,
+    uint16_t *out_part_count, uint16_t *out_pose_bytes)
 {
     sm64_saturn_pose_handle_t handle;
     sm64_saturn_rigid_pose_t *pose;
     sm64_saturn_mtx_t *const workspace =
         (sm64_saturn_mtx_t *)(void *)complete_actor_joint_workspace;
-    const sm64_saturn_actor_joint_t *const staged_joints =
-        complete_actor_slices_staged != 0U ? complete_actor_staged_joints : NULL;
     uint16_t mask = 0U;
     uint32_t extent;
     sm64_saturn_rigid_part_t first_part;
@@ -458,7 +490,7 @@ static uint16_t complete_actor_rigid_selftest(
         return mask;
 
     handle = sm64_saturn_pose_pool_claim(&complete_actor_cold_pool,
-                                         COMPLETE_ACTOR_OWNER_RIGID, extent);
+                                         owner, extent);
     if (!sm64_saturn_pose_handle_is_valid(handle))
         return mask;
     mask |= RIGID_SELFTEST_CLAIMED;
@@ -468,7 +500,7 @@ static uint16_t complete_actor_rigid_selftest(
         return mask;
 
     if (sm64_saturn_actor_rigid_pose_evaluate(
-            bank, COMPLETE_ACTOR_FALLBACK_ANIMATION_ID, 0, staged_joints,
+            bank, animation_id, 0, staged_joints,
             workspace, pose, extent) &&
         pose->flags == SM64_SATURN_RIGID_POSE_VALID) {
         mask |= RIGID_SELFTEST_EVALUATED;
@@ -479,31 +511,38 @@ static uint16_t complete_actor_rigid_selftest(
          * part, or the lane is publishing a bind pose and calling it
          * animation. */
         if (sm64_saturn_actor_rigid_pose_evaluate(
-                bank, COMPLETE_ACTOR_FALLBACK_ANIMATION_ID, 3, staged_joints,
+                bank, animation_id, second_frame, staged_joints,
                 workspace, pose, extent) &&
             memcmp(&first_part, &pose->part[bank->bank.joint_count - 1U],
                    sizeof(first_part)) != 0)
             mask |= RIGID_SELFTEST_FRAMES_DIFFER;
+        /* Every baked animation must decode, not just the first one: an
+         * unbaked or misaliased ID must never be reachable at draw time. */
+        if (alt_animation_id >= 0 &&
+            sm64_saturn_actor_rigid_pose_evaluate(
+                bank, alt_animation_id, 0, staged_joints,
+                workspace, pose, extent) &&
+            pose->flags == SM64_SATURN_RIGID_POSE_VALID &&
+            pose->animation_id == (uint16_t)alt_animation_id)
+            mask |= RIGID_SELFTEST_ALT_ANIMATION;
     }
 
     /* A block that cannot hold the hierarchy must be refused, not
      * overrun -- this is the check that keeps a deep actor from writing past
      * its pool block into its neighbour's pose. */
     if (!sm64_saturn_actor_rigid_pose_evaluate(
-            bank, COMPLETE_ACTOR_FALLBACK_ANIMATION_ID, 0, staged_joints,
+            bank, animation_id, 0, staged_joints,
             workspace, pose, extent - 1U) &&
         pose->flags == 0U)
         mask |= RIGID_SELFTEST_UNDERSIZE_REFUSED;
 
-    sm64_saturn_complete_actor_probe.rigid_part_count = pose->part_count;
-    sm64_saturn_complete_actor_probe.rigid_pose_bytes = (uint16_t)extent;
-    sm64_saturn_complete_actor_probe.rigid_part_bytes =
-        (uint16_t)sizeof(sm64_saturn_rigid_part_t);
+    if (out_part_count != NULL) *out_part_count = pose->part_count;
+    if (out_pose_bytes != NULL) *out_pose_bytes = (uint16_t)extent;
 
     /* Hand the block back: this exercise is scaffolding and must not hold a
      * block a real enemy could use. */
     if (sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
-                                            COMPLETE_ACTOR_OWNER_RIGID) == 1U &&
+                                            owner) == 1U &&
         sm64_saturn_pose_pool_resolve(&complete_actor_cold_pool, handle) == NULL)
         mask |= RIGID_SELFTEST_RELEASED;
     return mask;
@@ -539,6 +578,78 @@ static void complete_actor_despawn_sink(uint16_t pool_slot,
         sm64_saturn_complete_actor_probe.despawn_releases =
             (uint16_t)(sm64_saturn_complete_actor_probe.despawn_releases +
                        released);
+}
+
+/* The first non-Mario actor evaluated through the rigid lane.
+ *
+ * r2-rigid-part-evaluator.md section 8.1 named "a Bob-omb or Goomba .s64b
+ * bake" as the blocker and recorded that `mario.s64b` was the only bank in
+ * the tree.  That is true of the standalone bank *files*; it is not true of
+ * the shipped package.  `bob-area1-actors-v3.s64f` already carries a
+ * validated S64B v2 bank for MODEL_BLACK_BOBOMB (family ordinal 7, model
+ * 0x00BC) -- 13 joints, two animations, 6,288 B -- baked by
+ * `tools/saturn/actor_variant_bank.py`, which is generic, not Mario-specific.
+ * So the bank did not have to be authored; it had to be *reached*.
+ *
+ * 13 parts is 16 + 13*24 = 328 B, which the 640 B cold class holds, and 13 is
+ * inside the 20-part shared-workspace ceiling, so no class-plan or workspace
+ * edit is needed for this actor.
+ *
+ * This is boot-time scaffolding, exactly like the Mario arm: it claims one
+ * cold block, evaluates, and hands the block straight back.  Nothing here
+ * runs per frame and nothing here draws. */
+SM64_SATURN_CART_COLD
+static void complete_actor_enemy_rigid_selftest(void)
+{
+    sm64_saturn_actor_bundle_view_t bundle;
+    sm64_saturn_actor_bundle_variant_t variant;
+    sm64_saturn_actor_bank_view_t bank;
+
+    if (complete_actor_enemy_bundle == NULL ||
+        complete_actor_enemy_bundle_bytes == 0U ||
+        !sm64_saturn_actor_bundle_validate(complete_actor_enemy_bundle,
+                                           complete_actor_enemy_bundle_bytes,
+                                           &bundle) ||
+        !sm64_saturn_actor_bundle_variant(&bundle, complete_actor_enemy_family,
+                                          complete_actor_enemy_model,
+                                          &variant) ||
+        /* Resolve through the real identity-bound path, not a raw offset:
+         * it rehashes the bank against the variant record and re-derives the
+         * workspace requirements, so a bundle that has drifted from its bank
+         * fails closed here rather than composing garbage. */
+        !sm64_saturn_actor_bundle_resolve(&bundle, complete_actor_enemy_family,
+                                          complete_actor_enemy_model,
+                                          variant.source_hash_words[0],
+                                          variant.source_hash_words, &bank))
+        return;
+
+    sm64_saturn_complete_actor_probe.enemy_bank_ready = 1U;
+    sm64_saturn_complete_actor_probe.enemy_bank_joint_count =
+        bank.bank.joint_count;
+    sm64_saturn_complete_actor_probe.enemy_bank_animation_count =
+        bank.bank.animation_count;
+
+    /* Animation 0 at frame 0 and at frame n-1 (INT16_MAX clamps to the last
+     * frame inside the evaluator), then animation 1 at frame 0.  No staged
+     * joint slice exists for this bank, so the joint table is read straight
+     * out of CART -- correct for a boot-time exercise, and the exact thing a
+     * per-frame caller would have to stage. */
+    sm64_saturn_complete_actor_probe.enemy_rigid_selftest_mask =
+        complete_actor_rigid_selftest(
+            &bank, COMPLETE_ACTOR_OWNER_RIGID_ENEMY, 0, INT16_MAX,
+            bank.bank.animation_count > 1U ? (int16_t)1 : (int16_t)-1, NULL,
+            &sm64_saturn_complete_actor_probe.enemy_rigid_part_count,
+            &sm64_saturn_complete_actor_probe.enemy_rigid_pose_bytes);
+}
+
+void sm64_saturn_complete_actor_set_enemy_bundle(
+    const void *bytes, uint32_t byte_count,
+    uint16_t family_ordinal, uint16_t model_id)
+{
+    complete_actor_enemy_bundle = (const uint8_t *)bytes;
+    complete_actor_enemy_bundle_bytes = byte_count;
+    complete_actor_enemy_family = family_ordinal;
+    complete_actor_enemy_model = model_id;
 }
 
 static void complete_actor_pools_bring_up(void)
@@ -601,7 +712,16 @@ static void complete_actor_pools_bring_up(void)
         /* The rigid lane runs before the pool self-test drains the arena, so
          * it is exercised against a pool that still has blocks. */
         sm64_saturn_complete_actor_probe.rigid_selftest_mask =
-            complete_actor_rigid_selftest(&complete_actor_bank);
+            complete_actor_rigid_selftest(
+                &complete_actor_bank, COMPLETE_ACTOR_OWNER_RIGID,
+                COMPLETE_ACTOR_FALLBACK_ANIMATION_ID, 3, -1,
+                complete_actor_slices_staged != 0U
+                    ? complete_actor_staged_joints : NULL,
+                &sm64_saturn_complete_actor_probe.rigid_part_count,
+                &sm64_saturn_complete_actor_probe.rigid_pose_bytes);
+        sm64_saturn_complete_actor_probe.rigid_part_bytes =
+            (uint16_t)sizeof(sm64_saturn_rigid_part_t);
+        complete_actor_enemy_rigid_selftest();
         mask |= complete_actor_pool_selftest();
     }
 
@@ -707,6 +827,15 @@ static uint8_t complete_actor_evaluate(
 #endif
 
 #if !SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+/* Feature-off keeps the symbol so the sourceboot scene owner links either
+ * way; with no pose pool there is nothing to exercise. */
+void sm64_saturn_complete_actor_set_enemy_bundle(
+    const void *bytes, uint32_t byte_count,
+    uint16_t family_ordinal, uint16_t model_id)
+{
+    (void)bytes; (void)byte_count; (void)family_ordinal; (void)model_id;
+}
+
 static uint8_t is_walking_family(int16_t animation_id)
 {
     switch (animation_id) {

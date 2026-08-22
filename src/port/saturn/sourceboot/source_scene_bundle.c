@@ -9,6 +9,9 @@
 
 #include "../runtime/saturn_scene_package.h"
 #include "../platform/saturn_cart_code.h"
+#if !defined(SM64_SATURN_SOURCE_SCENE_BUNDLE_HOST_TEST)
+#include "../gfx/saturn_actor_bridge.h"
+#endif
 
 #if !defined(SM64_SATURN_SOURCE_SCENE_BUNDLE_HOST_TEST)
 #define SOURCE_SCENE_UNCACHED \
@@ -246,6 +249,14 @@ bool sm64_saturn_source_scene_bundle_init_from(
         SM64_SATURN_SOURCE_SCENE_BUNDLE_PROBE_MAGIC;
     g_sm64_saturn_source_scene_bundle_probe.status =
         SM64_SATURN_SOURCE_SCENE_BUNDLE_READY;
+#if !defined(SM64_SATURN_SOURCE_SCENE_BUNDLE_HOST_TEST)
+    /* Lend the validated bundle to the actor bridge so the rigid-part lane
+     * can be exercised against the first non-Mario bank -- MODEL_BLACK_BOBOMB,
+     * family ordinal 7, model 0x00BC -- at bring-up.  Borrowed, not copied,
+     * and read once; nothing per-frame is wired here. */
+    sm64_saturn_complete_actor_set_enemy_bundle(bundle, bundle_bytes,
+                                                7U, 0x00BCU);
+#endif
     return true;
 }
 

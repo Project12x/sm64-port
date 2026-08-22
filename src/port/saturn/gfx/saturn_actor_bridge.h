@@ -69,4 +69,13 @@ uint8_t sm64_saturn_mario_actor_pose_from_selector(
     const sm64_saturn_mario_pose_selector_t *selector,
     sm64_saturn_mario_actor_pose_t *pose);
 
+/* Hand the resident S64F actor bundle to the bridge so the rigid-part lane
+ * can be exercised against a real non-Mario bank at bring-up.  The bundle is
+ * borrowed, never copied: the first enemy bank costs zero additional cart
+ * bytes because it already ships inside the generic actor package.  Call once
+ * per scene, before gameplay.  This does NOT wire a per-frame consumer. */
+void sm64_saturn_complete_actor_set_enemy_bundle(
+    const void *bytes, uint32_t byte_count,
+    uint16_t family_ordinal, uint16_t model_id);
+
 #endif
