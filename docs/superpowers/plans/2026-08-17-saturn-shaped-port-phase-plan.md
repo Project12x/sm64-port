@@ -43,13 +43,13 @@ Sprint 2 took cadence **3.8753 → 6.7181, +73.4%**, past A9A's 5.294 / 11.333.
 Historical T2.17 headless comparison build: `id-c0352f297034f653`. It was not
 GUI-launched, live owner-observed, or owner-accepted; it is preserved as a
 historical headless comparison/rollback baseline, and its unbounded-fence risk
-motivated W0. The current owner-accepted artifact is **W6a rebuild `id-57fb7312058b7f2e`**,
-accepted 2026-08-22 at **7.0445 FPS mean / 6.6667 1% low / 8.5172 VB** (owner
-observation: "hitting between 6 and 8 fps", visuals and audio good), ELF
-`4a287b769d94978007840ca08d2a1ae594aa1e3a287e5cad2c3574891779b66b`,
-`provenance.closure_clean: true` at `996487b9`. It supersedes W0
-candidate `id-e8720d58595d9a62` (6.6923 / 6.0), which remains the
-rollback point.
+motivated W0. The current owner-accepted artifact is **W2 candidate `id-28b8cb0e531f8476`**,
+accepted 2026-08-22 at **7.3109 FPS mean / 7.5000 median** (tick 30; 7.2803 / 7.5000 at
+tick 150), `closure_clean: true` at `da071fb7`. Owner: *"it looks and runs
+fine. getting closer and closer to a playable frame rate and frame timing."* Its
+tick-30 1% low of 6.0000 is a **documented, understood artifact** — see STATE.md; never
+quote it without the tick-150 and tick-210 columns. It supersedes W6a rebuild
+`id-57fb7312058b7f2e` (7.0445 / 6.6667), which becomes the rollback point.
 
 > **~~STRUCTURAL CHANGE, W6a: the master is no longer saturated.~~ WITHDRAWN by W7
 > (2026-08-21, same day). The 5.22% was a short-window measurement artifact, and I

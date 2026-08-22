@@ -4,92 +4,52 @@
 **Active branch:** `saturn/recovery` (worktree `.worktrees/saturn-recovery`)
 **Active plan:**
 [`docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md`](docs/superpowers/plans/2026-08-14-saturn-shaped-port-program.md)
-**Status:** **W6a COMPLETE and owner-accepted 2026-08-22** on
-`id-57fb7312058b7f2e` (manifest
-`2d66f95fd871abc3b2a8e74e2d39559cca50ff39cec9aa85fbb52d4ce51b2c57`, ELF
-`4a287b769d94978007840ca08d2a1ae594aa1e3a287e5cad2c3574891779b66b`, ISO
-`fc007092b2429ff9844dd34fb1b4874c4ddac97b6bccdb1250a62a38b1d68f6e`,
-`provenance.closure_clean: true` at `git_revision 996487b9`). Preserved at
-`releases/2026-08-22_w6a-rebuild/id-57fb7312058b7f2e/`.
-W0 was owner-accepted 2026-08-17 on `id-e8720d58595d9a62`; Sprint 1 (R0+R1)
-historically 2026-08-15.
+**Status:** **W2 COMPLETE and owner-accepted 2026-08-22** on
+`id-28b8cb0e531f8476` (manifest `8c31fefa...cfb4fe`, ELF
+`5f60ba87...c91c63`, ISO `4c14dd0e...8ca3d1`, `provenance.closure_clean: true`
+at `git_revision da071fb7`). Staged at `releases/2026-08-22_w2-product/`.
+Owner: **"it looks and runs fine. getting closer and closer to a playable frame
+rate and frame timing."** W6a was accepted 2026-08-22 on `id-57fb7312058b7f2e`;
+W0 on `id-e8720d58595d9a62`; Sprint 1 (R0+R1) historically 2026-08-15.
 
-**Current accepted cadence: 7.0445 FPS mean / 6.6667 median / 6.6667 1% low /
-8.5172 VBlanks per frame**, caches off, 30 presentation events, 29 intervals,
-`summarize_cadence`, identity probe MATCH. Against the previous accepted
-`id-e8720d58595d9a62` (6.6923 / 6.0 / 8.9655): **+5.26% mean, +11.1% on the
-1% low.** **Owner observation 2026-08-22: "hitting between 6 and 8 fps", visuals
-and audio good** -- which corroborates the measured distribution directly.
+**Current accepted cadence**, caches off, `summarize_cadence`, 30 presentation
+events, identity MATCH, **bit-deterministic across five repetitions per arm**:
 
-**What earned it (W6a, 2026-08-21):** the soft-float implementation for
-`__addsf3`/`__subsf3`/`__mulsf3`/`__divsf3` was replaced with LLVM `compiler-rt`,
-**bit-identically** -- `verify-softfp-bitexact` **43,333,704,485 checks, 0
-failures**. Soft-float fell from 33.55% to 24.87% of master cycles.
-Source: `docs/saturn/evidence/reports/w6a-softfloat-implementation.md` and
-`w6a-rebuild-sealed.md`.
+| route tick | mean | median | 1% low |
+|---|---:|---:|---:|
+| 30 | **7.3109** | 7.5000 | 6.0000 |
+| 150 | **7.2803** | 7.5000 | 6.6667 |
 
-> **Retracted: "the master is no longer saturated."** W6a reported master idle
-> 0.000000 -> 5.22% and this file recorded a ~50% absorption of further arithmetic
-> wins. **W7 withdrew it** (`w7-master-wait-attribution.md`): 5.22% was a
-> **short-window artifact** -- 2.1450% over a 4.83-frame window at the same tick, and
-> **0.000000 at ticks 30 and 210** and under `--sh2-cache`. The wait is **one event,
-> not a per-frame cost**, and W6a's residual argument paired a tick-30 cadence with a
-> tick-150 idle share. **Arithmetic work is worth 80-100% of face value, not 50%.**
-> Standing protocol: **>=4-frame windows, and local cadence at the same route tick as
-> the profile.**
+Against the previous accepted `id-57fb7312058b7f2e` (7.0445 / 6.6667 /
+6.6667 at tick 30): **+3.78% to +4.60% mean, +12.5% median.**
 
-**W2 candidate, not yet owner-accepted: `id-28b8cb0e531f8476`** (ELF
-`5f60ba879918893bfec7eea8fbd10572f42330a8f90b73859e7e403b61c91c63`, ISO
-`4c14dd0efbda96a18c60c0dc2c5e915e98f8345a759bb7cdfb6174fc438ca3d1`, manifest
-`8c31fefa47afa63678ea90e32dcbee796617b602587f597e0806e63f34cfb4fe`,
-`provenance.closure_clean: true` at `git_revision da071fb7`). Preserved at
-`releases/2026-08-22_w2-product/id-28b8cb0e531f8476/`.
-**7.3109 mean / 7.5000 median / 6.0000 1% low / 8.2069 VB per frame at route
-tick 30** (+3.78% mean, +12.50% median, **-10.00% on the 1% low** -- two
-10-VBlank intervals appear where the baseline had none) and **7.2803 / 7.5000
-/ 6.6667 / 8.2414 at route tick 150** (+4.60% mean, +12.50% median, 1% low
-unchanged, against a baseline re-measured at that tick as 6.9600 / 8.6207).
-Earned by replacing `sqrtf`'s four soft-float Newton iterations with a 24-step
-integer digit-by-digit square root. Source:
+> **The tick-30 1% low reads 6.0000, down from 6.6667 — documented as an accepted,
+> understood artifact. Never quote it alone.** At n=29 that statistic resolves to
+> `rates[0]` — the single slowest interval on a 60/k grid — so **-10.0% is the
+> smallest movement it can express**, and one 10-VBlank frame moves it as much as two.
+> It is **route-locked to five frames in 219** and its sign is
+> **window-position dependent**: worse at 4 of 13 swept starts, unchanged at 3,
+> **better at 6 — including +22.2% at tick 210** (5.4545 -> 6.6667). Route-wide the
+> accepted build is the steadier one: longest frame **166.7 ms vs 183.3 ms**, **5
+> frames >=10 VB against 14**, it never produces the predecessor's 5.4545, and it
+> finishes **83 VB (1.38 s) ahead**. **Cause measured:** the long frames are the
+> master *waiting*, not working — baseline idle `0.000000` against 0.2108
+> VB/frame, matching the cadence excess of 0.2069 to 1.9% — on the presentation
+> loop's `SM64_SATURN_FRAME_SIM_VBLANK_DIVISOR == 2`, which grants simulation
+> credit per *field pair* and drops unspent credit, so missing a boundary costs two
+> fields. **That lives in the scheduler, not in W2's change.** Source:
+> `w2-onepercent-low-recheck.md`.
+
+**What earned it (W2, 2026-08-22):** `sqrtf` — the port's own compat shim — was
+**8.462% of master cycles**, running four Newton iterations in float (1,559
+cycles/call, 209 calls/frame). Replaced with a 24-step restoring integer root, all
+32-bit, every shift a compile-time constant because the SH-2 has no barrel shifter.
+**Exact equality with the correctly-rounded IEEE-754 root, 0 ulp, verified over all
+4,294,967,296 bit patterns.** Downstream movement **zero** — Mario's action, face
+angle, position and velocity identical on all 196 complete route ticks. Source:
 `docs/saturn/evidence/reports/w2-softfloat-call-sites.md`.
-**The tick-30 1% low regression must be re-measured before promotion.**
 
-> **Soft-float re-derived, W2 2026-08-22.** The exact master census over one
-> contiguous **4.83-frame** window at `--warmup-ticks 150`, normalised by that
-> tick's own cadence (8.6207, not W6a's tick-30 8.5172), puts soft-float at
-> **26.580% of master / 1,025,249 cycles per frame / 2.291 VB per frame** --
-> so this file's **2.0718 VB/frame is confirmed in magnitude and corrected
-> upward by 10.6%**, and W6a's 24.87% differs mainly by the idle in its
-> denominator (26.24% vs 27.16% of *non-idle* master cycles). The ranking is
-> by **call site** for the first time, from exact PR-at-entry attribution:
-> **`_sqrtf` 8.46% of master (0.729 VB/frame), then a long flat tail** --
-> `_saturn_geo_enter_object` 2.707%, `_detect_object_hitbox_overlap` 2.121%,
-> `_dist_between_objects` 1.578%, `_calculate_vertex_xyz` 1.410%, everything
-> below under 1%, across **962 distinct functions** holding 3,482 static
-> soft-float references. **The Saturn render path is already essentially
-> float-free** (132 of those 3,482); the remainder is SM64 simulation, which
-> is W6b, not W2.
-
-> **`_sm64_saturn_ztreme_frustum_aabb` is NOT a soft-float call site.**
-> Checked in the linked ELF: it references only `_support_radius_q16` and
-> `_scaled_limit` and contains **zero floating point** -- it is already fully
-> fixed-point, so W2 cannot apply to it. Its plan figure of ~0.649 VB/frame
-> **does not survive re-derivation**: the symbol is bursty, its per-call cost
-> is flat at **981.5 cycles** across three windows spanning 2.7x in length
-> while its per-frame number moves by **1.8x**, and the honest figure is a
-> range (0.466-0.714 VB/frame depending on whether `_support_radius_q16` is
-> counted and on the assumed burst rate). **Quote cycles per call and calls
-> per frame for this symbol, never a three-decimal per-frame number.**
-> `_scaled_limit` records **0 cycles**, so T2.10 item 3's cross-multiplied
-> fast path is taken on 100% of calls and its divided fallback is dead on this
-> route.
-
-**The rebuild reproduced W6a's cadence to the full IEEE double** (7.044534412955466
-both times) from committed source in 487 s at `-j12`, one attempt. The identity
-tag differs from W6a's `id-586944bb637a920f` only because the two ELFs differ in
-**exactly 64 bytes**, all inside the identity blob: W6a had sealed an intermediate
-`Makefile.saturn.mk` edit existing in no commit, which is what `closure_clean: false`
-recorded. The linked code is byte-identical.
+**Journey: 3.8753 -> 7.3109 FPS, +88.7%.**
 
 **Historical T2.17 measured cadence: 6.7181 FPS / 8.9310 VBlanks per frame** on
 `id-c0352f297034f653`, against A9A's 5.294 FPS / 11.333 VB. The current
