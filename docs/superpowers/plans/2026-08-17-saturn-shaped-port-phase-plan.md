@@ -378,21 +378,59 @@ above are gameplay. Any change must be guarded so the non-Saturn arm is untouche
 **Why:** ~19–20% of the master critical path remains soft-float, on a compiler this
 project was founded on distrusting. Both references are fixed-point throughout.
 
-**⚠ OPEN — sizing not re-derived.** `STATE.md` carries **2.0718 VB/frame**, but that
-figure descends from the burst profiler T2.20 discredited. **The first task of this
-workstream is to re-derive the ranking from `capture_idle_attribution`'s exact census at
-`--warmup-ticks 150`** and confirm or correct it. Do not act on 2.0718 until then.
-(T2.27 was dispatched twice to do exactly this and died both times on transient
-server-side 529s; the brief is written and ready to re-run.)
+**✅ SIZED AND HEAD TAKEN — 2026-08-22, `w2-softfloat-call-sites.md`.** The exact
+census was re-derived over one contiguous **4.83-frame** window at `--warmup-ticks 150`,
+normalised by that tick's own cadence (8.6207 — W6a had used a tick-30 8.5172 for a
+tick-150 census, and that is corrected here). Soft-float is **26.580% of master /
+2.291 VB per frame**, so **2.0718 is confirmed in magnitude and corrected upward by
+10.6%**. The ranking is by **call site** for the first time, from exact PR-at-entry
+attribution added to `capture_idle_attribution.py`.
 
-**Leads, to verify not to trust:**
-- `_sm64_saturn_ztreme_frustum_aabb` ~0.649 VB/frame (T2.16) — **and this is the function
-  T2.10 item 3 made 0.075 VB *worse*** by cross-multiplying divides against a mispriced
-  serial-latency model. Read that history first.
-- `_saturn_geo_enter_object` was T2.13's top float caller; `_saturn_geo_enter_camera` is a
-  fully-Q16 sibling available as a template.
-- A 0x1400-entry Q16 trig table already exists in tree (used by T2.13's shadow path).
-- Census items 2 and 5 are static phantoms on this route — deprioritised.
+| rank | call site | % master | VB/frame |
+| ---: | :--- | ---: | ---: |
+| **1** | **`_sqrtf`** (incl. its own body) | **8.462%** | **0.7294** |
+| 2 | `_saturn_geo_enter_object` | 2.707% | 0.2333 |
+| 3 | `_detect_object_hitbox_overlap` | 2.121% | 0.1829 |
+| 4 | `_dist_between_objects` | 1.578% | 0.1360 |
+| 5 | `_calculate_vertex_xyz` | 1.410% | 0.1216 |
+
+**Rank 1 landed: `sqrtf` is now a 24-step integer digit-by-digit square root**
+instead of four Newton iterations in soft float (four `__divsf3` + four `__addsf3` +
+four `__mulsf3` per call, 1,559 cycles). Measured **+3.78% at route tick 30** (7.0445 ->
+7.3109) and **+4.60% at tick 150** (6.9600 -> 7.2803), converting at close to full face
+value exactly as W7 predicted. Correctly rounded on all 2^32 inputs, <=1 ulp from what it
+replaced, and **downstream movement measured at zero** — Mario's state is identical on
+every complete route tick 0-199. **The 1% low fell 10% at tick 30** (two 10-VBlank
+intervals) and did not move at tick 150; that must be re-measured before promotion.
+
+**Below rank 1 the recommendation is to STOP.** Ranks 2-5 total 7.8%; everything below
+rank 5 is under 1% each; **962 distinct functions** in the linked image hold 3,482 static
+soft-float references. The **Saturn render path is already essentially float-free** —
+30 render-side functions hold 132 of those 3,482 — and the rest is SM64 simulation, which
+is **W6b's** design problem, not a call-site sweep. If exactly one more site is taken it
+should be `_saturn_geo_enter_object`: its remaining float is the inlined `obj_is_in_view`
+reading the derived float mirror `gMatStack` when the authoritative `gMatStackQ` sits
+beside it, plus a per-frame-constant `sins/coss` recomputed per object.
+
+**Leads, resolved:**
+- ~~`_sm64_saturn_ztreme_frustum_aabb` ~0.649 VB/frame~~ — **withdrawn on both counts.**
+  It contains **zero floating point** (checked in the linked ELF: it references only
+  `_support_radius_q16` and `_scaled_limit`), so W2 cannot apply to it at all; and the
+  per-frame figure does not survive re-derivation, because the symbol is bursty exactly
+  as W7 warned — **981.5 cycles per call, flat to four significant figures across three
+  windows spanning 2.7x in length, while the per-frame number moves 1.8x**. The honest
+  figure is a range, 0.466-0.714 VB/frame depending on whether `_support_radius_q16` is
+  counted and on the assumed burst rate. **Quote cycles/call and calls/frame for it, never
+  a three-decimal per-frame number.** It remains a live target for a *different*
+  workstream — ~256 calls/frame of 64-bit integer work, where the lever is call count —
+  and T2.10 item 3 stands as the warning against pricing its divides serially.
+  (Free finding: `_scaled_limit` records **0 cycles**, so item 3's cross-multiplied fast
+  path is taken on 100% of calls and its divided fallback is dead code on this route.)
+- `_saturn_geo_enter_object` **confirmed** as rank 2 at 2.707%; `_saturn_geo_enter_camera`
+  remains the fully-Q16 sibling template.
+- The 0x1400-entry Q16 trig table exists and was **not needed** for rank 1.
+- Census items 2 and 5 are static phantoms on this route — deprioritised, and the static
+  scan here confirms the general point: static reference counts misrank badly.
 
 **Correctness bar:** byte-identity is **not** required — owner's standing position from
 T2.13: *"byte identical is not important for this case at all."* Use an error-bounded

@@ -1,0 +1,8 @@
+sqrtf oracle: shipped integer sqrtf vs correctly rounded IEEE-754,
+              and vs the pre-W2 four-iteration float Newton body
+swept 4294967296 bit patterns at stride 1
+correctly rounded: 2139095040 exact, worst deviation 0 ulp (input 0x00000000)
+divergence from the pre-W2 float body: 535863898 results moved
+  normal inputs:    532785701 moved, worst 1 ulp (input 0x00800003), worst relative 1.192093e-07 (input 0x00800003)
+  including subnormals: worst relative 9.926344e-01 (input 0x00000001) -- the pre-W2 seed did not converge below the normal range
+RESULT: shipped sqrtf is the correctly rounded IEEE-754 square root on every input, and every named blunder case holds.

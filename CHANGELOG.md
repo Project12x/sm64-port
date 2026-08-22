@@ -25,6 +25,39 @@
 
 ### Changed
 
+- **W2 measurement: the soft-float census is re-derived by call site, and the
+  phase plan's headline lead is withdrawn on both counts.** **Reasoning:** the
+  plan's W2 section carried `STATE.md`'s 2.0718 VB/frame, which descends from
+  the burst profiler T2.20 discredited, and named
+  `_sm64_saturn_ztreme_frustum_aabb` at ~0.649 VB/frame as the top lead. One
+  contiguous **4.83-frame** window of the exact master census at
+  `--warmup-ticks 150`, normalised by that tick's own cadence (8.6207 -- W6a
+  had used a tick-30 8.5172 for a tick-150 census), measures soft-float at
+  **26.580% of master / 1,025,249 cycles per frame / 2.291 VB per frame**, so
+  the old figure is confirmed in magnitude and corrected upward by 10.6%.
+  **Root cause of the withdrawn lead, and it is two separate faults:** first,
+  `_sm64_saturn_ztreme_frustum_aabb` contains **no floating point at all** --
+  verified in the linked ELF, where it references only `_support_radius_q16`
+  and `_scaled_limit` -- so a fixed-point workstream cannot apply to it;
+  second, its per-frame figure is an artifact of window length, because the
+  symbol runs in one burst of ~256 calls per frame and its per-call cost is
+  flat at **981.5 cycles** across three windows spanning 2.7x in length while
+  the per-frame number moves by **1.8x**. This is precisely the normalisation
+  defect W7 identified. **Consumer-facing impact: none** -- diagnosis only.
+  **Guidance changed:** quote cycles-per-call and calls-per-frame for that
+  symbol, never a three-decimal per-frame number, and treat it as a call-count
+  target for a different workstream. A free finding from the same window:
+  `_scaled_limit` records **0 cycles**, so T2.10 item 3's cross-multiplied
+  fast path is taken on 100% of calls and its divided fallback is dead code on
+  this route. **The census also says where to stop:** below `_sqrtf` (8.462%
+  of master) the distribution is a long flat tail -- rank 2 is 2.707%,
+  everything below rank 5 is under 1%, and **962 distinct functions** in the
+  linked image hold 3,482 static soft-float references. The Saturn render path
+  is already essentially float-free (132 of those 3,482); the remainder is
+  SM64 simulation, which is W6b's design problem rather than a call-site
+  sweep. Evidence:
+  `docs/saturn/evidence/reports/w2-softfloat-call-sites.md`.
+
 - **W2: `sqrtf` is now an integer digit-by-digit square root instead of four
   Newton iterations in soft float.** **Reasoning:** the re-derived exact
   master census (`capture_idle_attribution --warmup-ticks 150`, one

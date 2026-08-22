@@ -38,6 +38,52 @@ Source: `docs/saturn/evidence/reports/w6a-softfloat-implementation.md` and
 > Standing protocol: **>=4-frame windows, and local cadence at the same route tick as
 > the profile.**
 
+**W2 candidate, not yet owner-accepted: `id-28b8cb0e531f8476`** (ELF
+`5f60ba879918893bfec7eea8fbd10572f42330a8f90b73859e7e403b61c91c63`, ISO
+`4c14dd0efbda96a18c60c0dc2c5e915e98f8345a759bb7cdfb6174fc438ca3d1`, manifest
+`8c31fefa47afa63678ea90e32dcbee796617b602587f597e0806e63f34cfb4fe`,
+`provenance.closure_clean: true` at `git_revision da071fb7`). Preserved at
+`releases/2026-08-22_w2-product/id-28b8cb0e531f8476/`.
+**7.3109 mean / 7.5000 median / 6.0000 1% low / 8.2069 VB per frame at route
+tick 30** (+3.78% mean, +12.50% median, **-10.00% on the 1% low** -- two
+10-VBlank intervals appear where the baseline had none) and **7.2803 / 7.5000
+/ 6.6667 / 8.2414 at route tick 150** (+4.60% mean, +12.50% median, 1% low
+unchanged, against a baseline re-measured at that tick as 6.9600 / 8.6207).
+Earned by replacing `sqrtf`'s four soft-float Newton iterations with a 24-step
+integer digit-by-digit square root. Source:
+`docs/saturn/evidence/reports/w2-softfloat-call-sites.md`.
+**The tick-30 1% low regression must be re-measured before promotion.**
+
+> **Soft-float re-derived, W2 2026-08-22.** The exact master census over one
+> contiguous **4.83-frame** window at `--warmup-ticks 150`, normalised by that
+> tick's own cadence (8.6207, not W6a's tick-30 8.5172), puts soft-float at
+> **26.580% of master / 1,025,249 cycles per frame / 2.291 VB per frame** --
+> so this file's **2.0718 VB/frame is confirmed in magnitude and corrected
+> upward by 10.6%**, and W6a's 24.87% differs mainly by the idle in its
+> denominator (26.24% vs 27.16% of *non-idle* master cycles). The ranking is
+> by **call site** for the first time, from exact PR-at-entry attribution:
+> **`_sqrtf` 8.46% of master (0.729 VB/frame), then a long flat tail** --
+> `_saturn_geo_enter_object` 2.707%, `_detect_object_hitbox_overlap` 2.121%,
+> `_dist_between_objects` 1.578%, `_calculate_vertex_xyz` 1.410%, everything
+> below under 1%, across **962 distinct functions** holding 3,482 static
+> soft-float references. **The Saturn render path is already essentially
+> float-free** (132 of those 3,482); the remainder is SM64 simulation, which
+> is W6b, not W2.
+
+> **`_sm64_saturn_ztreme_frustum_aabb` is NOT a soft-float call site.**
+> Checked in the linked ELF: it references only `_support_radius_q16` and
+> `_scaled_limit` and contains **zero floating point** -- it is already fully
+> fixed-point, so W2 cannot apply to it. Its plan figure of ~0.649 VB/frame
+> **does not survive re-derivation**: the symbol is bursty, its per-call cost
+> is flat at **981.5 cycles** across three windows spanning 2.7x in length
+> while its per-frame number moves by **1.8x**, and the honest figure is a
+> range (0.466-0.714 VB/frame depending on whether `_support_radius_q16` is
+> counted and on the assumed burst rate). **Quote cycles per call and calls
+> per frame for this symbol, never a three-decimal per-frame number.**
+> `_scaled_limit` records **0 cycles**, so T2.10 item 3's cross-multiplied
+> fast path is taken on 100% of calls and its divided fallback is dead on this
+> route.
+
 **The rebuild reproduced W6a's cadence to the full IEEE double** (7.044534412955466
 both times) from committed source in 487 s at `-j12`, one attempt. The identity
 tag differs from W6a's `id-586944bb637a920f` only because the two ELFs differ in
@@ -356,8 +402,7 @@ partial/duplicate plotting, or permanent freezing. I accept this W0
 candidate.` W0 is therefore `complete; owner-accepted`. The busy branch
 remains `host-proven; target-compiled; live occurrence unproven`; the known
 pre-W0 presentation-boundary literal drift remains a retained limitation.
-**(2) Continue the soft-float purge on the master** -- 2.0718 VB/frame, now
-correctly priced, master-local, no constraint tax. **(3) VDP1 command
+**(2) ~~Continue the soft-float purge on the master~~ -- HEAD TAKEN by W2, and W2 recommends stopping there.** The re-derived exact census (2.291 VB/frame, not 2.0718) ranks it by call site: `_sqrtf` alone was 0.729 VB/frame and is now converted; below it the distribution is a long flat tail across 962 functions, almost all of it SM64 simulation rather than the Saturn render path, which is W6b's design problem. The one render-path item still worth taking on its own is `_saturn_geo_enter_object` (0.233 VB/frame). `docs/saturn/evidence/reports/w2-softfloat-call-sites.md`. **(3) VDP1 command
 reduction -- promoted, but strictly after (1)**; before (1) it is worth zero
 frames. **(4) ~~Widen the slave's 4-job render graph~~ -- CLOSED by T2.25 as
 stated.** Window width is not the binding constraint and has not been since
