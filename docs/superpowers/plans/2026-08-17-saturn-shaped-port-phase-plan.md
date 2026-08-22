@@ -186,6 +186,73 @@ subsystems; recreated ones need behavioural acceptance instead. See W6b as amend
 
 ---
 
+## 2b. Functional correctness beats numerical correctness — and we are porting *down*
+
+**Owner ruling (2026-08-22):** *"Numerical correctness isnt as important as functional
+correctness as a game. remember, this is a saturn port, and it cant be direct as we're
+basically reaching for a target a generation below instead of above the original
+target."*
+
+**The direction of travel is the whole point.** Most ports move *up* — a more capable
+target, where fidelity is free and the question is what to add. This one moves **down
+a generation**. The N64 is the stronger machine. So **every subsystem here is a
+degradation decision**, and the question is never "how close can we get to the
+original" — it is **"which degradation is invisible in play."**
+
+**The acceptance bar is: does it play right.** Numerical exactness is *one cheap route*
+to that guarantee. It is not the goal, and it is not the standard.
+
+**Where exactness is free, take it — as a convenience, not a principle.** W6a replaced
+the soft-float library with an exactly-equivalent one and got 43.3 billion checks at 0
+failures; W2 replaced `sqrtf` with a correctly-rounded integer root, 0 ulp over all
+4,294,967,296 bit patterns. Both were *cheap* to verify precisely because equivalence
+was available, which removed an oracle-design problem entirely. **That is why those
+workstreams ranked early — low risk and decidable — not because bit-exactness is the
+bar.** Do not read those results as a precedent that future work must match.
+
+**Where exactness costs cycles or scope, spend the fidelity.** Both reference ports
+did, and shipped playable: `malucard/sm64-psx` quantises every surface normal to `s8`
+at scale 120 (~0.83% error, with slope thresholds quantised alongside), drops
+round-to-nearest in the `atan2` index so angles can land one table entry off, leaves
+the rounding correction in `vec3q_to_vec3s` commented out, and truncates positions to
+whole world units in distance and look-at maths. None of that is defensible as
+numerics. All of it is fine as a game.
+
+**The failure modes that actually matter are functional, and they are specific:**
+
+- geometry that **swims, jitters or pops** between frames — a *fixed* offset is
+  invisible, an *accumulating* one is a defect at any starting size, because
+  simulation state feeds itself forward;
+- a threshold that **never fires** after quantisation — the reference's stuck Bowser
+  state transition and its poles that never go down are the shape of this;
+- a jump that **no longer clears a gap**, or a floor that stops holding Mario;
+- **frame-time spikes** — the 1% low, which is what makes a frame rate feel steady
+  rather than merely average well.
+
+**Not a ulp.**
+
+**Corollary for verification: a played route outranks an exhaustive numerical proof.**
+Where the two disagree, the played route wins. Divergence harnesses are
+**change-detectors that tell the owner where to look**, not gates that decide
+acceptance. This is the same reasoning as §2a's port/recreate split, one level up: 2a
+says *which* criterion applies per subsystem; 2b says what the criterion is ultimately
+*for*.
+
+**Consequences already in force:**
+
+- **W6b leans behavioural.** Its scope is the data Mario reads, and each interface
+  states its quantisation against a **named observable** — slope classification
+  threshold, wall push distance, ledge-grab reach, object interaction radius — not
+  against a tolerance.
+- **W2's pending promotion decision is functional, not statistical.** It is held on a
+  1% low that moved 6.6667 -> 6.0 at one route position, because that is a *stutter*
+  question. Its exact-root proof does not answer it and was never going to.
+- **W4's degradation-as-design policy is the same idea applied to visuals.** The shadow
+  sprite is not a worse shadow; it is the Saturn answer. Extend that framing to LOD
+  tiers, CLUT depth, draw distance and per-level budgets.
+
+---
+
 ## 3. Sequencing against the charter
 
 | Charter phase | Relationship to this plan |
