@@ -98,6 +98,10 @@
   demands exact equality with the correctly rounded reference, and the second
   requires five mutations to fail it, including a **1-ulp** perturbation --
   the tightest mutation that can exist against an exact-equality bound.
+  `verify-softfp-bitexact` was run to completion anyway and is unchanged at
+  **43,333,704,485 checks, 0 failures**; `verify-memory-map` is `RESULT OK`
+  with `hwram_remaining = 0x5518` against a required `0x1F00`, 128 bytes below
+  the baseline, which is the growth of `_sqrtf` itself (0x80 -> 0x114).
 
 - **W6a: `__addsf3`, `__subsf3`, `__mulsf3` and `__divsf3` now come from LLVM
   `compiler-rt` instead of GCC `soft-fp`, bit-identically, for +5.26% FPS.**

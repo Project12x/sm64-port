@@ -465,7 +465,7 @@ Caches-on was not measured. One basis only; the two are never mixed.
 | `verify-ir-transform` | PASS |
 | `verify-hot-promotion` | PASS |
 | `verify-saturn-object-pool-probe-contract` | PASS |
-| `verify-softfp-bitexact` | see §8.1 |
+| `verify-softfp-bitexact` (full, 43.3 G checks) | **PASS, 0 failures** — see §8.1 |
 
 `___end` moved by 0x80 and `hwram_remaining` fell from `0x5598` to `0x5518`
 — 128 bytes, the growth of `_sqrtf` — against a required floor of `0x1F00`.
@@ -481,10 +481,22 @@ Not run, known pre-existing failures per the standing list:
 This task changes no soft-float source: `third_party/gcc-soft-fp`,
 `third_party/llvm-compiler-rt` and both `SOFTFP_FAST_FUNCS` lists are
 untouched, and the linked `___addsf3`/`___mulsf3`/`___divsf3` are identical in
-size to the baseline's. The gate was started at shipped defaults and its
-result is appended to `w2-softfp-bitexact.txt` when it completes; W6a's
-43,333,704,485-check / 0-failure run at the same source state stands as the
-last recorded result for these routines.
+size to the baseline's. The gate was nonetheless run to completion at shipped
+defaults (`SOFTFP_TEST_PAIRS=12000000`, `SOFTFP_TEST_STRIDE=1`) rather than
+argued away. Full log: `w2-softfp-bitexact.txt`.
+
+```
+total bit-exact checks:            43333704485
+of which NaN-result cases:         97742
+of which out-of-range int casts:   6287831620
+failures:                          0
+
+RESULT: soft-fp matches the host IEEE-754 reference bit for bit across every
+        input class.
+```
+
+**43,333,704,485 checks, 0 failures** — the same volume W6a obtained, unchanged
+by this task.
 
 ---
 
@@ -536,6 +548,7 @@ PowerShell. One attempt after the first was corrected — the wrapper does
 | `w2-cadence-tick150-28b8cb0e.json` | candidate cadence at tick 150 |
 | `w2-route-base.json`, `w2-route-new.json` | route timelines, ticks 0–200, both builds — the downstream measurement |
 | `w2-sqrtf-fixed-exhaustive.txt` | the 2^32-input gate run |
+| `w2-softfp-bitexact.txt` | the 43.3 G-check soft-float gate run |
 
 Reproduce (PowerShell for Make; `$env:YAUL_INSTALL_ROOT` must be the Windows
 spelling; the make itself must run under MSYS `sh` **after sourcing
@@ -572,9 +585,10 @@ python tools/saturn/capture_idle_attribution.py --ymir "$YMIR" --ipl "$IPL" \
    level, and covers 200 route ticks. A longer route could still diverge; the
    1-ulp bound makes that possible in principle and no argument here rules it
    out.
-5. **`verify-softfp-bitexact` had not completed when this was written**
-   (§8.1). Nothing in this change touches its scope, and that is an argument,
-   not a result.
+5. **`verify-softfp-bitexact` passing is expected, not informative here.**
+   Nothing in this change is inside its scope; it is reported because it is
+   mandated, and because "the change is out of scope" is an argument rather
+   than a result.
 6. **The caller attribution reaches the immediate caller only.** A routine
    that tail-calls — `__subsf3` onto `__addsf3` — is billed to whichever site
    PR named, which for a tail call is the original application caller. That

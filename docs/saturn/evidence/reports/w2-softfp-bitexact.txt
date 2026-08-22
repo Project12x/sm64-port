@@ -1,0 +1,15 @@
+===== verify-softfp-bitexact =====
+"/d/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/saturn-recovery/build/saturn/host-tests/softfp/softfp-bitexact-test.exe" 12000000 1
+self-check: reference arm (7fc00001) and soft-fp arm (7fc00000) are distinct implementations
+special values: 40 x 40 single, 35 x 35 double cross products done (31525 checks so far)
+exhaustive 32-bit sweeps: 4294967296 inputs x 4 float->int + 4 int->float + negsf2 + extendsfdf2 (stride 1, 42949704485 checks total)
+single-precision random pairs: 12000000 (11 routines each)
+double-precision random pairs: 12000000 (11 routines each)
+64-bit random sweeps: 12000000 inputs (truncdfsf2, negdf2, 4 double->int, 4 int64->float)
+
+total bit-exact checks:            43333704485
+of which NaN-result cases:         97742
+of which out-of-range int casts:   6287831620
+failures:                          0
+
+RESULT: soft-fp matches the host IEEE-754 reference bit for bit across every input class.
