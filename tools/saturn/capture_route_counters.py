@@ -32,6 +32,7 @@ in ``sm64_saturn_fast3d_frontend_submit``, which never runs when
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import hashlib
 import json
 import statistics
@@ -140,7 +141,7 @@ def rates(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True)
+    ymir_binary.add_ymir_argument(parser)
     parser.add_argument("--ipl", type=Path, required=True)
     parser.add_argument("--game", type=Path, required=True, help="exact matching CUE")
     parser.add_argument("--elf", type=Path, required=True, help="exact matching ELF")

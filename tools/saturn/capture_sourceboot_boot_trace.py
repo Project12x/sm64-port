@@ -9,6 +9,7 @@ ELF and emits both its decoded last boundary and the raw 32-bit words.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import hashlib
 import json
 import re
@@ -446,7 +447,7 @@ def run_bios_handoff(client: YmirClient, run_for: Any, checkpoint: Any) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True, help="ymir-headless executable")
+    ymir_binary.add_ymir_argument(parser, "ymir-headless executable")
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS image")
     parser.add_argument("--game", type=Path, required=True, help="trace CUE image")
     parser.add_argument("--elf", type=Path, required=True, help="matching sourceboot ELF")

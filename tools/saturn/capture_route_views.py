@@ -9,6 +9,7 @@ that selected it rather than an inferred emulator-frame depth.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import base64
 import hashlib
 import json
@@ -276,7 +277,7 @@ def screenshot_identity(result: dict[str, Any], path: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True)
+    ymir_binary.add_ymir_argument(parser)
     parser.add_argument("--ipl", type=Path, required=True)
     parser.add_argument("--game", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)

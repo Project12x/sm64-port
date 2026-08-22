@@ -10,6 +10,7 @@ differential test can consume the capture without trusting formatted floats.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import json
 import struct
 import time
@@ -76,7 +77,7 @@ def run_boot_macro(client: YmirClient) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True)
+    ymir_binary.add_ymir_argument(parser)
     parser.add_argument("--ipl", type=Path, required=True)
     parser.add_argument("--game", type=Path, required=True)
     parser.add_argument("--route-address", type=lambda value: int(value, 0), required=True)

@@ -14,6 +14,7 @@ than reimplementing the transport.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import base64
 import hashlib
 import json
@@ -180,7 +181,7 @@ def save_screenshot(result: dict[str, Any], path: Path) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", required=True, type=Path, help="path to ymir-headless.exe")
+    ymir_binary.add_ymir_argument(parser, "path to ymir-headless.exe")
     parser.add_argument("--ipl", required=True, type=Path, help="Saturn BIOS/IPL image")
     parser.add_argument("--game", required=True, type=Path, help="built sourceboot .cue path")
     parser.add_argument("--release-manifest", required=True, type=Path)

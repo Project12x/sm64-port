@@ -9,6 +9,7 @@ one structured JSON report.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import hashlib
 import json
 from pathlib import Path
@@ -97,7 +98,7 @@ def probe_audio_state(client: YmirClient, *, frames: int,
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True, help="Ymir headless executable")
+    ymir_binary.add_ymir_argument(parser, "Ymir headless executable")
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS image")
     parser.add_argument("--cue", type=Path, required=True, help="exact sourceboot CUE to boot")
     parser.add_argument(

@@ -24,6 +24,7 @@ capture_route_views.py's YmirClient transport.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import json
 import subprocess
 import time
@@ -390,7 +391,7 @@ def validate_sample_interval(interval: int) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True, help="ymir-headless executable")
+    ymir_binary.add_ymir_argument(parser, "ymir-headless executable")
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS image")
     parser.add_argument("--game", type=Path, required=True, help="built sourceboot .cue path")
     parser.add_argument("--elf", type=Path, required=True, help="matching sourceboot ELF")

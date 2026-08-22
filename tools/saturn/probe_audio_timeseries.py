@@ -13,6 +13,7 @@ Read-only: no target memory is written, no source file is touched.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import json
 import sys
 import time
@@ -348,7 +349,7 @@ def probe_audio_timeseries(client: YmirClient, *, warmup_frames: int,
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True)
+    ymir_binary.add_ymir_argument(parser)
     parser.add_argument("--ipl", type=Path, required=True)
     parser.add_argument("--cue", type=Path, required=True,
                         help="absolute path to the CUE (YmirClient changes cwd)")

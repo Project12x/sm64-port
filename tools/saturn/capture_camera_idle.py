@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import hashlib
 import json
 import os
@@ -295,7 +296,7 @@ def run_boot_macro(client: Any) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True)
+    ymir_binary.add_ymir_argument(parser)
     parser.add_argument("--ipl", type=Path, required=True)
     parser.add_argument("--game", type=Path, required=True)
     parser.add_argument("--route-manifest", type=Path, required=True)

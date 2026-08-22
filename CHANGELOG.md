@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`tools/saturn/ymir_binary.py` — a checked-in answer to "which ymir-headless
+  should this capture use?", wired into all 22 headless capture/probe tools.**
+  **Reasoning:** the binary-selection trap fixed in the previous entry was only
+  detected, not disarmed — every tool still took `--ymir` as a required,
+  hand-passed path, so a stale command line copied from an old report would
+  re-arm it. `--ymir` is now optional everywhere: the default resolves
+  `ymir-agent/build-agent2/.../ymir-headless.exe` by upward search (works from a
+  worktree or the main checkout), and `SM64_SATURN_YMIR` overrides it. A
+  set-but-dangling override fails rather than silently falling back to a binary
+  the user steered away from. When nothing is found, `--ymir` stays required —
+  identical behaviour to before on a machine without the binary — and the error
+  names the superseded `build-agent` build and its silent `--dram-cart` behaviour
+  if that is what is on disk. The resolver deliberately does not *reject* a
+  binary by path: a rebuilt `build-agent` with cart support would be valid, and
+  only the runtime `dram-cart` probe can tell. The GUI launcher
+  (`launch_ymir_desktop.py`, `ymir-sdl3.exe`) is untouched — different binary,
+  different concern. Verified live: a capture with no `--ymir` flag completes in
+  52 s with figures identical to the explicit-path run; 8 new resolver tests,
+  5/5 mutations caught.
+
 ### Changed
 
 - **Saturn geo reductions are now a policy, not a one-actor exception — coins

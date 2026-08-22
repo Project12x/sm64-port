@@ -10,6 +10,7 @@ It does not build a target or alter its scheduling policy.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import hashlib
 import json
 import math
@@ -972,7 +973,7 @@ def _write_report(path: Path, report: dict[str, Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Expose the CLI surface so its defaults are testable."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True, help="Ymir headless executable")
+    ymir_binary.add_ymir_argument(parser, "Ymir headless executable")
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS image")
     parser.add_argument("--game", type=Path, required=True, help="exact matching sourceboot CUE")
     parser.add_argument("--elf", type=Path, required=True, help="exact matching sourceboot ELF")

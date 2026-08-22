@@ -44,6 +44,7 @@ ELF through `exec.stepi` / `regs.read` / `mem.peek` exactly as T2.16 does.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import hashlib
 import json
 import subprocess
@@ -423,7 +424,7 @@ def summarise(window: dict[str, Any], clock_hz: float, vblanks_per_frame: float)
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True)
+    ymir_binary.add_ymir_argument(parser)
     parser.add_argument("--ipl", type=Path, required=True)
     parser.add_argument("--game", type=Path, required=True, help="exact matching CUE")
     parser.add_argument("--elf", type=Path, required=True, help="exact matching ELF")

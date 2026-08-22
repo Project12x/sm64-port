@@ -9,6 +9,7 @@ evidence and should be paired with a retail capture when available.
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import base64
 import hashlib
 import json
@@ -272,7 +273,7 @@ def run_for_requests_cadenced(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ymir", type=Path, required=True, help="path to the ymir-headless executable")
+    ymir_binary.add_ymir_argument(parser, "path to the ymir-headless executable")
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS/IPL image")
     parser.add_argument("--game", type=Path, required=True, help="hwtest .cue/.iso path")
     parser.add_argument("--frames", type=int, default=600, help="bounded frames to execute (1..3600)")

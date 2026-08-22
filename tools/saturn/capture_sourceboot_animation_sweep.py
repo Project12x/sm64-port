@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ymir_binary
 import json
 from pathlib import Path
 from typing import Any
@@ -53,7 +54,7 @@ def capture(*, artifact_path: Path, output: Path, input_report: Path | None = No
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ymir", type=Path, required=True)
+    ymir_binary.add_ymir_argument(parser)
     parser.add_argument("--ipl", type=Path, required=True)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--startup-vblanks", type=int, default=600)
