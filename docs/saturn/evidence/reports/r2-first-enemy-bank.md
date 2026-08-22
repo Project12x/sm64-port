@@ -32,11 +32,13 @@ is a *generic* geo/animation/material compiler and not the Mario-specific
 Goomba cannot be baked today without lifting a hard-coded gate** (§2). 13 parts
 is `16 + 13*24 = 328 B`, inside the 640 B cold class and inside the 20-part
 shared-workspace ceiling, so **no class-plan edit and no workspace edit were
-needed**. The bank now loads and evaluates through the rigid lane in three
-places: a host fixture arm, a budget-enforcing bake tool that proves the
-standalone payload is **byte-identical** to the one already published in the
-scene package, and a boot-time exercise on the real SH-2 that resolves the bank
-out of the resident bundle through the real identity-bound path. **Cart cost is
+needed**. The bank loads and evaluates through the rigid lane in two places
+that were **proven** — a host fixture arm driving the real bank bytes, and a
+budget-enforcing bake tool that proves the standalone payload is
+**byte-identical** to the one already published in the scene package — and in a
+third that was **built, linked and symbol-checked but not observed**: a
+boot-time exercise on the SH-2 that resolves the bank out of the resident
+bundle through the real identity-bound path (§5.2 says why). **Cart cost is
 zero** — the bytes are read where they already are rather than linked a second
 time.
 
