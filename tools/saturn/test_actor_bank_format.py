@@ -19,7 +19,7 @@ from compile_actor_bank import compile_mario_actor_bank  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "tools/saturn/manifests/actors/mario.json"
-_MARIO_S64B_SHA256 = "242ecd7a91ddbfb49e65a0f04949168f1de9c24d66070c299b8889d6604ce539"
+_MARIO_S64B_SHA256 = "e86b5c14bc7694873264036e8dcba7f58c51bb29ef8d0658f74bde8e1aa9c8ae"
 
 
 class ActorBankFormatTest(unittest.TestCase):

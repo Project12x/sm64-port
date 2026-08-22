@@ -8,7 +8,7 @@ import hashlib
 import json
 import re
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -123,6 +123,66 @@ PINNED_MARIO_ANIMATION_PATHS_SHA256 = (
     "2d7c66e966281974652ab0581f8522c6e9b115c5ddca7fd43fe8ae74201c67e1"
 )
 PINNED_MARIO_ANIMATION_SOURCE_COMMIT = "68f9dd10"
+
+
+def _apply_animation_selection(
+    manifest: dict[str, object], records: Sequence[AnimationRecord]
+) -> tuple[tuple[AnimationRecord, ...], dict[str, object] | None]:
+    """Bake only the selected animation IDs; alias the rest to their nearest.
+
+    Every animation ID keeps its own record slot, enum name, source path and
+    source hash, so the bank stays a complete 0..N table and its provenance is
+    unchanged.  An unselected ID's *channel streams* are replaced by those of
+    the nearest selected ID, which the packer then deduplicates into a single
+    shared blob.  The consequence at runtime is that no requested ID can ever
+    fail to evaluate: an unbaked ID renders its nearest baked neighbour's
+    motion instead of nothing at all.
+    """
+    selection = manifest.get("animation_selection")
+    if selection is None:
+        return tuple(records), None
+    if not isinstance(selection, dict):
+        raise ValueError("animation_selection must be an object")
+    keep_raw = selection.get("keep")
+    if not isinstance(keep_raw, list) or not keep_raw:
+        raise ValueError("animation_selection requires a non-empty keep list")
+    available = {record.animation_id for record in records}
+    keep: set[int] = set()
+    for value in keep_raw:
+        if isinstance(value, bool) or not isinstance(value, int) or value not in available:
+            raise ValueError(f"animation_selection keep entry {value!r} is not a bank ID")
+        keep.add(value)
+    ordered_keep = sorted(keep)
+    donor_of: dict[int, int] = {}
+    by_id = {record.animation_id: record for record in records}
+    for record in records:
+        if record.animation_id in keep:
+            continue
+        donor_of[record.animation_id] = min(
+            ordered_keep, key=lambda kept: (abs(kept - record.animation_id), kept))
+    selected: list[AnimationRecord] = []
+    for record in records:
+        donor_id = donor_of.get(record.animation_id)
+        if donor_id is None:
+            selected.append(record)
+            continue
+        donor = by_id[donor_id]
+        selected.append(replace(
+            record, flags=donor.flags,
+            y_translation_divisor=donor.y_translation_divisor,
+            start_frame=donor.start_frame, loop_start=donor.loop_start,
+            frame_count=donor.frame_count, indices=donor.indices,
+            values=donor.values))
+    document = {
+        "policy": str(selection.get("policy", "")),
+        "rationale": str(selection.get("rationale", "")),
+        "substitution": str(selection.get("substitution", "")),
+        "baked_animation_count": len(ordered_keep),
+        "substituted_animation_count": len(donor_of),
+        "baked_animation_ids": ordered_keep,
+        "substitutions": {str(key): donor_of[key] for key in sorted(donor_of)},
+    }
+    return tuple(selected), document
 
 
 def _pinned_animation_source_inventory() -> dict[str, object]:
@@ -941,13 +1001,15 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
         meshlets=tuple(geometry["meshlets"]["meshlets"]),
         primitives=tuple(geometry["primitives"]),
     )
+    baked_records, selection_document = _apply_animation_selection(
+        manifest, inventory.records)
     payload, packed = pack_actor_bank(
         family_id=int(manifest["family_id"]),
         model_id=int(manifest["model_id"]),
         max_instances=int(manifest["max_instances"]),
         source_digest=source_digest,
         joints=joints,
-        animations=inventory.records,
+        animations=baked_records,
         vertices=vertices,
         geometry=shared_geometry,
     )
@@ -955,7 +1017,14 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
     payload_sha256 = str(packed["payload_sha256"])
     max_scratch = int(packed["max_scratch"])
     animation_documents = packed["animations"]
-    full_prebake_bytes = sum(record.frame_count for record in inventory.records) * len(geometry["vertices"]) * 7
+    if selection_document is not None:
+        baked_ids = set(selection_document["baked_animation_ids"])
+        substitutions = selection_document["substitutions"]
+        for item in animation_documents:
+            animation_id = int(item["animation_id"])
+            item["baked"] = animation_id in baked_ids
+            item["substitute_animation_id"] = substitutions.get(str(animation_id))
+    full_prebake_bytes = sum(record.frame_count for record in baked_records) * len(geometry["vertices"]) * 7
     document: dict[str, object] = {
         "schema": "sm64-saturn-actor-bank-v1", "version": VERSION,
         "magic": MAGIC.decode("ascii"), "family_id": int(manifest["family_id"]),
@@ -969,6 +1038,7 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
         "source_sha256": source_digest.hex(), "max_scratch": max_scratch,
         "geometry_scope": manifest["geometry_scope"],
         "animation_source_inventory": source_inventory_pin,
+        "animation_selection": selection_document,
         "switch_variant_geometry_complete": False,
         "switch_variant_runtime_owner": "Task 10",
         "sources": source_entries, "animations": animation_documents,

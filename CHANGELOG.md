@@ -2,6 +2,62 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **The Mario actor bank now bakes 104 core-play animation IDs instead of all
+  209, and aliases the other 105 onto their nearest baked neighbour.** The
+  `.s64b` payload falls 596,896 -> 232,564 B (compact channel bytes
+  574,274 -> 209,944), which is -364,332 B of `.cart_rodata`.
+  **Reasoning:** R3 measured the accepted `id-36ebaa12184cd661` at 2.81% cart
+  free (117,840 B of 4,194,304), and charter S1 (per-level cart loading) and
+  S6 (fifteen courses) are both blocked behind cart headroom. R3 section 8
+  established that the animation *count* is free at runtime --
+  `sm64_saturn_actor_pose_evaluate` indexes one record and samples 63 channels
+  with O(1) offset arithmetic and nothing iterates the animation table -- so
+  the baked set is pure cart, not cycles. **Selection method:** the two IDs
+  the accepted replay route actually requests (`MARIO_ANIM_IDLE_HEAD_LEFT`
+  0xC3, `MARIO_ANIM_RUNNING` 0x72, measured over ticks 100-230), plus every
+  animation set by an action handler reachable in the shipped sourceboot tuple
+  -- BOB with live input, and therefore no water, no cap powerups, no cannon,
+  no shell, no owl, no Bowser, no quicksand, no lava, no cutscene -- plus the
+  held-light-object family, because charter R2 is a Bob-omb and
+  `act_picking_up` / `act_hold_walking` become reachable the moment it spawns.
+  **Substitution, not omission:** every ID keeps its own record slot, enum
+  name, source path and source SHA-256, so the bank remains a complete 0..208
+  table with unchanged provenance and `legacy_differential` still reports
+  `exact: true` against both legacy banks. An unselected ID's channel streams
+  are replaced by those of the nearest selected ID (ties to the lower ID),
+  which the packer's existing blob deduplication then collapses to one shared
+  copy. **Consumer-facing impact:** an animation outside the baked set plays
+  its nearest neighbour's motion rather than its own -- a section 2b
+  degradation -- but it can never fail to evaluate, so it can never remove
+  Mario for a frame. Widening or narrowing the set is a one-line edit to
+  `animation_selection.keep` in `tools/saturn/manifests/actors/mario.json`
+  plus a rebake; the cost curve per tier is in
+  `docs/saturn/evidence/reports/r3-c-f-memory-recovery.md`.
+
+- **`saturn_actor_bridge.c` degrades an unevaluable animation ID to the
+  neutral idle instead of removing Mario.** **Root cause it forecloses:** at
+  `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1` a failed
+  `sm64_saturn_actor_pose_evaluate` zeroed the slot and propagated
+  `vertex_count == 0`, so Mario would vanish for that frame -- a pop, which
+  phase-plan section 2b names as a real functional defect, and constitution
+  rule 6 requires degrading at the smallest safe unit instead. The bridge now
+  retries once with `MARIO_ANIM_IDLE_HEAD_CENTER` at the *requested* frame, so
+  the fallback still advances rather than freezing on a stale pose, and it
+  needs no prior valid slot -- the first animation a session requests is
+  handled identically to the thousandth. **Consumer-facing impact:** none on
+  the accepted route, where both requested IDs are baked; the new
+  `sm64_saturn_complete_actor_probe` counter in `.lwram_bss` records
+  `evaluate_calls` and `fallback_hits` so that claim is observable on target
+  rather than asserted.
+
+- **`$(SOURCEBOOT_ACTOR_BANK)` now depends on the actor manifest and the bank
+  compiler.** **Root cause:** the rule had no prerequisites at all, so it only
+  ever ran when `mario.s64b` was absent; a changed bake list would have been
+  silently ignored and the link would have kept the previous bank. Found while
+  landing the reduced bake, not in review.
+
 ### Added
 
 - **The target profile now seals `features.complete_mario_animation = 1`, so

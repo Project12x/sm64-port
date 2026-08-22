@@ -919,7 +919,11 @@ $(SOURCEBOOT_GENERATED)/mario_anim_data.c: $(ROOT)/tools/mario_anims_converter.p
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@cd "$(ROOT)" && "$(SOURCEBOOT_PYTHON)" tools/mario_anims_converter.py > "$(SOURCEBOOT_GENERATED)/mario_anim_data.c"
 
-$(SOURCEBOOT_ACTOR_BANK):
+# The bake list and the compiler are inputs, not just the sources the compiler
+# reads: without these prerequisites a changed animation selection silently
+# reuses a stale .s64b and the link keeps the old bank.
+$(SOURCEBOOT_ACTOR_BANK): $(ROOT)/tools/saturn/manifests/actors/mario.json \
+    $(ROOT)/tools/saturn/compile_actor_bank.py
 	@$(MAKE) --no-print-directory -f "$(ROOT)/Makefile.saturn.mk" \
 	  compile-mario-actor-bank SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
 
