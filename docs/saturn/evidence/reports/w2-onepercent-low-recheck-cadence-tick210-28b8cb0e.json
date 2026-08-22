@@ -1,0 +1,3484 @@
+{
+  "artifacts": {
+    "cue": {
+      "mtime": 1787405581.6783395,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-22_w2-product\\id-28b8cb0e531f8476\\sm64-saturn-sourceboot-e2.cue",
+      "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+      "size": 88
+    },
+    "elf": {
+      "mtime": 1787405581.6628387,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-22_w2-product\\id-28b8cb0e531f8476\\obj\\sm64-saturn-sourceboot-e2.elf",
+      "sha256": "5f60ba879918893bfec7eea8fbd10572f42330a8f90b73859e7e403b61c91c63",
+      "size": 9984436
+    },
+    "iso": {
+      "mtime": 1787405581.6758387,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-22_w2-product\\id-28b8cb0e531f8476\\sm64-saturn-sourceboot-e2.iso",
+      "sha256": "4c14dd0efbda96a18c60c0dc2c5e915e98f8345a759bb7cdfb6174fc438ca3d1",
+      "size": 5177344
+    },
+    "ymir": {
+      "mtime": 1786970580.3028324,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\ymir-agent\\build-agent2\\apps\\ymir-headless\\Release\\ymir-headless.exe",
+      "sha256": "3156bea3f416ff98d061a2cdc81461dfbeb26da6674dbba211868d0d1677f98b",
+      "size": 3256320
+    }
+  },
+  "created_utc": "2026-08-22T13:33:01.640945+00:00",
+  "elf_build_identity": {
+    "address": 101219168,
+    "identity": {
+      "actor_package_hash": "4c131b6004549624ca4fc0c916baea2fc0d6ed82d04487ae8cc0a59caa09ab3c",
+      "animation_package_hash": "d367795485312e76f4eb4576003da82a11b5f2991e3b746260ae7b9c4a1caf13",
+      "area_id": 1,
+      "audio_package_hash": "e5cc00310572214cb978f940fcc420d3b7e505f719a5d9c930ed946961b36093",
+      "bootstrap_ticks": 600,
+      "bsp_order": 1,
+      "camera_artifact_hash": "a8132fc385fea49a4fee506ee2a3ecfc3084d9d5061c0ca93669705eb84d7f46",
+      "camera_route": 0,
+      "camera_variant": 3,
+      "cart_mbit": 32,
+      "cart_profile_hash": "555f9a0ed2f5446aa8766da0e5e3664772571ad6bb14c2281a7e64abf787a3be",
+      "cart_stage_sectors": 8,
+      "diagnostic_mode": 0,
+      "effective_config_hash": "28b8cb0e531f847642f58d1c16683d1b6f56234e2a39d7284a0811f5c3da022c",
+      "feature_bits": 4,
+      "fragment_mode": 0,
+      "hot_promotion": 1,
+      "input_artifact_hash": "4cd1d3037de45760d33c73368952e107f71b46f31b6829f8fb629dc6c4381f47",
+      "level_id": 9,
+      "live_input_mode": 1,
+      "magic": 1396853041,
+      "near_clip": 1,
+      "package_set_root_hash": "94014e46b8b08a4ab9bd21d5e1639b75826b1a6b0efd653627499623342b6f05",
+      "polygon_tier": 2,
+      "renderer_pipeline": 4,
+      "reserved0": 0,
+      "reserved1": 0,
+      "route_artifact_hash": "c7729f75e5b9b2e81bb8864370d0a1c6ed5cb946bfc3f84dae513639afd10283",
+      "route_id": 0,
+      "route_replay_mode": 1,
+      "scene_dependency_set_hash": "326fe783fb20b1fa503c7f9b410c75bed76d17628dee3811bafb453e8cc4fe54",
+      "scene_package_hash": "0d6e2211cecc9c6501c71e30b83173e224f9905d534a30d460ce3b9d6d0b607c",
+      "size": 500,
+      "source_hash": "fda4dd8490af5b192e75a9fdeda795921d1fca10a205f889866febe22cec23bf",
+      "target_profile_hash": "0835691224115234895f556f23f7aef984f5bd56d3998d3131580a096f854db0",
+      "toolchain_attestation_hash": "df57017415eb1a50d8c6ee2a3cd9abebadc5069a1cecc41762d88fcc1f749f50",
+      "version": 2
+    },
+    "label": "feat001-pipe4-l9-a1-route0-replay1-live1-boot600-cam0v3-diag0-cart32-stage8-hot1-clip1-bsp1-poly2-frag0-cfg28b8cb0e531f",
+    "sha256": "2c7d54085dd94b573ab103485cf7c4cb5ac15804c1800df6005d3dc997d405ea",
+    "size": 500
+  },
+  "evidence_kind": "ymir-sourceboot-queue-throughput",
+  "identity_probe": {
+    "address": 574619648,
+    "expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "size": 16
+  },
+  "observation": {
+    "cadence_unstable_retry_budget": 2,
+    "cadence_unstable_retry_count": 0,
+    "latest_coherent_queue": {
+      "master_failures": 0,
+      "notify_sequence": 238,
+      "qf": 0,
+      "qm": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "qn": 238,
+      "qq": 0,
+      "qr": 238,
+      "qs": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "queue_generation": 0,
+      "qw": 0,
+      "retired_sequence": 238,
+      "sequence": 238,
+      "slave_failures": 0
+    },
+    "measurement": {
+      "guest_fps_1pct_low": 6.666666666666667,
+      "guest_fps_mean": 6.796875,
+      "guest_fps_median": 6.666666666666667,
+      "interval_count": 29,
+      "intervals": [
+        {
+          "guest_fps": 7.5,
+          "phases": {
+            "attributed_vblank_crossings": 9,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 3,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -1,
+            "vblank_delta": 8
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 8
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 10,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 3,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -1,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 7.5,
+          "phases": {
+            "attributed_vblank_crossings": 9,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 3,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -1,
+            "vblank_delta": 8
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 8
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 10,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 3,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -1,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 7.5,
+          "phases": {
+            "attributed_vblank_crossings": 10,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 3,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 1
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 8
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 8
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 7.5,
+          "phases": {
+            "attributed_vblank_crossings": 9,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 3,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -1,
+            "vblank_delta": 8
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 8
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 7
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 2
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 7.5,
+          "phases": {
+            "attributed_vblank_crossings": 9,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 3,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -1,
+            "vblank_delta": 8
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 8
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 10,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 3,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -1,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 7
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 2
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 7
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 2
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 6
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 3
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 5
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 7
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 2
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 7
+            },
+            "dropped_vblank_credit_delta": 3,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 2
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        },
+        {
+          "guest_fps": 6.666666666666667,
+          "phases": {
+            "attributed_vblank_crossings": 11,
+            "build_delta": 1,
+            "concurrent_phase_allowance_vblank_crossings": 4,
+            "construction": {
+              "count": 1,
+              "vblank_crossings": 7
+            },
+            "dropped_vblank_credit_delta": 4,
+            "frame_delta": 1,
+            "master_finalization": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "presentation_delta": 1,
+            "simulation": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "slave_work_overlap_window": {
+              "count": 1,
+              "vblank_crossings": 2
+            },
+            "source_tick": {
+              "count": 1,
+              "vblank_crossings": 4
+            },
+            "transport_presentation": {
+              "count": 4,
+              "vblank_crossings": 0
+            },
+            "unattributed_vblank_crossings": -2,
+            "vblank_delta": 9
+          },
+          "presentation_generation_delta": 1,
+          "vblank_delta": 9
+        }
+      ],
+      "nominal_refresh_hz": 60.0,
+      "presentation_event_count": 30,
+      "target_vblank_delta": 256
+    },
+    "presentation_events": [
+      {
+        "cadence": {
+          "build_generation": 209,
+          "construction_count": 209,
+          "construction_vblank_crossings": 1089,
+          "dropped_vblank_credit": 657,
+          "frame_generation": 210,
+          "master_finalize_count": 209,
+          "master_finalize_vblank_crossings": 634,
+          "observed_vblank_generation": 3253,
+          "presentation_generation": 209,
+          "simulation_count": 210,
+          "simulation_vblank_crossings": 867,
+          "slave_work_count": 209,
+          "slave_work_vblank_crossings": 596,
+          "transport_presentation_count": 835,
+          "transport_presentation_vblank_crossings": 25
+        },
+        "presentation_generation": 209,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 209,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 209,
+          "qq": 0,
+          "qr": 209,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 209,
+          "sequence": 209,
+          "slave_failures": 0
+        },
+        "sample_index": 6,
+        "vblank_generation": 209
+      },
+      {
+        "cadence": {
+          "build_generation": 210,
+          "construction_count": 210,
+          "construction_vblank_crossings": 1094,
+          "dropped_vblank_credit": 660,
+          "frame_generation": 211,
+          "master_finalize_count": 210,
+          "master_finalize_vblank_crossings": 637,
+          "observed_vblank_generation": 3261,
+          "presentation_generation": 210,
+          "simulation_count": 211,
+          "simulation_vblank_crossings": 871,
+          "slave_work_count": 210,
+          "slave_work_vblank_crossings": 599,
+          "transport_presentation_count": 839,
+          "transport_presentation_vblank_crossings": 25
+        },
+        "presentation_generation": 210,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 210,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 210,
+          "qq": 0,
+          "qr": 210,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 210,
+          "sequence": 210,
+          "slave_failures": 0
+        },
+        "sample_index": 14,
+        "vblank_generation": 210
+      },
+      {
+        "cadence": {
+          "build_generation": 211,
+          "construction_count": 211,
+          "construction_vblank_crossings": 1100,
+          "dropped_vblank_credit": 663,
+          "frame_generation": 212,
+          "master_finalize_count": 211,
+          "master_finalize_vblank_crossings": 640,
+          "observed_vblank_generation": 3270,
+          "presentation_generation": 211,
+          "simulation_count": 212,
+          "simulation_vblank_crossings": 875,
+          "slave_work_count": 211,
+          "slave_work_vblank_crossings": 602,
+          "transport_presentation_count": 843,
+          "transport_presentation_vblank_crossings": 25
+        },
+        "presentation_generation": 211,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 211,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 211,
+          "qq": 0,
+          "qr": 211,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 211,
+          "sequence": 211,
+          "slave_failures": 0
+        },
+        "sample_index": 23,
+        "vblank_generation": 211
+      },
+      {
+        "cadence": {
+          "build_generation": 212,
+          "construction_count": 212,
+          "construction_vblank_crossings": 1105,
+          "dropped_vblank_credit": 666,
+          "frame_generation": 213,
+          "master_finalize_count": 212,
+          "master_finalize_vblank_crossings": 643,
+          "observed_vblank_generation": 3278,
+          "presentation_generation": 212,
+          "simulation_count": 213,
+          "simulation_vblank_crossings": 879,
+          "slave_work_count": 212,
+          "slave_work_vblank_crossings": 605,
+          "transport_presentation_count": 847,
+          "transport_presentation_vblank_crossings": 25
+        },
+        "presentation_generation": 212,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 212,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 212,
+          "qq": 0,
+          "qr": 212,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 212,
+          "sequence": 212,
+          "slave_failures": 0
+        },
+        "sample_index": 31,
+        "vblank_generation": 212
+      },
+      {
+        "cadence": {
+          "build_generation": 213,
+          "construction_count": 213,
+          "construction_vblank_crossings": 1110,
+          "dropped_vblank_credit": 669,
+          "frame_generation": 214,
+          "master_finalize_count": 213,
+          "master_finalize_vblank_crossings": 646,
+          "observed_vblank_generation": 3287,
+          "presentation_generation": 213,
+          "simulation_count": 214,
+          "simulation_vblank_crossings": 884,
+          "slave_work_count": 213,
+          "slave_work_vblank_crossings": 608,
+          "transport_presentation_count": 851,
+          "transport_presentation_vblank_crossings": 25
+        },
+        "presentation_generation": 213,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 213,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 213,
+          "qq": 0,
+          "qr": 213,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 213,
+          "sequence": 213,
+          "slave_failures": 0
+        },
+        "sample_index": 40,
+        "vblank_generation": 213
+      },
+      {
+        "cadence": {
+          "build_generation": 214,
+          "construction_count": 214,
+          "construction_vblank_crossings": 1115,
+          "dropped_vblank_credit": 673,
+          "frame_generation": 215,
+          "master_finalize_count": 214,
+          "master_finalize_vblank_crossings": 649,
+          "observed_vblank_generation": 3295,
+          "presentation_generation": 214,
+          "simulation_count": 215,
+          "simulation_vblank_crossings": 888,
+          "slave_work_count": 214,
+          "slave_work_vblank_crossings": 611,
+          "transport_presentation_count": 855,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 214,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 214,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 214,
+          "qq": 0,
+          "qr": 214,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 214,
+          "sequence": 214,
+          "slave_failures": 0
+        },
+        "sample_index": 48,
+        "vblank_generation": 214
+      },
+      {
+        "cadence": {
+          "build_generation": 215,
+          "construction_count": 215,
+          "construction_vblank_crossings": 1121,
+          "dropped_vblank_credit": 676,
+          "frame_generation": 216,
+          "master_finalize_count": 215,
+          "master_finalize_vblank_crossings": 653,
+          "observed_vblank_generation": 3304,
+          "presentation_generation": 215,
+          "simulation_count": 216,
+          "simulation_vblank_crossings": 893,
+          "slave_work_count": 215,
+          "slave_work_vblank_crossings": 614,
+          "transport_presentation_count": 859,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 215,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 215,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 215,
+          "qq": 0,
+          "qr": 215,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 215,
+          "sequence": 215,
+          "slave_failures": 0
+        },
+        "sample_index": 57,
+        "vblank_generation": 215
+      },
+      {
+        "cadence": {
+          "build_generation": 216,
+          "construction_count": 216,
+          "construction_vblank_crossings": 1126,
+          "dropped_vblank_credit": 679,
+          "frame_generation": 217,
+          "master_finalize_count": 216,
+          "master_finalize_vblank_crossings": 656,
+          "observed_vblank_generation": 3312,
+          "presentation_generation": 216,
+          "simulation_count": 217,
+          "simulation_vblank_crossings": 897,
+          "slave_work_count": 216,
+          "slave_work_vblank_crossings": 617,
+          "transport_presentation_count": 863,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 216,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 216,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 216,
+          "qq": 0,
+          "qr": 216,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 216,
+          "sequence": 216,
+          "slave_failures": 0
+        },
+        "sample_index": 65,
+        "vblank_generation": 216
+      },
+      {
+        "cadence": {
+          "build_generation": 217,
+          "construction_count": 217,
+          "construction_vblank_crossings": 1133,
+          "dropped_vblank_credit": 683,
+          "frame_generation": 218,
+          "master_finalize_count": 217,
+          "master_finalize_vblank_crossings": 660,
+          "observed_vblank_generation": 3321,
+          "presentation_generation": 217,
+          "simulation_count": 218,
+          "simulation_vblank_crossings": 901,
+          "slave_work_count": 217,
+          "slave_work_vblank_crossings": 619,
+          "transport_presentation_count": 867,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 217,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 217,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 217,
+          "qq": 0,
+          "qr": 217,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 217,
+          "sequence": 217,
+          "slave_failures": 0
+        },
+        "sample_index": 74,
+        "vblank_generation": 217
+      },
+      {
+        "cadence": {
+          "build_generation": 218,
+          "construction_count": 218,
+          "construction_vblank_crossings": 1139,
+          "dropped_vblank_credit": 686,
+          "frame_generation": 219,
+          "master_finalize_count": 218,
+          "master_finalize_vblank_crossings": 664,
+          "observed_vblank_generation": 3330,
+          "presentation_generation": 218,
+          "simulation_count": 219,
+          "simulation_vblank_crossings": 906,
+          "slave_work_count": 218,
+          "slave_work_vblank_crossings": 622,
+          "transport_presentation_count": 871,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 218,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 218,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 218,
+          "qq": 0,
+          "qr": 218,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 218,
+          "sequence": 218,
+          "slave_failures": 0
+        },
+        "sample_index": 83,
+        "vblank_generation": 218
+      },
+      {
+        "cadence": {
+          "build_generation": 219,
+          "construction_count": 219,
+          "construction_vblank_crossings": 1145,
+          "dropped_vblank_credit": 690,
+          "frame_generation": 220,
+          "master_finalize_count": 219,
+          "master_finalize_vblank_crossings": 668,
+          "observed_vblank_generation": 3339,
+          "presentation_generation": 219,
+          "simulation_count": 220,
+          "simulation_vblank_crossings": 911,
+          "slave_work_count": 219,
+          "slave_work_vblank_crossings": 625,
+          "transport_presentation_count": 875,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 219,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 219,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 219,
+          "qq": 0,
+          "qr": 219,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 219,
+          "sequence": 219,
+          "slave_failures": 0
+        },
+        "sample_index": 92,
+        "vblank_generation": 219
+      },
+      {
+        "cadence": {
+          "build_generation": 220,
+          "construction_count": 220,
+          "construction_vblank_crossings": 1150,
+          "dropped_vblank_credit": 693,
+          "frame_generation": 221,
+          "master_finalize_count": 220,
+          "master_finalize_vblank_crossings": 671,
+          "observed_vblank_generation": 3347,
+          "presentation_generation": 220,
+          "simulation_count": 221,
+          "simulation_vblank_crossings": 915,
+          "slave_work_count": 220,
+          "slave_work_vblank_crossings": 628,
+          "transport_presentation_count": 879,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 220,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 220,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 220,
+          "qq": 0,
+          "qr": 220,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 220,
+          "sequence": 220,
+          "slave_failures": 0
+        },
+        "sample_index": 101,
+        "vblank_generation": 220
+      },
+      {
+        "cadence": {
+          "build_generation": 221,
+          "construction_count": 221,
+          "construction_vblank_crossings": 1156,
+          "dropped_vblank_credit": 696,
+          "frame_generation": 222,
+          "master_finalize_count": 221,
+          "master_finalize_vblank_crossings": 674,
+          "observed_vblank_generation": 3356,
+          "presentation_generation": 221,
+          "simulation_count": 222,
+          "simulation_vblank_crossings": 919,
+          "slave_work_count": 221,
+          "slave_work_vblank_crossings": 631,
+          "transport_presentation_count": 883,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 221,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 221,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 221,
+          "qq": 0,
+          "qr": 221,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 221,
+          "sequence": 221,
+          "slave_failures": 0
+        },
+        "sample_index": 109,
+        "vblank_generation": 221
+      },
+      {
+        "cadence": {
+          "build_generation": 222,
+          "construction_count": 222,
+          "construction_vblank_crossings": 1162,
+          "dropped_vblank_credit": 700,
+          "frame_generation": 223,
+          "master_finalize_count": 222,
+          "master_finalize_vblank_crossings": 678,
+          "observed_vblank_generation": 3365,
+          "presentation_generation": 222,
+          "simulation_count": 223,
+          "simulation_vblank_crossings": 924,
+          "slave_work_count": 222,
+          "slave_work_vblank_crossings": 634,
+          "transport_presentation_count": 887,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 222,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 222,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 222,
+          "qq": 0,
+          "qr": 222,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 222,
+          "sequence": 222,
+          "slave_failures": 0
+        },
+        "sample_index": 118,
+        "vblank_generation": 222
+      },
+      {
+        "cadence": {
+          "build_generation": 223,
+          "construction_count": 223,
+          "construction_vblank_crossings": 1168,
+          "dropped_vblank_credit": 703,
+          "frame_generation": 224,
+          "master_finalize_count": 223,
+          "master_finalize_vblank_crossings": 682,
+          "observed_vblank_generation": 3374,
+          "presentation_generation": 223,
+          "simulation_count": 224,
+          "simulation_vblank_crossings": 929,
+          "slave_work_count": 223,
+          "slave_work_vblank_crossings": 637,
+          "transport_presentation_count": 891,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 223,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 223,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 223,
+          "qq": 0,
+          "qr": 223,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 223,
+          "sequence": 223,
+          "slave_failures": 0
+        },
+        "sample_index": 127,
+        "vblank_generation": 223
+      },
+      {
+        "cadence": {
+          "build_generation": 224,
+          "construction_count": 224,
+          "construction_vblank_crossings": 1174,
+          "dropped_vblank_credit": 707,
+          "frame_generation": 225,
+          "master_finalize_count": 224,
+          "master_finalize_vblank_crossings": 686,
+          "observed_vblank_generation": 3383,
+          "presentation_generation": 224,
+          "simulation_count": 225,
+          "simulation_vblank_crossings": 934,
+          "slave_work_count": 224,
+          "slave_work_vblank_crossings": 640,
+          "transport_presentation_count": 895,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 224,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 224,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 224,
+          "qq": 0,
+          "qr": 224,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 224,
+          "sequence": 224,
+          "slave_failures": 0
+        },
+        "sample_index": 136,
+        "vblank_generation": 224
+      },
+      {
+        "cadence": {
+          "build_generation": 225,
+          "construction_count": 225,
+          "construction_vblank_crossings": 1180,
+          "dropped_vblank_credit": 710,
+          "frame_generation": 226,
+          "master_finalize_count": 225,
+          "master_finalize_vblank_crossings": 690,
+          "observed_vblank_generation": 3392,
+          "presentation_generation": 225,
+          "simulation_count": 226,
+          "simulation_vblank_crossings": 939,
+          "slave_work_count": 225,
+          "slave_work_vblank_crossings": 643,
+          "transport_presentation_count": 899,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 225,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 225,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 225,
+          "qq": 0,
+          "qr": 225,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 225,
+          "sequence": 225,
+          "slave_failures": 0
+        },
+        "sample_index": 145,
+        "vblank_generation": 225
+      },
+      {
+        "cadence": {
+          "build_generation": 226,
+          "construction_count": 226,
+          "construction_vblank_crossings": 1186,
+          "dropped_vblank_credit": 714,
+          "frame_generation": 227,
+          "master_finalize_count": 226,
+          "master_finalize_vblank_crossings": 694,
+          "observed_vblank_generation": 3401,
+          "presentation_generation": 226,
+          "simulation_count": 227,
+          "simulation_vblank_crossings": 944,
+          "slave_work_count": 226,
+          "slave_work_vblank_crossings": 646,
+          "transport_presentation_count": 903,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 226,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 226,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 226,
+          "qq": 0,
+          "qr": 226,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 226,
+          "sequence": 226,
+          "slave_failures": 0
+        },
+        "sample_index": 154,
+        "vblank_generation": 226
+      },
+      {
+        "cadence": {
+          "build_generation": 227,
+          "construction_count": 227,
+          "construction_vblank_crossings": 1192,
+          "dropped_vblank_credit": 717,
+          "frame_generation": 228,
+          "master_finalize_count": 227,
+          "master_finalize_vblank_crossings": 698,
+          "observed_vblank_generation": 3410,
+          "presentation_generation": 227,
+          "simulation_count": 228,
+          "simulation_vblank_crossings": 949,
+          "slave_work_count": 227,
+          "slave_work_vblank_crossings": 649,
+          "transport_presentation_count": 907,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 227,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 227,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 227,
+          "qq": 0,
+          "qr": 227,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 227,
+          "sequence": 227,
+          "slave_failures": 0
+        },
+        "sample_index": 163,
+        "vblank_generation": 227
+      },
+      {
+        "cadence": {
+          "build_generation": 228,
+          "construction_count": 228,
+          "construction_vblank_crossings": 1199,
+          "dropped_vblank_credit": 721,
+          "frame_generation": 229,
+          "master_finalize_count": 228,
+          "master_finalize_vblank_crossings": 702,
+          "observed_vblank_generation": 3419,
+          "presentation_generation": 228,
+          "simulation_count": 229,
+          "simulation_vblank_crossings": 953,
+          "slave_work_count": 228,
+          "slave_work_vblank_crossings": 651,
+          "transport_presentation_count": 911,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 228,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 228,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 228,
+          "qq": 0,
+          "qr": 228,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 228,
+          "sequence": 228,
+          "slave_failures": 0
+        },
+        "sample_index": 172,
+        "vblank_generation": 228
+      },
+      {
+        "cadence": {
+          "build_generation": 229,
+          "construction_count": 229,
+          "construction_vblank_crossings": 1206,
+          "dropped_vblank_credit": 724,
+          "frame_generation": 230,
+          "master_finalize_count": 229,
+          "master_finalize_vblank_crossings": 706,
+          "observed_vblank_generation": 3428,
+          "presentation_generation": 229,
+          "simulation_count": 230,
+          "simulation_vblank_crossings": 957,
+          "slave_work_count": 229,
+          "slave_work_vblank_crossings": 653,
+          "transport_presentation_count": 915,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 229,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 229,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 229,
+          "qq": 0,
+          "qr": 229,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 229,
+          "sequence": 229,
+          "slave_failures": 0
+        },
+        "sample_index": 181,
+        "vblank_generation": 229
+      },
+      {
+        "cadence": {
+          "build_generation": 230,
+          "construction_count": 230,
+          "construction_vblank_crossings": 1212,
+          "dropped_vblank_credit": 728,
+          "frame_generation": 231,
+          "master_finalize_count": 230,
+          "master_finalize_vblank_crossings": 710,
+          "observed_vblank_generation": 3437,
+          "presentation_generation": 230,
+          "simulation_count": 231,
+          "simulation_vblank_crossings": 962,
+          "slave_work_count": 230,
+          "slave_work_vblank_crossings": 656,
+          "transport_presentation_count": 919,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 230,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 230,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 230,
+          "qq": 0,
+          "qr": 230,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 230,
+          "sequence": 230,
+          "slave_failures": 0
+        },
+        "sample_index": 190,
+        "vblank_generation": 230
+      },
+      {
+        "cadence": {
+          "build_generation": 231,
+          "construction_count": 231,
+          "construction_vblank_crossings": 1218,
+          "dropped_vblank_credit": 731,
+          "frame_generation": 232,
+          "master_finalize_count": 231,
+          "master_finalize_vblank_crossings": 714,
+          "observed_vblank_generation": 3446,
+          "presentation_generation": 231,
+          "simulation_count": 232,
+          "simulation_vblank_crossings": 967,
+          "slave_work_count": 231,
+          "slave_work_vblank_crossings": 659,
+          "transport_presentation_count": 923,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 231,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 231,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 231,
+          "qq": 0,
+          "qr": 231,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 231,
+          "sequence": 231,
+          "slave_failures": 0
+        },
+        "sample_index": 199,
+        "vblank_generation": 231
+      },
+      {
+        "cadence": {
+          "build_generation": 232,
+          "construction_count": 232,
+          "construction_vblank_crossings": 1224,
+          "dropped_vblank_credit": 735,
+          "frame_generation": 233,
+          "master_finalize_count": 232,
+          "master_finalize_vblank_crossings": 718,
+          "observed_vblank_generation": 3455,
+          "presentation_generation": 232,
+          "simulation_count": 233,
+          "simulation_vblank_crossings": 972,
+          "slave_work_count": 232,
+          "slave_work_vblank_crossings": 662,
+          "transport_presentation_count": 927,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 232,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 232,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 232,
+          "qq": 0,
+          "qr": 232,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 232,
+          "sequence": 232,
+          "slave_failures": 0
+        },
+        "sample_index": 208,
+        "vblank_generation": 232
+      },
+      {
+        "cadence": {
+          "build_generation": 233,
+          "construction_count": 233,
+          "construction_vblank_crossings": 1230,
+          "dropped_vblank_credit": 738,
+          "frame_generation": 234,
+          "master_finalize_count": 233,
+          "master_finalize_vblank_crossings": 722,
+          "observed_vblank_generation": 3464,
+          "presentation_generation": 233,
+          "simulation_count": 234,
+          "simulation_vblank_crossings": 977,
+          "slave_work_count": 233,
+          "slave_work_vblank_crossings": 665,
+          "transport_presentation_count": 931,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 233,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 233,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 233,
+          "qq": 0,
+          "qr": 233,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 233,
+          "sequence": 233,
+          "slave_failures": 0
+        },
+        "sample_index": 217,
+        "vblank_generation": 233
+      },
+      {
+        "cadence": {
+          "build_generation": 234,
+          "construction_count": 234,
+          "construction_vblank_crossings": 1236,
+          "dropped_vblank_credit": 742,
+          "frame_generation": 235,
+          "master_finalize_count": 234,
+          "master_finalize_vblank_crossings": 726,
+          "observed_vblank_generation": 3473,
+          "presentation_generation": 234,
+          "simulation_count": 235,
+          "simulation_vblank_crossings": 982,
+          "slave_work_count": 234,
+          "slave_work_vblank_crossings": 668,
+          "transport_presentation_count": 935,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 234,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 234,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 234,
+          "qq": 0,
+          "qr": 234,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 234,
+          "sequence": 234,
+          "slave_failures": 0
+        },
+        "sample_index": 226,
+        "vblank_generation": 234
+      },
+      {
+        "cadence": {
+          "build_generation": 235,
+          "construction_count": 235,
+          "construction_vblank_crossings": 1242,
+          "dropped_vblank_credit": 745,
+          "frame_generation": 236,
+          "master_finalize_count": 235,
+          "master_finalize_vblank_crossings": 730,
+          "observed_vblank_generation": 3482,
+          "presentation_generation": 235,
+          "simulation_count": 236,
+          "simulation_vblank_crossings": 987,
+          "slave_work_count": 235,
+          "slave_work_vblank_crossings": 671,
+          "transport_presentation_count": 939,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 235,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 235,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 235,
+          "qq": 0,
+          "qr": 235,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 235,
+          "sequence": 235,
+          "slave_failures": 0
+        },
+        "sample_index": 235,
+        "vblank_generation": 235
+      },
+      {
+        "cadence": {
+          "build_generation": 236,
+          "construction_count": 236,
+          "construction_vblank_crossings": 1249,
+          "dropped_vblank_credit": 749,
+          "frame_generation": 237,
+          "master_finalize_count": 236,
+          "master_finalize_vblank_crossings": 734,
+          "observed_vblank_generation": 3491,
+          "presentation_generation": 236,
+          "simulation_count": 237,
+          "simulation_vblank_crossings": 991,
+          "slave_work_count": 236,
+          "slave_work_vblank_crossings": 673,
+          "transport_presentation_count": 943,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 236,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 236,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 236,
+          "qq": 0,
+          "qr": 236,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 236,
+          "sequence": 236,
+          "slave_failures": 0
+        },
+        "sample_index": 244,
+        "vblank_generation": 236
+      },
+      {
+        "cadence": {
+          "build_generation": 237,
+          "construction_count": 237,
+          "construction_vblank_crossings": 1256,
+          "dropped_vblank_credit": 752,
+          "frame_generation": 238,
+          "master_finalize_count": 237,
+          "master_finalize_vblank_crossings": 738,
+          "observed_vblank_generation": 3500,
+          "presentation_generation": 237,
+          "simulation_count": 238,
+          "simulation_vblank_crossings": 995,
+          "slave_work_count": 237,
+          "slave_work_vblank_crossings": 675,
+          "transport_presentation_count": 947,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 237,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 237,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 237,
+          "qq": 0,
+          "qr": 237,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 237,
+          "sequence": 237,
+          "slave_failures": 0
+        },
+        "sample_index": 253,
+        "vblank_generation": 237
+      },
+      {
+        "cadence": {
+          "build_generation": 238,
+          "construction_count": 238,
+          "construction_vblank_crossings": 1263,
+          "dropped_vblank_credit": 756,
+          "frame_generation": 239,
+          "master_finalize_count": 238,
+          "master_finalize_vblank_crossings": 742,
+          "observed_vblank_generation": 3509,
+          "presentation_generation": 238,
+          "simulation_count": 239,
+          "simulation_vblank_crossings": 999,
+          "slave_work_count": 238,
+          "slave_work_vblank_crossings": 677,
+          "transport_presentation_count": 951,
+          "transport_presentation_vblank_crossings": 26
+        },
+        "presentation_generation": 238,
+        "queue": {
+          "master_failures": 0,
+          "notify_sequence": 238,
+          "qf": 0,
+          "qm": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "qn": 238,
+          "qq": 0,
+          "qr": 238,
+          "qs": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "queue_generation": 0,
+          "qw": 0,
+          "retired_sequence": 238,
+          "sequence": 238,
+          "slave_failures": 0
+        },
+        "sample_index": 262,
+        "vblank_generation": 238
+      }
+    ],
+    "vblanks_advanced": 262
+  },
+  "protocol": {
+    "notifications": [
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101157022,
+          "reason": "frame_limit",
+          "sequence": 1018,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101132202,
+          "reason": "frame_limit",
+          "sequence": 1019,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100710942,
+          "reason": "frame_limit",
+          "sequence": 1020,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101180560,
+          "reason": "frame_limit",
+          "sequence": 1021,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100683840,
+          "reason": "frame_limit",
+          "sequence": 1022,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101108342,
+          "reason": "frame_limit",
+          "sequence": 1023,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101092420,
+          "reason": "frame_limit",
+          "sequence": 1024,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101151764,
+          "reason": "frame_limit",
+          "sequence": 1025,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101141516,
+          "reason": "frame_limit",
+          "sequence": 1026,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101165114,
+          "reason": "frame_limit",
+          "sequence": 1027,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101132150,
+          "reason": "frame_limit",
+          "sequence": 1028,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100689820,
+          "reason": "frame_limit",
+          "sequence": 1029,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100704958,
+          "reason": "frame_limit",
+          "sequence": 1030,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178182,
+          "reason": "frame_limit",
+          "sequence": 1031,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101183422,
+          "reason": "frame_limit",
+          "sequence": 1032,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101089032,
+          "reason": "frame_limit",
+          "sequence": 1033,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100680280,
+          "reason": "frame_limit",
+          "sequence": 1034,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101143398,
+          "reason": "frame_limit",
+          "sequence": 1035,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101165392,
+          "reason": "frame_limit",
+          "sequence": 1036,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101130820,
+          "reason": "frame_limit",
+          "sequence": 1037,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100709630,
+          "reason": "frame_limit",
+          "sequence": 1038,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100681322,
+          "reason": "frame_limit",
+          "sequence": 1039,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178760,
+          "reason": "frame_limit",
+          "sequence": 1040,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101096906,
+          "reason": "frame_limit",
+          "sequence": 1041,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100700440,
+          "reason": "frame_limit",
+          "sequence": 1042,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101133196,
+          "reason": "frame_limit",
+          "sequence": 1043,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101141876,
+          "reason": "frame_limit",
+          "sequence": 1044,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101165876,
+          "reason": "frame_limit",
+          "sequence": 1045,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101130542,
+          "reason": "frame_limit",
+          "sequence": 1046,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101132334,
+          "reason": "frame_limit",
+          "sequence": 1047,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100704906,
+          "reason": "frame_limit",
+          "sequence": 1048,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178816,
+          "reason": "frame_limit",
+          "sequence": 1049,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178264,
+          "reason": "frame_limit",
+          "sequence": 1050,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101092410,
+          "reason": "frame_limit",
+          "sequence": 1051,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101133394,
+          "reason": "frame_limit",
+          "sequence": 1052,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101194964,
+          "reason": "frame_limit",
+          "sequence": 1053,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101157014,
+          "reason": "frame_limit",
+          "sequence": 1054,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101196024,
+          "reason": "frame_limit",
+          "sequence": 1055,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101122378,
+          "reason": "frame_limit",
+          "sequence": 1056,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178364,
+          "reason": "frame_limit",
+          "sequence": 1057,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178206,
+          "reason": "frame_limit",
+          "sequence": 1058,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178372,
+          "reason": "frame_limit",
+          "sequence": 1059,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101096870,
+          "reason": "frame_limit",
+          "sequence": 1060,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101133428,
+          "reason": "frame_limit",
+          "sequence": 1061,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101194862,
+          "reason": "frame_limit",
+          "sequence": 1062,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101165084,
+          "reason": "frame_limit",
+          "sequence": 1063,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101130482,
+          "reason": "frame_limit",
+          "sequence": 1064,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101124500,
+          "reason": "frame_limit",
+          "sequence": 1065,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101115168,
+          "reason": "frame_limit",
+          "sequence": 1066,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101115114,
+          "reason": "frame_limit",
+          "sequence": 1067,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101088926,
+          "reason": "frame_limit",
+          "sequence": 1068,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101092370,
+          "reason": "frame_limit",
+          "sequence": 1069,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101133352,
+          "reason": "frame_limit",
+          "sequence": 1070,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101194880,
+          "reason": "frame_limit",
+          "sequence": 1071,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101158662,
+          "reason": "frame_limit",
+          "sequence": 1072,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101130700,
+          "reason": "frame_limit",
+          "sequence": 1073,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101124850,
+          "reason": "frame_limit",
+          "sequence": 1074,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178244,
+          "reason": "frame_limit",
+          "sequence": 1075,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100681276,
+          "reason": "frame_limit",
+          "sequence": 1076,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101178968,
+          "reason": "frame_limit",
+          "sequence": 1077,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101092946,
+          "reason": "frame_limit",
+          "sequence": 1078,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101172764,
+          "reason": "frame_limit",
+          "sequence": 1079,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101194936,
+          "reason": "frame_limit",
+          "sequence": 1080,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 101196190,
+          "reason": "frame_limit",
+          "sequence": 1081,
+          "target": "sh2.master"
+        }
+      }
+    ],
+    "notifications_original_bytes": 169579,
+    "notifications_original_count": 1082,
+    "notifications_truncated": true,
+    "ready": true,
+    "stderr": "debug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8004D8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0004D8 to 0004DF\ndebug | CDBlock-PlayInit | Reset playback position to 0004D8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8004E0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0004E0 to 0004E7\ndebug | CDBlock-PlayInit | Reset playback position to 0004E0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8004E8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0004E8 to 0004EF\ndebug | CDBlock-PlayInit | Reset playback position to 0004E8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8004F0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0004F0 to 0004F7\ndebug | CDBlock-PlayInit | Reset playback position to 0004F0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8004F8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0004F8 to 0004FF\ndebug | CDBlock-PlayInit | Reset playback position to 0004F8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800500 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000500 to 000507\ndebug | CDBlock-PlayInit | Reset playback position to 000500\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800508 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000508 to 00050F\ndebug | CDBlock-PlayInit | Reset playback position to 000508\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800510 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000510 to 000517\ndebug | CDBlock-PlayInit | Reset playback position to 000510\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800518 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000518 to 00051F\ndebug | CDBlock-PlayInit | Reset playback position to 000518\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800520 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000520 to 000527\ndebug | CDBlock-PlayInit | Reset playback position to 000520\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800528 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000528 to 00052F\ndebug | CDBlock-PlayInit | Reset playback position to 000528\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800530 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000530 to 000537\ndebug | CDBlock-PlayInit | Reset playback position to 000530\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800538 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000538 to 00053F\ndebug | CDBlock-PlayInit | Reset playback position to 000538\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800540 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000540 to 000547\ndebug | CDBlock-PlayInit | Reset playback position to 000540\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800548 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000548 to 00054F\ndebug | CDBlock-PlayInit | Reset playback position to 000548\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800550 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000550 to 000557\ndebug | CDBlock-PlayInit | Reset playback position to 000550\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800558 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000558 to 00055F\ndebug | CDBlock-PlayInit | Reset playback position to 000558\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800560 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000560 to 000567\ndebug | CDBlock-PlayInit | Reset playback position to 000560\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800568 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000568 to 00056F\ndebug | CDBlock-PlayInit | Reset playback position to 000568\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800570 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000570 to 000577\ndebug | CDBlock-PlayInit | Reset playback position to 000570\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800578 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000578 to 00057F\ndebug | CDBlock-PlayInit | Reset playback position to 000578\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800580 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000580 to 000587\ndebug | CDBlock-PlayInit | Reset playback position to 000580\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800588 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000588 to 00058F\ndebug | CDBlock-PlayInit | Reset playback position to 000588\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800590 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000590 to 000597\ndebug | CDBlock-PlayInit | Reset playback position to 000590\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800598 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000598 to 00059F\ndebug | CDBlock-PlayInit | Reset playback position to 000598\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005A0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005A0 to 0005A7\ndebug | CDBlock-PlayInit | Reset playback position to 0005A0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005A8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005A8 to 0005AF\ndebug | CDBlock-PlayInit | Reset playback position to 0005A8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005B0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005B0 to 0005B7\ndebug | CDBlock-PlayInit | Reset playback position to 0005B0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005B8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005B8 to 0005BF\ndebug | CDBlock-PlayInit | Reset playback position to 0005B8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005C0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005C0 to 0005C7\ndebug | CDBlock-PlayInit | Reset playback position to 0005C0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005C8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005C8 to 0005CF\ndebug | CDBlock-PlayInit | Reset playback position to 0005C8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005D0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005D0 to 0005D7\ndebug | CDBlock-PlayInit | Reset playback position to 0005D0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005D8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005D8 to 0005DF\ndebug | CDBlock-PlayInit | Reset playback position to 0005D8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005E0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005E0 to 0005E7\ndebug | CDBlock-PlayInit | Reset playback position to 0005E0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005E8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005E8 to 0005EF\ndebug | CDBlock-PlayInit | Reset playback position to 0005E8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005F0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005F0 to 0005F7\ndebug | CDBlock-PlayInit | Reset playback position to 0005F0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8005F8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0005F8 to 0005FF\ndebug | CDBlock-PlayInit | Reset playback position to 0005F8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800600 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000600 to 000607\ndebug | CDBlock-PlayInit | Reset playback position to 000600\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800608 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000608 to 00060F\ndebug | CDBlock-PlayInit | Reset playback position to 000608\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800610 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000610 to 000617\ndebug | CDBlock-PlayInit | Reset playback position to 000610\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800618 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000618 to 00061F\ndebug | CDBlock-PlayInit | Reset playback position to 000618\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800620 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000620 to 000627\ndebug | CDBlock-PlayInit | Reset playback position to 000620\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800628 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000628 to 00062F\ndebug | CDBlock-PlayInit | Reset playback position to 000628\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800630 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000630 to 000637\ndebug | CDBlock-PlayInit | Reset playback position to 000630\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800638 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000638 to 00063F\ndebug | CDBlock-PlayInit | Reset playback position to 000638\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800640 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000640 to 000647\ndebug | CDBlock-PlayInit | Reset playback position to 000640\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800648 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000648 to 00064F\ndebug | CDBlock-PlayInit | Reset playback position to 000648\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800650 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000650 to 000657\ndebug | CDBlock-PlayInit | Reset playback position to 000650\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800658 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000658 to 00065F\ndebug | CDBlock-PlayInit | Reset playback position to 000658\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800660 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000660 to 000667\ndebug | CDBlock-PlayInit | Reset playback position to 000660\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800668 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000668 to 00066F\ndebug | CDBlock-PlayInit | Reset playback position to 000668\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800670 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000670 to 000677\ndebug | CDBlock-PlayInit | Reset playback position to 000670\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800678 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000678 to 00067F\ndebug | CDBlock-PlayInit | Reset playback position to 000678\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800680 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000680 to 000687\ndebug | CDBlock-PlayInit | Reset playback position to 000680\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800688 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000688 to 00068F\ndebug | CDBlock-PlayInit | Reset playback position to 000688\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800690 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000690 to 000697\ndebug | CDBlock-PlayInit | Reset playback position to 000690\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800698 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000698 to 00069F\ndebug | CDBlock-PlayInit | Reset playback position to 000698\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006A0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006A0 to 0006A7\ndebug | CDBlock-PlayInit | Reset playback position to 0006A0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006A8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006A8 to 0006AF\ndebug | CDBlock-PlayInit | Reset playback position to 0006A8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006B0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006B0 to 0006B7\ndebug | CDBlock-PlayInit | Reset playback position to 0006B0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006B8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006B8 to 0006BF\ndebug | CDBlock-PlayInit | Reset playback position to 0006B8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006C0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006C0 to 0006C7\ndebug | CDBlock-PlayInit | Reset playback position to 0006C0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006C8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006C8 to 0006CF\ndebug | CDBlock-PlayInit | Reset playback position to 0006C8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006D0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006D0 to 0006D7\ndebug | CDBlock-PlayInit | Reset playback position to 0006D0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006D8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006D8 to 0006DF\ndebug | CDBlock-PlayInit | Reset playback position to 0006D8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006E0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006E0 to 0006E7\ndebug | CDBlock-PlayInit | Reset playback position to 0006E0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006E8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006E8 to 0006EF\ndebug | CDBlock-PlayInit | Reset playback position to 0006E8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006F0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006F0 to 0006F7\ndebug | CDBlock-PlayInit | Reset playback position to 0006F0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8006F8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0006F8 to 0006FF\ndebug | CDBlock-PlayInit | Reset playback position to 0006F8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800700 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000700 to 000707\ndebug | CDBlock-PlayInit | Reset playback position to 000700\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800708 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000708 to 00070F\ndebug | CDBlock-PlayInit | Reset playback position to 000708\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800710 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000710 to 000717\ndebug | CDBlock-PlayInit | Reset playback position to 000710\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800718 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000718 to 00071F\ndebug | CDBlock-PlayInit | Reset playback position to 000718\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800720 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000720 to 000727\ndebug | CDBlock-PlayInit | Reset playback position to 000720\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800728 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000728 to 00072F\ndebug | CDBlock-PlayInit | Reset playback position to 000728\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800730 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000730 to 000737\ndebug | CDBlock-PlayInit | Reset playback position to 000730\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800738 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000738 to 00073F\ndebug | CDBlock-PlayInit | Reset playback position to 000738\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800740 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000740 to 000747\ndebug | CDBlock-PlayInit | Reset playback position to 000740\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800748 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000748 to 00074F\ndebug | CDBlock-PlayInit | Reset playback position to 000748\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800750 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000750 to 000757\ndebug | CDBlock-PlayInit | Reset playback position to 000750\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800758 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000758 to 00075F\ndebug | CDBlock-PlayInit | Reset playback position to 000758\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800760 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000760 to 000767\ndebug | CDBlock-PlayInit | Reset playback position to 000760\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800768 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000768 to 00076F\ndebug | CDBlock-PlayInit | Reset playback position to 000768\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800770 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000770 to 000777\ndebug | CDBlock-PlayInit | Reset playback position to 000770\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800778 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000778 to 00077F\ndebug | CDBlock-PlayInit | Reset playback position to 000778\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800780 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000780 to 000787\ndebug | CDBlock-PlayInit | Reset playback position to 000780\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800788 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000788 to 00078F\ndebug | CDBlock-PlayInit | Reset playback position to 000788\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800790 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000790 to 000797\ndebug | CDBlock-PlayInit | Reset playback position to 000790\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800798 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000798 to 00079F\ndebug | CDBlock-PlayInit | Reset playback position to 000798\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007A0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007A0 to 0007A7\ndebug | CDBlock-PlayInit | Reset playback position to 0007A0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007A8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007A8 to 0007AF\ndebug | CDBlock-PlayInit | Reset playback position to 0007A8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007B0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007B0 to 0007B7\ndebug | CDBlock-PlayInit | Reset playback position to 0007B0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007B8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007B8 to 0007BF\ndebug | CDBlock-PlayInit | Reset playback position to 0007B8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007C0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007C0 to 0007C7\ndebug | CDBlock-PlayInit | Reset playback position to 0007C0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007C8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007C8 to 0007CF\ndebug | CDBlock-PlayInit | Reset playback position to 0007C8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007D0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007D0 to 0007D7\ndebug | CDBlock-PlayInit | Reset playback position to 0007D0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007D8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007D8 to 0007DF\ndebug | CDBlock-PlayInit | Reset playback position to 0007D8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007E0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007E0 to 0007E7\ndebug | CDBlock-PlayInit | Reset playback position to 0007E0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007E8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007E8 to 0007EF\ndebug | CDBlock-PlayInit | Reset playback position to 0007E8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007F0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007F0 to 0007F7\ndebug | CDBlock-PlayInit | Reset playback position to 0007F0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8007F8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0007F8 to 0007FF\ndebug | CDBlock-PlayInit | Reset playback position to 0007F8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800800 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000800 to 000807\ndebug | CDBlock-PlayInit | Reset playback position to 000800\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800808 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000808 to 00080F\ndebug | CDBlock-PlayInit | Reset playback position to 000808\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800810 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000810 to 000817\ndebug | CDBlock-PlayInit | Reset playback position to 000810\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800818 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000818 to 00081F\ndebug | CDBlock-PlayInit | Reset playback position to 000818\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800820 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000820 to 000827\ndebug | CDBlock-PlayInit | Reset playback position to 000820\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800828 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000828 to 00082F\ndebug | CDBlock-PlayInit | Reset playback position to 000828\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800830 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000830 to 000837\ndebug | CDBlock-PlayInit | Reset playback position to 000830\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800838 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000838 to 00083F\ndebug | CDBlock-PlayInit | Reset playback position to 000838\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800840 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000840 to 000847\ndebug | CDBlock-PlayInit | Reset playback position to 000840\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800848 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000848 to 00084F\ndebug | CDBlock-PlayInit | Reset playback position to 000848\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800850 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000850 to 000857\ndebug | CDBlock-PlayInit | Reset playback position to 000850\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800858 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000858 to 00085F\ndebug | CDBlock-PlayInit | Reset playback position to 000858\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800860 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000860 to 000867\ndebug | CDBlock-PlayInit | Reset playback position to 000860\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800868 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000868 to 00086F\ndebug | CDBlock-PlayInit | Reset playback position to 000868\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800870 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000870 to 000877\ndebug | CDBlock-PlayInit | Reset playback position to 000870\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800878 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000878 to 00087F\ndebug | CDBlock-PlayInit | Reset playback position to 000878\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800880 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000880 to 000887\ndebug | CDBlock-PlayInit | Reset playback position to 000880\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800888 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000888 to 00088F\ndebug | CDBlock-PlayInit | Reset playback position to 000888\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800890 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000890 to 000897\ndebug | CDBlock-PlayInit | Reset playback position to 000890\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800898 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000898 to 00089F\ndebug | CDBlock-PlayInit | Reset playback position to 000898\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008A0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008A0 to 0008A7\ndebug | CDBlock-PlayInit | Reset playback position to 0008A0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008A8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008A8 to 0008AF\ndebug | CDBlock-PlayInit | Reset playback position to 0008A8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008B0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008B0 to 0008B7\ndebug | CDBlock-PlayInit | Reset playback position to 0008B0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008B8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008B8 to 0008BF\ndebug | CDBlock-PlayInit | Reset playback position to 0008B8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008C0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008C0 to 0008C7\ndebug | CDBlock-PlayInit | Reset playback position to 0008C0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008C8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008C8 to 0008CF\ndebug | CDBlock-PlayInit | Reset playback position to 0008C8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008D0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008D0 to 0008D7\ndebug | CDBlock-PlayInit | Reset playback position to 0008D0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008D8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008D8 to 0008DF\ndebug | CDBlock-PlayInit | Reset playback position to 0008D8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008E0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008E0 to 0008E7\ndebug | CDBlock-PlayInit | Reset playback position to 0008E0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008E8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008E8 to 0008EF\ndebug | CDBlock-PlayInit | Reset playback position to 0008E8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008F0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008F0 to 0008F7\ndebug | CDBlock-PlayInit | Reset playback position to 0008F0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8008F8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0008F8 to 0008FF\ndebug | CDBlock-PlayInit | Reset playback position to 0008F8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800900 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000900 to 000907\ndebug | CDBlock-PlayInit | Reset playback position to 000900\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800908 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000908 to 00090F\ndebug | CDBlock-PlayInit | Reset playback position to 000908\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800910 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000910 to 000917\ndebug | CDBlock-PlayInit | Reset playback position to 000910\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800918 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000918 to 00091F\ndebug | CDBlock-PlayInit | Reset playback position to 000918\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800920 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000920 to 000927\ndebug | CDBlock-PlayInit | Reset playback position to 000920\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800928 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000928 to 00092F\ndebug | CDBlock-PlayInit | Reset playback position to 000928\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800930 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000930 to 000937\ndebug | CDBlock-PlayInit | Reset playback position to 000930\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800938 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000938 to 00093F\ndebug | CDBlock-PlayInit | Reset playback position to 000938\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800940 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000940 to 000947\ndebug | CDBlock-PlayInit | Reset playback position to 000940\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800948 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000948 to 00094F\ndebug | CDBlock-PlayInit | Reset playback position to 000948\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800950 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000950 to 000957\ndebug | CDBlock-PlayInit | Reset playback position to 000950\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800958 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000958 to 00095F\ndebug | CDBlock-PlayInit | Reset playback position to 000958\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800960 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000960 to 000967\ndebug | CDBlock-PlayInit | Reset playback position to 000960\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800968 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000968 to 00096F\ndebug | CDBlock-PlayInit | Reset playback position to 000968\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800970 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000970 to 000977\ndebug | CDBlock-PlayInit | Reset playback position to 000970\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800978 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000978 to 00097F\ndebug | CDBlock-PlayInit | Reset playback position to 000978\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800980 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000980 to 000987\ndebug | CDBlock-PlayInit | Reset playback position to 000980\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800988 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000988 to 00098F\ndebug | CDBlock-PlayInit | Reset playback position to 000988\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800990 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000990 to 000997\ndebug | CDBlock-PlayInit | Reset playback position to 000990\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800998 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000998 to 00099F\ndebug | CDBlock-PlayInit | Reset playback position to 000998\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8009A0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0009A0 to 0009A7\ndebug | CDBlock-PlayInit | Reset playback position to 0009A0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8009A8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0009A8 to 0009AF\ndebug | CDBlock-PlayInit | Reset playback position to 0009A8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8009B0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0009B0 to 0009B7\ndebug | CDBlock-PlayInit | Reset playback position to 0009B0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8009B8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0009B8 to 0009BF\ndebug | CDBlock-PlayInit | Reset playback position to 0009B8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8009C0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0009C0 to 0009C7\ndebug | CDBlock-PlayInit | Reset playback position to 0009C0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8009C8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0009C8 to 0009CF\ndebug | CDBlock-PlayInit | Reset playback position to 0009C8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8009D0 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0009D0 to 0009D7\ndebug | CDBlock-PlayInit | Reset playback position to 0009D0\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=8009D8 end=800008 repeat=0\ndebug | CDBlock-PlayInit | FAD range 0009D8 to 0009DF\ndebug | CDBlock-PlayInit | Reset playback position to 0009D8\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | SMPC             | Processing SSHOFF\ndebug | SMPC             | Processing SSHON\ndebug | SMPC             | Processing SNDOFF\ninfo  | SCSP             | MC68EC00 processor disabled\ndebug | SMPC             | Processing SNDON\ninfo  | SCSP             | MC68EC00 processor enabled\n",
+    "stderr_original_bytes": 65484,
+    "stderr_truncated": false
+  },
+  "release_manifest_sha256": "8c31fefa47afa63678ea90e32dcbee796617b602587f597e0806e63f34cfb4fe",
+  "route_span": {
+    "end": 239,
+    "end_simulation_tick": 240,
+    "start": 210,
+    "start_simulation_tick": 210
+  },
+  "schema": "sm64-saturn-sourceboot-throughput-v1",
+  "sh2_cache_emulation": false,
+  "status": "complete",
+  "symbols": {
+    "s_render_job_queue": {
+      "address": 638558028,
+      "size": 232
+    },
+    "s_runtime": {
+      "address": 638558372,
+      "size": 104
+    },
+    "sourceboot_boot_trace": {
+      "address": 101261460,
+      "size": 32
+    },
+    "sourceboot_cadence_trace": {
+      "address": 2984208,
+      "size": 76
+    }
+  },
+  "target_build_identity": {
+    "address": 101219168,
+    "identity": {
+      "actor_package_hash": "4c131b6004549624ca4fc0c916baea2fc0d6ed82d04487ae8cc0a59caa09ab3c",
+      "animation_package_hash": "d367795485312e76f4eb4576003da82a11b5f2991e3b746260ae7b9c4a1caf13",
+      "area_id": 1,
+      "audio_package_hash": "e5cc00310572214cb978f940fcc420d3b7e505f719a5d9c930ed946961b36093",
+      "bootstrap_ticks": 600,
+      "bsp_order": 1,
+      "camera_artifact_hash": "a8132fc385fea49a4fee506ee2a3ecfc3084d9d5061c0ca93669705eb84d7f46",
+      "camera_route": 0,
+      "camera_variant": 3,
+      "cart_mbit": 32,
+      "cart_profile_hash": "555f9a0ed2f5446aa8766da0e5e3664772571ad6bb14c2281a7e64abf787a3be",
+      "cart_stage_sectors": 8,
+      "diagnostic_mode": 0,
+      "effective_config_hash": "28b8cb0e531f847642f58d1c16683d1b6f56234e2a39d7284a0811f5c3da022c",
+      "feature_bits": 4,
+      "fragment_mode": 0,
+      "hot_promotion": 1,
+      "input_artifact_hash": "4cd1d3037de45760d33c73368952e107f71b46f31b6829f8fb629dc6c4381f47",
+      "level_id": 9,
+      "live_input_mode": 1,
+      "magic": 1396853041,
+      "near_clip": 1,
+      "package_set_root_hash": "94014e46b8b08a4ab9bd21d5e1639b75826b1a6b0efd653627499623342b6f05",
+      "polygon_tier": 2,
+      "renderer_pipeline": 4,
+      "reserved0": 0,
+      "reserved1": 0,
+      "route_artifact_hash": "c7729f75e5b9b2e81bb8864370d0a1c6ed5cb946bfc3f84dae513639afd10283",
+      "route_id": 0,
+      "route_replay_mode": 1,
+      "scene_dependency_set_hash": "326fe783fb20b1fa503c7f9b410c75bed76d17628dee3811bafb453e8cc4fe54",
+      "scene_package_hash": "0d6e2211cecc9c6501c71e30b83173e224f9905d534a30d460ce3b9d6d0b607c",
+      "size": 500,
+      "source_hash": "fda4dd8490af5b192e75a9fdeda795921d1fca10a205f889866febe22cec23bf",
+      "target_profile_hash": "0835691224115234895f556f23f7aef984f5bd56d3998d3131580a096f854db0",
+      "toolchain_attestation_hash": "df57017415eb1a50d8c6ee2a3cd9abebadc5069a1cecc41762d88fcc1f749f50",
+      "version": 2
+    },
+    "label": "feat001-pipe4-l9-a1-route0-replay1-live1-boot600-cam0v3-diag0-cart32-stage8-hot1-clip1-bsp1-poly2-frag0-cfg28b8cb0e531f",
+    "match": true,
+    "sha256": "2c7d54085dd94b573ab103485cf7c4cb5ac15804c1800df6005d3dc997d405ea",
+    "size": 500
+  },
+  "target_identity": {
+    "address": 574619648,
+    "expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "match": true,
+    "observed_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+    "size": 16,
+    "startup_identity_attempts": 681,
+    "startup_vblanks_waited": 681
+  },
+  "warmup": {
+    "addresses": {
+      "global_timer": "0x60bc304",
+      "replay_ticks": "0x60f02e0"
+    },
+    "global_timer": 210,
+    "max_vblanks": 20000,
+    "mode": "ticks",
+    "replay_ticks": 210,
+    "start_global_timer": 0,
+    "start_replay_ticks": 0,
+    "steps": 130,
+    "target_tick": 210,
+    "vblanks_advanced": 3238
+  },
+  "warmup_plan": {
+    "max_vblanks": 20000,
+    "mode": "ticks",
+    "symbol_error": null,
+    "target_tick": 210,
+    "tick_cap": 600
+  }
+}

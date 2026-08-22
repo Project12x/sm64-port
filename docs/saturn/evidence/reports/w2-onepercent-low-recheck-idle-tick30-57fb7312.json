@@ -1,0 +1,791 @@
+{
+ "schema": "sm64-saturn-idle-attribution-v1",
+ "note": "trimmed for evidence: identity, tracing configuration and the summary block only; the per-symbol residency tables of the full capture are omitted because this run was taken to read master idle, not a census",
+ "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-22_w6a-rebuild\\id-57fb7312058b7f2e\\obj\\sm64-saturn-sourceboot-e2.elf",
+ "elf_sha256": "4a287b769d94978007840ca08d2a1ae594aa1e3a287e5cad2c3574891779b66b",
+ "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\releases\\2026-08-22_w6a-rebuild\\id-57fb7312058b7f2e\\sm64-saturn-sourceboot-e2.cue",
+ "identity": {
+  "address": 574619648,
+  "size": 16,
+  "expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+  "observed_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+  "match": true,
+  "startup_vblanks_waited": 681,
+  "startup_identity_attempts": 681
+ },
+ "tracing": {
+  "windows": 1,
+  "window_steps": 13000000,
+  "window_gap_vblanks": 7,
+  "slave_stride": 16,
+  "io_stride": 20000,
+  "run_log_min_cycles": 20000,
+  "startup_vblanks": 4096,
+  "warmup": {
+   "mode": "ticks",
+   "target_tick": 30,
+   "replay_ticks": 30,
+   "global_timer": 30,
+   "vblanks_advanced": 1773,
+   "steps": 117,
+   "start_replay_ticks": 0,
+   "start_global_timer": 0,
+   "max_vblanks": 20000,
+   "addresses": {
+    "replay_ticks": "0x60f0260",
+    "global_timer": "0x60bc284"
+   }
+  },
+  "route_position_after_trace": {
+   "replay_ticks": 34,
+   "global_timer": 34
+  },
+  "sh2_cache_emulation": false,
+  "attributed_callees": []
+ },
+ "summary": {
+  "clock_hz": 26846590.91,
+  "vblanks_per_frame": 8.5172,
+  "cycles_per_vblank": 447443.2,
+  "cycles_per_frame": 3810963.1,
+  "traced_cycles": 15838709,
+  "traced_vblanks": 35.3983,
+  "traced_frames_equivalent": 4.1561,
+  "master": {
+   "cycles": 15838709,
+   "idle_cycles": 0,
+   "idle_share": 0.0,
+   "barrier_cycles": 0,
+   "barrier_share": 0.0,
+   "idle_vblanks_per_frame": 0.0
+  },
+  "slave": {
+   "cycles": 15838709,
+   "idle_cycles": 10358459,
+   "idle_share": 0.653996,
+   "idle_vblanks_per_frame": 5.5702
+  },
+  "combined_idle_share": 0.326998,
+  "joint": {
+   "work|idle:notification-wait": {
+    "cycles": 10358459,
+    "share": 0.653996,
+    "vblanks_per_frame": 5.5702
+   },
+   "work|work": {
+    "cycles": 5480250,
+    "share": 0.346004,
+    "vblanks_per_frame": 2.947
+   }
+  },
+  "master_wait_call_sites": {},
+  "master_vblank_spin_runs": {
+   "count": 0,
+   "total_cycles": 0,
+   "mean_cycles": 0.0,
+   "median_cycles": 0,
+   "min_cycles": 0,
+   "max_cycles": 0
+  },
+  "slave_notification_wait_runs": {
+   "count": 4,
+   "total_cycles": 10358459,
+   "mean_cycles": 2589614.8,
+   "median_cycles": 2593123,
+   "min_cycles": 2577783,
+   "max_cycles": 2607646
+  },
+  "master_run_structure": {
+   "_demo_render_finalize": {
+    "count": 16216,
+    "total_cycles": 1569826,
+    "mean_cycles": 96.8,
+    "median_cycles": 18,
+    "min_cycles": 5,
+    "max_cycles": 36775
+   },
+   "___addsf3": {
+    "count": 26788,
+    "total_cycles": 1490368,
+    "mean_cycles": 55.6,
+    "median_cycles": 56,
+    "min_cycles": 6,
+    "max_cycles": 136
+   },
+   "_sm64_saturn_ztreme_frustum_aabb": {
+    "count": 4220,
+    "total_cycles": 1017545,
+    "mean_cycles": 241.1,
+    "median_cycles": 26,
+    "min_cycles": 8,
+    "max_cycles": 604
+   },
+   "___mulsf3": {
+    "count": 10903,
+    "total_cycles": 972555,
+    "mean_cycles": 89.2,
+    "median_cycles": 96,
+    "min_cycles": 9,
+    "max_cycles": 99
+   },
+   "_demo_render_prepare_publish": {
+    "count": 5839,
+    "total_cycles": 883863,
+    "mean_cycles": 151.4,
+    "median_cycles": 71,
+    "min_cycles": 4,
+    "max_cycles": 15117
+   },
+   "_sm64_saturn_matrix_mul.isra.0": {
+    "count": 819,
+    "total_cycles": 858459,
+    "mean_cycles": 1048.2,
+    "median_cycles": 215,
+    "min_cycles": 9,
+    "max_cycles": 2093
+   },
+   "___divsf3": {
+    "count": 4437,
+    "total_cycles": 643407,
+    "mean_cycles": 145.0,
+    "median_cycles": 146,
+    "min_cycles": 24,
+    "max_cycles": 150
+   },
+   "_saturn_geo_enter_object": {
+    "count": 8039,
+    "total_cycles": 533943,
+    "mean_cycles": 66.4,
+    "median_cycles": 9,
+    "min_cycles": 3,
+    "max_cycles": 2830
+   },
+   "_saturn_mtxq_refresh_float_mirror": {
+    "count": 9253,
+    "total_cycles": 488725,
+    "mean_cycles": 52.8,
+    "median_cycles": 61,
+    "min_cycles": 6,
+    "max_cycles": 149
+   },
+   "_actor_meshlet_live_depth_bounds": {
+    "count": 3068,
+    "total_cycles": 460967,
+    "mean_cycles": 150.2,
+    "median_cycles": 158,
+    "min_cycles": 27,
+    "max_cycles": 211
+   },
+   "_memcpy": {
+    "count": 3996,
+    "total_cycles": 432841,
+    "mean_cycles": 108.3,
+    "median_cycles": 89,
+    "min_cycles": 23,
+    "max_cycles": 5385
+   },
+   "_memset": {
+    "count": 3707,
+    "total_cycles": 339569,
+    "mean_cycles": 91.6,
+    "median_cycles": 67,
+    "min_cycles": 18,
+    "max_cycles": 1998
+   },
+   "_support_radius_q16": {
+    "count": 3161,
+    "total_cycles": 280929,
+    "mean_cycles": 88.9,
+    "median_cycles": 89,
+    "min_cycles": 9,
+    "max_cycles": 89
+   },
+   "_actor_meshlet_core": {
+    "count": 3209,
+    "total_cycles": 275001,
+    "mean_cycles": 85.7,
+    "median_cycles": 57,
+    "min_cycles": 6,
+    "max_cycles": 1555
+   },
+   "_sm64_saturn_scene_admit_with_scratch": {
+    "count": 2136,
+    "total_cycles": 267515,
+    "mean_cycles": 125.2,
+    "median_cycles": 52,
+    "min_cycles": 6,
+    "max_cycles": 32299
+   },
+   "_sm64_saturn_terrain_depth_bins_scatter": {
+    "count": 10544,
+    "total_cycles": 262203,
+    "mean_cycles": 24.9,
+    "median_cycles": 26,
+    "min_cycles": 4,
+    "max_cycles": 540
+   },
+   "_sm64_saturn_terrain_depth_bins_digit.isra.0": {
+    "count": 19475,
+    "total_cycles": 251115,
+    "mean_cycles": 12.9,
+    "median_cycles": 14,
+    "min_cycles": 6,
+    "max_cycles": 33
+   },
+   "___ashlsi3_r0": {
+    "count": 22739,
+    "total_cycles": 247933,
+    "mean_cycles": 10.9,
+    "median_cycles": 12,
+    "min_cycles": 8,
+    "max_cycles": 13
+   },
+   "_sm64_saturn_render_job_queue_job": {
+    "count": 3339,
+    "total_cycles": 180218,
+    "mean_cycles": 54.0,
+    "median_cycles": 54,
+    "min_cycles": 17,
+    "max_cycles": 55
+   },
+   "_actor_position_ref": {
+    "count": 5632,
+    "total_cycles": 177408,
+    "mean_cycles": 31.5,
+    "median_cycles": 32,
+    "min_cycles": 31,
+    "max_cycles": 32
+   }
+  },
+  "slave_during_master_idle": {},
+  "master_during_slave_idle": {
+   "_demo_render_finalize": 1569826,
+   "_sm64_saturn_ztreme_frustum_aabb": 1017545,
+   "_demo_render_prepare_publish": 883863,
+   "_sm64_saturn_matrix_mul.isra.0": 591233,
+   "_actor_meshlet_live_depth_bounds": 460967,
+   "_saturn_geo_enter_object": 409140,
+   "_memcpy": 390113,
+   "_saturn_mtxq_refresh_float_mirror": 305809,
+   "_support_radius_q16": 280929,
+   "_actor_meshlet_core": 275001,
+   "_sm64_saturn_scene_admit_with_scratch": 267515,
+   "_sm64_saturn_terrain_depth_bins_scatter": 262203,
+   "_sm64_saturn_terrain_depth_bins_digit.isra.0": 251115,
+   "_memset": 246477,
+   "___addsf3": 225049,
+   "_sm64_saturn_render_job_queue_job": 180218,
+   "_actor_position_ref": 177408,
+   "___mulsf3": 171491,
+   "_demo_actor_result_read": 158320,
+   "___ashrsi3": 146822
+  },
+  "master_symbols": [
+   {
+    "symbol": "_demo_render_finalize",
+    "cycles": 1569826,
+    "share_of_master": 0.099113,
+    "cycles_per_frame": 377717.0
+   },
+   {
+    "symbol": "___addsf3",
+    "cycles": 1490368,
+    "share_of_master": 0.094097,
+    "cycles_per_frame": 358598.5
+   },
+   {
+    "symbol": "_sm64_saturn_ztreme_frustum_aabb",
+    "cycles": 1017545,
+    "share_of_master": 0.064244,
+    "cycles_per_frame": 244832.2
+   },
+   {
+    "symbol": "___mulsf3",
+    "cycles": 972555,
+    "share_of_master": 0.061404,
+    "cycles_per_frame": 234007.2
+   },
+   {
+    "symbol": "_demo_render_prepare_publish",
+    "cycles": 883863,
+    "share_of_master": 0.055804,
+    "cycles_per_frame": 212666.9
+   },
+   {
+    "symbol": "_sm64_saturn_matrix_mul.isra.0",
+    "cycles": 858459,
+    "share_of_master": 0.0542,
+    "cycles_per_frame": 206554.4
+   },
+   {
+    "symbol": "___divsf3",
+    "cycles": 643407,
+    "share_of_master": 0.040622,
+    "cycles_per_frame": 154810.6
+   },
+   {
+    "symbol": "_saturn_geo_enter_object",
+    "cycles": 533943,
+    "share_of_master": 0.033711,
+    "cycles_per_frame": 128472.4
+   },
+   {
+    "symbol": "_saturn_mtxq_refresh_float_mirror",
+    "cycles": 488725,
+    "share_of_master": 0.030856,
+    "cycles_per_frame": 117592.5
+   },
+   {
+    "symbol": "_actor_meshlet_live_depth_bounds",
+    "cycles": 460967,
+    "share_of_master": 0.029104,
+    "cycles_per_frame": 110913.6
+   },
+   {
+    "symbol": "_memcpy",
+    "cycles": 432841,
+    "share_of_master": 0.027328,
+    "cycles_per_frame": 104146.2
+   },
+   {
+    "symbol": "_memset",
+    "cycles": 339569,
+    "share_of_master": 0.021439,
+    "cycles_per_frame": 81703.9
+   },
+   {
+    "symbol": "_support_radius_q16",
+    "cycles": 280929,
+    "share_of_master": 0.017737,
+    "cycles_per_frame": 67594.5
+   },
+   {
+    "symbol": "_actor_meshlet_core",
+    "cycles": 275001,
+    "share_of_master": 0.017363,
+    "cycles_per_frame": 66168.2
+   },
+   {
+    "symbol": "_sm64_saturn_scene_admit_with_scratch",
+    "cycles": 267515,
+    "share_of_master": 0.01689,
+    "cycles_per_frame": 64367.0
+   },
+   {
+    "symbol": "_sm64_saturn_terrain_depth_bins_scatter",
+    "cycles": 262203,
+    "share_of_master": 0.016555,
+    "cycles_per_frame": 63088.9
+   },
+   {
+    "symbol": "_sm64_saturn_terrain_depth_bins_digit.isra.0",
+    "cycles": 251115,
+    "share_of_master": 0.015855,
+    "cycles_per_frame": 60421.0
+   },
+   {
+    "symbol": "___ashlsi3_r0",
+    "cycles": 247933,
+    "share_of_master": 0.015654,
+    "cycles_per_frame": 59655.3
+   },
+   {
+    "symbol": "_sm64_saturn_render_job_queue_job",
+    "cycles": 180218,
+    "share_of_master": 0.011378,
+    "cycles_per_frame": 43362.4
+   },
+   {
+    "symbol": "_actor_position_ref",
+    "cycles": 177408,
+    "share_of_master": 0.011201,
+    "cycles_per_frame": 42686.3
+   },
+   {
+    "symbol": "___lesf2",
+    "cycles": 173339,
+    "share_of_master": 0.010944,
+    "cycles_per_frame": 41707.2
+   },
+   {
+    "symbol": "___gesf2",
+    "cycles": 171279,
+    "share_of_master": 0.010814,
+    "cycles_per_frame": 41211.6
+   },
+   {
+    "symbol": "_demo_actor_result_read",
+    "cycles": 158320,
+    "share_of_master": 0.009996,
+    "cycles_per_frame": 38093.5
+   },
+   {
+    "symbol": "_sm64_saturn_geo_walk_runtime_run",
+    "cycles": 157512,
+    "share_of_master": 0.009945,
+    "cycles_per_frame": 37899.1
+   },
+   {
+    "symbol": "___lshrsi3_r0",
+    "cycles": 152366,
+    "share_of_master": 0.00962,
+    "cycles_per_frame": 36660.9
+   },
+   {
+    "symbol": "___floatsisf",
+    "cycles": 147357,
+    "share_of_master": 0.009304,
+    "cycles_per_frame": 35455.7
+   },
+   {
+    "symbol": "___ashrsi3",
+    "cycles": 146822,
+    "share_of_master": 0.00927,
+    "cycles_per_frame": 35326.9
+   },
+   {
+    "symbol": "_sm64_saturn_render_job_graph_validate_actor_merge",
+    "cycles": 129001,
+    "share_of_master": 0.008145,
+    "cycles_per_frame": 31039.0
+   },
+   {
+    "symbol": "_find_floor_from_list",
+    "cycles": 126256,
+    "share_of_master": 0.007971,
+    "cycles_per_frame": 30378.5
+   },
+   {
+    "symbol": "_world_bounds",
+    "cycles": 124962,
+    "share_of_master": 0.00789,
+    "cycles_per_frame": 30067.2
+   },
+   {
+    "symbol": "_cur_obj_update",
+    "cycles": 121181,
+    "share_of_master": 0.007651,
+    "cycles_per_frame": 29157.4
+   },
+   {
+    "symbol": "_push",
+    "cycles": 117569,
+    "share_of_master": 0.007423,
+    "cycles_per_frame": 28288.4
+   },
+   {
+    "symbol": "_sm64_saturn_float_to_q16",
+    "cycles": 116752,
+    "share_of_master": 0.007371,
+    "cycles_per_frame": 28091.8
+   },
+   {
+    "symbol": "_saturn_geo_walk_enter",
+    "cycles": 114085,
+    "share_of_master": 0.007203,
+    "cycles_per_frame": 27450.1
+   },
+   {
+    "symbol": "___clzsi2",
+    "cycles": 111150,
+    "share_of_master": 0.007018,
+    "cycles_per_frame": 26743.9
+   },
+   {
+    "symbol": "_sqrtf",
+    "cycles": 99893,
+    "share_of_master": 0.006307,
+    "cycles_per_frame": 24035.3
+   },
+   {
+    "symbol": "_sm64_saturn_geo_walk_runtime_next",
+    "cycles": 72569,
+    "share_of_master": 0.004582,
+    "cycles_per_frame": 17460.9
+   },
+   {
+    "symbol": "___adddf3",
+    "cycles": 62172,
+    "share_of_master": 0.003925,
+    "cycles_per_frame": 14959.2
+   },
+   {
+    "symbol": "_saturn_geo_enter_animated_part",
+    "cycles": 61648,
+    "share_of_master": 0.003892,
+    "cycles_per_frame": 14833.2
+   },
+   {
+    "symbol": "_sm64_saturn_mtxq_scale_vec3f",
+    "cycles": 53424,
+    "share_of_master": 0.003373,
+    "cycles_per_frame": 12854.4
+   }
+  ],
+  "slave_symbols": [
+   {
+    "symbol": "___slave_polling_entry",
+    "cycles": 10358459,
+    "share_of_slave": 0.653996,
+    "cycles_per_frame": 2492356.2
+   },
+   {
+    "symbol": "_demo_terrain_queue_world_lower",
+    "cycles": 1309098,
+    "share_of_slave": 0.082652,
+    "cycles_per_frame": 314983.0
+   },
+   {
+    "symbol": "_sm64_saturn_ir_transform_one",
+    "cycles": 600319,
+    "share_of_slave": 0.037902,
+    "cycles_per_frame": 144443.2
+   },
+   {
+    "symbol": "_demo_prepare_position_owners",
+    "cycles": 463758,
+    "share_of_slave": 0.02928,
+    "cycles_per_frame": 111585.1
+   },
+   {
+    "symbol": "_sm64_saturn_ir_project_view",
+    "cycles": 387974,
+    "share_of_slave": 0.024495,
+    "cycles_per_frame": 93350.7
+   },
+   {
+    "symbol": "_demo_actor_lower_compat_wrapper",
+    "cycles": 358911,
+    "share_of_slave": 0.02266,
+    "cycles_per_frame": 86357.8
+   },
+   {
+    "symbol": "_demo_projected_read",
+    "cycles": 349901,
+    "share_of_slave": 0.022092,
+    "cycles_per_frame": 84189.9
+   },
+   {
+    "symbol": "_demo_actor_queue_vertex_lookup",
+    "cycles": 348979,
+    "share_of_slave": 0.022033,
+    "cycles_per_frame": 83968.1
+   },
+   {
+    "symbol": "_demo_terrain_queue_world_admit",
+    "cycles": 270147,
+    "share_of_slave": 0.017056,
+    "cycles_per_frame": 65000.3
+   },
+   {
+    "symbol": "_demo_view_read",
+    "cycles": 261629,
+    "share_of_slave": 0.016518,
+    "cycles_per_frame": 62950.7
+   },
+   {
+    "symbol": "_demo_actor_admit_compat_wrapper",
+    "cycles": 201041,
+    "share_of_slave": 0.012693,
+    "cycles_per_frame": 48372.6
+   },
+   {
+    "symbol": "___lshrsi3_r0",
+    "cycles": 165031,
+    "share_of_slave": 0.010419,
+    "cycles_per_frame": 39708.2
+   },
+   {
+    "symbol": "_memset",
+    "cycles": 94440,
+    "share_of_slave": 0.005963,
+    "cycles_per_frame": 22723.3
+   },
+   {
+    "symbol": "_sm64_saturn_lod_lifetime_select",
+    "cycles": 84689,
+    "share_of_slave": 0.005347,
+    "cycles_per_frame": 20377.1
+   },
+   {
+    "symbol": "___movmemSI4",
+    "cycles": 79575,
+    "share_of_slave": 0.005024,
+    "cycles_per_frame": 19146.6
+   },
+   {
+    "symbol": "_memcpy",
+    "cycles": 62031,
+    "share_of_slave": 0.003916,
+    "cycles_per_frame": 14925.3
+   },
+   {
+    "symbol": "_sm64_saturn_terrain_clip_near_quad",
+    "cycles": 55327,
+    "share_of_slave": 0.003493,
+    "cycles_per_frame": 13312.3
+   },
+   {
+    "symbol": "_saturn_lod_select",
+    "cycles": 54238,
+    "share_of_slave": 0.003424,
+    "cycles_per_frame": 13050.2
+   },
+   {
+    "symbol": "___movmemSI8",
+    "cycles": 46659,
+    "share_of_slave": 0.002946,
+    "cycles_per_frame": 11226.7
+   },
+   {
+    "symbol": "_demo_terrain_resolved_template",
+    "cycles": 43956,
+    "share_of_slave": 0.002775,
+    "cycles_per_frame": 10576.3
+   },
+   {
+    "symbol": "___movmemSI12",
+    "cycles": 37773,
+    "share_of_slave": 0.002385,
+    "cycles_per_frame": 9088.6
+   },
+   {
+    "symbol": "_saturn_lod_default_thresholds",
+    "cycles": 27025,
+    "share_of_slave": 0.001706,
+    "cycles_per_frame": 6502.5
+   },
+   {
+    "symbol": "_sm64_saturn_div_s64_s32",
+    "cycles": 26028,
+    "share_of_slave": 0.001643,
+    "cycles_per_frame": 6262.6
+   },
+   {
+    "symbol": "_saturn_lod_can_suppress",
+    "cycles": 20770,
+    "share_of_slave": 0.001311,
+    "cycles_per_frame": 4997.5
+   },
+   {
+    "symbol": "_saturn_lod_can_degrade_material",
+    "cycles": 17387,
+    "share_of_slave": 0.001098,
+    "cycles_per_frame": 4183.5
+   },
+   {
+    "symbol": "___movmemSI16",
+    "cycles": 14166,
+    "share_of_slave": 0.000894,
+    "cycles_per_frame": 3408.5
+   },
+   {
+    "symbol": "___movmemSI20",
+    "cycles": 12990,
+    "share_of_slave": 0.00082,
+    "cycles_per_frame": 3125.5
+   },
+   {
+    "symbol": "___movmemSI24",
+    "cycles": 11283,
+    "share_of_slave": 0.000712,
+    "cycles_per_frame": 2714.8
+   },
+   {
+    "symbol": "___ashlsi3_r0",
+    "cycles": 10579,
+    "share_of_slave": 0.000668,
+    "cycles_per_frame": 2545.4
+   },
+   {
+    "symbol": "_sm64_saturn_render_job_graph_propagate_failures",
+    "cycles": 8444,
+    "share_of_slave": 0.000533,
+    "cycles_per_frame": 2031.7
+   },
+   {
+    "symbol": "_graph_claim",
+    "cycles": 7401,
+    "share_of_slave": 0.000467,
+    "cycles_per_frame": 1780.8
+   },
+   {
+    "symbol": "_sm64_saturn_render_job_queue_claimed_job",
+    "cycles": 6451,
+    "share_of_slave": 0.000407,
+    "cycles_per_frame": 1552.2
+   },
+   {
+    "symbol": "_sm64_saturn_render_output_bank_owner_lane",
+    "cycles": 4785,
+    "share_of_slave": 0.000302,
+    "cycles_per_frame": 1151.3
+   },
+   {
+    "symbol": "_sm64_saturn_render_job_queue_claim_index",
+    "cycles": 4189,
+    "share_of_slave": 0.000264,
+    "cycles_per_frame": 1007.9
+   },
+   {
+    "symbol": "_demo_terrain_queue_claim_index",
+    "cycles": 3517,
+    "share_of_slave": 0.000222,
+    "cycles_per_frame": 846.2
+   },
+   {
+    "symbol": "_sm64_saturn_render_callback_context_open",
+    "cycles": 2879,
+    "share_of_slave": 0.000182,
+    "cycles_per_frame": 692.7
+   },
+   {
+    "symbol": "_sm64_saturn_render_output_bank_publish",
+    "cycles": 2871,
+    "share_of_slave": 0.000181,
+    "cycles_per_frame": 690.8
+   },
+   {
+    "symbol": "_sm64_saturn_render_job_queue_job",
+    "cycles": 1927,
+    "share_of_slave": 0.000122,
+    "cycles_per_frame": 463.7
+   },
+   {
+    "symbol": "_sm64_saturn_render_job_bridge_begin_output",
+    "cycles": 1769,
+    "share_of_slave": 0.000112,
+    "cycles_per_frame": 425.6
+   },
+   {
+    "symbol": "_graph_current",
+    "cycles": 1750,
+    "share_of_slave": 0.00011,
+    "cycles_per_frame": 421.1
+   }
+  ],
+  "vdp_witness": {
+   "samples": 650,
+   "edsr_cef_set": 47,
+   "edsr_cef_share": 0.072308,
+   "edsr_bef_set": 650,
+   "tvstat_vblank_set": 98,
+   "tvstat_vblank_share": 0.150769,
+   "copr_min": 8,
+   "copr_max": 2216,
+   "copr_distinct": 62
+  },
+  "per_window": [
+   {
+    "steps": 13000000,
+    "total_cycles": 15838709,
+    "vblanks_covered": 35.3983,
+    "master_idle_share": 0.0,
+    "slave_idle_share": 0.653996,
+    "wall_seconds": 1548.12
+   }
+  ],
+  "callee_call_sites": {},
+  "caller_rollup": []
+ }
+}

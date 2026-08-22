@@ -434,6 +434,19 @@ slow frames in one 29-interval window rather than a systematic loss of floor —
 but it is a measured regression on the metric the owner feels as smoothness,
 and it should be re-measured before this build is promoted.
 
+**Re-measured — see `w2-onepercent-low-recheck.md`.** It is reproducible (the
+capture is bit-deterministic; 5 repetitions per arm returned identical
+sequences), the long frames are route-locked, and the sign of the delta
+depends on where the 29-frame window sits: worse at 4 of 10 swept start ticks,
+unchanged at 3, and **better at 3** — including **+22.2% at tick 210**, where
+the baseline itself produces an 11-VBlank frame and the candidate's worst is 9.
+Over route ticks 30–248 the candidate's worst frame is *shorter* than the
+baseline's. The two 10-VBlank intervals quoted above sit at route ticks 31 and
+52, and are the same two frames every time. Matched ≥4-frame idle censuses at
+tick 30 show they are the master **waiting**, not working: baseline master
+idle `0.000000`, candidate 0.2108 VB/frame, against a cadence excess of
+0.2069 VB/frame.
+
 **Conversion rate.** Square roots cost 326,395 cycles/frame (0.729 VB) before.
 The measured frame shortened by 0.3793 VB at tick 150, so the integer square
 root costs about 0.35 VB/frame — roughly **750 cycles per call against 1,559**,
@@ -642,4 +655,8 @@ the reason.**
 - **`id-28b8cb0e531f8476` is an evidence artifact, not an accepted
   baseline.** It needs an owner-observed CUE before it replaces
   `id-57fb7312058b7f2e`, per AGENTS.md's product gate — and the tick-30 1%
-  low should be re-measured as part of that.
+  low should be re-measured as part of that. **That re-measurement is done:
+  `w2-onepercent-low-recheck.md`, 50 cadence runs across 20 route positions.
+  Its recommendation is to promote with the tick-30 figure documented as an
+  accepted, understood, window-position-dependent artifact.** The owner-observed
+  CUE is still the gate.
