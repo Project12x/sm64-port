@@ -387,6 +387,36 @@ def validate_startup_vblanks(startup_vblanks: int) -> int:
     return startup_vblanks
 
 
+DRAM_CART_BASE = 0x22400000
+DRAM_CART_SIZE = 0x00400000
+DRAM_CART_ABSENT_MESSAGE = (
+    "DRAM cart is not mapped: the cart window reads as open bus (0xFF). The "
+    "ymir-headless binary accepted --dram-cart but did not honour it, which "
+    "means it predates DRAM-cart support. Ymir's parser ignores unknown flags "
+    "silently, so this must be detected here rather than at launch. Use a "
+    "ymir-headless built with --dram-cart support."
+)
+
+
+def assert_dram_cart_mapped(client: Any, probe: dict[str, Any]) -> None:
+    """Separate 'cart absent' from 'cart not staged yet' before the wait loop.
+
+    An absent cart reads 0xFF (open bus); a mapped-but-unstaged cart reads
+    0x00. Without this the wait loop burns its whole budget and then blames
+    target identity, which sends the reader after the build instead of the
+    emulator binary.
+    """
+    address = probe.get("address")
+    if address is None:
+        return  # no mapped window named, so there is nothing to gate on
+    if not DRAM_CART_BASE <= int(address) < DRAM_CART_BASE + DRAM_CART_SIZE:
+        return
+    for offset in (0x0, DRAM_CART_SIZE // 2):
+        if read_exact(client, DRAM_CART_BASE + offset, 256) != bytes(256 * [0xFF]):
+            return
+    raise ValueError(DRAM_CART_ABSENT_MESSAGE)
+
+
 def wait_for_target_identity(
     client: Any, probe: dict[str, Any], *, startup_vblanks: int
 ) -> dict[str, Any]:
@@ -939,7 +969,8 @@ def _write_report(path: Path, report: dict[str, Any]) -> None:
     path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Expose the CLI surface so its defaults are testable."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ymir", type=Path, required=True, help="Ymir headless executable")
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS image")
@@ -957,7 +988,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--startup-vblanks",
         type=int,
-        default=600,
+        default=2048,
         help="separate identity-load wait bound (1..4096)",
     )
     # T2.19d: this tool counts *presentation events*, not VBlanks, so its
@@ -986,6 +1017,11 @@ def main(argv: list[str] | None = None) -> int:
             "not be compared against the accepted caches-off baselines"
         ),
     )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     report: dict[str, Any] = {
         "schema": SCHEMA,
@@ -1054,6 +1090,8 @@ def main(argv: list[str] | None = None) -> int:
         client = YmirClient(
             args.ymir, args.ipl, capture_game, args.timeout, sh2_cache=args.sh2_cache
         )
+        stage = "dram-cart"
+        assert_dram_cart_mapped(client, identity_probe)
         stage = "bios-handoff"
         run_bios_handoff(client, lambda frames: client.call("exec.run_for", {"frames": frames}), lambda _label: None)
         stage = "target-identity"

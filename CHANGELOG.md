@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`tools/saturn/capture_sourceboot_throughput.py` — the live capture harness,
+  which had been failing every capture at `target-identity` on every build
+  including the owner-accepted baseline.** **Root cause: binary selection, not
+  the environment and not a regression.** Two `ymir-headless` builds are present
+  in the tree, and `ymir-agent/build-agent/...` predates DRAM-cart support. Ymir's
+  argument parser ignores unknown flags **silently**, so that binary accepts
+  `--dram-cart`, boots the game, and reaches the *same* boot-trace stage 3 as a
+  good binary — it simply never maps the cart. The identity probe binds to
+  `.cart_rodata` at `0x22400000` (section 1, flagged `AX`, so it is the first
+  ALLOC+EXECINSTR section `build_elf_identity_probe` finds), so with no cart the
+  window reads `0xFF` open bus forever and identity can never match **at any
+  VBlank count** — which is why raising the budget to 4096 and 8192 changed
+  nothing, and why the accepted baseline "failed identically". Diagnosed by
+  probing the cart window, boot trace and HWRAM through the boot sequence
+  side by side on both binaries.
+- **A second, independent defect: `--startup-vblanks` defaulted to 600, below
+  the ~683 the current build actually needs.** Identity is reached at attempt
+  **683** on `id-c7ef9bd81c762a6d`, so *a correct binary invoked with defaults
+  still failed*. Default raised to 2048 (bound is 4096); this is a wait ceiling,
+  not a fixed cost, so captures do not get slower — a full run is 44 s.
+- **Fail-fast on an absent cart (`assert_dram_cart_mapped`, new `dram-cart`
+  stage).** An absent cart reads `0xFF`, a mapped-but-unstaged cart reads `0x00`,
+  so the two are distinguishable *before* the wait loop starts. The wrong binary
+  now fails in **0 s** naming the emulator binary, instead of burning the whole
+  startup budget and blaming target identity — which sent readers after the
+  build. Absence requires **two** widely separated all-`0xFF` windows, so a
+  legitimate all-`0xFF` run inside staged data cannot trip it.
+- **Consumer-facing impact:** live measurement is unblocked. Baseline
+  `id-c7ef9bd81c762a6d` re-measured through the repaired harness at **6.9048
+  mean / 6.6667 median / 6.0 1%-low** over 29 intervals at tick 30, reproducible
+  to the digit across runs — consistent with the accepted "animated Mario is a
+  little slower" reading against W2's 7.3109.
+- **Prerequisite for anyone running captures:** use a `ymir-headless` with
+  DRAM-cart support (`ymir-agent/build-agent2/...`). The old `build-agent`
+  binary is now detected rather than silently mismeasured.
+
+### Changed
+
+- **`build_parser()` extracted from `main()`** in the throughput harness so CLI
+  defaults are testable; `main()` now calls it. No behavioural change beyond the
+  raised default above.
+
 ### Added
 
 - **`tools/saturn/manifests/actors/bobomb.json` and

@@ -281,6 +281,69 @@ def build_identity_fixture(root: Path, version: int) -> bytes:
     return identity.build_identity(spec).raw
 
 
+class DramCartPresenceTests(unittest.TestCase):
+    """An absent DRAM cart must be named as such, not blamed on target identity.
+
+    Ymir's argument parser ignores unknown flags silently, so a ymir-headless
+    that predates --dram-cart accepts the flag, boots the game, reaches the
+    same boot-trace stage, and only differs in that the cart window reads as
+    open bus. Before this check that produced a target-identity timeout after
+    the whole startup budget, which sent readers after the build.
+    """
+
+    @staticmethod
+    def _client(fill: int):
+        class FakeYmir:
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                assert method == "mem.peek"
+                return {"data": [fill] * int(params["count"])}
+
+        return FakeYmir()
+
+    def _cart_probe(self) -> dict[str, int]:
+        return {"address": capture.DRAM_CART_BASE, "size": capture.IDENTITY_PROBE_BYTES}
+
+    def test_open_bus_cart_is_reported_as_an_absent_cart(self) -> None:
+        with self.assertRaises(ValueError) as caught:
+            capture.assert_dram_cart_mapped(self._client(0xFF), self._cart_probe())
+        self.assertEqual(str(caught.exception), capture.DRAM_CART_ABSENT_MESSAGE)
+
+    def test_mapped_but_unstaged_cart_reads_zero_and_is_accepted(self) -> None:
+        capture.assert_dram_cart_mapped(self._client(0x00), self._cart_probe())
+
+    def test_probe_outside_the_cart_window_is_not_gated_on_the_cart(self) -> None:
+        for address in (
+            capture.DRAM_CART_BASE - 1,
+            capture.DRAM_CART_BASE + capture.DRAM_CART_SIZE,
+            0x06004000,
+        ):
+            with self.subTest(address=address):
+                capture.assert_dram_cart_mapped(
+                    self._client(0xFF),
+                    {"address": address, "size": capture.IDENTITY_PROBE_BYTES},
+                )
+
+    def test_a_single_all_ff_window_is_not_enough_to_declare_absence(self) -> None:
+        """Real staged data may contain an all-0xFF run; absence is global."""
+
+        class PartlyFF:
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                assert method == "mem.peek"
+                count = int(params["count"])
+                if int(params["address"]) == capture.DRAM_CART_BASE:
+                    return {"data": [0xFF] * count}
+                return {"data": [0x5A] * count}
+
+        capture.assert_dram_cart_mapped(PartlyFF(), self._cart_probe())
+
+    def test_startup_budget_default_clears_the_observed_load_wait(self) -> None:
+        """Identity was observed at attempt 683 on the accepted baseline; the
+        old default of 600 failed on a correct binary for that reason alone."""
+        parser_default = capture.build_parser().get_default("startup_vblanks")
+        self.assertGreaterEqual(parser_default, 1024)
+        self.assertLessEqual(parser_default, capture.MAX_VBLANKS)
+
+
 class ThroughputCaptureTests(unittest.TestCase):
     def test_build_identity_probe_uses_one_snapshot_if_elf_path_changes(self) -> None:
         class MutatingElfPath:
