@@ -59,9 +59,12 @@ Both references push 2.7–3.7× our draw volume on the same hardware. The frame
 somewhere other than drawing, and the two largest identified consumers are both artifacts
 of running a decompiled N64 game:
 
-- **The geo-graph walk — 18.18% of the frame.** T2.15 measured `SKIP_GEO_WALK` at
-  +0.9735 FPS / −1.7241 VB, the largest single lever recorded in Sprint 2. Only **0.479%**
-  of that region is display-list construction (T2.15); the rest is traversal and state work.
+- **The geo-graph walk region — 18.18% of the frame, but see W1: this is NOT a lever.**
+  T2.15 measured `SKIP_GEO_WALK` at +0.9735 FPS / −1.7241 VB. **That diagnostic skips
+  animation advance, camera publication and callback side effects — all load-bearing —
+  so it sizes the region, not the removable part.** The removable part is the
+  matrix-stack bookkeeping, which has never been sized. Display-list construction, the
+  one piece that was measured, is 0.479% of the region and already declined.
 - **Soft-float — ~19–20% of the master critical path.** Both references are fixed-point
   throughout.
 
@@ -149,12 +152,18 @@ subsystems; recreated ones need behavioural acceptance instead. See W6b as amend
 | **S6** All levels | Depends on S1 + W3. |
 | **S7** Perf & hardware, 6–10 FPS band | W0–W2 serve this; hardware validation still open. |
 
-**Ordering rule:** W0 before anything (correctness). W1 and W2 are independent and may run
-in parallel — W1 is structural in `src/game/`, W2 is arithmetic in `src/port/saturn/`.
-W3 is offline and independent of both. W4 is a standing policy, not a task.
-**W6a should run early regardless of the rest** — it is bit-exact, whole-program, and
-does not depend on W5's measurement. **W6b runs last**, after W5a makes the category
-measurable and W5b says which parts of the simulation are hot.
+**Ordering rule (re-ranked 2026-08-17, after W1's headline figure was withdrawn):**
+**W0 first — correctness**, and note the open audit finding below before treating it as
+closed. **W6a next**: it is bit-exact, whole-program, provable by an existing gate, needs
+no dependency enumeration, and pays proportionally to whatever float's share turns out to
+be — the only large lever here whose correctness is *decidable*. **Then W5a**, because
+until the phase decomposition closes again nothing can attribute simulation cost, and
+several of the remaining decisions depend on that number. **W3 is offline and independent**
+of all of them and can run in parallel at any time. **W2 after W6a**, since W6a makes its
+remaining sites cheaper and may change which are worth converting. **W1 is demoted to a
+measurement task** — its 18.18% headline was withdrawn and its real size is unknown;
+size it before scoping it. **W6b last**, after W5b's actor-scaling curve says which parts
+of the simulation are hot. **W4 is standing policy, not a task.**
 
 ---
 
@@ -241,53 +250,76 @@ obsolete spelling.
 
 ---
 
-## W1 — Remove the N64 scene-graph traversal *(largest measured lever, 18.18%)*
+## W1 — Delete the discarded transform bookkeeping *(size unknown — measure first)*
 
-**Why:** the walk produces a display list nothing reads. Under `SATURN_DEMO_PATH=1`,
-display submission is suppressed around the whole of `game_loop_one_iteration()`
-(`sourceboot/main.c:547-559`), `src/game/game_init.c:464` never calls `exec_display_list`,
-and `sourceboot/main.c:2151` passes `NULL, NULL` to `sm64_saturn_source_runtime_configure`.
-Witnesses (T2.14, 50 s product capture): `submitted_tasks` **0.000/frame**,
-`command_count` **0.000/frame**, `scene_graph_walks` **1.000/frame**.
+> **Corrected 2026-08-17 after owner challenge: "isn't the n64 scene graph traversal
+> needed for actual gameplay?"** It is. The previous title ("Remove the N64
+> scene-graph traversal") and its headline figure (18.18%) were both wrong, and the
+> error is recorded here rather than quietly edited away — see *Sizing error* below.
 
-**What the prep established (2026-08-17, this session):**
+**The traversal must stay. Two hard dependencies:**
 
-- **No reader outside `src/game/rendering_graph_node.c` touches `gMatStack`, `gMatStackQ`
-  or `gMatStackFixed`.** Those stacks are maintained per node solely to stamp transforms
-  into display-list entries. This is the deletable mass.
-- **`gCurGraphNodeCamera` escapes and is read by gameplay code** —
-  `src/game/behaviors/bowser.inc.c:1760`, `king_bobomb.inc.c:11`, `ukiki.inc.c:51`,
-  `src/game/behavior_actions.c:167` each call
-  `create_transformation_from_matrices(..., *gCurGraphNodeCamera->matrixPtr)`; also
-  `src/game/level_geo.c:32-33` and `src/game/mario_misc.c:409`. `matrixPtr` is set to
-  `&gMatStack[gMatStackIndex]` at `rendering_graph_node.c:730`, so **one matrix must
-  survive** — not the stack discipline around it.
-- **`gCurGraphNodeCamFrustum`** (`:562`, `:572`) has the same class of consumer via
-  `src/engine/graph_node.c:639-642`.
-- **Geo callbacks carry side effects that must keep running:** `gMovtexCounter`,
-  `gPaintingUpdateCounter`, `gEnvFxMode` (generated-list and background nodes),
-  `gShadowAboveWaterOrLava` and `gMarioOnIceOrCarpet` (shadow node), per T2.15's
-  "both" classification.
-- **The renderer does not depend on the walk.** `saturn_actor_bridge.c:114-135` reads
-  `gMarioState->pos`, `gLakituState.*` and `gMarioObject->header.gfx.animInfo.*` — all
-  simulation-owned.
+- **Animation frames advance inside the walk.** `rendering_graph_node.c:1302` calls
+  `geo_update_animation_frame(node, &node->animFrameAccelAssist)`. The Saturn
+  renderer then reads `animInfo.animFrame` through `saturn_actor_bridge.c:133-134`
+  to select poses — **so the walk is what currently feeds the renderer's animation.**
+  Remove it and animation stops advancing. (Note `mario.c:188` calls the same
+  function separately; which is authoritative for Mario needs establishing before any
+  change.)
+- **The camera matrix is read by gameplay** — `src/game/behaviors/bowser.inc.c:1760`,
+  `king_bobomb.inc.c:11`, `ukiki.inc.c:51`, `src/game/behavior_actions.c:167` each
+  call `create_transformation_from_matrices(..., *gCurGraphNodeCamera->matrixPtr)`;
+  also `level_geo.c:32-33` and `mario_misc.c:409`. `matrixPtr` points at
+  `&gMatStack[gMatStackIndex]` (`rendering_graph_node.c:730`), so **one matrix must
+  survive** — but not the stack discipline around it. `gCurGraphNodeCamFrustum`
+  (`:562`, `:572`) has the same class of consumer via `graph_node.c:639-642`.
 
-**Approach:** enumerate every global the walk writes; for each, find readers outside the
-walk; delete the ones with none. `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1`
-(`sourceboot/main.c:549-556`) already bounds the prize as a sealed diagnostic — it
-deliberately invalidates this state, so it is a **ceiling, never a shippable config**.
+**What is actually removable, and it is narrow:** nothing outside
+`src/game/rendering_graph_node.c` reads `gMatStack`, `gMatStackQ` or
+`gMatStackFixed`. Those stacks are maintained per node solely to stamp transforms
+into display-list entries that are then discarded. **That bookkeeping is the target — not
+the traversal.**
 
-**Correctness bar:** byte-identical published state. Capture the walk's outputs (surviving
-camera matrix, bridge snapshot fields, animation IDs, callback counters) before and after
-and assert identity across a frame sweep. Mutation-check with a perturbed matrix entry, a
-perturbed animation ID, and a suppressed callback side effect — each must fail.
+The list is genuinely dead: under `SATURN_DEMO_PATH=1` display submission is
+suppressed around all of `game_loop_one_iteration()` (`sourceboot/main.c:547-559`),
+`src/game/game_init.c:464` never calls `exec_display_list`, and `main.c:2151`
+passes `NULL, NULL` to `sm64_saturn_source_runtime_configure`. T2.14 witnesses over a
+50 s product capture: `submitted_tasks` **0.000/frame**, `command_count` **0.000/frame**,
+`scene_graph_walks` **1.000/frame**.
 
-**Size:** ceiling is +0.9735 FPS / −1.7241 VB. Reachable share unknown until the
-enumeration is done; T2.15's 0.479% figure applies **only** to display-list construction,
-which is already declined.
+**Correction to an earlier claim in this plan:** `gShadowAboveWaterOrLava` and
+`gMarioOnIceOrCarpet` were listed as gameplay interfaces the walk owns. They are not —
+grep finds no reader outside `rendering_graph_node.c` and `shadow.c`. They are
+render-only, so that constraint is smaller than stated. The geo-callback side effects
+that **do** need to keep running are `gMovtexCounter`, `gPaintingUpdateCounter` and
+`gEnvFxMode`.
+
+### Sizing error, recorded
+
+**The 18.18% figure does not belong to this workstream.** It came from
+`SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1`, which sets `scene_graph_suppressed` and — by
+its own comment at `sourceboot/main.c:549-556` — deliberately invalidates animation,
+warp, camera, water, moving-texture and matrix state. **It measures skipping everything,
+and most of what it skips is load-bearing.** Quoting it as W1's prize repeated exactly the
+error T2.14 made with "~10x the shadow path" (24-fold high) and that T2.15 caught by
+measuring instead of extrapolating.
+
+**Known lower bound:** T2.15 measured display-list *construction* at **0.479%** of the
+region — already declined at +0.005 FPS. The matrix-stack maintenance is the untested
+remainder and **has never been sized separately**.
+
+**First task is therefore measurement, not deletion:** isolate the cost of the matrix-stack
+push/pop and `gMatStackFixed[]` writes specifically — with animation advance, camera
+publication and callback side effects all still running. **If that number is a fraction of
+a percent, W1 closes as declined**, like the display-list half before it.
+
+**Correctness bar (unchanged, if it proceeds):** byte-identical published state — surviving
+camera matrix, bridge snapshot fields, animation IDs, callback counters — asserted across a
+frame sweep, with mutations on a perturbed matrix entry, a perturbed animation ID and a
+suppressed callback side effect, each of which must fail.
 
 **Risk:** this is `src/game/` — decomp-adjacent, non-GPL, and the four behaviour files
-above are gameplay. Changes must be guarded so the non-Saturn arm is untouched.
+above are gameplay. Any change must be guarded so the non-Saturn arm is untouched.
 
 ---
 
