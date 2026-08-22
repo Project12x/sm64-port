@@ -69,6 +69,20 @@
   `vdp1_fence_waits` field now counts busy deferrals rather than blocking
   waits.
 
+### Added
+
+- W6a evidence: `docs/saturn/evidence/reports/w6a-softfloat-implementation.md`
+  plus the four artifacts it cites. This is the measurement that justifies the
+  soft-float replacement above and the audit trail for reversing it: the
+  operation-level master census before and after (exact residency, not the
+  burst sampler T2.20 caught reporting the soft-float trend with the wrong
+  sign), the 43.3-billion-check gate log, and the candidate cadence capture.
+  It also records two premises that did not survive contact with the code --
+  soft-fp was already emitting `dmulu.l` for the mantissa multiply, and
+  `verify-softfp-bitexact` being a *host* test is what rules out every
+  hand-written-assembly candidate -- so neither is re-asserted later.
+
+
 ### Fixed
 
 - **`verify-softfp-bitexact` is runnable again**, and no longer creates a
