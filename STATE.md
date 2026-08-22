@@ -10,6 +10,26 @@ Owner: **"animation is working... a little slower - it is not meaningfully bad,
 and this should be our future baseline. jump animation and others are working as
 well."**
 
+**R2 entry landed 2026-08-22 on `id-0e0420373f40f11e` (`live-observed`, not
+owner-accepted).** The actor pose-slot pool replaces
+`complete_actor_pose_slots[2]`, the fixed 8,560 B Mario-only HWRAM global that
+made a second animated actor impossible. **Headline finding: most props need no
+pose slot at all** — 74 of 130 SM64 actor directories have no
+`GEO_ANIMATED_PART`, and only 8 of BOB's 86 closure records carry an animation
+table, so coins and trees are a transform and a variant index, not a posed
+vertex buffer. Mario is unchanged: the W2 route timeline shows **0 mismatches
+over ticks 0-199** on every simulation field, and tick-30 cadence is identical
+to the accepted baseline (6.8775 / 6.6667, 8.7241 VB/frame, same 21x9+8x8
+histogram); tick 150 is 6.7969 / 6.6667, -0.39% on the mean with the median
+unchanged. On target, all 11 boot self-checks and all 17 probe checks pass,
+with `pool_alias_faults == 0` over 199 evaluations. **HWRAM free 9,944 ->
+9,016 B, LWRAM 88,176 -> 76,864 B, cart unchanged at 482,160 B**; the 928 B of
+HWRAM is the on-target evidence scaffolding, not the allocator, and section 6.1
+of [`docs/saturn/evidence/reports/r2-pose-slot-pooling.md`](docs/saturn/evidence/reports/r2-pose-slot-pooling.md)
+accounts for every byte. **The next wave needs a rigid-part pose evaluator,
+distance-ordered claiming, a per-instance owner key, and `release_owner` wired
+to despawn.**
+
 **This is half of charter R3's gate** (*"Owner accepts animated Mario, then HUD"*).
 **Animated Mario: accepted. HUD: outstanding.**
 

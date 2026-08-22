@@ -464,6 +464,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/gfx/saturn_actor_texture_residency.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_material.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_pose.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_pose_pool.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c \

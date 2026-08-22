@@ -1,0 +1,147 @@
+{
+ "checks": {
+  "alias_check_actually_ran": true,
+  "alias_check_advanced_over_the_route": true,
+  "alias_checks_match_evaluate_calls": true,
+  "bridge_fallback_never_used": true,
+  "cold_arena_is_10240_bytes": true,
+  "cold_pool_partitioned": true,
+  "evaluate_ran": true,
+  "exhaustion_was_exercised": true,
+  "hot_pool_serves_both_mario_generations": true,
+  "hot_slot_is_the_expected_size": true,
+  "lwram_slices_still_staged": true,
+  "no_alias_fault_all_session": true,
+  "pool_ready": true,
+  "pool_selftest_all_passed": true,
+  "probe_magic_ok": true,
+  "stale_handle_was_rejected": true,
+  "two_cold_tenants_held": true
+ },
+ "created_utc": "2026-08-22T17:02:46.062339+00:00",
+ "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\sourceboot\\e2-bob-identity-id-0e0420373f40f11e\\obj\\sm64-saturn-sourceboot-e2.elf",
+ "game": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\sourceboot\\e2-bob-identity-id-0e0420373f40f11e\\sm64-saturn-sourceboot-e2.cue",
+ "probe_first": {
+  "bank_animation_count": 209,
+  "bank_vertex_count": 424,
+  "evaluate_calls": 99,
+  "fallback_hits": 0,
+  "last_fallback_requested_id": 0,
+  "magic": 1396788813,
+  "magic_ok": true,
+  "pool_alias_faults": 0,
+  "pool_cold_arena_bytes": 10240,
+  "pool_cold_claim_failures": 2,
+  "pool_cold_live": 2,
+  "pool_cold_peak_live": 16,
+  "pool_cold_slot_count": 16,
+  "pool_cold_stale_resolves": 2,
+  "pool_frames_checked": 99,
+  "pool_hot_live": 2,
+  "pool_hot_slot_bytes": 3000,
+  "pool_ready": 1,
+  "pool_selftest": {
+   "cold_init": true,
+   "exhaustion_harmless": true,
+   "exhaustion_refuses": true,
+   "hot_init": true,
+   "mario_claimed": true,
+   "mario_generations_disjoint": true,
+   "oversize_refused": true,
+   "release_kills_handle": true,
+   "reuse_ok": true,
+   "two_tenants_claimed": true,
+   "two_tenants_disjoint": true
+  },
+  "pool_selftest_mask": 2047,
+  "staged_slices": 1
+ },
+ "probe_last": {
+  "bank_animation_count": 209,
+  "bank_vertex_count": 424,
+  "evaluate_calls": 199,
+  "fallback_hits": 0,
+  "last_fallback_requested_id": 0,
+  "magic": 1396788813,
+  "magic_ok": true,
+  "pool_alias_faults": 0,
+  "pool_cold_arena_bytes": 10240,
+  "pool_cold_claim_failures": 2,
+  "pool_cold_live": 2,
+  "pool_cold_peak_live": 16,
+  "pool_cold_slot_count": 16,
+  "pool_cold_stale_resolves": 2,
+  "pool_frames_checked": 199,
+  "pool_hot_live": 2,
+  "pool_hot_slot_bytes": 3000,
+  "pool_ready": 1,
+  "pool_selftest": {
+   "cold_init": true,
+   "exhaustion_harmless": true,
+   "exhaustion_refuses": true,
+   "hot_init": true,
+   "mario_claimed": true,
+   "mario_generations_disjoint": true,
+   "oversize_refused": true,
+   "release_kills_handle": true,
+   "reuse_ok": true,
+   "two_tenants_claimed": true,
+   "two_tenants_disjoint": true
+  },
+  "pool_selftest_mask": 2047,
+  "staged_slices": 1
+ },
+ "schema": "sm64-saturn-r2-pose-pool-probe-v1",
+ "status": "complete",
+ "symbols": {
+  "_complete_actor_cold_arena": {
+   "address": 2101776,
+   "size": 10240
+  },
+  "_complete_actor_cold_pool": {
+   "address": 2112016,
+   "size": 524
+  },
+  "_complete_actor_hot_arena": {
+   "address": 101575016,
+   "size": 6000
+  },
+  "_complete_actor_hot_pool": {
+   "address": 2112540,
+   "size": 524
+  },
+  "_complete_actor_joint_workspace": {
+   "address": 101581016,
+   "size": 1280
+  },
+  "_sm64_saturn_complete_actor_probe": {
+   "address": 2097224,
+   "size": 72
+  }
+ },
+ "target_identity": {
+  "address": 574619648,
+  "expected_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+  "match": true,
+  "observed_sha256": "d88b17a9fd1c42e57e3a0c76cd790a506b6a7e778f0a37dfc63f1850850d23b5",
+  "size": 16,
+  "startup_identity_attempts": 683,
+  "startup_vblanks_waited": 683
+ },
+ "vblanks_advanced": 879,
+ "warmup": {
+  "addresses": {
+   "global_timer": "0x60bd7a4",
+   "replay_ticks": "0x60f34c0"
+  },
+  "global_timer": 100,
+  "max_vblanks": 20000,
+  "mode": "ticks",
+  "replay_ticks": 100,
+  "start_global_timer": 0,
+  "start_replay_ticks": 0,
+  "steps": 127,
+  "target_tick": 100,
+  "vblanks_advanced": 2380
+ }
+}

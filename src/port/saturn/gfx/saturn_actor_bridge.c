@@ -8,6 +8,7 @@
  * source animation until their source pose bank is promoted.
  */
 #include "saturn_actor_bridge.h"
+#include "saturn_actor_pose_pool.h"
 #include "saturn_render_native_math.h"
 
 #include <string.h>
@@ -29,21 +30,73 @@
 #if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
 extern const uint8_t sm64_saturn_mario_actor_bank_data[];
 extern const uint32_t sm64_saturn_mario_actor_bank_size;
+/* One published pose per in-flight render generation.  This is a pipeline
+ * depth (`sm64_saturn_render_snapshot_bank_t.slot[2]`), not an actor count. */
 #define COMPLETE_ACTOR_POSE_SLOT_COUNT 2U
+#define COMPLETE_ACTOR_OWNER_MARIO 0x4D41524FUL /* 'MARO' */
+
+/* The joint matrices are workspace, not published state: nothing downstream
+ * of the evaluator reads them (`sm64_saturn_actor_pose_view_t` carries only
+ * vertices, lights and the root translation, and the render worker -- master
+ * and slave alike -- reads only those).  They were per-slot in the shipped
+ * build, which cost 1,280 B of HWRAM per generation for bytes no consumer
+ * ever looks at.  Exactly one evaluator lane exists: the master sim tick
+ * calls complete_actor_evaluate once per tick and no other caller is compiled
+ * into the product tuple.  A second concurrent evaluator would need a second
+ * workspace, 1,280 B each. */
+#define COMPLETE_ACTOR_JOINT_CAPACITY 20U
 typedef struct complete_actor_pose_slot {
     int16_t vertices[SM64_MARIO_VERTEX_COUNT][3];
     uint8_t lights[SM64_MARIO_VERTEX_COUNT];
-    int32_t joints[20U * 16U];
     sm64_saturn_actor_pose_view_t evaluated;
     uint16_t animation_id;
     uint16_t animation_frame;
     uint8_t valid;
 } complete_actor_pose_slot_t;
 static sm64_saturn_actor_bank_view_t complete_actor_bank;
-static complete_actor_pose_slot_t complete_actor_pose_slots[
-    COMPLETE_ACTOR_POSE_SLOT_COUNT];
 static uint8_t complete_actor_next_pose_slot;
 static uint8_t complete_actor_bank_ready;
+
+/* --- pose-slot pools ----------------------------------------------------
+ *
+ * Two arenas, one allocator.  Residency is the priority mechanism: Mario is
+ * the only tenant of the hot HWRAM arena, so no number of enemies can starve
+ * him, and no enemy pays for his 2,968-byte skinned pose.  Everyone else
+ * claims from the cold LWRAM arena, which is 16-bit and slower but has
+ * ~88 KB free against HWRAM tight ~2 KB of margin.
+ *
+ * Memory record: hot arena = 2 * sizeof(complete_actor_pose_slot_t) = 6,000 B
+ * of HWRAM (the shipped build spent 8,560 B on the same two slots), plus
+ * 1,280 B of shared joint workspace.  Cold arena = 10,240 B of LWRAM.
+ * Lifetime is the process; the owner is this file; reset happens only at bank
+ * re-validation, which is once. */
+#define COMPLETE_ACTOR_COLD_ARENA_BYTES 10240U
+#define COMPLETE_ACTOR_COLD_SMALL_BYTES 256U
+#define COMPLETE_ACTOR_COLD_LARGE_BYTES 1024U
+
+static int32_t complete_actor_joint_workspace[COMPLETE_ACTOR_JOINT_CAPACITY * 16U];
+static uint8_t complete_actor_hot_arena[
+    COMPLETE_ACTOR_POSE_SLOT_COUNT * sizeof(complete_actor_pose_slot_t)]
+    __attribute__((aligned(4)));
+static sm64_saturn_pose_handle_t complete_actor_mario_handle[
+    COMPLETE_ACTOR_POSE_SLOT_COUNT];
+static uint8_t complete_actor_pools_ready;
+
+static sm64_saturn_pose_pool_t complete_actor_hot_pool
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+static sm64_saturn_pose_pool_t complete_actor_cold_pool
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+static uint8_t complete_actor_cold_arena[COMPLETE_ACTOR_COLD_ARENA_BYTES]
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+
+static complete_actor_pose_slot_t *complete_actor_slot(uint8_t index)
+{
+    if (index >= COMPLETE_ACTOR_POSE_SLOT_COUNT ||
+        complete_actor_pools_ready == 0U)
+        return NULL;
+    return (complete_actor_pose_slot_t *)sm64_saturn_pose_pool_resolve(
+        &complete_actor_hot_pool, complete_actor_mario_handle[index]);
+}
 
 /* The reduced bake keeps a record for every animation ID and aliases the ones
  * it does not bake onto their nearest baked neighbour, so no requested ID can
@@ -80,6 +133,22 @@ typedef struct sm64_saturn_complete_actor_probe {
     uint16_t evaluate_calls;
     uint16_t fallback_hits;
     uint16_t last_fallback_requested_id;
+    /* Pose-slot pool evidence.  `pool_selftest_mask` is the boot-time
+     * claim/release/reuse/exhaustion/disjointness sequence run against real
+     * LWRAM on the real SH-2; `pool_alias_faults` is the per-tick check that
+     * two simultaneously held cold slots never see each other bytes. */
+    uint16_t pool_ready;
+    uint16_t pool_selftest_mask;
+    uint16_t pool_hot_live;
+    uint16_t pool_hot_slot_bytes;
+    uint16_t pool_cold_live;
+    uint16_t pool_cold_peak_live;
+    uint16_t pool_cold_claim_failures;
+    uint16_t pool_cold_stale_resolves;
+    uint16_t pool_cold_slot_count;
+    uint16_t pool_frames_checked;
+    uint16_t pool_alias_faults;
+    uint16_t pool_cold_arena_bytes;
 } sm64_saturn_complete_actor_probe_t;
 sm64_saturn_complete_actor_probe_t sm64_saturn_complete_actor_probe
     __attribute__((section(".lwram_bss"), used, aligned(4)));
@@ -136,6 +205,236 @@ static void complete_actor_publish_probe(void)
     sm64_saturn_complete_actor_probe.magic = 0x53414E4DUL; /* 'SANM' */
 }
 
+/* Two synthetic cold tenants, held for the life of the session.  They stand
+ * in for the enemies R2 will spawn: the point of keeping them is that the
+ * per-tick check below proves, on target, that two simultaneously held slots
+ * do not alias -- the failure this pool exists to prevent, and the one that
+ * would otherwise ship silently because it looks like nothing until an enemy
+ * wears another enemy pose. */
+#define COMPLETE_ACTOR_EXERCISE_TENANTS 2U
+#define COMPLETE_ACTOR_EXERCISE_STRIPE 32U
+static sm64_saturn_pose_handle_t complete_actor_exercise[
+    COMPLETE_ACTOR_EXERCISE_TENANTS];
+
+enum {
+    POOL_SELFTEST_HOT_INIT = 1U << 0,
+    POOL_SELFTEST_COLD_INIT = 1U << 1,
+    POOL_SELFTEST_MARIO_CLAIMED = 1U << 2,
+    POOL_SELFTEST_MARIO_DISJOINT = 1U << 3,
+    POOL_SELFTEST_TWO_TENANTS = 1U << 4,
+    POOL_SELFTEST_TENANTS_DISJOINT = 1U << 5,
+    POOL_SELFTEST_EXHAUSTION_FAILS = 1U << 6,
+    POOL_SELFTEST_EXHAUSTION_HARMLESS = 1U << 7,
+    POOL_SELFTEST_RELEASE_KILLS_HANDLE = 1U << 8,
+    POOL_SELFTEST_REUSE_OK = 1U << 9,
+    POOL_SELFTEST_OVERSIZE_FAILS = 1U << 10
+};
+
+static void complete_actor_stripe(sm64_saturn_pose_handle_t handle,
+                                  uint8_t pattern)
+{
+    uint8_t *const bytes = (uint8_t *)sm64_saturn_pose_pool_resolve(
+        &complete_actor_cold_pool, handle);
+    uint16_t index;
+    if (bytes == NULL) return;
+    for (index = 0U; index < COMPLETE_ACTOR_EXERCISE_STRIPE; index++)
+        bytes[index] = pattern;
+}
+
+static uint8_t complete_actor_stripe_ok(sm64_saturn_pose_handle_t handle,
+                                        uint8_t pattern)
+{
+    const uint8_t *const bytes = (const uint8_t *)
+        sm64_saturn_pose_pool_resolve(&complete_actor_cold_pool, handle);
+    uint16_t index;
+    if (bytes == NULL) return 0U;
+    for (index = 0U; index < COMPLETE_ACTOR_EXERCISE_STRIPE; index++) {
+        if (bytes[index] != pattern) return 0U;
+    }
+    return 1U;
+}
+
+/* Boot-time exercise of the cold pool against real LWRAM.  Runs once. */
+static uint16_t complete_actor_pool_selftest(void)
+{
+    sm64_saturn_pose_handle_t filler[8];
+    sm64_saturn_pose_handle_t reused;
+    uint16_t mask = 0U;
+    uint16_t filled = 0U;
+    uint16_t index;
+
+    complete_actor_exercise[0] = sm64_saturn_pose_pool_claim(
+        &complete_actor_cold_pool, 0xE0000001UL,
+        COMPLETE_ACTOR_COLD_LARGE_BYTES);
+    complete_actor_exercise[1] = sm64_saturn_pose_pool_claim(
+        &complete_actor_cold_pool, 0xE0000002UL,
+        COMPLETE_ACTOR_COLD_SMALL_BYTES);
+    if (sm64_saturn_pose_handle_is_valid(complete_actor_exercise[0]) &&
+        sm64_saturn_pose_handle_is_valid(complete_actor_exercise[1]))
+        mask |= POOL_SELFTEST_TWO_TENANTS;
+
+    complete_actor_stripe(complete_actor_exercise[0], 0xA5U);
+    complete_actor_stripe(complete_actor_exercise[1], 0x5AU);
+    if (complete_actor_stripe_ok(complete_actor_exercise[0], 0xA5U) &&
+        complete_actor_stripe_ok(complete_actor_exercise[1], 0x5AU))
+        mask |= POOL_SELFTEST_TENANTS_DISJOINT;
+
+    /* Drain everything that is left, then confirm exhaustion is a refusal
+     * rather than an eviction. */
+    for (index = 0U; index < 8U; index++) {
+        filler[index] = sm64_saturn_pose_pool_claim(
+            &complete_actor_cold_pool, 0xE0000010UL + index,
+            COMPLETE_ACTOR_COLD_SMALL_BYTES);
+        if (!sm64_saturn_pose_handle_is_valid(filler[index])) break;
+        filled++;
+    }
+    while (sm64_saturn_pose_pool_largest_free_extent(&complete_actor_cold_pool)
+           != 0U) {
+        if (!sm64_saturn_pose_handle_is_valid(sm64_saturn_pose_pool_claim(
+                &complete_actor_cold_pool, 0xE0000020UL,
+                COMPLETE_ACTOR_COLD_SMALL_BYTES)))
+            break;
+    }
+    if (!sm64_saturn_pose_handle_is_valid(sm64_saturn_pose_pool_claim(
+            &complete_actor_cold_pool, 0xE0000030UL,
+            COMPLETE_ACTOR_COLD_SMALL_BYTES)))
+        mask |= POOL_SELFTEST_EXHAUSTION_FAILS;
+    if (complete_actor_stripe_ok(complete_actor_exercise[0], 0xA5U) &&
+        complete_actor_stripe_ok(complete_actor_exercise[1], 0x5AU))
+        mask |= POOL_SELFTEST_EXHAUSTION_HARMLESS;
+
+    /* Release one filler; its handle must die and its block must come back. */
+    if (filled > 0U) {
+        const sm64_saturn_pose_handle_t dead = filler[0];
+        if (sm64_saturn_pose_pool_release(&complete_actor_cold_pool, dead) &&
+            sm64_saturn_pose_pool_resolve(&complete_actor_cold_pool, dead) ==
+                NULL)
+            mask |= POOL_SELFTEST_RELEASE_KILLS_HANDLE;
+        reused = sm64_saturn_pose_pool_claim(&complete_actor_cold_pool,
+                                             0xE0000040UL,
+                                             COMPLETE_ACTOR_COLD_SMALL_BYTES);
+        if (sm64_saturn_pose_handle_is_valid(reused) &&
+            sm64_saturn_pose_pool_resolve(&complete_actor_cold_pool, reused) !=
+                NULL &&
+            sm64_saturn_pose_pool_resolve(&complete_actor_cold_pool, dead) ==
+                NULL)
+            mask |= POOL_SELFTEST_REUSE_OK;
+    }
+
+    /* Nothing may be larger than the largest class. */
+    if (!sm64_saturn_pose_handle_is_valid(sm64_saturn_pose_pool_claim(
+            &complete_actor_cold_pool, 0xE0000050UL, 0xFFFFU)))
+        mask |= POOL_SELFTEST_OVERSIZE_FAILS;
+
+    /* Hand the arena back to the two long-lived tenants. */
+    for (index = 0U; index < 8U; index++) {
+        (void)sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
+                                                  0xE0000010UL + index);
+    }
+    (void)sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
+                                              0xE0000020UL);
+    (void)sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
+                                              0xE0000040UL);
+    if (complete_actor_stripe_ok(complete_actor_exercise[0], 0xA5U) &&
+        complete_actor_stripe_ok(complete_actor_exercise[1], 0x5AU))
+        mask |= POOL_SELFTEST_TENANTS_DISJOINT;
+    return mask;
+}
+
+/* Per-tick witness: rewrite both long-lived cold tenants with a stripe that
+ * changes every tick and read both back.  Two 32-byte stripes. */
+static void complete_actor_pool_tick_check(uint16_t tick)
+{
+    const uint8_t left = (uint8_t)(0x10U + (tick & 0x3FU));
+    const uint8_t right = (uint8_t)(0x90U + (tick & 0x3FU));
+    complete_actor_stripe(complete_actor_exercise[0], left);
+    complete_actor_stripe(complete_actor_exercise[1], right);
+    if (complete_actor_stripe_ok(complete_actor_exercise[0], left) &&
+        complete_actor_stripe_ok(complete_actor_exercise[1], right))
+        sm64_saturn_complete_actor_probe.pool_frames_checked++;
+    else
+        sm64_saturn_complete_actor_probe.pool_alias_faults++;
+}
+
+static void complete_actor_pools_bring_up(void)
+{
+    static const sm64_saturn_pose_pool_class_plan_t cold_plan[] = {
+        { COMPLETE_ACTOR_COLD_SMALL_BYTES, 8U },
+        { COMPLETE_ACTOR_COLD_LARGE_BYTES, 8U },
+    };
+    const sm64_saturn_pose_pool_class_plan_t hot_plan[] = {
+        { (uint16_t)sizeof(complete_actor_pose_slot_t),
+          COMPLETE_ACTOR_POSE_SLOT_COUNT },
+    };
+    uint16_t mask = 0U;
+    uint8_t index;
+
+    if (sm64_saturn_pose_pool_init(&complete_actor_hot_pool,
+                                   complete_actor_hot_arena,
+                                   (uint32_t)sizeof(complete_actor_hot_arena),
+                                   hot_plan, 1U))
+        mask |= POOL_SELFTEST_HOT_INIT;
+    if (sm64_saturn_pose_pool_init(&complete_actor_cold_pool,
+                                   complete_actor_cold_arena,
+                                   (uint32_t)sizeof(complete_actor_cold_arena),
+                                   cold_plan, 2U))
+        mask |= POOL_SELFTEST_COLD_INIT;
+
+    if ((mask & POOL_SELFTEST_HOT_INIT) != 0U) {
+        uint8_t claimed = 0U;
+        for (index = 0U; index < COMPLETE_ACTOR_POSE_SLOT_COUNT; index++) {
+            complete_actor_mario_handle[index] = sm64_saturn_pose_pool_claim(
+                &complete_actor_hot_pool, COMPLETE_ACTOR_OWNER_MARIO,
+                (uint32_t)sizeof(complete_actor_pose_slot_t));
+            if (sm64_saturn_pose_handle_is_valid(
+                    complete_actor_mario_handle[index]))
+                claimed++;
+        }
+        if (claimed == COMPLETE_ACTOR_POSE_SLOT_COUNT) {
+            mask |= POOL_SELFTEST_MARIO_CLAIMED;
+            complete_actor_pools_ready = 1U;
+        }
+    }
+    /* Mario two generations must never share bytes; if they did he would
+     * tear between an old and a new pose. */
+    if (complete_actor_pools_ready != 0U) {
+        complete_actor_pose_slot_t *const a = complete_actor_slot(0U);
+        complete_actor_pose_slot_t *const b = complete_actor_slot(1U);
+        if (a != NULL && b != NULL && a != b) {
+            memset(a, 0, sizeof(*a));
+            memset(b, 0, sizeof(*b));
+            a->animation_id = 0x1234U;
+            b->animation_id = 0x5678U;
+            if (a->animation_id == 0x1234U && b->animation_id == 0x5678U)
+                mask |= POOL_SELFTEST_MARIO_DISJOINT;
+            memset(a, 0, sizeof(*a));
+            memset(b, 0, sizeof(*b));
+        }
+    }
+
+    if ((mask & POOL_SELFTEST_COLD_INIT) != 0U)
+        mask |= complete_actor_pool_selftest();
+
+    sm64_saturn_complete_actor_probe.pool_selftest_mask = mask;
+    sm64_saturn_complete_actor_probe.pool_ready = complete_actor_pools_ready;
+    sm64_saturn_complete_actor_probe.pool_hot_live =
+        complete_actor_hot_pool.live_count;
+    sm64_saturn_complete_actor_probe.pool_hot_slot_bytes =
+        (uint16_t)sizeof(complete_actor_pose_slot_t);
+    sm64_saturn_complete_actor_probe.pool_cold_live =
+        complete_actor_cold_pool.live_count;
+    sm64_saturn_complete_actor_probe.pool_cold_peak_live =
+        complete_actor_cold_pool.peak_live_count;
+    sm64_saturn_complete_actor_probe.pool_cold_claim_failures =
+        complete_actor_cold_pool.claim_failures;
+    sm64_saturn_complete_actor_probe.pool_cold_stale_resolves =
+        complete_actor_cold_pool.stale_resolves;
+    sm64_saturn_complete_actor_probe.pool_cold_slot_count =
+        complete_actor_cold_pool.slot_count;
+    sm64_saturn_complete_actor_probe.pool_cold_arena_bytes =
+        COMPLETE_ACTOR_COLD_ARENA_BYTES;
+}
+
 static const sm64_saturn_actor_bank_view_t *complete_bank(void)
 {
     if (complete_actor_bank_ready == 0U) {
@@ -144,6 +443,7 @@ static const sm64_saturn_actor_bank_view_t *complete_bank(void)
             &complete_actor_bank);
         if (complete_actor_bank_ready != 0U) {
             complete_actor_stage_slices();
+            complete_actor_pools_bring_up();
             complete_actor_publish_probe();
         }
     }
@@ -153,26 +453,28 @@ static const sm64_saturn_actor_bank_view_t *complete_bank(void)
 static uint8_t complete_actor_evaluate(
     const sm64_saturn_mario_actor_snapshot_t *snapshot, uint8_t slot_index)
 {
-    complete_actor_pose_slot_t *const slot =
-        &complete_actor_pose_slots[slot_index];
-    sm64_saturn_actor_pose_work_t work = {
-        .vertices = slot->vertices,
-        .light_intensity = slot->lights,
-        .joint_matrices_q16 = slot->joints,
-        .vertex_capacity = SM64_MARIO_VERTEX_COUNT,
-        .joint_capacity = 20U,
-        .light_capacity = SM64_MARIO_VERTEX_COUNT,
-    };
     const sm64_saturn_actor_bank_view_t *const bank = complete_bank();
+    complete_actor_pose_slot_t *const slot = complete_actor_slot(slot_index);
+    sm64_saturn_actor_pose_work_t work;
     const sm64_saturn_actor_vertex_t *const staged_vertices =
         complete_actor_slices_staged != 0U ? complete_actor_staged_vertices : NULL;
     const sm64_saturn_actor_joint_t *const staged_joints =
         complete_actor_slices_staged != 0U ? complete_actor_staged_joints : NULL;
     sm64_saturn_complete_actor_probe.evaluate_calls++;
-    if (bank == NULL) {
-        slot->valid = 0U;
+    /* Fail closed: a slot that cannot be resolved is a released or never
+     * granted claim.  Publishing nothing removes Mario for one frame, which
+     * is the same degradation the shipped build takes when the bank is
+     * unusable -- and it can never publish another tenant bytes. */
+    if (bank == NULL || slot == NULL)
         return 0U;
-    }
+    complete_actor_pool_tick_check(
+        sm64_saturn_complete_actor_probe.evaluate_calls);
+    work.vertices = slot->vertices;
+    work.light_intensity = slot->lights;
+    work.joint_matrices_q16 = complete_actor_joint_workspace;
+    work.vertex_capacity = SM64_MARIO_VERTEX_COUNT;
+    work.joint_capacity = COMPLETE_ACTOR_JOINT_CAPACITY;
+    work.light_capacity = SM64_MARIO_VERTEX_COUNT;
     if (!sm64_saturn_actor_pose_evaluate_staged(
             bank, snapshot->animation_id, snapshot->animation_frame,
             &work, staged_vertices, staged_joints, &slot->evaluated)) {
@@ -276,16 +578,19 @@ uint8_t sm64_saturn_mario_actor_pose(
     memset(pose, 0, sizeof(*pose));
 #if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
     {
-        const uint8_t slot = complete_actor_next_pose_slot++ %
-                             COMPLETE_ACTOR_POSE_SLOT_COUNT;
-        if (!complete_actor_evaluate(snapshot, slot))
+        const uint8_t index = complete_actor_next_pose_slot++ %
+                              COMPLETE_ACTOR_POSE_SLOT_COUNT;
+        const complete_actor_pose_slot_t *slot;
+        if (!complete_actor_evaluate(snapshot, index))
             return 0U;
-        pose->vertices = complete_actor_pose_slots[slot].evaluated.vertices;
-        pose->light_intensity =
-            complete_actor_pose_slots[slot].evaluated.light_intensity;
-        pose->frame = complete_actor_pose_slots[slot].evaluated.frame;
-        pose->frame_count = complete_actor_pose_slots[slot].evaluated.frame_count;
-        pose->vertex_count = complete_actor_pose_slots[slot].evaluated.vertex_count;
+        slot = complete_actor_slot(index);
+        if (slot == NULL)
+            return 0U;
+        pose->vertices = slot->evaluated.vertices;
+        pose->light_intensity = slot->evaluated.light_intensity;
+        pose->frame = slot->evaluated.frame;
+        pose->frame_count = slot->evaluated.frame_count;
+        pose->vertex_count = slot->evaluated.vertex_count;
         return 1U;
     }
 #else
@@ -354,18 +659,22 @@ uint8_t sm64_saturn_mario_actor_pose_from_selector(
     if (selector == NULL || pose == NULL || selector->valid == 0U) return 0U;
     memset(pose, 0, sizeof(*pose));
 #if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
-    if (selector->pose_slot >= COMPLETE_ACTOR_POSE_SLOT_COUNT ||
-        !complete_actor_pose_slots[selector->pose_slot].valid)
-        return 0U;
-    pose->vertices = complete_actor_pose_slots[selector->pose_slot].evaluated.vertices;
-    pose->light_intensity =
-        complete_actor_pose_slots[selector->pose_slot].evaluated.light_intensity;
-    pose->frame = complete_actor_pose_slots[selector->pose_slot].evaluated.frame;
-    pose->frame_count =
-        complete_actor_pose_slots[selector->pose_slot].evaluated.frame_count;
-    pose->vertex_count =
-        complete_actor_pose_slots[selector->pose_slot].evaluated.vertex_count;
-    return 1U;
+    {
+        /* The selector carries an index into Mario own handle table, never a
+         * raw pointer, so a render generation can only ever reach a slot that
+         * is still granted to Mario: the pool generation check rejects a
+         * released or re-let block. */
+        const complete_actor_pose_slot_t *const slot =
+            complete_actor_slot(selector->pose_slot);
+        if (slot == NULL || slot->valid == 0U)
+            return 0U;
+        pose->vertices = slot->evaluated.vertices;
+        pose->light_intensity = slot->evaluated.light_intensity;
+        pose->frame = slot->evaluated.frame;
+        pose->frame_count = slot->evaluated.frame_count;
+        pose->vertex_count = slot->evaluated.vertex_count;
+        return 1U;
+    }
 #else
     return 0U;
 #endif

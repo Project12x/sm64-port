@@ -4,6 +4,53 @@
 
 ### Added
 
+- **`src/port/saturn/gfx/saturn_actor_pose_pool.{h,c}` — a pose-slot pool, so
+  the port can animate more than one actor.** **Reasoning:** the complete
+  animation path shipped `complete_actor_pose_slots[2]`, a fixed 8,560 B HWRAM
+  global reserved for Mario alone, and HWRAM had 2,008 B of margin — a second
+  animated actor could not be added at all, and N Mario-sized slots was never
+  available. The pool is a caller-supplied byte arena partitioned at init into
+  fixed-size classes with per-class free lists: O(1) claim and release, zero
+  fragmentation by construction, and a worst case fixed at init. Handles are
+  `(index, generation)` and `release` bumps the generation, so a stale handle
+  resolves to NULL instead of to whatever actor now owns the block — that, not
+  discipline, is what makes two actors reading each other's vertex data
+  unrepresentable. **The arena is an argument**, which is how residency is
+  expressed: a hot HWRAM arena whose only tenant is Mario, and a cold 10,240 B
+  LWRAM arena for everyone else, so no number of enemies can starve him and no
+  enemy pays for his 2,968-byte skinned pose. **Degradation policy (plan §2b):**
+  a failed claim never evicts — an actor already animating keeps animating and
+  the newcomer goes without; an actor with no slot still renders, at its last
+  pose or its bind pose; `claim_failures` / `stale_resolves` / `peak_live_count`
+  are live in the LWRAM probe so pressure is observable. **Consumer-facing
+  impact:** the next wave still owes a rigid-part pose evaluator, distance-
+  ordered claiming, a per-instance owner key, and `release_owner` wired to the
+  object lifecycle — without that last one the pool leaks to exhaustion within a
+  level. Full record in
+  [`docs/saturn/evidence/reports/r2-pose-slot-pooling.md`](docs/saturn/evidence/reports/r2-pose-slot-pooling.md).
+
+- **`verify-actor-pose-pool` and `verify-actor-pose-pool-mutation`.** The
+  fixture claims every block in a seven-block arena, fills each with its own
+  byte pattern over the *whole* block, and reads all of them back; it also runs
+  three tenants of three sizes across sixteen simulated frames and a mid-session
+  despawn. Three mutations — `claim` returning an already-held slot, `release`
+  reporting success without releasing, and two claims aliasing — are each
+  compiled in by define and each **must** fail the fixture. **3 of 3 caught, 0
+  escaped.**
+
+- **`docs/saturn/evidence/reports/r2-pose-slot-pooling.md` and its evidence
+  set** — the actor-class census, the sizing rationale, the residency decision,
+  the claim/release/exhaustion policy, `r2_probe_pose_pool.py`, two cadence
+  captures, the on-target pool probe and both route timelines. **The headline is
+  that most props need no pose slot at all:** 74 of SM64's 130 actor
+  directories contain no `GEO_ANIMATED_PART` — coin, tree, star, metal_box,
+  thwomp, warp_pipe, koopa_shell and 67 more — and the generated BOB closure
+  carries an animation table on only 8 of 86 records. A coin is a
+  `GEO_SWITCH_CASE` over four flat display lists; a tree is one static display
+  list. **Consumer-facing impact:** props are gated on the generic actor closure
+  (`features.dynamic_actor_closure = 0`, 13 unsupported required capabilities,
+  twelve of them `GEO_CULLING_RADIUS`), not on pose slots.
+
 - **`docs/saturn/evidence/reports/r3-c-f-memory-recovery.md` and its evidence
   set** — the measured result of R3 options C and F on
   `id-8e643f9cc3e9fdee`, plus `r3_probe_cf.py`, the two cadence captures and
@@ -25,6 +72,37 @@
   mesh decimation or an HWRAM→LWRAM eviction has to precede it.
 
 ### Changed
+
+- **`complete_actor_pose_slot_t` no longer carries the joint matrices, and
+  Mario's slots are now let by the pool.** **Root cause of the waste, found by
+  reading the consumer rather than the producer:** the 1,280 B `joints[20*16]`
+  array was per-slot, but nothing downstream ever read it —
+  `sm64_saturn_actor_pose_view_t` exposes vertices, lights, ids and the root
+  translation and no joint pointer, and the render worker (master and slave
+  both, which split Mario's vertices between them) reads only vertices and
+  lights. The joint matrices are workspace consumed *inside* the evaluator, so
+  they are per-evaluator, not per-generation, and there is exactly one evaluator
+  in the product tuple. One shared workspace replaces two, returning 1,280 B of
+  HWRAM. Mario's slot goes 4,280 -> 3,000 B and his two published poses are now
+  two claims against a 6,000 B hot arena instead of a static array. **Tradeoff
+  recorded:** a second concurrent evaluator lane would cost 1,280 B, and the
+  header says so. **Consumer-facing impact:** none — the route timeline over
+  ticks 0-199 shows **zero mismatches** on action, all three face angles,
+  position, velocity, forward velocity, floor height, global timer and the
+  applied route input, and tick-30 cadence is identical to the accepted
+  baseline to four decimals and to the interval histogram.
+
+- **HWRAM free moves 9,944 -> 9,016 B; LWRAM free 88,176 -> 76,864 B; cart free
+  is unchanged at 482,160 B.** **This is a 928 B regression on the tightest
+  resource and it is reported as it came out.** Per-symbol accounting in the
+  report separates the two causes: the allocator is close to memory-neutral (it
+  returns 1,263 B of data and spends ~1,050 B of code), and the 928 B is the
+  **on-target evidence scaffolding** — the boot-time selftest and the per-tick
+  alias witness, plus the two pool entry points that exist in this link only
+  because the selftest calls them. That scaffolding is labelled temporary in the
+  source and its removal is the next wave's first item. **Consumer-facing
+  impact:** the HUD still does not fit in the remaining margin, and it now has
+  928 B less to work with until the scaffolding goes.
 
 - **The BOB scene package generation moves 15 -> 16.** **Root cause, found by
   a failed build and not by review:** published package generations are
