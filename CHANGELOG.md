@@ -4,6 +4,31 @@
 
 ### Changed
 
+- **The BOB scene package generation moves 15 -> 16.** **Root cause, found by
+  a failed build and not by review:** published package generations are
+  immutable and `compile_actor_family_bundle.py --verify-publication`
+  recompiles the bundle from current inputs and byte-compares it against the
+  published one. The reduced Mario bake moves
+  `resource_inventory.package_class_source_bytes.actor` from 596,896 to
+  232,564, so generation 15's publication is genuinely stale for the new
+  inputs -- exactly the byte-changing follow-up its own comment says must
+  select a newer generation. Nothing else in the bundle changed: the
+  `bob-area1-actors-v3.s64f` payload, the capacity header and the dependency
+  manifest are byte-identical between g15 and g16. **Consumer-facing impact:**
+  the runtime binds `actor_scene_bundle_g16.sx` and `scene-v3-g16`;
+  `SCENE_PACKAGE_GENERATION` is not part of the target profile's
+  `release_config`, so the profile does not move, but the sealed identity does
+  because the bank bytes did.
+
+- **`$(SOURCEBOOT_ACTOR_BUNDLE_REPORT)` now has a rule binding it to the phony
+  target that publishes it.** **Root cause:** the identity-registry header
+  listed the report as a hard file prerequisite alongside the phony
+  `source-actor-family-bundle` that creates it. Make cannot infer that
+  relationship, so the first build of a *new* generation died with "no rule to
+  make target .../actors-v3-g16/actor-family-bundle.json" -- a generation bump
+  could not bootstrap itself. Mirrors the `$(SOURCEBOOT_ACTOR_SCENE_ASM)`
+  pattern already in the same file.
+
 - **The pose evaluator's two per-frame-invariant bank slices are now staged
   once into LWRAM instead of being re-read from CART every frame.** 424 vertex
   records (4,240 B) and 20 joint records (240 B), 4,480 B total, into

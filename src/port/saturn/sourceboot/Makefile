@@ -365,7 +365,7 @@ SOURCEBOOT_SKY_GRADIENT_HEADER := $(SOURCEBOOT_GENERATED)/saturn_sky_gradient_ge
 SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER := $(SOURCEBOOT_GENERATED)/actor_identity_registry.h
 SOURCEBOOT_ACTOR_FAMILY_REPORT := $(ROOT)/build/saturn/packages/bob/1/actors/actor-families.json
 SOURCEBOOT_ACTOR_CLOSURE := $(ROOT)/build/saturn/packages/bob/1/closure.json
-SOURCEBOOT_SCENE_PACKAGE_GENERATION ?= 15
+SOURCEBOOT_SCENE_PACKAGE_GENERATION ?= 16
 SOURCEBOOT_ACTOR_BUNDLE_DIR := $(ROOT)/build/saturn/packages/bob/1/actors-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
 SOURCEBOOT_ACTOR_BUNDLE := $(SOURCEBOOT_ACTOR_BUNDLE_DIR)/bob-area1-actors-v3.s64f
 SOURCEBOOT_ACTOR_BUNDLE_REPORT := $(SOURCEBOOT_ACTOR_BUNDLE_DIR)/actor-family-bundle.json
@@ -1134,6 +1134,13 @@ source-actor-family-bundle: source-actor-families
 
 .PHONY: source-actor-identity-registry-force
 source-actor-identity-registry-force:
+
+# The bundle report is published by the phony target above, exactly as the
+# scene assembly is published by source-actor-scene-package.  Make cannot infer
+# that, so a generation whose directory does not exist yet fails with "no rule
+# to make target" instead of publishing it.  Bind them.
+$(SOURCEBOOT_ACTOR_BUNDLE_REPORT): source-actor-family-bundle
+	@test -f "$@"
 
 # This header has one stable pathname but embeds SOURCEBOOT_SCENE_PACKAGE_GENERATION.
 # Re-run its deterministic generator on each sourceboot invocation so a prior

@@ -37,10 +37,12 @@ ACTOR_FAMILY_BUNDLE_DIR ?= $(SATURN_REPO_ROOT)/build/saturn/packages/$(SCENE_LEV
 ACTOR_FAMILY_BUNDLE_REPORT ?= $(ACTOR_FAMILY_BUNDLE_DIR)/actor-family-bundle.json
 ACTOR_FAMILY_BUNDLE_PAYLOAD ?= $(ACTOR_FAMILY_BUNDLE_DIR)/bob-area1-actors-v3.s64f
 ACTOR_FAMILY_BUNDLE_DEPENDENCY ?= $(ACTOR_FAMILY_BUNDLE_DIR)/bob-area1-actors-v3-dependency.json
-# Published package generations are immutable/no-clobber. Generation 15 adds
+# Published package generations are immutable/no-clobber. Generation 15 added
 # the first normal spawned Bob-omb bank to the same generic BOB package path;
-# any byte-changing follow-up must deliberately select a newer generation.
-SCENE_PACKAGE_GENERATION ?= 15
+# generation 16 takes the reduced Mario animation bake, which moves the actor
+# package class from 596,896 to 232,564 source bytes and is therefore exactly
+# the byte-changing follow-up that must select a newer generation.
+SCENE_PACKAGE_GENERATION ?= 16
 PYTHON ?= python3
 HOST_CC ?= gcc
 ifeq ($(OS),Windows_NT)
