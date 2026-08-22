@@ -4,6 +4,33 @@
 
 ### Added
 
+- **`tools/saturn/manifests/actors/bobomb.json` and
+  `tools/saturn/compile_enemy_actor_bank.py` — a declared Saturn budget for the
+  first enemy, enforced by the build.** **Reasoning:** phase plan W3 exists
+  because every runtime data lever last sprint dead-ended in a bake that had no
+  declared budget — terrain became 867 atomic one-command primitives with no LOD
+  tiers to work with, because nobody wrote the budget down first. The Bob-omb
+  bake was already Saturn-shaped, but its decisions lived only in code. They are
+  now a manifest, and the tool fails the build if a re-bake breaks one: part
+  count against the 20-matrix shared joint workspace, rigid pose bytes against
+  the 640 B cold class, primitives / texture / CLUT residency / payload / animation
+  count against declared ceilings, exactly one hierarchy root, no forward parent
+  reference, `3 + joints*3` channels per animation, and — the T2.19a check —
+  **one VDP1 command per source primitive**, so this bake can never silently
+  acquire Mario's Gouraud-polygon-plus-distorted-sprite structure. **The tool
+  also proves the emitted payload is byte-identical to the bank already
+  published in the scene package**, so the standalone `.s64b` can never diverge
+  from what ships. **Consumer-facing:** `make -f Makefile.saturn.mk
+  compile-enemy-actor-bank`; `verify-actor-rigid-pose` now takes the enemy bank
+  as a second argument and runs a real-data arm against it (every advertised
+  animation decoding at frame 0 and n−1, hierarchy read back through
+  `sm64_saturn_actor_bank_joint`, two fail-closed rejections). **Recorded
+  finding:** the Bob-omb's 25-frame walk is a **closed loop** — all eleven of
+  its animated channels return to their frame-0 value at frame 24 — so a
+  liveness check that compares frame 0 against frame *n*−1 reports a stiff
+  actor for a perfectly good animation. Both the fixture and the boot-time
+  exercise compare against a mid frame instead.
+
 - **The first non-Mario actor evaluated through the rigid-part lane — a
   Bob-omb, at zero additional cart cost.** **Reasoning:**
   `r2-rigid-part-evaluator.md` §8.1 named "a Bob-omb or Goomba `.s64b` bake" as

@@ -649,6 +649,154 @@ static void test_real_bank(const char *path)
     free(bytes);
 }
 
+/* The first non-Mario bank, driven through the rigid lane the way a real
+ * enemy would be.
+ *
+ * This is the arm that answers r2-rigid-part-evaluator.md section 8.1.  The
+ * Mario arm above proves the wrapper survives *a* real bank; this one proves
+ * it survives a bank that was never designed around Mario -- a 13-joint
+ * rigid-part hierarchy with two independent animation streams, baked by the
+ * generic producer.  Every check here is a property the draw path will
+ * depend on. */
+static void test_enemy_bank(const char *path)
+{
+    sm64_saturn_actor_bank_view_t view;
+    sm64_saturn_mtx_t workspace[SM64_SATURN_RIGID_POSE_MAX_PARTS];
+    pose_block_t first, last;
+    sm64_saturn_actor_joint_t joint;
+    uint8_t *bytes;
+    long size;
+    uint16_t index, roots = 0U, id;
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) {
+        fprintf(stderr, "FAIL: cannot open enemy bank %s\n", path);
+        g_failures++;
+        return;
+    }
+    fseek(file, 0, SEEK_END);
+    size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    bytes = (uint8_t *)malloc((size_t)size);
+    if (bytes == NULL || fread(bytes, 1U, (size_t)size, file) != (size_t)size) {
+        fprintf(stderr, "FAIL: cannot read enemy bank %s\n", path);
+        g_failures++;
+        fclose(file);
+        free(bytes);
+        return;
+    }
+    fclose(file);
+    if (!sm64_saturn_actor_bank_validate(bytes, (size_t)size, &view)) {
+        fprintf(stderr, "FAIL: enemy bank %s did not validate\n", path);
+        g_failures++;
+        free(bytes);
+        return;
+    }
+
+    /* The bank parses, and it is a *different* shape from Mario's -- a v2
+     * bank produced by the generic variant compiler, not the Mario bake. */
+    check_eq_i32(view.bank.version, 2, "the enemy bank is S64B v2");
+    check(view.bank.joint_count > 0U, "the enemy bank has a joint hierarchy");
+    check(view.bank.animation_count > 0U, "the enemy bank has animations");
+
+    /* The two ceilings that decide whether it can be evaluated at all. */
+    check(view.bank.joint_count <= 20U,
+          "the hierarchy fits the 20-matrix shared joint workspace");
+    check(SM64_SATURN_RIGID_POSE_BYTES(view.bank.joint_count) <= 640U,
+          "the published pose fits the 640 B cold class");
+
+    /* Hierarchy: exactly one root, and every parent strictly precedes its
+     * child, because the evaluator composes in ordinal order and refuses a
+     * forward reference. */
+    for (index = 0U; index < view.bank.joint_count; index++) {
+        if (!sm64_saturn_actor_bank_joint(&view, index, &joint)) {
+            fprintf(stderr, "FAIL: enemy joint %u is unreadable\n",
+                    (unsigned)index);
+            g_failures++;
+            continue;
+        }
+        if (joint.parent_ordinal < 0) roots++;
+        else
+            check(joint.parent_ordinal < (int16_t)index,
+                  "an enemy joint's parent strictly precedes it");
+    }
+    check_eq_i32(roots, 1, "the enemy hierarchy has exactly one root");
+
+    /* EVERY baked animation decodes at frame 0 and at frame n-1, and the two
+     * are not the same pose.  Task C's precedent is that an unbaked ID must
+     * never be reachable; the enforcement of that is that every ID the bank
+     * advertises actually evaluates. */
+    for (id = 0U; id < view.bank.animation_count; id++) {
+        sm64_saturn_actor_animation_record_t record;
+        char label[96];
+        check(sm64_saturn_actor_bank_animation(&view, id, &record),
+              "an advertised enemy animation has a record");
+        if (record.frame_count == 0U) {
+            fprintf(stderr, "FAIL: enemy animation %u has no frames\n",
+                    (unsigned)id);
+            g_failures++;
+            continue;
+        }
+        check_eq_i32(record.joint_count, view.bank.joint_count,
+                     "the animation stream carries one channel triple per joint");
+        memset(&first, 0, sizeof(first));
+        memset(&last, 0, sizeof(last));
+        snprintf(label, sizeof(label),
+                 "enemy animation %u decodes at frame 0", (unsigned)id);
+        check(sm64_saturn_actor_rigid_pose_evaluate(&view, (int16_t)id, 0, NULL,
+                                                    workspace, &first.pose,
+                                                    POSE_BYTES) &&
+              first.pose.flags == SM64_SATURN_RIGID_POSE_VALID, label);
+        snprintf(label, sizeof(label),
+                 "enemy animation %u decodes at frame n-1", (unsigned)id);
+        check(sm64_saturn_actor_rigid_pose_evaluate(
+                  &view, (int16_t)id, (int16_t)(record.frame_count - 1U), NULL,
+                  workspace, &last.pose, POSE_BYTES) &&
+              last.pose.flags == SM64_SATURN_RIGID_POSE_VALID, label);
+        check_eq_i32(first.pose.part_count, view.bank.joint_count,
+                     "the enemy pose publishes one part per bank joint");
+        check_eq_i32(last.pose.frame, (int32_t)(record.frame_count - 1U),
+                     "the published frame is the frame that was asked for");
+        check_eq_i32(last.pose.frame_count, record.frame_count,
+                     "the published frame count is the bank's frame count");
+        /* "Does it move" must NOT be asked of frame 0 against frame n-1.
+         * The Bob-omb's walk is a closed loop: all eleven of its animated
+         * channels return to their frame-0 value at frame 24, so that
+         * comparison reports a stiff actor for a perfectly good animation.
+         * Ask a mid frame instead, and assert the loop closure separately so
+         * the property is recorded rather than tripped over. */
+        {
+            pose_block_t middle;
+            memset(&middle, 0, sizeof(middle));
+            snprintf(label, sizeof(label),
+                     "enemy animation %u decodes at a mid frame", (unsigned)id);
+            check(sm64_saturn_actor_rigid_pose_evaluate(
+                      &view, (int16_t)id, (int16_t)(record.frame_count / 2U),
+                      NULL, workspace, &middle.pose, POSE_BYTES) &&
+                  middle.pose.flags == SM64_SATURN_RIGID_POSE_VALID, label);
+            snprintf(label, sizeof(label),
+                     "enemy animation %u actually moves", (unsigned)id);
+            check(record.frame_count < 3U ||
+                  memcmp(first.pose.part, middle.pose.part,
+                         sizeof(sm64_saturn_rigid_part_t) *
+                             first.pose.part_count) != 0, label);
+        }
+    }
+
+    /* Fail-closed on the enemy bank too: one past the last advertised ID is
+     * refused rather than sampling off the end of the channel table. */
+    memset(&first, 0, sizeof(first));
+    check(!sm64_saturn_actor_rigid_pose_evaluate(
+              &view, (int16_t)view.bank.animation_count, 0, NULL, workspace,
+              &first.pose, POSE_BYTES),
+          "an out-of-range enemy animation id is refused");
+    check_eq_i32(first.pose.flags, 0, "a refused enemy pose is not valid");
+    check(!sm64_saturn_actor_rigid_pose_evaluate(
+              &view, 0, 0, NULL, workspace, &first.pose,
+              SM64_SATURN_RIGID_POSE_BYTES(view.bank.joint_count) - 1U),
+          "a block one byte short of the enemy hierarchy is refused");
+    free(bytes);
+}
+
 int main(int argc, char **argv)
 {
     test_q15_conversion();
@@ -661,6 +809,7 @@ int main(int argc, char **argv)
     test_degenerate();
     test_fails_closed();
     if (argc > 1) test_real_bank(argv[1]);
+    if (argc > 2) test_enemy_bank(argv[2]);
 
     if (g_failures != 0) {
         fprintf(stderr, "rigid-pose fixture: %d failing assertions\n",

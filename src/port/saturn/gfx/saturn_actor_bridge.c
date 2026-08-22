@@ -280,6 +280,11 @@ static void complete_actor_publish_probe(void)
     sm64_saturn_pose_owner_reserved(0xE005U, 0U)
 #define COMPLETE_ACTOR_OWNER_RIGID \
     sm64_saturn_pose_owner_reserved(0xE006U, 0U)
+/* The first non-Mario tenant.  It is a *reserved* key, not a generic instance
+ * key, because this is still a boot-time exercise: no object-pool slot owns
+ * it, so it can never alias a real actor's `(incarnation << 16) | pool_slot`. */
+#define COMPLETE_ACTOR_OWNER_RIGID_ENEMY \
+    sm64_saturn_pose_owner_reserved(0xE007U, 0U)
 
 /* The resident S64F actor bundle, handed over by the sourceboot scene owner
  * once it has validated it.  The bundle already ships in CART for the generic
@@ -629,14 +634,20 @@ static void complete_actor_enemy_rigid_selftest(void)
     sm64_saturn_complete_actor_probe.enemy_bank_animation_count =
         bank.bank.animation_count;
 
-    /* Animation 0 at frame 0 and at frame n-1 (INT16_MAX clamps to the last
-     * frame inside the evaluator), then animation 1 at frame 0.  No staged
-     * joint slice exists for this bank, so the joint table is read straight
-     * out of CART -- correct for a boot-time exercise, and the exact thing a
-     * per-frame caller would have to stage. */
+    /* Animation 0 at frame 0 and at a mid frame, then animation 1 at frame 0.
+     *
+     * The comparison frame is deliberately NOT n-1.  The Bob-omb's walk is a
+     * closed loop: all eleven of its animated channels return to their
+     * frame-0 value at frame 24, so a frame-0-against-n-1 comparison reports
+     * an actor that never moves.  Frame 12 is inside the loop for the 25
+     * frame animation and clamps to the last frame of the 10 frame one.
+     *
+     * No staged joint slice exists for this bank, so the joint table is read
+     * straight out of CART -- correct for a boot-time exercise, and the exact
+     * thing a per-frame caller would have to stage. */
     sm64_saturn_complete_actor_probe.enemy_rigid_selftest_mask =
         complete_actor_rigid_selftest(
-            &bank, COMPLETE_ACTOR_OWNER_RIGID_ENEMY, 0, INT16_MAX,
+            &bank, COMPLETE_ACTOR_OWNER_RIGID_ENEMY, 0, 12,
             bank.bank.animation_count > 1U ? (int16_t)1 : (int16_t)-1, NULL,
             &sm64_saturn_complete_actor_probe.enemy_rigid_part_count,
             &sm64_saturn_complete_actor_probe.enemy_rigid_pose_bytes);

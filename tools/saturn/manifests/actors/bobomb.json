@@ -1,0 +1,88 @@
+{
+  "schema": "sm64-saturn-actor-source-v1",
+  "version": 1,
+  "family_ordinal": 7,
+  "model": "MODEL_BLACK_BOBOMB",
+  "model_id": 188,
+  "stable_id": "bhvBobomb",
+  "max_instances": 14,
+  "model_source": "actors/bobomb/model.inc.c",
+  "geo": "actors/bobomb/geo.inc.c",
+  "geo_root": "black_bobomb_geo",
+  "animation_table": "actors/bobomb/anims/table.inc.c",
+  "bake": {
+    "producer": "tools/saturn/actor_variant_bank.py via tools/saturn/compile_actor_family_bundle.py",
+    "format": "S64B v2",
+    "residency": "embedded in build/saturn/packages/bob/1/actors-v3-g16/bob-area1-actors-v3.s64f (ACTOR_DEPENDENCIES, CART, SCENE lifetime)",
+    "standalone_copy_is_linked": false,
+    "rationale": "The bank already ships inside the generic BOB actor package. Emitting a second linked copy would cost 6,288 cart bytes for zero new capability, so the standalone .s64b is a host verification artifact only."
+  },
+  "degradation": {
+    "policy": "phase plan section 2b -- author to the Saturn budget, do not port the N64 asset and then look for savings",
+    "geo_scale_folded": {
+      "decision": "GEO_SCALE(0x00, 24576) is folded into the baked joint translations at 0.375 and no runtime scale node is emitted",
+      "evidence": "source (0,57,-60) bakes to (0,21,-23); source (91,0,0) bakes to (34,0,0)",
+      "visual_cost": "sub-unit rounding on four joint offsets, fixed and non-accumulating",
+      "saves": "one matrix multiply per part per frame and one geo node class the runtime does not have to support"
+    },
+    "shadow_dropped": {
+      "decision": "GEO_SHADOW is recorded and not emitted as geometry",
+      "visual_cost": "no per-actor shadow from this bank",
+      "replacement": "W4 standing policy -- a generic painted sprite under the actor, not a light-following N64 shadow"
+    },
+    "switch_alternatives_share_one_joint": {
+      "decision": "the two geo_switch_anim_state display lists (eyes open / eyes blink) bind to ONE joint ordinal (12), matching the source animation stream's 13 channels",
+      "visual_cost": "none -- the source only ever draws one of the two"
+    },
+    "one_command_per_primitive": {
+      "decision": "one VDP1 command per source triangle; a textured primitive emits a distorted sprite and NOT an additional Gouraud polygon",
+      "contrast": "T2.19a: Mario's 50 textured primitives emit a Gouraud polygon PLUS a distorted sprite, and 56.38% of their texture words are transparent",
+      "visual_cost": "VDP1 textured Gouraud is additive rather than N64 texture-times-shade"
+    },
+    "texture_budget": {
+      "format": "CLUT16",
+      "tile_classes": [16, 32],
+      "policy_id": "bob-direct-material-v1",
+      "quantizer": "deterministic transparent-plus-15-colour median cut; CLUT index zero is transparent; alpha threshold 128"
+    }
+  },
+  "budget": {
+    "max_joints": 20,
+    "max_joints_reason": "complete_actor_joint_workspace is 20 Q16.16 matrices and is shared with the skinned lane; each extra part costs 64 B of HWRAM",
+    "max_rigid_pose_bytes": 640,
+    "max_rigid_pose_bytes_reason": "the large cold pose class (r2-rigid-part-evaluator.md section 1.4)",
+    "max_primitives": 80,
+    "max_primitives_reason": "Mario is 644 primitives / 694 VDP1 commands and Z-Treme's whole-scene budget is 1,900 polys; 14 live Bob-ombs at 68 commands is already 952 commands, so this is the ceiling, not a target",
+    "max_texture_resident_bytes": 2048,
+    "max_clut_resident_bytes": 512,
+    "max_payload_bytes": 8192,
+    "max_animations": 4
+  },
+  "animation_selection": {
+    "policy": "bake-all-v1",
+    "rationale": "The actor has exactly two source animations (walk, 25 frames; and a 10-frame secondary) and both are reachable from bhvBobomb. Mario's core-play-v1 tiering exists because 193 animation files had to be cut to 103; with two, tiering would cost more than it saves.",
+    "substitution": "nearest-baked-animation-id, ties resolved to the lower ID -- unreachable because every ID is baked",
+    "keep": [0, 1]
+  },
+  "expected": {
+    "joint_count": 13,
+    "animation_count": 2,
+    "frame_counts": [25, 10],
+    "channel_counts": [42, 42],
+    "vertex_count": 62,
+    "primitive_count": 68,
+    "meshlet_count": 7,
+    "material_count": 6,
+    "tile_count": 11,
+    "clut_count": 5,
+    "texture_resident_bytes": 1408,
+    "clut_resident_bytes": 160,
+    "draw_records_per_instance": 68,
+    "texture_commands_per_instance": 12,
+    "gouraud_tables_per_instance": 56,
+    "payload_bytes": 6288,
+    "payload_sha256": "89a13d8828a7242c68d5f4fc26d0d1d91fbc58789a677ebdf6058fc3487aabe6",
+    "rigid_pose_bytes": 328,
+    "rigid_pose_class_bytes": 640
+  }
+}
