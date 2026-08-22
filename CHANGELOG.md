@@ -4,6 +4,22 @@
 
 ### Added
 
+- **The target profile now seals `features.complete_mario_animation = 1`, so
+  the R3 arm can be built and measured.** **Reasoning:** the complete-Mario
+  animation path is not a plain `-D` flip. `SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS`
+  (`src/port/saturn/sourceboot/Makefile:178`) passes
+  `--expect features.complete_mario_animation=$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)`
+  and `bootstrap_sourceboot_identity_spec.py` refuses to seal an identity when
+  the Make-provided tuple disagrees with the profile's `release_config`, so a
+  `=1` build could not previously be produced at all without this row moving
+  with it. **Consumer-facing impact:** the sealed identity changes -- every
+  build from this commit forward carries a different `effective_config_sha256`
+  than `id-28b8cb0e531f8476`, and identity tags are not comparable across it.
+  This row is an R3 scoping input; whether it ships is decided by the memory,
+  cadence and per-frame measurements recorded in
+  `docs/saturn/evidence/reports/r3-mario-animation-scoping.md`, not by this
+  commit.
+
 - **`capture_idle_attribution.py` can now attribute soft-float *call sites*,
   not just residency.** `--attribute-callers-of softfloat` reads PR at every
   entry to a listed callee and rolls the result up to the calling function,
