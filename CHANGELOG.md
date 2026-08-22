@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **The per-tick pose-pool alias witness** (`saturn_actor_bridge.c`). It
+  re-striped both long-lived cold tenants with a tick-varying byte and read
+  them back on every Mario pose evaluation - two 32-byte writes plus two
+  32-byte compares per frame, inlined into `complete_actor_evaluate` and so
+  resident in HWRAM rather than CART. **Reasoning:** it already did its job.
+  `pool_alias_faults == 0` over 199 consecutive on-target evaluations is the
+  evidence that the arena partition never lets one tenant touch another, and
+  that is a property of the partition fixed at init - re-proving it every
+  frame buys nothing once observed. The boot-time selftest still proves
+  disjointness on every boot. No build gate reads the counters (only evidence
+  docs and a one-off probe script), and they remain in the probe struct at
+  their boot values.
+- **Two permanently-held cold pool blocks.** The exercise tenants were claimed
+  at boot and never released so the witness could keep re-striping them; with
+  the witness gone they are handed back, returning 2 of the cold arena's 16
+  blocks to real tenants.
+- **Measured: -848 B of HWRAM** (1,017,230 -> 1,016,382), plus per-frame time
+  saved in Mario's evaluation path. `complete_actor_stripe` /
+  `complete_actor_stripe_ok` are now `SM64_SATURN_CART_COLD` and verified in
+  CART, since the only remaining callers are boot-time. **This corrects a
+  standing estimate:** the scaffolding was recorded as returning ~1.1 KB, which
+  was an accounted estimate, never a measurement. The real figure is 848 B,
+  because the rigid selftests were already `CART_COLD` and only ~120 B of
+  separately-symbolised scaffolding was ever HWRAM-resident.
+
+### Fixed
+
+- **Diagnosed both coin defects as one root cause.** Coins render but do not
+  animate and show wrong colours. Each coin bakes **8 switch cases** - 1,024 B
+  of texture (8 x 128 B, one 16x16 4bpp tile per case) and 256 B of CLUT
+  (8 x 32 B, one 16-colour CLUT per case) - across 16 draw records, 2 quads
+  per case. The runtime enforces `draw_records_per_instance == primitive_count`
+  and has no switch filtering, so **all 8 rotation frames emit every frame,
+  superimposed, each with its own CLUT**. That is simultaneously why there is
+  no animation (every frame shows every phase) and why the colour is wrong
+  (whichever case draws last wins the pixel). The selector data is already
+  captured - `geo_process_switch` records `selectedCase` into
+  `switch_state[0]` and it reaches the instance snapshot - but the S64B binary
+  carries no switch-to-primitive mapping, so consuming it is a **bank-format
+  addition**, not a wiring change.
+
 ### Changed
 
 - **The collision spatial index moved from HWRAM to LWRAM, which is what lets

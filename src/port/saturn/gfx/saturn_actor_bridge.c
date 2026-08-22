@@ -320,6 +320,7 @@ enum {
     POOL_SELFTEST_OVERSIZE_FAILS = 1U << 10
 };
 
+SM64_SATURN_CART_COLD
 static void complete_actor_stripe(sm64_saturn_pose_handle_t handle,
                                   uint8_t pattern)
 {
@@ -331,6 +332,7 @@ static void complete_actor_stripe(sm64_saturn_pose_handle_t handle,
         bytes[index] = pattern;
 }
 
+SM64_SATURN_CART_COLD
 static uint8_t complete_actor_stripe_ok(sm64_saturn_pose_handle_t handle,
                                         uint8_t pattern)
 {
@@ -344,7 +346,10 @@ static uint8_t complete_actor_stripe_ok(sm64_saturn_pose_handle_t handle,
     return 1U;
 }
 
-/* Boot-time exercise of the cold pool against real LWRAM.  Runs once. */
+/* Boot-time exercise of the cold pool against real LWRAM.  Runs once, so it
+ * must not spend HWRAM -- the per-tick witness that used to keep these
+ * helpers hot is gone. */
+SM64_SATURN_CART_COLD
 static uint16_t complete_actor_pool_selftest(void)
 {
     sm64_saturn_pose_handle_t filler[8];
@@ -429,23 +434,36 @@ static uint16_t complete_actor_pool_selftest(void)
     if (complete_actor_stripe_ok(complete_actor_exercise[0], 0xA5U) &&
         complete_actor_stripe_ok(complete_actor_exercise[1], 0x5AU))
         mask |= POOL_SELFTEST_TENANTS_DISJOINT;
+
+    /* Hand the two exercise blocks back.  They used to be held for the whole
+     * session so a per-tick witness could keep re-striping them; that witness
+     * is gone (see below), so holding them would just be two cold blocks of
+     * the sixteen permanently unavailable to real tenants. */
+    (void)sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
+                                              COMPLETE_ACTOR_OWNER_EXERCISE_A);
+    (void)sm64_saturn_pose_pool_release_owner(&complete_actor_cold_pool,
+                                              COMPLETE_ACTOR_OWNER_EXERCISE_B);
+    complete_actor_exercise[0] = sm64_saturn_pose_handle_invalid();
+    complete_actor_exercise[1] = sm64_saturn_pose_handle_invalid();
     return mask;
 }
 
-/* Per-tick witness: rewrite both long-lived cold tenants with a stripe that
- * changes every tick and read both back.  Two 32-byte stripes. */
-static void complete_actor_pool_tick_check(uint16_t tick)
-{
-    const uint8_t left = (uint8_t)(0x10U + (tick & 0x3FU));
-    const uint8_t right = (uint8_t)(0x90U + (tick & 0x3FU));
-    complete_actor_stripe(complete_actor_exercise[0], left);
-    complete_actor_stripe(complete_actor_exercise[1], right);
-    if (complete_actor_stripe_ok(complete_actor_exercise[0], left) &&
-        complete_actor_stripe_ok(complete_actor_exercise[1], right))
-        sm64_saturn_complete_actor_probe.pool_frames_checked++;
-    else
-        sm64_saturn_complete_actor_probe.pool_alias_faults++;
-}
+/* The per-tick pool alias witness has been REMOVED.
+ *
+ * It re-striped both long-lived cold tenants with a tick-varying byte and
+ * read them back every time Mario's pose was evaluated -- two 32-byte writes
+ * plus two 32-byte compares per frame, inlined into complete_actor_evaluate
+ * and therefore resident in HWRAM rather than CART.
+ *
+ * It did its job: `pool_alias_faults == 0` over 199 consecutive on-target
+ * evaluations (r2-pose-slot-pooling.md, reconfirmed in
+ * r2-rigid-part-evaluator.md) is the evidence that the arena partition never
+ * lets one tenant touch another. That is a property of the partition, fixed
+ * at init, so a per-frame re-proof buys nothing once it has been observed.
+ * The boot-time selftest above still proves disjointness on every boot.
+ *
+ * `pool_frames_checked` and `pool_alias_faults` remain in the probe struct
+ * and now stay at their boot values; no build gate reads them. */
 
 enum {
     RIGID_SELFTEST_CLAIMED = 1U << 0,
@@ -793,8 +811,6 @@ static uint8_t complete_actor_evaluate(
      * unusable -- and it can never publish another tenant bytes. */
     if (bank == NULL || slot == NULL)
         return 0U;
-    complete_actor_pool_tick_check(
-        sm64_saturn_complete_actor_probe.evaluate_calls);
     work.vertices = slot->vertices;
     work.light_intensity = slot->lights;
     work.joint_matrices_q16 = complete_actor_joint_workspace;
