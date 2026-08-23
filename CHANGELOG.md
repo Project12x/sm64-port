@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Sprint 3 plan gains the two structural FPS levers it missed** (owner
+  question: "whats the biggest FPS lever our plan misses?"). **S1.10:** every
+  frame still runs the full N64 rendering-graph walk and display-list build,
+  then discards the output (`display_suppressed`, `game_init.c:450`) - two
+  renderers paid per frame, the plan tuned only the Saturn one. The walk
+  cannot be skipped (W1: it feeds animation/camera/observer) but can be
+  recreated Saturn-native per section 2a - Q16-only, consumer-driven, no float
+  mirror, no display lists. Region upper bound ~18% of master; half is ~one
+  cadence rung. Gated on the S0.1 capture, which now also prices
+  `geo_process_node_and_siblings` / `saturn_mtxq_refresh_float_mirror` /
+  `alloc_display_list`. **S1.11:** the slave measured 79% idle at T2.16
+  (pre-closure - re-measure, never assume); the workstream owns the idle
+  budget with tenants claiming from it: the terrain depth-bin offload (+4.3%,
+  STATE.md's own ranking, dropped from the first draft by omission), T6
+  (actor process), and slave-side pieces of the native walk. The 8.57 and
+  10.00 rungs now have named levers under them instead of a wish.
+
 ### Added
 
 - **Sprint 3 plan** (`docs/superpowers/plans/2026-08-22-sprint3-playable-bob-wf-menu.md`),

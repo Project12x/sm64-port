@@ -58,11 +58,15 @@ Budget ~60% conversion of removed cycles into frame time (measured on W2).
 **FPS arithmetic, stated honestly.** Recovering the full closure regression
 returns us to ~6.9 → rung **6.67**. T1+T2 alone are worth ~47 ms of the
 55 ms and are low-risk. Reaching **7.50** needs the mechanical tail
-(T3/T4/T5/T8) plus the seam scans (T9). Reaching **8.57** most likely needs
-the slave offload (T6) — gated on the S0.1 measurement. **10.00 means
-halving today's frame time (200 → 100 ms); it is the sprint's stretch rung,
-not a promise**, and each S2 bake batch adds VDP1/master work that must be
-paid for as we go — which is why S1 and S2 interleave with measurements.
+(T3/T4/T5/T8) plus the seam scans (T9). **The rungs past 7.50 stand on the
+two structural levers** (S1.10 native geo walk, S1.11 slave utilization):
+the walk's recoverable half is worth roughly a rung on its own, the slave's
+re-measured idle sets the ceiling for everything offloaded, and T6 is one
+tenant of S1.11, not the whole answer. **10.00 means halving today's frame
+time (200 → 100 ms); it is the sprint's stretch rung, not a promise** — but
+it is now a rung with named levers under it rather than a wish. Each S2 bake
+batch adds VDP1/master work that must be paid for as we go — which is why S1
+and S2 interleave with measurements.
 
 ---
 
@@ -70,7 +74,7 @@ paid for as we go — which is why S1 and S2 interleave with measurements.
 
 | # | Task | Mechanism / file | Effort |
 |---|---|---|---|
-| S0.1 | **The one measurement that steers the sprint:** `capture_idle_attribution.py` on the closure build at ticks 30 and 150, `--attribute-callers-of` `_actor_saturating_mul_i64` / `___divdi3` / `_demo_generic_actor_world_vertex`, plus the master×slave contingency table | confirms Audit C's cycle accounting AND decides whether T6 (slave offload) is worth its risk | capture run |
+| S0.1 | **The one measurement that steers the sprint:** `capture_idle_attribution.py` on the closure build at ticks 30 and 150, `--attribute-callers-of` `_actor_saturating_mul_i64` / `___divdi3` / `_demo_generic_actor_world_vertex` **plus `_geo_process_node_and_siblings` / `_saturn_mtxq_refresh_float_mirror` / `_alloc_display_list`**, plus the master×slave contingency table | one capture prices all three structural questions: confirms Audit C's accounting, **prices the discarded N64 geo walk (S1.10 go/no-go)**, and sizes today's slave idle (S1.11 budget; the 79% figure is T2.16, pre-closure — re-measure, never assume) | capture run |
 | S0.2 | **Instance-level skip instead of frame-level `return false`** in `demo_generic_actor_emit`/`prepare` — one failing bank/residency lookup currently drops the whole frame | `saturn_demo_render.c:4288-4295` and the prepare loop; add skip telemetry. Violates ROADMAP M2's "never stall the complete scene" as-is, and **must land before any bake batch grows the roster** | small RT |
 | S0.3 | **Raise/handle `SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE=64`** — the observer hard-fails the entire capture on overflow rather than degrading | `saturn_actor_instance.h:14`, `saturn_actor_instance.c:111-114`; degrade = drop farthest, count it | small RT |
 | S0.4 | Fix build-config drift: `build-sourceboot.ps1` still defaults `DYNAMIC_ACTOR_CLOSURE=0`; make the coins profile the default profile | `tools/saturn/build-sourceboot.ps1:70`, `tools/saturn/profiles/` | one-liner |
@@ -93,12 +97,25 @@ window sweep — single-tick readings mislead) after each landing.
 | S1.8 | **T7 — switch filter into the bake** | Emit per-case primitive lists so unselected switch cases never produce output records. Today a coin reserves 16 records where 2 draw — 8x record-budget pressure that bites at a screenful of coins. **Depends on S3.0** (touches the pinned tables) | record budget, future-proofing | med |
 | S1.9 | **T6 — slave offload of the process phase** | `drain_slave` + the second workspace lane exist unwired. **Go/no-go from S0.1's contingency table only.** Emit stays master-owned | up to the whole process phase | **high** |
 
+### The two structural levers (added 2026-08-22, owner-directed)
+
+Everything above tunes the Saturn renderer. These two attack the frame's
+other halves — the N64 renderer we still run every frame, and the CPU we
+barely use. Both are gated on S0.1's numbers, and both are what the
+8.57 → 10.00 rungs actually stand on.
+
+| # | Target | Mechanism | Expected | Risk |
+|---|---|---|---|---|
+| S1.10 | **Replace the discarded N64 geo walk with a Saturn-native walk** | Every frame still runs the full `rendering_graph_node.c` traversal and display-list build, then `display_suppressed` (`game_init.c:450`) discards the output — two renderers paid per frame. The walk cannot be *skipped* (W1: it feeds animation, camera and the observer; its 18.18% headline was withdrawn as *removable*, not as *sized*), but it can be *recreated* per §2a: a Q16-only walk computing ONLY what has consumers — observer state (the registry seam IS the consumer list), animation advance, camera — with no float mirror (`saturn_mtxq_refresh_float_mirror` burns 16 `q16_to_float` per matrix write), no `alloc_display_list`, no matrix work for subtrees nothing reads. Prior art: `docs/superpowers/plans/2026-08-06-saturn-iterative-geo-walk.md`. | region upper bound ~18% of master; if half is recoverable, **~18 ms/frame ≈ one full rung**, compounding with every actor S2 adds | **high** — the W1 failure is the cautionary tale; land behind a tick-by-tick equivalence oracle on observer/animation/camera state against the shipped walk |
+| S1.11 | **Spend the slave's idle cycles (T6 is one tenant, not the answer)** | T2.16 measured the slave **79% idle** with the master near-saturated — close to half the machine's combined cycles unused. This workstream owns the budget; tenants claim from it. Priced tenant: the **terrain depth-bin offload, +4.3% / ~0.367 VB** (STATE.md's own post-T2.17 ranking; dropped from this plan's first draft by omission). Second tenant: T6 (actor process phase). Candidate third, after S1.10: slave-side portions of the native walk. Gate on every tenant: no SH-2 cache coherency — slave-visible state goes through the uncached mirror or explicit lines; the existing terrain master/slave split is the pattern to copy. | depth-bin offload alone ≈ +4.3%; the ceiling is S0.1's re-measured contingency table | med per tenant; T6 stays **high** |
+
 **Anti-target:** the soft-float tail (Audit C T10). Ranks 2-5 total 7.8% over
 962 functions. Do not spend sprint time there; W6b remains a separate program.
 
 **Milestone S1-A (owner check):** route rung ≥ 6.67 with coins + Bob-ombs on.
 **Milestone S1-B:** rung 7.50 after the mechanical tail.
-**Stretch:** 8.57 post-T6; 10.00 only if S2's added load is paid for.
+**Stretch:** 8.57 on the structural levers (S1.10/S1.11); 10.00 only if
+both land AND S2's added load is paid for.
 
 ## S3.0 — Re-key the material/digest tables (critical path for S2 AND S5)
 
