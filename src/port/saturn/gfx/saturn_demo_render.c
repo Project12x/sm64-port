@@ -3232,8 +3232,13 @@ static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
         if (!sm64_saturn_source_scene_bundle_resolve(
                 &snapshots[index], 0U,
                 &transaction->actor_runtime->outputs[output_cursor], remaining,
-                &resolution))
-            return false;
+                &resolution)) {
+            /* No claim was made -- resolve failed before acquiring one --
+             * so there is nothing to release. Skip this instance only; a
+             * single bad bank/residency lookup must not drop the frame. */
+            transaction->profile->actor_instance_skipped++;
+            continue;
+        }
         const uint32_t capacity = resolution.bank.draw_records_per_instance;
         const bool descriptor_ok = capacity != 0U && capacity <= remaining &&
             capacity <= UINT16_MAX &&
@@ -3242,9 +3247,17 @@ static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
                 SM64_SATURN_ACTOR_OUTPUT_OPAQUE, output_cursor,
                 (uint16_t)capacity,
                 &transaction->actor_runtime->queue.descriptors[descriptor_count]);
+        /* Release unconditionally, before the pass/fail check below, so the
+         * claim is never held past this instance regardless of outcome. */
         const bool released = sm64_saturn_source_scene_bundle_release(
             0U, resolution.residency_generation);
-        if (!descriptor_ok || !released) return false;
+        if (!descriptor_ok || !released) {
+            /* Claim already released above. Skip this instance without
+             * creating a descriptor for it -- descriptor_count/output_cursor
+             * only advance for admitted instances below. */
+            transaction->profile->actor_instance_skipped++;
+            continue;
+        }
         output_cursor = (uint16_t)(output_cursor + capacity);
         descriptor_count++;
     }
@@ -4289,8 +4302,25 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
             !sm64_saturn_source_scene_bundle_resolve(
                 snapshot, 0U,
                 &transaction->actor_runtime->outputs[descriptor->output_offset],
-                descriptor->output_capacity, &resolution))
-            return false;
+                descriptor->output_capacity, &resolution)) {
+            /* resolve() only runs once descriptor/result/snapshot/reason/
+             * capacity have already passed, and short-circuits before it on
+             * any earlier failure, so no claim is ever left outstanding on
+             * this path -- nothing to release. Skip this instance instead of
+             * failing the whole frame over one bad bank/residency lookup.
+             * Its records must still count toward `emitted` the same way a
+             * rejected primitive does, so generic_actor_output_count (summed
+             * in demo_generic_actor_prepare from this same result lookup)
+             * still matches exactly. If result is NULL there is no count to
+             * credit -- that is a queue-consistency fault, not a per-instance
+             * lookup failure, and is left to fail closed at the final
+             * `emitted != generic_actor_output_count` check below rather than
+             * dereference a NULL result here. */
+            transaction->profile->actor_instance_skipped++;
+            if (result != NULL)
+                emitted = (uint16_t)(emitted + result->output_count);
+            continue;
+        }
         sm64_saturn_actor_pose_view_t pose;
         bool valid = sm64_saturn_actor_pose_evaluate(
             &resolution.bank, snapshot->animation_id, snapshot->animation_frame,

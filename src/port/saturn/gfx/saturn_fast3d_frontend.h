@@ -505,6 +505,11 @@ typedef struct sm64_saturn_fast3d_profile {
     /* Flat-shaded actor primitives that took the cheap constant-colour path
      * instead of uploading a four-corner Gouraud table. */
     uint32_t actor_flat_replace;
+    /* Generic-actor instances skipped (not the whole frame) because their own
+     * bank/residency lookup or descriptor build failed -- ROADMAP Milestone 2
+     * requires the scene to keep rendering past a single bad actor instance.
+     * Appended for the same offsetof() reason as reject_switch_case. */
+    uint32_t actor_instance_skipped;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

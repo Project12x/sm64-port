@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **S0.2: one bad actor instance no longer drops the whole frame.**
+  `demo_generic_actor_prepare` and `demo_generic_actor_emit` returned false
+  from inside their per-instance loops on any bank/residency resolve or
+  descriptor failure, discarding every actor that frame - a violation of
+  ROADMAP Milestone 2's "never stall the complete scene", and a hazard that
+  grows with every actor the S2 bake batches add. Both now skip the instance
+  and continue, counted in a new `actor_instance_skipped` profile field.
+- **Invariants preserved and independently verified:** the claim is never
+  left outstanding (prepare releases unconditionally before its check; emit's
+  short-circuit `||` means resolve either never ran or itself failed);
+  `descriptor_count`/`output_cursor` advance only for admitted instances, so
+  the `drain_master() != descriptor_count` check still holds; and
+  `emitted == generic_actor_output_count` holds because the skip credits
+  `result->output_count`, mirroring how a rejected primitive still does
+  `emitted++` (confirmed by reading the loop: `emitted++` fires on every
+  iteration, success and reject alike).
+- **One edge case deliberately left fail-closed rather than papered over:** a
+  NULL `result` is a queue-consistency fault, not a per-instance lookup
+  failure, so no count is invented for it - the frame still fails the final
+  accounting check exactly as before, now only for that genuinely anomalous
+  case instead of for every ordinary bad lookup.
+- `actor_instance_skipped` is **appended at the struct tail**, keeping
+  `capture_route_counters.py`'s hand-computed offsets valid. Sealed build
+  `id-333e380c68636a58`, built clean.
+
 ### Added
 
 - **Sprint 3 gains S7, the content-side counterweight** — the workstream
