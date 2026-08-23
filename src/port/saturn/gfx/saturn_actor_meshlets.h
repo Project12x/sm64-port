@@ -110,6 +110,37 @@ bool sm64_saturn_actor_meshlets_bind_bundle_workspace(
     sm64_saturn_actor_output_record_t *records, uint16_t draw_capacity,
     sm64_saturn_actor_meshlet_workspace_t *workspace);
 
+/* S1.11: the meshlet walk writes exactly four counters, and they are the only
+ * fast3d-profile fields it touches. Naming them as their own type lets the
+ * generic-actor phase accumulate into a small block the slave CPU owns --
+ * which must live in uncached memory, and which a whole
+ * sm64_saturn_fast3d_profile_t is far too large to be. The master folds the
+ * block into the real profile after the slave retires, so the totals are
+ * unchanged and the accumulation is a sequenced handoff, not a race. */
+typedef struct sm64_saturn_actor_meshlet_stats {
+    uint32_t meshlets_tested;
+    uint32_t meshlets_admitted;
+    uint32_t meshlets_culled;
+    uint32_t positions_admitted;
+} sm64_saturn_actor_meshlet_stats_t;
+
+/* Fold a walk counter block into a frame profile. Tolerates NULL on either
+ * side so callers that do not profile stay branch-free at their call site. */
+void sm64_saturn_actor_meshlet_stats_fold(
+    sm64_saturn_fast3d_profile_t *profile,
+    const sm64_saturn_actor_meshlet_stats_t *stats);
+
+/* prepare_bank, but accumulating into a caller-owned counter block instead of
+ * a frame profile. This is the entry point the generic-actor phase uses when
+ * it runs on the slave. */
+bool sm64_saturn_actor_meshlets_prepare_bank_stats(
+    const sm64_saturn_actor_bank_view_t *bank,
+    const sm64_saturn_actor_instance_snapshot_t *instance,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_actor_pose_work_t *pose_work,
+    sm64_saturn_actor_meshlet_bank_output_t *output,
+    sm64_saturn_actor_meshlet_stats_t *stats);
+
 /* Compatibility entry point. It shares the bank-neutral admission core while
  * retaining the exact Mario snapshot/pose/capacity contract. */
 bool sm64_saturn_actor_meshlets_prepare(

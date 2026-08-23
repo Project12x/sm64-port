@@ -25,7 +25,8 @@ bool sm64_saturn_build_identity_is_valid(
     const uint32_t known_features =
         SM64_SATURN_FEATURE_COMPLETE_MARIO_ANIMATION |
         SM64_SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE |
-        SM64_SATURN_FEATURE_SEMANTIC_AUDIO;
+        SM64_SATURN_FEATURE_SEMANTIC_AUDIO |
+        SM64_SATURN_FEATURE_ACTOR_PHASE_SLAVE;
 
     if (identity == 0 ||
         identity->magic != SM64_SATURN_BUILD_IDENTITY_MAGIC ||

@@ -20,6 +20,15 @@ FEATURE_BITS = {
     "complete_mario_animation": 1 << 0,
     "dynamic_actor_closure": 1 << 1,
     "semantic_audio": 1 << 2,
+    # S1.11: runs the generic-actor phase on the slave CPU. Sealed as a
+    # feature so the offload-on and offload-off arms get distinct build
+    # identities -- without this they collide in one build directory and the
+    # second build silently overwrites the first, which is exactly how a
+    # A/B measurement ends up comparing one binary against itself.
+    # Note: this DOES shift every identity, including offload-off builds --
+    # effective_config_hash covers the config key set, not just the values, so
+    # adding the key moves the hash even where it is 0.
+    "actor_phase_slave": 1 << 3,
 }
 KNOWN_FEATURE_BITS = sum(FEATURE_BITS.values())
 SCALAR_FIELDS = (

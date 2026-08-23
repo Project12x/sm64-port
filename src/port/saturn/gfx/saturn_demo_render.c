@@ -15,6 +15,20 @@
 #define SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE 0
 #endif
 
+/* S1.11: run the generic-actor phase on the slave CPU, overlapped with the
+ * master's terrain/Mario preparation.
+ *
+ * Default OFF. The cadence harness runs with SH-2 cache emulation disabled
+ * (`sh2_cache_emulation: false`, and every accepted baseline is caches-off),
+ * so it cannot observe a coherency defect in this path -- a green cadence run
+ * is not evidence that the offload is correct. Keeping the switch explicit
+ * means the master-only arm remains the shipped default until the offload has
+ * been measured on a caches-on basis, and makes the two arms directly
+ * comparable from one build tree. */
+#ifndef SATURN_FEATURE_ACTOR_PHASE_SLAVE
+#define SATURN_FEATURE_ACTOR_PHASE_SLAVE 0
+#endif
+
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -645,6 +659,9 @@ typedef struct demo_render_transaction {
     uint16_t required_positions;
     uint16_t actor_vertex_count;
     uint16_t generic_actor_output_count;
+    /* S1.11: retained across the publish/join split so the join can walk the
+     * same descriptor range the publish admitted, without re-deriving it. */
+    uint16_t generic_actor_descriptor_count;
     uint16_t generic_actor_gouraud_count;
     uint16_t generic_actor_gouraud_first;
     uint16_t frame_job_count;
@@ -1651,6 +1668,13 @@ static void demo_build_primitive_work_metadata(void)
 }
 
 SM64_SATURN_CART_COLD
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE && SATURN_FEATURE_ACTOR_PHASE_SLAVE
+/* Defined with the rest of the actor phase, far below; registration happens
+ * here during init because the runtime refuses a rebind after the first
+ * notify. */
+static bool demo_actor_phase_slave_task(void);
+#endif
+
 void sm64_saturn_demo_render_init(void)
 {
     demo_lod_storage_t *const lod_storage =
@@ -1734,6 +1758,16 @@ void sm64_saturn_demo_render_init(void)
         sm64_saturn_render_job_runtime_activate_graph(
             &s_render_job_graph, demo_render_job_callbacks(), NULL) ? 1U : 0U;
     if (s_render_job_runtime_active == 0U) return;
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE && SATURN_FEATURE_ACTOR_PHASE_SLAVE
+    /* S1.11: register before the first notify -- the runtime refuses a rebind
+     * once notification has begun, so a late registration fails loudly here
+     * rather than racing a live frame. */
+    if (!sm64_saturn_render_job_runtime_set_slave_task(
+            demo_actor_phase_slave_task)) {
+        s_render_job_runtime_active = 0U;
+        return;
+    }
+#endif
     s_bob_resident_ready = 1U;
 }
 
@@ -3154,17 +3188,157 @@ static bool demo_generic_actor_world_vertex(
     return true;
 }
 
+/* File-scope tag declaration first: a tag whose first mention is inside a
+ * prototype gets prototype scope, which would make this a different type from
+ * the definition below. */
+struct demo_actor_phase_accum;
+static bool demo_generic_actor_run(struct demo_actor_phase_accum *accum,
+                                   bool on_slave);
+
+/* Compiler barrier only: every field it orders lives in uncached storage, so
+ * there is no write-back to flush -- the hazard being prevented is the
+ * compiler hoisting a load or sinking a store across the handshake, not the
+ * cache. Same shape as actor_queue_fence()/runtime_fence() elsewhere. */
+static inline void demo_render_fence(void)
+{
+#if defined(__GNUC__)
+    __asm__ volatile("" ::: "memory");
+#endif
+}
+
+/* A slave that faulted mid-phase must fail the frame closed rather than hang
+ * the master forever. The phase is a few thousand cycles of work the master
+ * has already overlapped, so any spin count this large means the peer is gone,
+ * not merely slow. */
+#define DEMO_ACTOR_PHASE_WAIT_LIMIT UINT32_C(0x00400000)
+
+/* S1.11: everything the generic-actor phase accumulates while it walks the
+ * instance queue. This block is written by whichever CPU runs the phase and
+ * read by the master when it folds the totals in, so it must not be cached:
+ * the two SH-2s have no coherency, and a cached accumulator would let each
+ * CPU's write-back discard the other's. The master folds it after the phase
+ * completes -- a sequenced handoff across a barrier, never a concurrent
+ * read-modify-write.
+ *
+ * It replaces two shared mutable writes that used to sit inside the process
+ * callback: transaction->generic_actor_gouraud_count, and the four meshlet
+ * counters written straight into the frame profile. Both were safe only
+ * because the drain was master-only. */
+typedef struct demo_actor_phase_accum {
+    /* --- published by the master before the phase is dispatched --- */
+    sm64_saturn_actor_output_record_t *outputs;
+    sm64_saturn_actor_instance_queue_t *queue;
+    sm64_saturn_render_view_t camera;
+    uint32_t generation;
+    uint16_t descriptor_count;
+    /* --- accumulated by whichever CPU runs the phase --- */
+    sm64_saturn_actor_meshlet_stats_t walk;
+    uint32_t gouraud_count;
+    uint32_t instance_skipped;
+    /* --- dispatch handshake --- */
+    sm64_saturn_actor_instance_processor_t processor;
+    volatile uint32_t pending;
+    volatile uint32_t done;
+    volatile uint32_t drained;
+    volatile uint32_t ok;
+} demo_actor_phase_accum_t;
+
+static demo_actor_phase_accum_t s_actor_phase_accum;
+
+static demo_actor_phase_accum_t *demo_actor_phase_accum_uncached(void)
+{
+#if defined(__sh__)
+    return (demo_actor_phase_accum_t *)(CPU_CACHE_THROUGH |
+                                        (uintptr_t)&s_actor_phase_accum);
+#else
+    return &s_actor_phase_accum;
+#endif
+}
+
+static void demo_actor_phase_accum_reset(void)
+{
+    demo_actor_phase_accum_t *const accum = demo_actor_phase_accum_uncached();
+    accum->walk.meshlets_tested = 0U;
+    accum->walk.meshlets_admitted = 0U;
+    accum->walk.meshlets_culled = 0U;
+    accum->walk.positions_admitted = 0U;
+    accum->gouraud_count = 0U;
+    accum->instance_skipped = 0U;
+    accum->pending = 0U;
+    accum->done = 0U;
+    accum->drained = 0U;
+    accum->ok = 0U;
+}
+
+/* The slave's half of the handshake. Registered once with the render job
+ * runtime; offered every slave wake-up and claims only the ones raised for an
+ * actor phase, so the graph pass is untouched on every other wake-up. */
+static bool demo_actor_phase_slave_task(void)
+{
+    demo_actor_phase_accum_t *const accum = demo_actor_phase_accum_uncached();
+    if (accum->pending == 0U) return false;
+    accum->pending = 0U;
+    demo_render_fence();
+    accum->ok = demo_generic_actor_run(accum, true) ? 1U : 0U;
+    demo_render_fence();
+    /* `done` is the release marker: publish every other field before it, so a
+     * master that observes done == 1 sees a complete phase. */
+    accum->done = 1U;
+    demo_render_fence();
+    return true;
+}
+
+/* Master's half. With the offload off this simply runs the phase inline,
+ * which is exactly the pre-S1.11 behaviour. */
+static void demo_actor_phase_dispatch(demo_actor_phase_accum_t *accum)
+{
+    accum->done = 0U;
+    accum->ok = 0U;
+#if SATURN_FEATURE_ACTOR_PHASE_SLAVE && defined(__sh__)
+    accum->pending = 1U;
+    demo_render_fence();
+    sm64_saturn_render_job_runtime_dispatch_slave_task();
+#else
+    accum->pending = 0U;
+    accum->ok = demo_generic_actor_run(accum, false) ? 1U : 0U;
+    demo_render_fence();
+    accum->done = 1U;
+#endif
+}
+
+/* Bounded wait for the phase. The bound matters: a slave that faulted must
+ * fail the frame closed rather than hang the master forever, which is the
+ * same discipline the rest of this pipeline uses. The master reaches here
+ * only after its own overlapped work, so in the healthy case the phase is
+ * already complete and this spins zero times. */
+static bool demo_actor_phase_wait(demo_actor_phase_accum_t *accum)
+{
+    if (accum == NULL) return false;
+#if SATURN_FEATURE_ACTOR_PHASE_SLAVE && defined(__sh__)
+    uint32_t spins = 0U;
+    while (accum->done == 0U) {
+        if (++spins > DEMO_ACTOR_PHASE_WAIT_LIMIT) return false;
+    }
+    demo_render_fence();
+#endif
+    return accum->done != 0U;
+}
+
 static bool demo_generic_actor_process(
     const sm64_saturn_actor_instance_descriptor_t *descriptor,
     const sm64_saturn_actor_instance_snapshot_t *snapshot, uint8_t lane,
     void *context, uint16_t *output_count)
 {
-    demo_render_transaction_t *const transaction = context;
+    /* S1.11: the context is the uncached phase block, never the transaction.
+     * The transaction lives in cached HWRAM and is master-owned, so a slave
+     * that dereferenced it would be reading through its own incoherent cache.
+     * Everything this callback needs is published into the block before the
+     * phase is dispatched. */
+    demo_actor_phase_accum_t *const accum = context;
     sm64_saturn_actor_bundle_resolution_t resolution;
     bool prepared = false;
     if (output_count != NULL) *output_count = 0U;
-    if (transaction == NULL || transaction->actor_runtime == NULL ||
-        transaction->scene_snapshot == NULL || descriptor == NULL ||
+    if (accum == NULL || accum->outputs == NULL || descriptor == NULL ||
         snapshot == NULL || output_count == NULL ||
         descriptor->output_offset > SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING ||
         descriptor->output_capacity >
@@ -3174,17 +3348,17 @@ static bool demo_generic_actor_process(
         lane == SM64_SATURN_ACTOR_CLAIMED_MASTER ? 0U : 1U;
     if (!sm64_saturn_source_scene_bundle_resolve(
             snapshot, workspace_lane,
-            &transaction->actor_runtime->outputs[descriptor->output_offset],
+            &accum->outputs[descriptor->output_offset],
             descriptor->output_capacity, &resolution))
         return false;
-    sm64_saturn_render_view_t view = transaction->scene_snapshot->camera;
+    sm64_saturn_render_view_t view = accum->camera;
     view.generation = descriptor->generation;
     prepared = resolution.package_generation ==
             snapshot->scene_package_generation &&
-        sm64_saturn_actor_meshlets_prepare_bank(
+        sm64_saturn_actor_meshlets_prepare_bank_stats(
             &resolution.bank, snapshot, &view,
             &resolution.workspace.pose_work, &resolution.workspace.output,
-            transaction->profile);
+            &accum->walk);
     if (prepared) {
         const uint32_t count =
             (uint32_t)resolution.workspace.output.output.opaque_count +
@@ -3192,14 +3366,15 @@ static bool demo_generic_actor_process(
         prepared = count <= descriptor->output_capacity;
         /* S64B-v2 seals the maximum Gouraud claim for this bank.  Reserve it
          * once per selected instance rather than decoding every primitive
-         * during the meshlet walk merely to reconstruct this capacity fact. */
+         * during the meshlet walk merely to reconstruct this capacity fact.
+         * S1.11: the running total lives in the uncached phase block rather
+         * than in the master-owned transaction, so the phase stays correct
+         * whichever CPU executes it. */
         if (prepared && resolution.bank.gouraud_tables_per_instance >
-                UINT16_MAX - transaction->generic_actor_gouraud_count)
+                UINT16_MAX - accum->gouraud_count)
             prepared = false;
         if (prepared)
-            transaction->generic_actor_gouraud_count = (uint16_t)(
-                transaction->generic_actor_gouraud_count +
-                resolution.bank.gouraud_tables_per_instance);
+            accum->gouraud_count += resolution.bank.gouraud_tables_per_instance;
         if (prepared) {
             *output_count = (uint16_t)count;
         }
@@ -3210,7 +3385,11 @@ static bool demo_generic_actor_process(
     return prepared;
 }
 
-static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
+/* Master-side publish half: admit instances, build descriptors, hand the
+ * queue over, then dispatch the phase. Cheap -- one bank header read per
+ * instance -- and it is deliberately the only half that must precede the
+ * master's own terrain/Mario preparation. */
+static bool demo_generic_actor_publish(demo_render_transaction_t *transaction,
                                        uint32_t generation)
 {
     sm64_saturn_actor_instance_processor_t processor;
@@ -3221,10 +3400,14 @@ static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
         return false;
     transaction->generic_actor_prepared = 0U;
     transaction->generic_actor_output_count = 0U;
+    transaction->generic_actor_descriptor_count = 0U;
     transaction->generic_actor_gouraud_count = 0U;
     transaction->generic_actor_gouraud_first = 0U;
+    demo_actor_phase_accum_reset();
     sm64_saturn_actor_runtime_handoff_init(&transaction->actor_handoff);
     if (transaction->scene_snapshot->actor_instance_count == 0U) {
+        /* Nothing to dispatch: mark the phase prepared so the join is a no-op
+         * rather than waiting on a dispatch that will never be raised. */
         transaction->generic_actor_prepared = 1U;
         return true;
     }
@@ -3250,7 +3433,7 @@ static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
             /* No claim was made -- resolve failed before acquiring one --
              * so there is nothing to release. Skip this instance only; a
              * single bad bank/residency lookup must not drop the frame. */
-            transaction->profile->actor_instance_skipped++;
+            demo_actor_phase_accum_uncached()->instance_skipped++;
             continue;
         }
         const uint32_t capacity = resolution.bank.draw_records_per_instance;
@@ -3269,7 +3452,7 @@ static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
             /* Claim already released above. Skip this instance without
              * creating a descriptor for it -- descriptor_count/output_cursor
              * only advance for admitted instances below. */
-            transaction->profile->actor_instance_skipped++;
+            demo_actor_phase_accum_uncached()->instance_skipped++;
             continue;
         }
         output_cursor = (uint16_t)(output_cursor + capacity);
@@ -3286,23 +3469,65 @@ static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
             transaction->actor_runtime->batches,
             SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE))
         return false;
-    processor = (sm64_saturn_actor_instance_processor_t){
-        .snapshots = transaction->actor_handoff.snapshots,
-        .snapshot_count = transaction->actor_handoff.snapshot_count,
-        .generation = generation,
-        .process = demo_generic_actor_process,
-        .context = transaction,
-    };
-    if (sm64_saturn_actor_instance_queue_drain_master(
-            &transaction->actor_runtime->queue, generation, &processor) !=
-            descriptor_count ||
-        !sm64_saturn_actor_instance_queue_all_terminal(
-            &transaction->actor_runtime->queue, generation))
-        return false;
+    /* S1.11: publish everything the phase needs into the uncached block, then
+     * either dispatch it to the slave or run it here. The descriptor loop
+     * above is the cheap half (one bank header read per instance); the drain
+     * below is the expensive half that S0.1 attributed ~10.5% of a saturated
+     * master to, and the half worth overlapping. */
+    {
+        demo_actor_phase_accum_t *const accum =
+            demo_actor_phase_accum_uncached();
+        accum->outputs = transaction->actor_runtime->outputs;
+        accum->queue = &transaction->actor_runtime->queue;
+        accum->camera = transaction->scene_snapshot->camera;
+        accum->generation = generation;
+        accum->descriptor_count = descriptor_count;
+        accum->processor = (sm64_saturn_actor_instance_processor_t){
+            .snapshots = transaction->actor_handoff.snapshots,
+            .snapshot_count = transaction->actor_handoff.snapshot_count,
+            .generation = generation,
+            .process = demo_generic_actor_process,
+            .context = accum,
+        };
+        transaction->generic_actor_descriptor_count = descriptor_count;
+        demo_actor_phase_dispatch(accum);
+    }
+    return true;
+}
+
+/* Run the actor phase. Executes on whichever CPU claimed the dispatch; every
+ * byte it touches is either uncached or lane-private, which is what makes that
+ * choice free. */
+static bool demo_generic_actor_run(demo_actor_phase_accum_t *accum,
+                                   bool on_slave)
+{
+    if (accum == NULL || accum->queue == NULL) return false;
+    const uint16_t drained = on_slave
+        ? sm64_saturn_actor_instance_queue_drain_slave(
+              accum->queue, accum->generation, &accum->processor)
+        : sm64_saturn_actor_instance_queue_drain_master(
+              accum->queue, accum->generation, &accum->processor);
+    accum->drained = drained;
+    return drained == accum->descriptor_count &&
+        sm64_saturn_actor_instance_queue_all_terminal(
+            accum->queue, accum->generation);
+}
+
+/* Master-side join: wait for the phase, then fold its results in. Called after
+ * the master has finished the work it overlapped the phase with. */
+static bool demo_generic_actor_join(demo_render_transaction_t *transaction,
+                                    uint32_t generation)
+{
+    demo_actor_phase_accum_t *const accum = demo_actor_phase_accum_uncached();
+    if (transaction == NULL || generation == 0U) return false;
+    if (transaction->generic_actor_prepared != 0U) return true;
+    const uint16_t descriptor_count = transaction->generic_actor_descriptor_count;
+    if (!demo_actor_phase_wait(accum)) return false;
+    if (accum->ok == 0U) return false;
     for (uint16_t index = 0U; index < descriptor_count; index++) {
         const sm64_saturn_actor_instance_result_t *const result =
             sm64_saturn_actor_instance_queue_result(
-                &transaction->actor_runtime->queue, generation, index);
+                accum->queue, generation, index);
         if (result == NULL || result->reason !=
                 SM64_SATURN_ACTOR_QUARANTINE_NONE ||
             result->output_count > UINT16_MAX -
@@ -3314,6 +3539,14 @@ static bool demo_generic_actor_prepare(demo_render_transaction_t *transaction,
     if (!sm64_saturn_actor_runtime_handoff_finalize(
             &transaction->actor_handoff))
         return false;
+    /* S1.11: the phase is complete and single-owner at this point, so folding
+     * its uncached block into the master-owned transaction and frame profile
+     * is a sequenced handoff. Totals are identical to the pre-S1.11 direct
+     * accumulation; only the moment at which they land has moved. */
+    if (accum->gouraud_count > UINT16_MAX) return false;
+    transaction->generic_actor_gouraud_count = (uint16_t)accum->gouraud_count;
+    sm64_saturn_actor_meshlet_stats_fold(transaction->profile, &accum->walk);
+    transaction->profile->actor_instance_skipped += accum->instance_skipped;
     transaction->generic_actor_prepared = 1U;
     return true;
 }
@@ -4565,6 +4798,20 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
         .clip_near = false
     };
     transaction->actor_job = actor_job;
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+    /* S1.11: dispatch the generic-actor phase as early as the snapshot allows.
+     * Everything between here and the join below -- spatial admission, work
+     * order, the visible position set, Mario preparation -- is master work
+     * that now overlaps it. Dispatching after that block instead would leave
+     * the master with nothing to do but wait, which is why simply moving the
+     * phase onto the slave without moving the dispatch buys nothing. */
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_ACTOR_CLOSURE);
+    const bool actor_publish_ok =
+        demo_generic_actor_publish(transaction, generation);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
+    if (!actor_publish_ok) return false;
+#endif
     /* Mario keeps the selected build tier while terrain cluster admission
      * below derives each tier from the immutable camera view and its own
      * hysteretic state before any worker transforms positions. */
@@ -4623,9 +4870,12 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
                            &actor_vertex_count);
     SM64_SATURN_PRENOTIFY_PROFILE_POP();
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+    /* S1.11: the phase was dispatched before Mario preparation began, so by
+     * the time control reaches here the slave has been working on it for the
+     * whole of that window. Joining is where the overlap is cashed in. */
     SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
         SM64_SATURN_PRENOTIFY_PROFILE_NODE_ACTOR_CLOSURE);
-    if (!demo_generic_actor_prepare(transaction, generation)) {
+    if (!demo_generic_actor_join(transaction, generation)) {
         SM64_SATURN_PRENOTIFY_PROFILE_POP();
         return false;
     }

@@ -12,6 +12,12 @@ enum sm64_saturn_feature_bits {
     SM64_SATURN_FEATURE_COMPLETE_MARIO_ANIMATION = 1U << 0,
     SM64_SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE = 1U << 1,
     SM64_SATURN_FEATURE_SEMANTIC_AUDIO = 1U << 2,
+    /* S1.11: generic-actor phase runs on the slave CPU. Must stay in step
+     * with FEATURE_BITS in tools/saturn/gen_build_identity.py -- an identity
+     * carrying a bit this table does not know is rejected as invalid, and the
+     * boot path halts in an infinite loop rather than running a build it
+     * cannot attest. */
+    SM64_SATURN_FEATURE_ACTOR_PHASE_SLAVE = 1U << 3,
 };
 
 typedef struct sm64_saturn_build_identity {

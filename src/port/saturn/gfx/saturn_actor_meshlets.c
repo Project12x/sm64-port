@@ -630,7 +630,8 @@ static bool actor_meshlet_core(
     uint32_t position_seen_capacity, sm64_saturn_actor_meshlet_output_t *output,
     sm64_saturn_actor_draw_ref_t *combined_records, uint16_t draw_capacity,
     bool atomic_output, uint8_t *failure_reason,
-    sm64_saturn_fast3d_profile_t *stats, actor_meshlet_depth_carry_t *carry)
+    sm64_saturn_actor_meshlet_stats_t *stats,
+    actor_meshlet_depth_carry_t *carry)
 {
     uint32_t opaque_count = 0U, translucent_count = 0U;
     uint16_t admitted_positions = 0U, admitted_meshlets = 0U, culled = 0U;
@@ -688,7 +689,7 @@ static bool actor_meshlet_core(
         actor_meshlet_span_t span;
         bool bounds_ok;
         if (!atomic_output && stats != NULL)
-            stats->demo_actor_meshlets_tested++;
+            stats->meshlets_tested++;
         SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
             SM64_SATURN_PRENOTIFY_PROFILE_NODE_MESHLET_DEPTH_ADMIT);
         bounds_ok = actor_meshlet_live_depth_bounds(source, transform, view,
@@ -878,10 +879,10 @@ static bool actor_meshlet_core(
     output->position_count = admitted_positions;
     if (stats != NULL) {
         if (atomic_output)
-            stats->demo_actor_meshlets_tested += source->meshlet_count;
-        stats->demo_actor_meshlets_admitted += admitted_meshlets;
-        stats->demo_actor_meshlets_culled += culled;
-        stats->demo_actor_positions_admitted += admitted_positions;
+            stats->meshlets_tested += source->meshlet_count;
+        stats->meshlets_admitted += admitted_meshlets;
+        stats->meshlets_culled += culled;
+        stats->positions_admitted += admitted_positions;
     }
     return true;
 }
@@ -891,7 +892,8 @@ static bool actor_mario_prepare_with_carry(
     const sm64_saturn_mario_actor_pose_t *pose,
     const sm64_saturn_render_view_t *view,
     sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
-    sm64_saturn_fast3d_profile_t *stats, actor_meshlet_depth_carry_t *carry)
+    sm64_saturn_actor_meshlet_stats_t *stats,
+    actor_meshlet_depth_carry_t *carry)
 {
     uint8_t position_seen[SM64_MARIO_VERTEX_COUNT];
     actor_meshlet_source_t source = actor_mario_source();
@@ -932,11 +934,30 @@ bool sm64_saturn_actor_meshlets_prepare(
     sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
     sm64_saturn_fast3d_profile_t *stats)
 {
-    return actor_mario_prepare_with_carry(snapshot, pose, view, output,
-                                          capacity, stats,
-                                          &s_mario_depth_carry);
+    sm64_saturn_actor_meshlet_stats_t walk = {0U, 0U, 0U, 0U};
+    const bool admitted = actor_mario_prepare_with_carry(
+        snapshot, pose, view, output, capacity,
+        stats != NULL ? &walk : NULL, &s_mario_depth_carry);
+    sm64_saturn_actor_meshlet_stats_fold(stats, &walk);
+    return admitted;
 }
 
+/* S1.11: the fold helper lives beside the walk that produces the counters, so
+ * the four field names appear in exactly two places -- here and the walk. */
+void sm64_saturn_actor_meshlet_stats_fold(
+    sm64_saturn_fast3d_profile_t *profile,
+    const sm64_saturn_actor_meshlet_stats_t *stats)
+{
+    if (profile == NULL || stats == NULL) return;
+    profile->demo_actor_meshlets_tested += stats->meshlets_tested;
+    profile->demo_actor_meshlets_admitted += stats->meshlets_admitted;
+    profile->demo_actor_meshlets_culled += stats->meshlets_culled;
+    profile->demo_actor_positions_admitted += stats->positions_admitted;
+}
+
+/* Profile-taking compatibility wrapper. Every caller that is not the
+ * generic-actor phase keeps its existing contract; the counters are folded on
+ * the way out, so totals are identical to the pre-S1.11 direct accumulation. */
 bool sm64_saturn_actor_meshlets_prepare_bank(
     const sm64_saturn_actor_bank_view_t *bank,
     const sm64_saturn_actor_instance_snapshot_t *instance,
@@ -944,6 +965,22 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
     sm64_saturn_actor_pose_work_t *pose_work,
     sm64_saturn_actor_meshlet_bank_output_t *output,
     sm64_saturn_fast3d_profile_t *stats)
+{
+    sm64_saturn_actor_meshlet_stats_t walk = {0U, 0U, 0U, 0U};
+    const bool prepared = sm64_saturn_actor_meshlets_prepare_bank_stats(
+        bank, instance, view, pose_work, output,
+        stats != NULL ? &walk : NULL);
+    sm64_saturn_actor_meshlet_stats_fold(stats, &walk);
+    return prepared;
+}
+
+bool sm64_saturn_actor_meshlets_prepare_bank_stats(
+    const sm64_saturn_actor_bank_view_t *bank,
+    const sm64_saturn_actor_instance_snapshot_t *instance,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_actor_pose_work_t *pose_work,
+    sm64_saturn_actor_meshlet_bank_output_t *output,
+    sm64_saturn_actor_meshlet_stats_t *stats)
 {
     sm64_saturn_actor_pose_view_t pose;
     actor_meshlet_source_t source;
@@ -1042,8 +1079,12 @@ bool sm64_saturn_actor_meshlets_prepare_recompute(
     sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
     sm64_saturn_fast3d_profile_t *stats)
 {
-    return actor_mario_prepare_with_carry(snapshot, pose, view, output,
-                                          capacity, stats, NULL);
+    sm64_saturn_actor_meshlet_stats_t walk = {0U, 0U, 0U, 0U};
+    const bool admitted = actor_mario_prepare_with_carry(
+        snapshot, pose, view, output, capacity,
+        stats != NULL ? &walk : NULL, NULL);
+    sm64_saturn_actor_meshlet_stats_fold(stats, &walk);
+    return admitted;
 }
 
 /* T2.6 equivalence probe.  Test-only: no Saturn image defines this macro, so

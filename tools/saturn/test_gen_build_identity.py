@@ -41,6 +41,7 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
                 "complete_mario_animation": 1,
                 "dynamic_actor_closure": 0,
                 "semantic_audio": 1,
+                "actor_phase_slave": 0,
             },
             "renderer_pipeline": 4,
             "level_id": 9,
@@ -104,9 +105,16 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
         built = identity.build_identity(self.v1_spec)
         self.assertEqual(len(built.raw), 404)
         self.assertEqual(identity.parse_identity(built.raw)["version"], 1)
+        # Re-pinned 2026-08-23 when S1.11 added the actor_phase_slave feature.
+        # The 404-byte layout above is the contract and is unchanged: the
+        # feature word is one u32, so a new bit costs no bytes. What moved is
+        # effective_config_hash, which covers the config KEY SET -- so adding
+        # the key shifts the hash even though its value here is 0. That is the
+        # intended behaviour (a build carrying a config field its identity did
+        # not attest would be the defect), not a regression.
         self.assertEqual(
             hashlib.sha256(built.raw).hexdigest(),
-            "faa7288b4c9fdf90ae14f01ab3af3752649b8e1ca78d77c47033425c9d68b23f",
+            "52c8ca9332b009dc6ea738834baef34c7254fd455d560939f2936363ca35f58e",
         )
 
     def test_v2_extends_v1_layout_to_exactly_500_bytes(self) -> None:
@@ -339,6 +347,7 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             ("features", "complete_mario_animation"),
             ("features", "dynamic_actor_closure"),
             ("features", "semantic_audio"),
+            ("features", "actor_phase_slave"),
             (None, "route_replay_mode"),
             (None, "live_input_mode"),
             (None, "hot_promotion"),

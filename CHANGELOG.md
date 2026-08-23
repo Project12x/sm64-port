@@ -2,6 +2,98 @@
 
 ## [Unreleased]
 
+### Added
+
+- **S1.11 lands: the generic-actor phase now runs on the slave CPU, overlapped
+  with the master's own preparation. Measured 5.4037 -> 5.7237 mean FPS
+  (+5.92%)**, 29 intervals, offload-off `id-3a6074d285705b1d` vs offload-on
+  `id-774734f5426a1282`. Median (5.4545) and 1%-low (5.0000) are unchanged --
+  the gain is in the mean, i.e. more frames land on the faster rung rather than
+  the whole distribution shifting. First real return on the slave's measured
+  74.04% idle.
+- **The offload renders byte-identical output.** Frame captures from both arms
+  at 1,200 frames hash to the same `ca67fd4cfef7bace4fcd48c906fc28891a9c009f
+  c838c49bcf42c5adb2d9a56f`. This is the check that matters: a render offload
+  that quietly dropped actors would also look faster, and cadence alone cannot
+  tell the two apart. Identical frames plus `slave_failures: 0` also prove the
+  slave really executed the phase -- had it not, the master's bounded wait
+  would have failed the frame closed and changed the image.
+- **Why the dispatch had to move, not just the work.**
+  `saturn_render_lifecycle.c:65` makes the master block on `slave_retired()`
+  before `drain_master`, so handing the actor phase to the slave *at the
+  existing notify* would have bought exactly zero -- the master would simply
+  wait longer at the same barrier. The phase is therefore dispatched at the top
+  of `demo_render_prepare_publish`, before spatial admission, work order,
+  visible-position set and Mario preparation, all of which now overlap it.
+- **Mechanism: a second slave dispatch.** The notify cannot simply move earlier
+  because the job graph must be published first, so the runtime gained a
+  neutral auxiliary-dispatch hook
+  (`sm64_saturn_render_job_runtime_set_slave_task` /
+  `_dispatch_slave_task`). A registered task is offered every slave wake-up
+  *before* the graph pass; claiming one consumes it without touching the
+  notify/retire protocol. Safe because `cpu_dual_slave_notify()` writes MINIT,
+  which latches the FTCSR ICI flag that the polling slave clears before
+  entering the handler -- a dispatch raised while the slave is still inside a
+  handler is preserved, not lost. Registration is refused after the first
+  notify so it cannot race a live frame.
+- **`SATURN_FEATURE_ACTOR_PHASE_SLAVE`, sealed as identity feature bit 3, and
+  a second target profile (`sourceboot-bob-coins-slave-v1.json`).** Sealing it
+  is not ceremony: the first A/B attempt passed the flag as a bare make
+  variable, it never reached the compiler, and **both arms produced the
+  identical build id `id-fbf254dac8f075b0`** -- an A/B that would have compared
+  one binary against itself. The sealed contract caught it. ELF-level
+  verification (`nm`) now confirms `_demo_actor_phase_slave_task` and
+  `_s_slave_task` are present in the offload arm and the task symbol absent
+  from the other, rather than trusting source reachability.
+
+### Changed
+
+- **Removed the two shared mutable writes that made the actor process callback
+  master-only.** `transaction->generic_actor_gouraud_count` and the four
+  `stats->demo_actor_meshlet*` counters were read-modify-written inside the
+  callback, in cached HWRAM. Both now accumulate into one uncached phase block
+  that the running CPU owns and the master folds in afterwards -- a sequenced
+  handoff across a barrier that already existed, not a concurrent accumulator.
+  Totals are unchanged; only the moment they land moved.
+- **The process callback no longer dereferences the transaction at all.**
+  `s_demo_render_transaction` is cached, master-owned HWRAM (`0x060dcf20`); a
+  slave reading it would be reading through its own incoherent cache. Its
+  context is now the uncached phase block, into which the master publishes the
+  output records, camera view and generation before dispatch.
+- **Narrowed the meshlet walk's stats parameter to a new
+  `sm64_saturn_actor_meshlet_stats_t` (4 counters).** Those four fields were
+  the only part of `sm64_saturn_fast3d_profile_t` the walk ever wrote, and the
+  full profile is far too large to duplicate per-CPU in uncached memory. Public
+  entry points keep their existing profile-taking signatures and fold on the
+  way out, so every non-actor caller is untouched -- the meshlet golden hashes
+  are unchanged, which is the evidence.
+
+### Fixed
+
+- **The C-side identity feature mask has to be updated in lockstep with the
+  Python one.** Adding feature bit 3 to `gen_build_identity.py` alone produced
+  a build that halted forever at `main.c:2006` -- `build_identity_is_valid()`
+  rejects an identity carrying a bit its table does not know, and the boot path
+  spins rather than run a build it cannot attest. Diagnosed from the stuck
+  master PC (`0x060818de`) rather than guessed at; the fail-closed behaviour is
+  correct, the missing half of the change was mine.
+- **Corrected a claim made in the same change:** adding the feature key shifts
+  **every** build identity, offload-off included, because
+  `effective_config_hash` covers the config key set and not merely the values.
+  The v1 golden fixture hash is re-pinned accordingly (the 404-byte layout
+  contract is unchanged -- a new bit in an existing u32 costs no bytes).
+
+### Known issues
+
+- **Validated on the caches-off basis only.** The cadence harness runs
+  `sh2_cache_emulation: false`, so it cannot observe a coherency defect in this
+  path at all. The offload is therefore built to be correct by construction --
+  every shared mutable byte goes through `CPU_CACHE_THROUGH`, and the lane
+  workspace was cache-line aligned first (`eddd2d38`) -- and
+  **`SATURN_FEATURE_ACTOR_PHASE_SLAVE` ships OFF by default** until a
+  `--sh2-cache` run confirms it on the caches-on basis. Both arms build from
+  one tree, so that run is a profile switch away.
+
 ### Fixed
 
 - **S1.11 substrate: cache-line aligned the actor lane workspace.**

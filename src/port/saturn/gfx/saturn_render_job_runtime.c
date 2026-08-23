@@ -29,6 +29,12 @@ typedef struct sm64_saturn_render_job_runtime {
 static sm64_saturn_render_job_runtime_t s_runtime
     SM64_SATURN_RENDER_JOB_RUNTIME_SHARED;
 
+/* S1.11: shared with the slave, so it must not be cached. NULL until the
+ * owner registers a task, which keeps every existing build byte-identical in
+ * behaviour on the graph path. */
+static sm64_saturn_render_job_runtime_slave_task_fn s_slave_task
+    SM64_SATURN_RENDER_JOB_RUNTIME_SHARED;
+
 static void runtime_fence(void)
 {
 #if defined(__GNUC__)
@@ -123,6 +129,11 @@ static void runtime_publish_retirement_marker(uint32_t generation,
 #if defined(__sh__)
 static void render_job_slave_entry(void)
 {
+    /* S1.11: offer the wake-up to the auxiliary task first. A task that claims
+     * it returns here without running the graph pass or advancing the
+     * retirement protocol -- the master raises a separate dispatch for the
+     * graph once it has published one. */
+    if (s_slave_task != NULL && s_slave_task()) return;
     const uint32_t notified = s_runtime.notify_sequence;
     const uint32_t generation = s_runtime.telemetry.notified_generation;
     /* T2.4/L12: the slave's own busy time, measured on the slave's own FRT
@@ -186,6 +197,26 @@ bool sm64_saturn_render_job_runtime_observe_markers(
     s_runtime.marker_context = context;
     runtime_fence();
     return true;
+}
+
+bool sm64_saturn_render_job_runtime_set_slave_task(
+    sm64_saturn_render_job_runtime_slave_task_fn task)
+{
+    /* Registration is a boot-time act. Rebinding underneath a live frame would
+     * race the slave, so refuse once notification has begun. */
+    if (s_runtime.notify_sequence != 0U) return false;
+    s_slave_task = task;
+    runtime_fence();
+    return true;
+}
+
+void sm64_saturn_render_job_runtime_dispatch_slave_task(void)
+{
+    if (s_slave_task == NULL) return;
+    runtime_fence();
+#if defined(__sh__)
+    cpu_dual_slave_notify();
+#endif
 }
 
 void sm64_saturn_render_job_runtime_notify(void)

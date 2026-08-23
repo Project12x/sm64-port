@@ -49,6 +49,30 @@ bool sm64_saturn_render_job_runtime_observe_markers(
     sm64_saturn_render_job_runtime_marker_observer_fn observer,
     sm64_saturn_render_job_runtime_marker_clock_fn clock, void *context);
 
+/* S1.11 auxiliary slave dispatch.
+ *
+ * The graph pass owns the notify/retire protocol below, and that protocol
+ * admits exactly one pass per frame. A second kind of slave work -- work the
+ * master wants overlapped with its own pre-publication phase, before the graph
+ * even exists -- therefore cannot ride it.
+ *
+ * A registered task is offered every slave wake-up BEFORE the graph pass. If
+ * it returns true it has consumed that wake-up: it runs to completion and the
+ * entry returns without touching notify_sequence/retired_sequence, leaving the
+ * graph protocol untouched. Returning false falls through to the graph pass, so
+ * a frame with no auxiliary work behaves exactly as it did before.
+ *
+ * Notifications are latched (MINIT sets the FTCSR ICI flag, and the polling
+ * slave clears it before invoking the entry), so a dispatch raised while the
+ * slave is still inside a handler is preserved rather than lost. The caller
+ * must still ensure at most one dispatch is outstanding at a time. */
+typedef bool (*sm64_saturn_render_job_runtime_slave_task_fn)(void);
+bool sm64_saturn_render_job_runtime_set_slave_task(
+    sm64_saturn_render_job_runtime_slave_task_fn task);
+
+/* Raise one auxiliary dispatch. No-op where there is no slave CPU. */
+void sm64_saturn_render_job_runtime_dispatch_slave_task(void);
+
 /* The master calls this only after queue publication. */
 void sm64_saturn_render_job_runtime_notify(void);
 
