@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **S1.11 substrate: cache-line aligned the actor lane workspace.**
+  `s_actor_phase_workspace` lives in `.lwram_bss` -- the *cached* LWRAM alias
+  (origin `0x00200000`) -- and carried only `__attribute__((aligned(4)))`. The
+  bundle's `workspace_lane_stride` is 1456 = 16*91, already a cache-line
+  multiple, so the stride was never the problem; the **base** was. Lane 1
+  begins 1456 bytes past the base, so with a merely 4-aligned base the tail of
+  lane 0 and the head of lane 1 land in the same 16-byte SH-2 cache line. The
+  two CPUs have no cache coherency, so the first time the slave took lane 1
+  each CPU's write-back would silently clobber the other's bytes at that
+  boundary. Harmless today (the master-only drain only ever uses lane 0), and a
+  hard prerequisite for the slave processing actors at all.
+
+### Added
+
+- **`docs/saturn/evidence/reports/s1_11-slave-activation-design.md` -- the
+  verified blocker analysis for spending the slave's 74.04% idle.** Two results
+  reframe the task:
+  - **The binding blocker is the lifecycle order, not the queue.**
+    `saturn_render_lifecycle.c:65` has the master *block* on `slave_retired()`
+    before it may run `drain_master`. So moving actor work onto the slave buys
+    **nothing on its own** -- the master just waits longer at the same barrier.
+    A real win needs the notify moved earlier so the slave's actor work
+    overlaps the master's terrain/Mario prepare. This was not visible from the
+    idle measurement and would have produced a zero-gain implementation.
+  - **Three of five suspected coherency blockers were already handled.** The
+    actor instance queue routes every access through `actor_queue_uncached()`,
+    and the bundle residency `lane_claim[]` bytes sit inside
+    `SOURCE_SCENE_UNCACHED` storage, so neither can false-share. Only the
+    workspace alignment (fixed above), the shared `generic_actor_gouraud_count`
+    accumulator, and the four `stats->demo_actor_meshlet*` counters remain.
+- **Design decision recorded: move the *whole* generic-actor phase to the
+  slave rather than splitting the drain across both CPUs.** With one CPU owning
+  actor state the two remaining accumulators stop being races and become a
+  sequenced handoff across the existing retirement barrier, the workspace
+  hazard disappears outright, and the master sheds the measured ~10.5% actor
+  cost (pose 4.977% + depth 3.359% + emit 2.127%) onto a 74%-idle CPU. Simpler
+  *and* worth more than the split-drain approach.
+- **Validation constraint recorded:** the cadence harness runs
+  `sh2_cache_emulation: false` and every accepted baseline is caches-off, so
+  **the default harness cannot observe any of these coherency bugs.** A green
+  cadence run is not evidence of correctness here; this work must be correct by
+  construction (`CPU_CACHE_THROUGH`), with `--sh2-cache` as a separate basis.
+
 ### Changed
 
 - **T5 (partial): the animation channel cursor -- `sample_channel` no longer

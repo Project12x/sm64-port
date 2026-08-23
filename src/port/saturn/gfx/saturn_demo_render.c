@@ -1226,8 +1226,17 @@ union demo_actor_phase_workspace {
     uint8_t source_scene_workspace[
         SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES];
 };
+/* S1.11 substrate: 4-byte alignment was sufficient while the actor drain ran
+ * master-only, because only lane 0 was ever live.  The moment the slave takes
+ * lane 1 the two lane spans must not share an SH-2 cache line -- the CPUs have
+ * no coherency, so each one's write-back would clobber the other's bytes at
+ * the boundary.  The bundle's workspace_lane_stride is already a multiple of
+ * 16 (1456 = 16*91), so aligning the base to the cache line is all that is
+ * needed to make every lane span start on its own line. */
+#define DEMO_ACTOR_WORKSPACE_CACHE_LINE_BYTES 16U
 static union demo_actor_phase_workspace s_actor_phase_workspace
-    DEMO_TERRAIN_TRANSFORM_CACHE __attribute__((aligned(4)));
+    DEMO_TERRAIN_TRANSFORM_CACHE
+    __attribute__((aligned(DEMO_ACTOR_WORKSPACE_CACHE_LINE_BYTES)));
 #define s_mario_transform_context s_actor_phase_workspace.mario
 _Static_assert(sizeof(demo_mario_transform_context_t) <= UINT16_MAX,
                "Mario callback context must retain a bounded byte count");
