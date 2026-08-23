@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Flat-shaded actor primitives now draw as constant-colour REPLACE instead
+  of spending a Gouraud table** (`saturn_demo_render.c`). A Gouraud table is
+  four RGB1555 corners staged in HWRAM and uploaded to VDP1 every frame; it
+  only earns that cost when the corners differ. The generic pose evaluator
+  hands every vertex the same default intensity (255), so an untextured
+  actor primitive is a single flat colour VDP1 can draw natively - measured
+  live at **19.4 of 38 emitted actor primitives per frame** taking the cheap
+  path. The test is on the measured corners, not on the default, so real
+  baked per-vertex lighting will simply stop taking it.
+- **This is also the leading fix candidate for the invisible Bob-omb body.**
+  Owner report: eyes, feet and fuse render, body absent. The live funnel
+  rules out the primitives being dropped - per frame 83 seen, 5.3
+  switch-rejected, 39.8 backfaced (48%, normal for a closed body), 38
+  emitted - so the body was emitted and invisible, and everything invisible
+  went through the CC_GOURAUD path while everything visible was textured
+  REPLACE. A zeroed staged table would make VDP1 output 0x0000, which it
+  treats as transparent. The flat-replace path routes exactly those
+  primitives around the table machinery with an explicit MSB-set colour.
+  Verification on screen is owed; the gouraud-upload path for generic actors
+  remains suspect for the textured-Gouraud primitives still using it.
+- **New profile counters are APPENDED, never inserted**
+  (`saturn_fast3d_frontend.h`): `capture_route_counters.py` carries
+  hand-computed offsetof() values, so a mid-struct insert silently shifts
+  every counter after it - my first placement of `reject_switch_case` did
+  exactly that and was moved to the tail before shipping. New:
+  `reject_switch_case`, `actor_prims_seen`, `actor_reject_backface`,
+  `actor_prims_emitted`, `actor_flat_replace` at offsets 668-684, verified
+  by the same host-offsetof method the tool documents.
+- Cadence on the capture route: 5.0144 -> 5.0000 mean (unchanged within
+  noise; the route's window holds few actors). Sealed build
+  `id-d75563f2b6de665c`.
+
 ### Fixed
 
 - **GEO_SWITCH_CASE branches are now selected at draw time instead of all

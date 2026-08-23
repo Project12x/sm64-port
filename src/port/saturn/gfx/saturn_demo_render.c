@@ -4337,6 +4337,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                  * branch costs neither vertex transforms nor a VDP1 command.
                  * The record still counts as emitted so the descriptor's
                  * output accounting stays exact. */
+                transaction->profile->actor_prims_seen++;
                 if (valid &&
                     demo_generic_actor_switch_rejects(snapshot, &binding)) {
                     transaction->profile->reject_switch_case++;
@@ -4371,6 +4372,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                         (vertices[2].x - vertices[0].x);
                 if (cross <= 0) {
                     transaction->profile->reject_degenerate++;
+                    transaction->profile->actor_reject_backface++;
                     emitted++;
                     continue;
                 } else if (!sm64_saturn_actor_material_bind(
@@ -4384,7 +4386,42 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                     material.recipe == SM64_SATURN_ACTOR_RECIPE_FLAT_GOURAUD ||
                     material.recipe == SM64_SATURN_ACTOR_RECIPE_CLUT16_GOURAUD ||
                     material.recipe == SM64_SATURN_ACTOR_RECIPE_RGB1555_GOURAUD;
-                if (valid && uses_gouraud) {
+                /* A Gouraud table is four RGB1555 corners uploaded to
+                 * VDP1 every frame.  It only earns that cost when the corners
+                 * actually differ: an untextured primitive whose four vertices
+                 * share one light intensity is a single flat colour, which
+                 * VDP1 draws natively in replace mode for free.  The generic
+                 * pose evaluator currently hands every vertex the same default
+                 * intensity, so this covers the whole of an actor's flat
+                 * geometry -- 56 of a Bob-omb's 68 primitives.  The test is on
+                 * the measured corners rather than on that default, so real
+                 * baked per-vertex lighting will simply stop taking it. */
+                bool flat_replace = false;
+                if (valid &&
+                    material.recipe == SM64_SATURN_ACTOR_RECIPE_FLAT_GOURAUD) {
+                    const uint8_t *const intensities =
+                        resolution.workspace.pose_work.light_intensity;
+                    const uint8_t first = intensities[primitive.vertex[0]];
+                    flat_replace =
+                        intensities[primitive.vertex[1]] == first &&
+                        intensities[primitive.vertex[2]] == first &&
+                        intensities[primitive.vertex[3]] == first;
+                    if (flat_replace) {
+                        const uint8_t r = (uint8_t)(
+                            ((uint16_t)color.rgb555[0] * first + 127U) / 255U);
+                        const uint8_t g = (uint8_t)(
+                            ((uint16_t)color.rgb555[1] * first + 127U) / 255U);
+                        const uint8_t b = (uint8_t)(
+                            ((uint16_t)color.rgb555[2] * first + 127U) / 255U);
+                        vdp1_cmdt_draw_mode_set(&command,
+                            (vdp1_cmdt_draw_mode_t){
+                                .color_mode = VDP1_CMDT_CM_RGB_32768,
+                                .cc_mode = VDP1_CMDT_CC_REPLACE});
+                        vdp1_cmdt_color_set(&command, RGB1555(1, r, g, b));
+                        transaction->profile->actor_flat_replace++;
+                    }
+                }
+                if (valid && uses_gouraud && !flat_replace) {
                     const uint32_t table_index =
                         (uint32_t)transaction->generic_actor_gouraud_first +
                         gouraud_ordinal;
@@ -4427,6 +4464,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                         valid = false;
                         break;
                     }
+                    transaction->profile->actor_prims_emitted++;
                     vdp1_cmdt_end_clear(&command);
                     command.cmd_link = painter_bin;
                     *target = command;

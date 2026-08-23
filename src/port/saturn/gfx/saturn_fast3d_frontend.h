@@ -75,11 +75,6 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t reject_near_far;
     uint32_t reject_backface;
     uint32_t reject_degenerate;
-    /* Primitives skipped because they belong to a GEO_SWITCH_CASE branch the
-     * instance did not select this frame.  For a coin this is 14 of its 16
-     * draw records every frame -- the eight spin phases the N64 walk would
-     * never have descended into. */
-    uint32_t reject_switch_case;
     uint32_t reject_vertex_range;
     uint32_t reject_command_capacity; /* the frontend's resolved-triangle
                                         * buffer (this file) filling up --
@@ -491,6 +486,25 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t vdp1_terminal_fence_wait_ticks_accum;
     uint32_t vdp1_transfer_faults;
     uint32_t vdp1_transfer_queued_not_started;
+    /* Primitives skipped because they belong to a GEO_SWITCH_CASE branch the
+     * instance did not select this frame.  For a coin this is 14 of its 16
+     * draw records every frame -- the eight spin phases the N64 walk would
+     * never have descended into.
+     *
+     * APPENDED DELIBERATELY.  tools/saturn/capture_route_counters.py carries
+     * hand-computed offsetof() values for this struct, so inserting a field
+     * mid-struct silently shifts every counter after it and makes that tool
+     * report the wrong bucket.  New counters go at the end. */
+    uint32_t reject_switch_case;
+    /* Generic-actor funnel, separate from the terrain counters above because
+     * those conflate both and an actor defect cannot be read out of a shared
+     * bucket.  Appended for the same offsetof() reason as reject_switch_case. */
+    uint32_t actor_prims_seen;
+    uint32_t actor_reject_backface;
+    uint32_t actor_prims_emitted;
+    /* Flat-shaded actor primitives that took the cheap constant-colour path
+     * instead of uploading a four-corner Gouraud table. */
+    uint32_t actor_flat_replace;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,
