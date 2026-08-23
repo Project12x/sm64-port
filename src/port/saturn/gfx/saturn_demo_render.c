@@ -3132,7 +3132,11 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
 }
 
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
-static bool demo_generic_actor_emit(demo_render_transaction_t *transaction);
+struct demo_actor_emit_context;
+struct demo_actor_command_sink;
+static bool demo_generic_actor_emit(const struct demo_actor_emit_context *ctx,
+                                    struct demo_actor_command_sink *sink,
+                                    sm64_saturn_vdp1_backend_t *backend);
 
 static int64_t demo_generic_saturating_add_i64(int64_t left, int64_t right)
 {
@@ -3254,6 +3258,45 @@ typedef struct demo_actor_emit_counters {
     uint32_t actor_primitives_emitted;
     uint32_t texture_commands;
 } demo_actor_emit_counters_t;
+
+/* S1.12 step 3: everything demo_generic_actor_emit reads out of the render
+ * transaction, published explicitly.
+ *
+ * The transaction lives in cached, master-owned HWRAM, so a slave that
+ * dereferenced it would read through its own incoherent cache. Naming the
+ * dependency as a value type both makes the offload possible and makes the
+ * coupling auditable -- it was previously eleven scattered `transaction->`
+ * reads with no statement anywhere of what emit actually needs. */
+typedef struct demo_actor_emit_context {
+    sm64_saturn_actor_runtime_storage_t *actor_runtime;
+    const sm64_saturn_actor_instance_snapshot_t *snapshots;
+    sm64_saturn_gouraud_table_t *gouraud_staging;
+    uintptr_t gouraud_vram_base;
+    sm64_saturn_ir_transform_job_t actor_job;
+    uint32_t handoff_generation;
+    uint16_t instance_count;
+    uint16_t gouraud_first;
+    uint16_t gouraud_limit;
+    uint16_t gouraud_capacity;
+    uint16_t gouraud_count;
+    uint16_t output_count;
+} demo_actor_emit_context_t;
+
+/* Where emit puts the commands it builds.
+ *
+ * `commands == NULL` appends straight into the VDP1 arena, which is what the
+ * master does and is byte-for-byte the pre-S1.12 path. Otherwise commands land
+ * in a caller-owned staging array and the master splices them into the arena
+ * afterwards -- the arrangement that lets the slave build them without ever
+ * touching the shared arena cursor. Splicing preserves painter order because
+ * the staged block is appended after terrain and Mario, keeping actor commands
+ * at the highest arena indices exactly as before. */
+typedef struct demo_actor_command_sink {
+    vdp1_cmdt_t *commands;
+    uint16_t capacity;
+    uint16_t count;
+    uint8_t overflowed;
+} demo_actor_command_sink_t;
 
 typedef struct demo_actor_phase_accum {
     /* --- published by the master before the phase is dispatched --- */
@@ -4547,37 +4590,33 @@ static bool demo_generic_actor_switch_rejects(
     return snapshot->switch_state[switch_ordinal] != selected_case;
 }
 
-static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
+static bool demo_generic_actor_emit(const demo_actor_emit_context_t *ctx,
+                                    demo_actor_command_sink_t *sink,
+                                    sm64_saturn_vdp1_backend_t *backend)
 {
     uint16_t emitted = 0U, gouraud_ordinal = 0U;
-    if (transaction == NULL || transaction->actor_runtime == NULL ||
-        transaction->scene_snapshot == NULL || transaction->profile == NULL)
+    if (ctx == NULL || ctx->actor_runtime == NULL || sink == NULL ||
+        (sink->commands == NULL && backend == NULL))
         return false;
     /* S1.12 step 2: accumulate into the uncached phase block, not the shared
      * frame profile. The master folds it in once emit returns. */
     demo_actor_emit_counters_t *const emit_counters =
         &demo_actor_phase_accum_uncached()->emit;
-    if (transaction->scene_snapshot->actor_instance_count == 0U) {
-        transaction->generic_actor_gouraud_count = 0U;
-        return true;
-    }
-    if (transaction->actor_handoff.state !=
-        SM64_SATURN_ACTOR_HANDOFF_BATCHED)
-        return false;
+    if (ctx->instance_count == 0U) return true;
     for (uint16_t descriptor_index = 0U;
-         descriptor_index < transaction->actor_runtime->queue.count;
+         descriptor_index < ctx->actor_runtime->queue.count;
          descriptor_index++) {
         const sm64_saturn_actor_instance_descriptor_t *const descriptor =
             sm64_saturn_actor_instance_queue_descriptor(
-                &transaction->actor_runtime->queue,
-                transaction->actor_handoff.generation, descriptor_index);
+                &ctx->actor_runtime->queue,
+                ctx->handoff_generation, descriptor_index);
         const sm64_saturn_actor_instance_result_t *const result =
             sm64_saturn_actor_instance_queue_result(
-                &transaction->actor_runtime->queue,
-                transaction->actor_handoff.generation, descriptor_index);
+                &ctx->actor_runtime->queue,
+                ctx->handoff_generation, descriptor_index);
         const sm64_saturn_actor_instance_snapshot_t *const snapshot =
             descriptor == NULL ? NULL :
-            &transaction->actor_handoff.snapshots[descriptor->snapshot_index];
+            &ctx->snapshots[descriptor->snapshot_index];
         sm64_saturn_actor_bundle_resolution_t resolution;
         sm64_saturn_actor_texture_mapping_t mapping;
         vdp1_vram_partitions_t actor_texture_partitions;
@@ -4586,7 +4625,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
             result->output_count > descriptor->output_capacity ||
             !sm64_saturn_source_scene_bundle_resolve(
                 snapshot, 0U,
-                &transaction->actor_runtime->outputs[descriptor->output_offset],
+                &ctx->actor_runtime->outputs[descriptor->output_offset],
                 descriptor->output_capacity, &resolution)) {
             /* resolve() only runs once descriptor/result/snapshot/reason/
              * capacity have already passed, and short-circuits before it on
@@ -4624,7 +4663,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
         for (uint16_t local = 0U; valid && local < result->output_count;
              local++) {
                 const sm64_saturn_actor_output_record_t *const record =
-                    &transaction->actor_runtime->outputs[
+                    &ctx->actor_runtime->outputs[
                         descriptor->output_offset + local];
                 sm64_saturn_actor_primitive_t primitive;
                 sm64_saturn_actor_render_binding_t binding;
@@ -4665,7 +4704,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                         snapshot, &resolution.workspace.pose_work,
                         primitive.vertex[corner], &world);
                     if (valid && !sm64_saturn_ir_transform_one(
-                            &transaction->actor_job, world, &view_position,
+                            &ctx->actor_job, world, &view_position,
                             &projected[corner])) {
                         projected_visible = false;
                         break;
@@ -4738,7 +4777,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                 }
                 if (valid && uses_gouraud && !flat_replace) {
                     const uint32_t table_index =
-                        (uint32_t)transaction->generic_actor_gouraud_first +
+                        (uint32_t)ctx->gouraud_first +
                         gouraud_ordinal;
                     /* S1.12 step 1: bound against this actor phase's OWN
                      * reservation rather than live-reading gouraud_bank->used,
@@ -4747,13 +4786,13 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                      * begins, so the snapshot is exact -- and it is a strictly
                      * tighter bound, catching an ordinal that overruns the
                      * actor range instead of silently borrowing terrain's. */
-                    if (table_index >= transaction->generic_actor_gouraud_limit ||
-                        table_index >= transaction->gouraud_bank->capacity) {
+                    if (table_index >= ctx->gouraud_limit ||
+                        table_index >= ctx->gouraud_capacity) {
                         valid = false;
                         break;
                     }
                     sm64_saturn_gouraud_table_t *const table =
-                        &transaction->gouraud_bank->staging[table_index];
+                        &ctx->gouraud_staging[table_index];
                     for (uint16_t corner = 0U; corner < 4U; corner++) {
                         const uint8_t intensity =
                             resolution.workspace.pose_work.light_intensity[
@@ -4774,14 +4813,22 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                         .raw = sm64_saturn_gouraud_neutral_color()});
                     vdp1_cmdt_gouraud_base_set(
                         &command,
-                        (vdp1_vram_t)(transaction->gouraud_bank->vram_base +
+                        (vdp1_vram_t)(ctx->gouraud_vram_base +
                             table_index * sizeof(*table)));
                     gouraud_ordinal++;
                 }
                 if (valid) {
-                    vdp1_cmdt_t *const target =
-                        sm64_saturn_vdp1_backend_reserve(
-                            transaction->backend, 1U);
+                    vdp1_cmdt_t *target;
+                    if (sink->commands != NULL) {
+                        if (sink->count >= sink->capacity) {
+                            sink->overflowed = 1U;
+                            valid = false;
+                            break;
+                        }
+                        target = &sink->commands[sink->count++];
+                    } else {
+                        target = sm64_saturn_vdp1_backend_reserve(backend, 1U);
+                    }
                     if (target == NULL) {
                         valid = false;
                         break;
@@ -4803,8 +4850,8 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
             valid = false;
         if (!valid) return false;
     }
-    if (emitted != transaction->generic_actor_output_count) return false;
-    return gouraud_ordinal <= transaction->generic_actor_gouraud_count;
+    if (emitted != ctx->output_count) return false;
+    return gouraud_ordinal <= ctx->gouraud_count;
 }
 #endif
 
@@ -5185,7 +5232,36 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
     if (actor_vertex_count != 0U)
         demo_emit_mario(snapshot, pose, backend, partitions, profile);
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
-    if (!demo_generic_actor_emit(transaction)) return false;
+    /* S1.12 step 3: publish exactly what emit needs, then run it. The context
+     * is built here, on the master, after the Gouraud reservation -- which is
+     * why the dispatch cannot be raised any earlier: gouraud_first is an
+     * input. `sink.commands == NULL` keeps this the direct-to-arena path. */
+    {
+        demo_actor_emit_context_t emit_ctx;
+        demo_actor_command_sink_t sink;
+        memset(&emit_ctx, 0, sizeof(emit_ctx));
+        memset(&sink, 0, sizeof(sink));
+        if (transaction->actor_handoff.state !=
+                SM64_SATURN_ACTOR_HANDOFF_BATCHED &&
+            transaction->scene_snapshot->actor_instance_count != 0U)
+            return false;
+        emit_ctx.actor_runtime = transaction->actor_runtime;
+        emit_ctx.snapshots = transaction->actor_handoff.snapshots;
+        emit_ctx.gouraud_staging = gouraud_bank->staging;
+        emit_ctx.gouraud_vram_base = gouraud_bank->vram_base;
+        emit_ctx.actor_job = transaction->actor_job;
+        emit_ctx.handoff_generation = transaction->actor_handoff.generation;
+        emit_ctx.instance_count =
+            transaction->scene_snapshot->actor_instance_count;
+        emit_ctx.gouraud_first = transaction->generic_actor_gouraud_first;
+        emit_ctx.gouraud_limit = transaction->generic_actor_gouraud_limit;
+        emit_ctx.gouraud_capacity = gouraud_bank->capacity;
+        emit_ctx.gouraud_count = transaction->generic_actor_gouraud_count;
+        emit_ctx.output_count = transaction->generic_actor_output_count;
+        if (emit_ctx.instance_count == 0U)
+            transaction->generic_actor_gouraud_count = 0U;
+        if (!demo_generic_actor_emit(&emit_ctx, &sink, backend)) return false;
+    }
     /* S1.12 step 2: emit is single-owner and complete here, so folding its
      * uncached block into the frame profile is a sequenced handoff. Totals are
      * identical to the previous direct accumulation. */

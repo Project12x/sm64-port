@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Step 3a: `demo_generic_actor_emit` now takes an explicit context and a
+  command sink instead of reaching into the render transaction.** Emit read
+  eleven scattered `transaction->` fields; the transaction lives in cached,
+  master-owned HWRAM, so a slave dereferencing it would read through its own
+  incoherent cache. Naming the dependency as a value type is what makes the
+  offload possible, and it makes the coupling auditable -- there was previously
+  no statement anywhere of what emit actually needs.
+- **The command sink decides where commands land.** `commands == NULL` appends
+  straight into the VDP1 arena, byte-for-byte the pre-existing path and what
+  this commit still does. A non-NULL sink stages commands in caller-owned
+  storage for the master to splice in afterwards, which is what lets the slave
+  build them without touching the shared arena cursor. Painter order is
+  preserved by construction: the staged block is appended after terrain and
+  Mario, so actor commands keep the highest arena indices exactly as before.
+- Behaviour-preserving: caches-on frame capture unchanged at
+  `7983335480d554ce...` (refactor sanity, not a correctness claim).
+
 ### Added
 
 - **Contract test for the generic-actor Gouraud reservation**
