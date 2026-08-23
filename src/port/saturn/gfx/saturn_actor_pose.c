@@ -92,6 +92,7 @@ bool sm64_saturn_actor_pose_evaluate_staged(
     sm64_saturn_actor_pose_view_t *pose)
 {
     sm64_saturn_actor_animation_record_t record;
+    sm64_saturn_actor_channel_cursor_t cursor;
     sm64_saturn_mtx_t *matrices;
     int32_t frame;
     uint16_t joint, vertex;
@@ -108,6 +109,14 @@ bool sm64_saturn_actor_pose_evaluate_staged(
         record.frame_count == 0U)
         return false;
 
+    /* Decode the animation's addressing state ONCE for all 3 + joints*3
+     * channels below.  sm64_saturn_actor_bank_sample_channel re-derives it
+     * per call, which for a 13-joint bank is 42 redundant record decodes
+     * across the uncached A-bus per evaluation. */
+    if (!sm64_saturn_actor_bank_channel_cursor_open(
+            bank, (uint16_t)animation_id, &cursor))
+        return false;
+
     frame = clamp_s16_frame(animation_frame);
     if ((uint32_t)frame >= record.frame_count)
         frame = (int32_t)record.frame_count - 1;
@@ -119,8 +128,8 @@ bool sm64_saturn_actor_pose_evaluate_staged(
     pose->joint_count = bank->bank.joint_count;
     for (uint16_t axis = 0U; axis < 3U; axis++) {
         int16_t sample = 0;
-        if (!sm64_saturn_actor_bank_sample_channel(
-                bank, (uint16_t)animation_id, (uint16_t)frame, axis, &sample)) {
+        if (!sm64_saturn_actor_bank_channel_cursor_sample(
+                bank, &cursor, (uint16_t)frame, axis, &sample)) {
             return false;
         }
         pose->root_translation[axis] = sample;
@@ -143,9 +152,8 @@ bool sm64_saturn_actor_pose_evaluate_staged(
         for (uint16_t axis = 0U; axis < 3U; axis++) {
             int16_t sample = 0;
             const uint16_t channel = (uint16_t)(3U + joint * 3U + axis);
-            if (!sm64_saturn_actor_bank_sample_channel(
-                    bank, (uint16_t)animation_id, (uint16_t)frame,
-                    channel, &sample)) {
+            if (!sm64_saturn_actor_bank_channel_cursor_sample(
+                    bank, &cursor, (uint16_t)frame, channel, &sample)) {
                 return false;
             }
             angles[axis] = sample;

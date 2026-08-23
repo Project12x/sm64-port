@@ -974,13 +974,14 @@ bool sm64_saturn_actor_bank_open_validated(
     return true;
 }
 
-bool sm64_saturn_actor_bank_sample_channel(
+bool sm64_saturn_actor_bank_channel_cursor_open(
     const sm64_saturn_actor_bank_view_t *view, uint16_t animation_id,
-    uint16_t frame, uint16_t channel, int16_t *sample)
+    sm64_saturn_actor_channel_cursor_t *cursor)
 {
     sm64_saturn_actor_animation_record_t record;
-    uint32_t index_words, value_words, count, offset, selected;
-    if (sample == NULL || view == NULL ||
+    uint32_t index_words, value_words;
+    if (cursor != NULL) memset(cursor, 0, sizeof(*cursor));
+    if (cursor == NULL || view == NULL ||
         !sm64_saturn_actor_bank_animation(view, animation_id, &record) ||
         record.indices_offset < 4U || record.values_offset < 4U ||
         record.indices_offset > view->byte_count - 4U ||
@@ -992,17 +993,48 @@ bool sm64_saturn_actor_bank_sample_channel(
         return false;
     index_words = read_be32(view->bytes + record.indices_offset - 4U);
     value_words = read_be32(view->bytes + record.values_offset - 4U);
-    if ((uint32_t)channel * 2U + 1U >= index_words ||
-        index_words > (view->byte_count - record.indices_offset) / 2U ||
+    if (index_words > (view->byte_count - record.indices_offset) / 2U ||
         value_words > (view->byte_count - record.values_offset) / 2U)
         return false;
-    count = read_be16(view->bytes + record.indices_offset + (uint32_t)channel * 4U);
-    offset = read_be16(view->bytes + record.indices_offset + (uint32_t)channel * 4U + 2U);
-    selected = offset + (frame < count ? frame : count - 1U);
-    if (count == 0U || selected >= value_words)
-        return false;
-    *sample = read_be_s16(view->bytes + record.values_offset + selected * 2U);
+    cursor->indices_offset = record.indices_offset;
+    cursor->values_offset = record.values_offset;
+    cursor->index_words = index_words;
+    cursor->value_words = value_words;
     return true;
+}
+
+bool sm64_saturn_actor_bank_channel_cursor_sample(
+    const sm64_saturn_actor_bank_view_t *view,
+    const sm64_saturn_actor_channel_cursor_t *cursor,
+    uint16_t frame, uint16_t channel, int16_t *sample)
+{
+    uint32_t count, offset, selected;
+    if (sample == NULL || view == NULL || cursor == NULL ||
+        (uint32_t)channel * 2U + 1U >= cursor->index_words)
+        return false;
+    count = read_be16(view->bytes + cursor->indices_offset +
+                      (uint32_t)channel * 4U);
+    offset = read_be16(view->bytes + cursor->indices_offset +
+                       (uint32_t)channel * 4U + 2U);
+    selected = offset + (frame < count ? frame : count - 1U);
+    if (count == 0U || selected >= cursor->value_words)
+        return false;
+    *sample = read_be_s16(view->bytes + cursor->values_offset + selected * 2U);
+    return true;
+}
+
+/* Retained verbatim in behaviour: opens a one-shot cursor and samples through
+ * it, so there is exactly one copy of the decode and range-check logic. */
+bool sm64_saturn_actor_bank_sample_channel(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t animation_id,
+    uint16_t frame, uint16_t channel, int16_t *sample)
+{
+    sm64_saturn_actor_channel_cursor_t cursor;
+    if (!sm64_saturn_actor_bank_channel_cursor_open(view, animation_id,
+                                                    &cursor))
+        return false;
+    return sm64_saturn_actor_bank_channel_cursor_sample(
+        view, &cursor, frame, channel, sample);
 }
 
 bool sm64_saturn_actor_bank_joint(

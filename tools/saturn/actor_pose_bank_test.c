@@ -520,6 +520,64 @@ int main(int argc, char **argv)
         free(bytes);
         return 1;
     }
+    /* T5: the hoisted channel cursor must be an exact equivalence for the
+     * per-call decode it replaces -- same samples, same refusals. Sweeping
+     * every channel of several animations against the original entry point
+     * is the property that matters, since the whole point is that the pose
+     * evaluator now samples through the cursor instead. */
+    {
+        sm64_saturn_actor_channel_cursor_t cursor;
+        const uint16_t animations[4] = {0U, 1U, 2U, 196U};
+        for (uint16_t a = 0U; a < 4U; a++) {
+            const uint16_t animation = animations[a];
+            sm64_saturn_actor_animation_record_t rec;
+            if (!sm64_saturn_actor_bank_animation(&view, animation, &rec) ||
+                !sm64_saturn_actor_bank_channel_cursor_open(&view, animation,
+                                                            &cursor)) {
+                fprintf(stderr, "cursor open failed for animation %u\n",
+                        animation);
+                free(bytes);
+                return 1;
+            }
+            const uint16_t channels = (uint16_t)(3U + 20U * 3U);
+            for (uint16_t frame = 0U; frame < 3U; frame++) {
+                for (uint16_t ch = 0U; ch < channels; ch++) {
+                    int16_t direct = 0, via_cursor = 0;
+                    const bool ok_direct =
+                        sm64_saturn_actor_bank_sample_channel(
+                            &view, animation, frame, ch, &direct);
+                    const bool ok_cursor =
+                        sm64_saturn_actor_bank_channel_cursor_sample(
+                            &view, &cursor, frame, ch, &via_cursor);
+                    if (ok_direct != ok_cursor ||
+                        (ok_direct && direct != via_cursor)) {
+                        fprintf(stderr,
+                                "cursor diverged: anim %u frame %u channel %u "
+                                "(direct ok=%d val=%d, cursor ok=%d val=%d)\n",
+                                animation, frame, ch, (int)ok_direct,
+                                direct, (int)ok_cursor, via_cursor);
+                        free(bytes);
+                        return 1;
+                    }
+                }
+            }
+        }
+        /* An out-of-range channel must still be refused through the cursor,
+         * and an unopened/zeroed cursor must refuse everything rather than
+         * reading at offset zero. */
+        int16_t ignored = 0;
+        sm64_saturn_actor_channel_cursor_t zeroed;
+        memset(&zeroed, 0, sizeof(zeroed));
+        if (sm64_saturn_actor_bank_channel_cursor_sample(
+                &view, &cursor, 0U, 0xFFFFU, &ignored) ||
+            sm64_saturn_actor_bank_channel_cursor_sample(
+                &view, &zeroed, 0U, 0U, &ignored) ||
+            sm64_saturn_actor_bank_channel_cursor_open(&view, 209U, &cursor)) {
+            fprintf(stderr, "cursor accepted an out-of-range request\n");
+            free(bytes);
+            return 1;
+        }
+    }
     {
         uint8_t saved[4];
         memcpy(saved, bytes + first.values_offset - 4U, sizeof(saved));

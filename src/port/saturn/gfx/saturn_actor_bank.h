@@ -218,6 +218,36 @@ bool sm64_saturn_actor_bank_animation(
 bool sm64_saturn_actor_bank_sample_channel(
     const sm64_saturn_actor_bank_view_t *view, uint16_t animation_id,
     uint16_t frame, uint16_t channel, int16_t *sample);
+
+/* One animation's decoded, range-validated addressing state.
+ *
+ * `sm64_saturn_actor_bank_sample_channel` re-derives all of this on EVERY
+ * call: it re-decodes the 16-byte animation record and re-reads the two
+ * length words that precede the index and value tables, then range-checks
+ * them, before touching the one sample it was asked for. A pose evaluation
+ * asks for `3 + joint_count * 3` channels, so a 13-joint Bob-omb pays that
+ * 42 times -- roughly 1,000 bytes of byte-wise big-endian reads across the
+ * UNCACHED A-bus (the bank lives in `.cart_rodata`) where 24 would do -- and
+ * the pose is evaluated more than once per instance per frame.
+ *
+ * Opening a cursor performs that decode and validation exactly once; each
+ * sample through it is then just the two index reads and the value read.
+ * The per-sample range checks are preserved in full, so this is a
+ * redundant-work removal, not a safety relaxation. */
+typedef struct sm64_saturn_actor_channel_cursor {
+    uint32_t indices_offset;
+    uint32_t values_offset;
+    uint32_t index_words;
+    uint32_t value_words;
+} sm64_saturn_actor_channel_cursor_t;
+
+bool sm64_saturn_actor_bank_channel_cursor_open(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t animation_id,
+    sm64_saturn_actor_channel_cursor_t *cursor);
+bool sm64_saturn_actor_bank_channel_cursor_sample(
+    const sm64_saturn_actor_bank_view_t *view,
+    const sm64_saturn_actor_channel_cursor_t *cursor,
+    uint16_t frame, uint16_t channel, int16_t *sample);
 bool sm64_saturn_actor_bank_joint(
     const sm64_saturn_actor_bank_view_t *view, uint16_t joint,
     sm64_saturn_actor_joint_t *out);

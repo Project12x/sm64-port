@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **T5 (partial): the animation channel cursor -- `sample_channel` no longer
+  re-decodes the animation record on every channel.** `sm64_saturn_actor_bank_
+  sample_channel` re-read the 16-byte animation record plus 8 header bytes for
+  *each* channel it was asked for, over the uncached A-bus to the DRAM cart.
+  A Bob-omb evaluation samples 42 channels, so it was pulling ~1,008 bytes of
+  CART per pose evaluation where 24 would do. Added
+  `sm64_saturn_actor_channel_cursor_t` with `_open`/`_sample`; the two pose
+  evaluators (`saturn_actor_pose.c`, `saturn_actor_rigid_pose.c`) now open one
+  cursor before their frame clamp and sample through it. The original
+  `sample_channel` entry point is kept and re-implemented on top of a one-shot
+  cursor, so the validation logic exists in exactly one place.
+- **Measured: mean 5.3870 -> 5.4037 (+0.31%), median 5.4545 unchanged, 1%-low
+  5.0000 unchanged**, 29 intervals, sealed build `id-b227747c65db2929` against
+  baseline `id-3481ef86ab8e531e`. **This is far below the estimate and is
+  honestly close to noise.** Kept because it is behaviour-preserving, strictly
+  removes redundant uncached reads, and does not regress -- but it should not
+  be counted as having delivered T5.
+- **T5's actual lever is still unimplemented.** S0.1 attributed 4.977% of
+  master to `_sm64_saturn_actor_pose_evaluate_staged`; the header re-decode was
+  only a slice of that. The real win is memoising the pose for the 17 of 18
+  banks that are `joint_count == 1` with a single animation -- their pose is a
+  bank *constant* re-derived every frame. That work remains open.
+
+### Fixed
+
+- **Capture-invocation trap, cost tokens twice:** `capture_sourceboot_
+  throughput.py`'s argparse defaults (`--presentation-events 2`,
+  `--max-vblanks 600`) do NOT reproduce the accepted baselines. They fail with
+  `cadence trace has wrong magic` / `notify_sequence: 0`, which reads exactly
+  like a dead render pipeline and sent this session chasing a non-existent
+  regression until the accepted baseline build was re-measured and failed
+  identically. Accepted numbers require `--startup-vblanks 4096 --max-vblanks
+  3600 --presentation-events 30` (= the 29 intervals every cadence entry
+  quotes). Recorded in project memory alongside the BIOS path.
+
+### Known issues
+
+- **`compile-enemy-actor-bank` fails and it is NOT from this change**, verified
+  by stashing: the emitted payload `79d52fed...` does not match the bank
+  published in the scene package (`89a13d88...`). Pre-existing, most likely a
+  stale artifact from the repeated `actors-v3-g17` re-bakes earlier in the
+  sprint. Tracked, not fixed here.
+
 ### Added
 
 - **S0.1 landed: the idle-attribution capture that failed 3x now completes

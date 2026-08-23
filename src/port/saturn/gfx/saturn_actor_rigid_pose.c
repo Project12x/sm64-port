@@ -175,6 +175,7 @@ bool sm64_saturn_actor_rigid_pose_evaluate(
     sm64_saturn_rigid_pose_t *out, uint32_t out_bytes)
 {
     sm64_saturn_actor_animation_record_t record;
+    sm64_saturn_actor_channel_cursor_t cursor;
     sm64_saturn_actor_joint_t joints[SM64_SATURN_RIGID_POSE_MAX_PARTS];
     int16_t angles[SM64_SATURN_RIGID_POSE_MAX_PARTS][3];
     int16_t root_translation[3] = { 0, 0, 0 };
@@ -192,6 +193,12 @@ bool sm64_saturn_actor_rigid_pose_evaluate(
         record.frame_count == 0U)
         return false;
 
+    /* One decode for all 3 + parts*3 channels; see
+     * sm64_saturn_actor_bank_channel_cursor_open. */
+    if (!sm64_saturn_actor_bank_channel_cursor_open(
+            bank, (uint16_t)animation_id, &cursor))
+        return false;
+
     part_count = bank->bank.joint_count;
     frame = animation_frame < 0 ? 0 : (int32_t)animation_frame;
     if ((uint32_t)frame >= record.frame_count)
@@ -202,8 +209,8 @@ bool sm64_saturn_actor_rigid_pose_evaluate(
      * the same bank format and the same animation stream. */
     for (axis = 0U; axis < 3U; axis++) {
         int16_t sample = 0;
-        if (!sm64_saturn_actor_bank_sample_channel(
-                bank, (uint16_t)animation_id, (uint16_t)frame, axis, &sample))
+        if (!sm64_saturn_actor_bank_channel_cursor_sample(
+                bank, &cursor, (uint16_t)frame, axis, &sample))
             return false;
         root_translation[axis] = sample;
     }
@@ -215,9 +222,8 @@ bool sm64_saturn_actor_rigid_pose_evaluate(
         for (axis = 0U; axis < 3U; axis++) {
             int16_t sample = 0;
             const uint16_t channel = (uint16_t)(3U + part * 3U + axis);
-            if (!sm64_saturn_actor_bank_sample_channel(
-                    bank, (uint16_t)animation_id, (uint16_t)frame, channel,
-                    &sample))
+            if (!sm64_saturn_actor_bank_channel_cursor_sample(
+                    bank, &cursor, (uint16_t)frame, channel, &sample))
                 return false;
             angles[part][axis] = sample;
         }
