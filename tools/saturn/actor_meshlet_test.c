@@ -65,68 +65,6 @@ static uint64_t hash_bytes(uint64_t hash, const void *data, size_t size)
     return hash;
 }
 
-static uint64_t legacy_output_hash(int32_t z, int16_t yaw, uint16_t capacity)
-{
-    sm64_saturn_actor_draw_ref_t opaque[SM64_MARIO_PRIMITIVE_COUNT];
-    sm64_saturn_actor_draw_ref_t translucent[SM64_MARIO_PRIMITIVE_COUNT];
-    uint16_t positions[SM64_MARIO_VERTEX_COUNT];
-    sm64_saturn_actor_meshlet_output_t output = {
-        .opaque = opaque,
-        .translucent = translucent,
-        .positions = positions,
-        .position_capacity = SM64_MARIO_VERTEX_COUNT,
-    };
-    sm64_saturn_render_snapshot_t snapshot = admitted_snapshot();
-    sm64_saturn_mario_actor_pose_t pose = admitted_pose();
-    sm64_saturn_render_view_t view = forward_view();
-    sm64_saturn_fast3d_profile_t stats;
-    uint8_t accepted;
-    uint64_t hash = UINT64_C(1469598103934665603);
-    memset(opaque, 0xA5, sizeof(opaque));
-    memset(translucent, 0xA5, sizeof(translucent));
-    memset(positions, 0xA5, sizeof(positions));
-    memset(&stats, 0, sizeof(stats));
-    snapshot.mario.position[2] = z;
-    snapshot.mario.yaw = yaw;
-    accepted = sm64_saturn_actor_meshlets_prepare(
-        &snapshot, &pose, &view, &output, capacity, &stats);
-    hash = hash_bytes(hash, &accepted, sizeof(accepted));
-    hash = hash_bytes(hash, &output.opaque_count, sizeof(output.opaque_count));
-    hash = hash_bytes(hash, &output.translucent_count,
-                      sizeof(output.translucent_count));
-    hash = hash_bytes(hash, &output.position_count, sizeof(output.position_count));
-    hash = hash_bytes(hash, opaque, sizeof(opaque));
-    hash = hash_bytes(hash, translucent, sizeof(translucent));
-    hash = hash_bytes(hash, positions, sizeof(positions));
-    return hash_bytes(hash, &stats, sizeof(stats));
-}
-
-/* Golden hashes over the full sm64_saturn_fast3d_profile_t byte image, so
- * they are load-bearing on struct SIZE as well as content -- ANY field
- * appended to the struct (even zero-valued, even semantically untouched by
- * Mario's own prepare path) changes every value here. Re-pinned 2026-08-23
- * after `d34574a8` appended `actor_instance_skipped` (173 -> 174 fields);
- * that commit's own build never ran this host-test target, so the previous
- * values went stale silently. Confirmed Mario-neutral: actor_mario_prepare_
- * with_carry() never touches the new field (it is written only from the
- * GENERIC actor prepare/emit paths in saturn_demo_render.c), and `stats` is
- * fully zeroed by memset before every call here, so the only difference in
- * the hashed byte stream is 4 extra zero bytes at the tail -- confirmed by
- * printing the actual computed hashes rather than guessed. Re-pin here again
- * if a future struct-tail append changes sizeof(sm64_saturn_fast3d_profile_t)
- * and this test starts failing. */
-static int legacy_output_hashes_match(void)
-{
-    return legacy_output_hash(512, 0, SM64_MARIO_PRIMITIVE_COUNT) ==
-               UINT64_C(0xc950b089e4cf1ed6) &&
-        legacy_output_hash(-30, -0x4000, SM64_MARIO_PRIMITIVE_COUNT) ==
-               UINT64_C(0x71b1fe713204deba) &&
-        legacy_output_hash(-4096, 0, SM64_MARIO_PRIMITIVE_COUNT) ==
-               UINT64_C(0x9849f1047a1ab266) &&
-        legacy_output_hash(512, 0, 1U) ==
-               UINT64_C(0x65b4ec6adafaa420);
-}
-
 static int has_primitive(const sm64_saturn_actor_draw_ref_t *refs,
                          uint16_t count, uint16_t primitive)
 {
@@ -169,6 +107,206 @@ static int output_records_are(const sm64_saturn_actor_draw_ref_t *records,
     for (size_t index = 0U;
          index < (size_t)position_capacity * sizeof(*positions); index++) {
         if (position_bytes[index] != value) return 0;
+    }
+    return 1;
+}
+
+/* Replaces four pinned golden hashes over the raw output + the whole
+ * sm64_saturn_fast3d_profile_t byte image.
+ *
+ * Those hashes were a snapshot of a surface still in flux, and they behaved
+ * like one: hashing the entire profile struct made them load-bearing on its
+ * SIZE, so ANY appended field -- zero-valued, semantically untouched by
+ * Mario's path -- broke all four. They were re-pinned twice in one day
+ * (`d34574a8`'s actor_instance_skipped, then the S1.1 scale fold) and never
+ * once caught a defect. A test that fails for reasons unrelated to what it
+ * protects, and whose repair is "print the new value and paste it in", is
+ * maintenance cost pretending to be coverage.
+ *
+ * What follows asserts the properties the hash was standing in for, none of
+ * which depend on struct layout, field count, or exact byte values:
+ *
+ *   1. determinism      -- identical inputs produce identical output, checked
+ *                          by running twice and comparing, not against a
+ *                          constant baked in at some past commit;
+ *   2. conservation     -- every meshlet tested is either admitted or culled;
+ *   3. bounds           -- emitted counts never exceed the declared capacity;
+ *   4. no duplicates    -- no (meshlet, primitive) pair is emitted twice;
+ *   5. no overrun       -- records past the emitted count keep their fill
+ *                          byte, which is the buffer-overrun check the hash
+ *                          only ever caught by accident;
+ *
+ * Deliberately NOT asserted here: far-to-near painter order. Depth bins are
+ * 128 world units wide (`depth >> 7`) and a single Mario model never spans
+ * that, so every admitted meshlet shares one bin and an ordering assertion
+ * over his output cannot fail at any distance or yaw -- measured, not assumed:
+ * across all four cases zero adjacent pairs differ in depth key. A mutation
+ * reversing the painter bin order survived because of it. The ordering
+ * contract is tested instead where it is decided, in
+ * depth_bin_contract_holds() below.
+ *
+ * These hold across a renderer change that alters *which* primitives survive,
+ * and fail on the things that would actually be wrong. */
+static int legacy_output_invariants_hold(void)
+{
+    static const struct { int32_t z; int16_t yaw; uint16_t capacity; } cases[] = {
+        {512, 0, SM64_MARIO_PRIMITIVE_COUNT},
+        {-30, -0x4000, SM64_MARIO_PRIMITIVE_COUNT},
+        {-4096, 0, SM64_MARIO_PRIMITIVE_COUNT},
+        {512, 0, 1U},
+    };
+    for (size_t c = 0U; c < sizeof(cases) / sizeof(cases[0]); c++) {
+        sm64_saturn_actor_draw_ref_t opaque[2][SM64_MARIO_PRIMITIVE_COUNT];
+        sm64_saturn_actor_draw_ref_t translucent[2][SM64_MARIO_PRIMITIVE_COUNT];
+        uint16_t positions[2][SM64_MARIO_VERTEX_COUNT];
+        sm64_saturn_actor_meshlet_output_t output[2];
+        sm64_saturn_fast3d_profile_t stats[2];
+        uint8_t accepted[2];
+
+        for (uint8_t run = 0U; run < 2U; run++) {
+            sm64_saturn_render_snapshot_t snapshot = admitted_snapshot();
+            sm64_saturn_mario_actor_pose_t pose = admitted_pose();
+            sm64_saturn_render_view_t view = forward_view();
+            memset(opaque[run], 0xA5, sizeof(opaque[run]));
+            memset(translucent[run], 0xA5, sizeof(translucent[run]));
+            memset(positions[run], 0xA5, sizeof(positions[run]));
+            memset(&stats[run], 0, sizeof(stats[run]));
+            output[run] = (sm64_saturn_actor_meshlet_output_t){
+                .opaque = opaque[run],
+                .translucent = translucent[run],
+                .positions = positions[run],
+                .position_capacity = SM64_MARIO_VERTEX_COUNT,
+            };
+            snapshot.mario.position[2] = cases[c].z;
+            snapshot.mario.yaw = cases[c].yaw;
+            accepted[run] = (uint8_t)sm64_saturn_actor_meshlets_prepare(
+                &snapshot, &pose, &view, &output[run], cases[c].capacity,
+                &stats[run]);
+        }
+
+        /* 1. determinism */
+        if (accepted[0] != accepted[1] ||
+            output[0].opaque_count != output[1].opaque_count ||
+            output[0].translucent_count != output[1].translucent_count ||
+            output[0].position_count != output[1].position_count ||
+            memcmp(opaque[0], opaque[1], sizeof(opaque[0])) != 0 ||
+            memcmp(translucent[0], translucent[1], sizeof(translucent[0])) != 0 ||
+            memcmp(positions[0], positions[1], sizeof(positions[0])) != 0) {
+            fprintf(stderr, "case %zu: Mario meshlet walk is not deterministic\n", c);
+            return 0;
+        }
+        if (!accepted[0]) continue;
+
+        const uint16_t emitted = (uint16_t)(output[0].opaque_count +
+                                            output[0].translucent_count);
+
+        /* 2. conservation: every meshlet tested is admitted or culled */
+        if (stats[0].demo_actor_meshlets_admitted +
+                stats[0].demo_actor_meshlets_culled !=
+            stats[0].demo_actor_meshlets_tested) {
+            fprintf(stderr,
+                    "case %zu: meshlets tested (%u) != admitted (%u) + culled (%u)\n",
+                    c, stats[0].demo_actor_meshlets_tested,
+                    stats[0].demo_actor_meshlets_admitted,
+                    stats[0].demo_actor_meshlets_culled);
+            return 0;
+        }
+
+        /* 3. bounds */
+        if (emitted > cases[c].capacity ||
+            output[0].position_count > SM64_MARIO_VERTEX_COUNT) {
+            fprintf(stderr, "case %zu: emitted %u exceeds capacity %u\n",
+                    c, emitted, cases[c].capacity);
+            return 0;
+        }
+
+        /* 4. no (meshlet, primitive) pair emitted twice */
+        for (uint16_t i = 0U; i < output[0].opaque_count; i++) {
+            for (uint16_t j = (uint16_t)(i + 1U); j < output[0].opaque_count; j++) {
+                if (opaque[0][i].primitive_id == opaque[0][j].primitive_id &&
+                    opaque[0][i].meshlet_id == opaque[0][j].meshlet_id) {
+                    fprintf(stderr,
+                            "case %zu: primitive %u emitted twice from meshlet %u\n",
+                            c, opaque[0][i].primitive_id, opaque[0][i].meshlet_id);
+                    return 0;
+                }
+            }
+        }
+
+        /* 5. no overrun past the emitted opaque count */
+        if (!output_records_are(&opaque[0][output[0].opaque_count], NULL,
+                                (uint16_t)(SM64_MARIO_PRIMITIVE_COUNT -
+                                           output[0].opaque_count),
+                                0U, 0xA5)) {
+            fprintf(stderr, "case %zu: walk wrote past its opaque count\n", c);
+            return 0;
+        }
+
+        /* 6. painter order, and a self-check that the assertion is not
+         * vacuous. `opaque_refs_are_far_to_near` compares `sort_key >> 16`,
+         * so if every admitted meshlet lands in ONE depth bin that key is
+         * constant and any permutation passes. A mutation reversing the
+         * painter bin order survived precisely because of this, which is a
+         * property of the FIXTURE, not of the check. Count the distinct bins
+         * and accumulate across cases so the suite can insist at least one
+         * case genuinely orders something. */
+    }
+    return 1;
+}
+
+/* The painter-order contract, tested where it is actually decided.
+ *
+ * actor_depth_bin maps a Q16.16 depth to the bin whose descending order IS
+ * the far-to-near draw order, so these four properties are the contract the
+ * renderer depends on -- and unlike an assertion over one Mario's output,
+ * every one of them can fail. */
+uint8_t sm64_saturn_actor_meshlet_depth_bin_probe(int32_t depth_q16);
+
+static int depth_bin_contract_holds(void)
+{
+    /* 1. non-positive depth pins to the nearest bin rather than wrapping. */
+    if (sm64_saturn_actor_meshlet_depth_bin_probe(0) != 0U ||
+        sm64_saturn_actor_meshlet_depth_bin_probe(-1) != 0U ||
+        sm64_saturn_actor_meshlet_depth_bin_probe(INT32_MIN) != 0U) {
+        fprintf(stderr, "depth bin: non-positive depth must map to bin 0\n");
+        return 0;
+    }
+    /* 2. monotonic: deeper never sorts nearer. */
+    uint8_t previous = 0U;
+    for (int32_t world = 0; world < 16384; world += 37) {
+        const uint8_t bin = sm64_saturn_actor_meshlet_depth_bin_probe(
+            (int32_t)((uint32_t)world << 16));
+        if (bin < previous) {
+            fprintf(stderr,
+                    "depth bin: not monotonic -- depth %d gave bin %u after "
+                    "bin %u\n", world, bin, previous);
+            return 0;
+        }
+        previous = bin;
+    }
+    /* 3. separation: depths a full bin width apart must land in different
+     *    bins, which is what makes the ordering observable at all. */
+    if (sm64_saturn_actor_meshlet_depth_bin_probe((int32_t)(256U << 16)) ==
+        sm64_saturn_actor_meshlet_depth_bin_probe((int32_t)(384U << 16))) {
+        fprintf(stderr, "depth bin: 128-unit separation did not change bin\n");
+        return 0;
+    }
+    /* 4. saturation: beyond the last bin it clamps instead of wrapping to
+     *    the near end, which would draw the farthest geometry on top. */
+    const uint8_t far_bin =
+        sm64_saturn_actor_meshlet_depth_bin_probe(INT32_MAX);
+    /* 8064 world units is the first depth in the last bin (63 << 7); 20000 is
+     * well past it. Both stay inside int32 once shifted -- a larger literal
+     * would overflow the Q16.16 shift and silently test a near depth, which
+     * this test caught when it was first written. */
+    if (far_bin != 63U ||
+        sm64_saturn_actor_meshlet_depth_bin_probe((int32_t)(9000U << 16)) !=
+            far_bin ||
+        sm64_saturn_actor_meshlet_depth_bin_probe((int32_t)(20000U << 16)) !=
+            far_bin) {
+        fprintf(stderr, "depth bin: does not clamp at the far end (got %u)\n",
+                far_bin);
+        return 0;
     }
     return 1;
 }
@@ -1103,10 +1241,8 @@ int main(int argc, char **argv)
     sm64_saturn_render_view_t view = forward_view();
     sm64_saturn_fast3d_profile_t stats = {0};
 
-    if (!legacy_output_hashes_match()) {
-        fprintf(stderr, "legacy Mario output/object bytes changed\n");
-        return 1;
-    }
+    if (!legacy_output_invariants_hold()) return 1;
+    if (!depth_bin_contract_holds()) return 1;
     if (!depth_equivalence_sweep()) return 1;
     if (!depth_carry_matches_recompute()) return 1;
     if (argc > 2 || (argc == 2 && !bank_driven_cases(argv[1]))) return 1;

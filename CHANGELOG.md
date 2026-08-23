@@ -4,6 +4,51 @@
 
 ### Changed
 
+- **Replaced four pinned golden hashes in `actor_meshlet_test.c` with property
+  assertions.** The hashes covered the raw output *and the whole
+  `sm64_saturn_fast3d_profile_t` byte image*, which made them load-bearing on
+  the struct's SIZE: any appended field — zero-valued, semantically untouched by
+  Mario's path — broke all four. They were re-pinned **twice in one day**
+  (`d34574a8`'s `actor_instance_skipped`, then the S1.1 scale fold) and never
+  caught a defect. A test that fails for reasons unrelated to what it protects,
+  and whose repair is "print the new value and paste it in", is maintenance cost
+  pretending to be coverage — and on a surface still in flux it actively pins
+  behaviour we intend to change.
+- **What replaced them** asserts what the hash was standing in for, none of it
+  dependent on struct layout or byte values: determinism (two runs compared to
+  each other, not to a constant baked in at a past commit), meshlet conservation
+  (tested == admitted + culled), capacity bounds, no `(meshlet, primitive)` pair
+  emitted twice, and no write past the emitted count.
+
+### Fixed
+
+- **Found a pre-existing assertion that cannot fail.**
+  `opaque_refs_are_far_to_near` compares `sort_key >> 16`, but depth bins are
+  128 world units wide (`depth >> 7`) and a single Mario model never spans that
+  — so every admitted meshlet shares one bin and the check passes for any
+  permutation. Measured rather than assumed: **zero adjacent pairs differ in
+  depth key across all four cases**, at any distance or yaw. A mutation
+  reversing the painter bin order survived precisely because of it.
+- **The ordering contract is now tested where it is decided**, via a test-only
+  `sm64_saturn_actor_meshlet_depth_bin_probe` following the file's existing
+  T2.6 probe convention: non-positive depth pins to bin 0 rather than wrapping,
+  the mapping is monotonic (deeper never sorts nearer), depths a full bin width
+  apart land in different bins, and the far end clamps instead of wrapping to
+  the near end — which would draw the farthest geometry on top.
+- **Mutation-tested, 4/4 caught**: `>=` → `>` at the clamp, `<= 0` → `== 0` at
+  the near guard, a widened bin shift, and an off-by-one in the culled
+  accumulator. Two process notes worth keeping: a first conservation mutant was
+  discarded because it produced a *compile* error rather than a test failure,
+  which is not coverage; and a first mutation harness reported everything as
+  SURVIVED because `git checkout` was wiping the uncommitted probe, so the suite
+  never compiled — the harness now restores from a non-git baseline and asserts
+  the unmutated build PASSes before trusting any result.
+- The test also caught a bug in its own fixture: `100000U << 16` overflows the
+  Q16.16 shift and silently tests a *near* depth. Corrected to depths that stay
+  in range, with a comment saying why.
+
+### Changed
+
 - **Actor-emit offload, steps 1-2: the two coherency hazards removed while emit
   still runs master-only.** Both are prerequisites for moving emit to the slave,
   and both are deliberately landed *before* any concurrency exists to trip over

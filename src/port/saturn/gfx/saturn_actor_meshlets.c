@@ -1087,6 +1087,19 @@ bool sm64_saturn_actor_meshlets_prepare_recompute(
     return admitted;
 }
 
+/* Depth-bin probe.  Test-only, same convention as the T2.6 equivalence probe
+ * below: actor_depth_bin is what decides painter order, and the emergent
+ * far-to-near property cannot be exercised through a single Mario model --
+ * bins are 128 world units wide (depth >> 7) and one actor never spans that,
+ * so an ordering assertion over his output can never fail.  Testing the
+ * deciding function directly is the part that can. */
+uint8_t sm64_saturn_actor_meshlet_depth_bin_probe(int32_t depth_q16);
+
+uint8_t sm64_saturn_actor_meshlet_depth_bin_probe(int32_t depth_q16)
+{
+    return actor_depth_bin(depth_q16);
+}
+
 /* T2.6 equivalence probe.  Test-only: no Saturn image defines this macro, so
  * this entry point exists only in tools/saturn/actor_meshlet_test.c's link.
  * It reaches the two file-private per-vertex depth implementations through
