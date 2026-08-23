@@ -2,6 +2,46 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Contract test for the generic-actor Gouraud reservation**
+  (`verify-actor-gouraud-reservation`, wired into `verify-all`). The
+  reservation arithmetic moved out of `saturn_demo_render.c`'s finalize path
+  into `saturn_actor_gouraud_reservation.h` so the contract can be tested
+  directly, and the shipping path now calls the tested helper rather than a
+  private copy.
+- **It asserts properties, not a snapshot** — six of them, each able to fail and
+  none observable in a rendered frame: disjointness (the range never overlaps
+  already-allocated tables, so actor shading cannot overwrite terrain's),
+  cache-line alignment on **both** edges (8-byte entries pack two per 16-byte
+  SH-2 line, and the two phases are about to run on different CPUs with no
+  coherency), sufficiency, containment within capacity, fail-closed refusal
+  rather than a clamp that overruns, and no wrap for inputs near `UINT16_MAX`.
+  Checked exhaustively over a 41x41x41 window — which covers every alignment
+  parity, the zero-count case and both sides of the capacity edge — plus an
+  edge-value sweep. The rounding is now done in `uint32` precisely so a `used`
+  or `count` near the ceiling cannot fold back into a small overlapping range.
+- **Mutation-tested 4/4 caught**: dropping the first-edge alignment, dropping
+  the count alignment, reverting the rounding to `uint16` (the wrap bug), and
+  relaxing the capacity check to accept an overrun. As with the meshlet round,
+  the harness restores from a non-git baseline and asserts the unmutated build
+  PASSes before any result is trusted.
+- The extraction is behaviour-preserving: caches-on frame capture is unchanged
+  at `7983335480d554ce...`. That is cited as a **refactor sanity check, not a
+  correctness claim** — it certifies "nothing moved", including defects, and is
+  not evidence that the reservation is right. The contract test is.
+
+### Known issues
+
+- **Two of the four planned emit-offload contract tests are deliberately not
+  written yet.** The arena-ordering contract (actor commands must occupy
+  strictly higher arena indices than terrain and Mario, which is what keeps
+  depth-bin ordering correct under concurrency) and the counter-fold
+  completeness check both describe code that does not exist until step 3 builds
+  the staging buffer and partition. Writing them now would pin a design that has
+  not been built — the same failure mode as the golden hashes, in reverse. They
+  land with step 3.
+
 ### Changed
 
 - **Replaced four pinned golden hashes in `actor_meshlet_test.c` with property

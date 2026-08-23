@@ -1490,6 +1490,14 @@ verify-actor-pose-bank: compile-mario-actor-bank
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-pose-bank-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-pose-bank-test$(HOST_EXEEXT)" "$(MARIO_ACTOR_BANK)"
 
+verify-actor-gouraud-reservation:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_gouraud_reservation_test.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-gouraud-reservation-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-gouraud-reservation-test$(HOST_EXEEXT)"
+
 verify-dma-queue:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
@@ -2478,7 +2486,7 @@ compile-castle-collision: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_collision.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-collision-bank-2026-07-19.json"
 
-verify-all: verify-tools verify-shadow-trig verify-shadow-trig-mutation verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-frame-pipeline verify-vdp1-frame-bank verify-vdp1-user-clip verify-vdp1-user-clip-mutation verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-sqrtf-fixed verify-sqrtf-fixed-mutation verify-hot-promotion verify-saturn-object-pool-probe-contract classify-source verify-hello verify-hwtest
+verify-all: verify-actor-gouraud-reservation verify-tools verify-shadow-trig verify-shadow-trig-mutation verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-frame-pipeline verify-vdp1-frame-bank verify-vdp1-user-clip verify-vdp1-user-clip-mutation verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-sqrtf-fixed verify-sqrtf-fixed-mutation verify-hot-promotion verify-saturn-object-pool-probe-contract classify-source verify-hello verify-hwtest
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean

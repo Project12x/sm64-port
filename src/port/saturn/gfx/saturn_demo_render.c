@@ -40,6 +40,7 @@
 #include <assert.h>
 #include "game/camera.h"
 #include "saturn_dual_frame_bank.h"
+#include "saturn_actor_gouraud_reservation.h"
 #include "saturn_actor_meshlets.h"
 #include "saturn_actor_material.h"
 #include "saturn_actor_pose.h"
@@ -5140,17 +5141,14 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
      * the actor range on an even index and round its length up to even so both
      * edges land on a line boundary. Costs at most two 8-byte entries. */
     {
-        const uint16_t aligned_first = (uint16_t)((gouraud_bank->used + 1U) &
-                                                  (uint16_t)~1U);
-        const uint16_t aligned_count = (uint16_t)(
-            (transaction->generic_actor_gouraud_count + 1U) & (uint16_t)~1U);
-        if (aligned_first > gouraud_bank->capacity ||
-            aligned_count > gouraud_bank->capacity - aligned_first)
+        sm64_saturn_actor_gouraud_reservation_t reservation;
+        if (!sm64_saturn_actor_gouraud_reserve(
+                gouraud_bank->used, gouraud_bank->capacity,
+                transaction->generic_actor_gouraud_count, &reservation))
             return false;
-        transaction->generic_actor_gouraud_first = aligned_first;
-        transaction->generic_actor_gouraud_limit =
-            (uint16_t)(aligned_first + aligned_count);
-        gouraud_bank->used = (uint16_t)(aligned_first + aligned_count);
+        transaction->generic_actor_gouraud_first = reservation.first;
+        transaction->generic_actor_gouraud_limit = reservation.limit;
+        gouraud_bank->used = reservation.limit;
     }
 #endif
     sm64_saturn_vdp1_backend_begin(backend);
