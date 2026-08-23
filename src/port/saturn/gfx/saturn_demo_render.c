@@ -669,6 +669,10 @@ typedef struct demo_render_transaction {
     uint16_t generic_actor_descriptor_count;
     uint16_t generic_actor_gouraud_count;
     uint16_t generic_actor_gouraud_first;
+    /* S1.12 step 1: one past the actor phase's last reserved Gouraud table.
+     * Snapshotted at reservation time so emit never reads the live bank
+     * cursor. */
+    uint16_t generic_actor_gouraud_limit;
     uint16_t frame_job_count;
     uint8_t generic_actor_prepared;
 } demo_render_transaction_t;
@@ -3229,6 +3233,27 @@ static inline void demo_render_fence(void)
  * callback: transaction->generic_actor_gouraud_count, and the four meshlet
  * counters written straight into the frame profile. Both were safe only
  * because the drain was master-only. */
+/* S1.12 step 2: every profile counter the generic-actor EMIT path writes.
+ * Emit is the next phase slated to move off the master, and these are
+ * read-modify-writes into the shared frame profile -- the same shape as the
+ * meshlet counters S1.11 had to relocate. Landing them in the uncached phase
+ * block now, while emit still runs master-only, is a behaviour-preserving step
+ * that removes the hazard before any concurrency exists to trip over it. */
+typedef struct demo_actor_emit_counters {
+    uint32_t instance_skipped;
+    uint32_t prims_seen;
+    uint32_t reject_switch_case;
+    uint32_t reject_near_far;
+    uint32_t reject_degenerate;
+    uint32_t reject_backface;
+    uint32_t flat_replace;
+    uint32_t prims_emitted;
+    uint32_t triangles_vdp1_emitted;
+    uint32_t triangles_emitted;
+    uint32_t actor_primitives_emitted;
+    uint32_t texture_commands;
+} demo_actor_emit_counters_t;
+
 typedef struct demo_actor_phase_accum {
     /* --- published by the master before the phase is dispatched --- */
     sm64_saturn_actor_output_record_t *outputs;
@@ -3240,6 +3265,7 @@ typedef struct demo_actor_phase_accum {
     sm64_saturn_actor_meshlet_stats_t walk;
     uint32_t gouraud_count;
     uint32_t instance_skipped;
+    demo_actor_emit_counters_t emit;
     /* --- dispatch handshake --- */
     sm64_saturn_actor_instance_processor_t processor;
     volatile uint32_t pending;
@@ -3269,6 +3295,7 @@ static void demo_actor_phase_accum_reset(void)
     accum->walk.positions_admitted = 0U;
     accum->gouraud_count = 0U;
     accum->instance_skipped = 0U;
+    memset((void *)&accum->emit, 0, sizeof(accum->emit));
     accum->pending = 0U;
     accum->done = 0U;
     accum->drained = 0U;
@@ -3408,6 +3435,7 @@ static bool demo_generic_actor_publish(demo_render_transaction_t *transaction,
     transaction->generic_actor_descriptor_count = 0U;
     transaction->generic_actor_gouraud_count = 0U;
     transaction->generic_actor_gouraud_first = 0U;
+    transaction->generic_actor_gouraud_limit = 0U;
     demo_actor_phase_accum_reset();
     sm64_saturn_actor_runtime_handoff_init(&transaction->actor_handoff);
     if (transaction->scene_snapshot->actor_instance_count == 0U) {
@@ -4524,6 +4552,10 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
     if (transaction == NULL || transaction->actor_runtime == NULL ||
         transaction->scene_snapshot == NULL || transaction->profile == NULL)
         return false;
+    /* S1.12 step 2: accumulate into the uncached phase block, not the shared
+     * frame profile. The master folds it in once emit returns. */
+    demo_actor_emit_counters_t *const emit_counters =
+        &demo_actor_phase_accum_uncached()->emit;
     if (transaction->scene_snapshot->actor_instance_count == 0U) {
         transaction->generic_actor_gouraud_count = 0U;
         return true;
@@ -4568,7 +4600,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
              * lookup failure, and is left to fail closed at the final
              * `emitted != generic_actor_output_count` check below rather than
              * dereference a NULL result here. */
-            transaction->profile->actor_instance_skipped++;
+            emit_counters->instance_skipped++;
             if (result != NULL)
                 emitted = (uint16_t)(emitted + result->output_count);
             continue;
@@ -4619,10 +4651,10 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                  * branch costs neither vertex transforms nor a VDP1 command.
                  * The record still counts as emitted so the descriptor's
                  * output accounting stays exact. */
-                transaction->profile->actor_prims_seen++;
+                emit_counters->prims_seen++;
                 if (valid &&
                     demo_generic_actor_switch_rejects(snapshot, &binding)) {
-                    transaction->profile->reject_switch_case++;
+                    emit_counters->reject_switch_case++;
                     emitted++;
                     continue;
                 }
@@ -4643,7 +4675,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                 }
                 if (!valid) break;
                 if (!projected_visible) {
-                    transaction->profile->reject_near_far++;
+                    emit_counters->reject_near_far++;
                     emitted++;
                     continue;
                 }
@@ -4653,8 +4685,8 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                     (int32_t)(vertices[1].y - vertices[0].y) *
                         (vertices[2].x - vertices[0].x);
                 if (cross <= 0) {
-                    transaction->profile->reject_degenerate++;
-                    transaction->profile->actor_reject_backface++;
+                    emit_counters->reject_degenerate++;
+                    emit_counters->reject_backface++;
                     emitted++;
                     continue;
                 } else if (!sm64_saturn_actor_material_bind(
@@ -4700,14 +4732,21 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                                 .color_mode = VDP1_CMDT_CM_RGB_32768,
                                 .cc_mode = VDP1_CMDT_CC_REPLACE});
                         vdp1_cmdt_color_set(&command, RGB1555(1, r, g, b));
-                        transaction->profile->actor_flat_replace++;
+                        emit_counters->flat_replace++;
                     }
                 }
                 if (valid && uses_gouraud && !flat_replace) {
                     const uint32_t table_index =
                         (uint32_t)transaction->generic_actor_gouraud_first +
                         gouraud_ordinal;
-                    if (table_index >= transaction->gouraud_bank->used ||
+                    /* S1.12 step 1: bound against this actor phase's OWN
+                     * reservation rather than live-reading gouraud_bank->used,
+                     * which terrain emit advances as it allocates its optional
+                     * shading. The reservation is fixed before any emission
+                     * begins, so the snapshot is exact -- and it is a strictly
+                     * tighter bound, catching an ordinal that overruns the
+                     * actor range instead of silently borrowing terrain's. */
+                    if (table_index >= transaction->generic_actor_gouraud_limit ||
                         table_index >= transaction->gouraud_bank->capacity) {
                         valid = false;
                         break;
@@ -4746,15 +4785,15 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
                         valid = false;
                         break;
                     }
-                    transaction->profile->actor_prims_emitted++;
+                    emit_counters->prims_emitted++;
                     vdp1_cmdt_end_clear(&command);
                     command.cmd_link = painter_bin;
                     *target = command;
-                    transaction->profile->triangles_vdp1_emitted++;
-                    transaction->profile->triangles_emitted++;
-                    transaction->profile->demo_actor_primitives_emitted++;
+                    emit_counters->triangles_vdp1_emitted++;
+                    emit_counters->triangles_emitted++;
+                    emit_counters->actor_primitives_emitted++;
                     if (binding.tile_id != UINT16_MAX)
-                        transaction->profile->texture_commands++;
+                        emit_counters->texture_commands++;
                 }
                 emitted++;
             }
@@ -5093,12 +5132,26 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
     if (actor_vertex_count != 0U)
         demo_reserve_mario_gouraud(gouraud_bank, profile);
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
-    if (transaction->generic_actor_gouraud_count >
-            gouraud_bank->capacity - gouraud_bank->used)
-        return false;
-    transaction->generic_actor_gouraud_first = gouraud_bank->used;
-    gouraud_bank->used = (uint16_t)(
-        gouraud_bank->used + transaction->generic_actor_gouraud_count);
+    /* S1.12 step 1: sm64_saturn_gouraud_table_t is 8 bytes, so TWO entries
+     * share every 16-byte SH-2 cache line. The actor reservation sits directly
+     * against terrain's subsequent allocations, so without this the boundary
+     * pair straddles one line -- and once the two phases run on different CPUs,
+     * with no coherency, each write-back would discard the other's half. Start
+     * the actor range on an even index and round its length up to even so both
+     * edges land on a line boundary. Costs at most two 8-byte entries. */
+    {
+        const uint16_t aligned_first = (uint16_t)((gouraud_bank->used + 1U) &
+                                                  (uint16_t)~1U);
+        const uint16_t aligned_count = (uint16_t)(
+            (transaction->generic_actor_gouraud_count + 1U) & (uint16_t)~1U);
+        if (aligned_first > gouraud_bank->capacity ||
+            aligned_count > gouraud_bank->capacity - aligned_first)
+            return false;
+        transaction->generic_actor_gouraud_first = aligned_first;
+        transaction->generic_actor_gouraud_limit =
+            (uint16_t)(aligned_first + aligned_count);
+        gouraud_bank->used = (uint16_t)(aligned_first + aligned_count);
+    }
 #endif
     sm64_saturn_vdp1_backend_begin(backend);
     /* Preserve Mario's all-or-nothing textured tail batch, then retain the
@@ -5135,6 +5188,25 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
         demo_emit_mario(snapshot, pose, backend, partitions, profile);
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
     if (!demo_generic_actor_emit(transaction)) return false;
+    /* S1.12 step 2: emit is single-owner and complete here, so folding its
+     * uncached block into the frame profile is a sequenced handoff. Totals are
+     * identical to the previous direct accumulation. */
+    {
+        const demo_actor_emit_counters_t *const ec =
+            &demo_actor_phase_accum_uncached()->emit;
+        profile->actor_instance_skipped += ec->instance_skipped;
+        profile->actor_prims_seen += ec->prims_seen;
+        profile->reject_switch_case += ec->reject_switch_case;
+        profile->reject_near_far += ec->reject_near_far;
+        profile->reject_degenerate += ec->reject_degenerate;
+        profile->actor_reject_backface += ec->reject_backface;
+        profile->actor_flat_replace += ec->flat_replace;
+        profile->actor_prims_emitted += ec->prims_emitted;
+        profile->triangles_vdp1_emitted += ec->triangles_vdp1_emitted;
+        profile->triangles_emitted += ec->triangles_emitted;
+        profile->demo_actor_primitives_emitted += ec->actor_primitives_emitted;
+        profile->texture_commands += ec->texture_commands;
+    }
     if (transaction->scene_snapshot->actor_instance_count != 0U &&
         (!sm64_saturn_actor_runtime_handoff_acknowledge_consumed(
              &transaction->actor_handoff) ||

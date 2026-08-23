@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Actor-emit offload, steps 1-2: the two coherency hazards removed while emit
+  still runs master-only.** Both are prerequisites for moving emit to the slave,
+  and both are deliberately landed *before* any concurrency exists to trip over
+  them, so each is verifiable by frame identity alone.
+- **Step 1a — emit no longer live-reads `gouraud_bank->used`.** The bound at the
+  Gouraud table lookup was `table_index >= transaction->gouraud_bank->used`, a
+  read of a field terrain emit advances as it allocates its own optional
+  shading. Emit now bounds against a new `generic_actor_gouraud_limit`
+  snapshotted at reservation time, which is exact because the actor range is
+  fully reserved before any emission begins. It is also a strictly **tighter**
+  bound: it catches an ordinal that overruns the actor's own reservation, where
+  the old check would have silently accepted it by borrowing terrain's range.
+- **Step 1b — the Gouraud reservation is even-aligned.**
+  `sm64_saturn_gouraud_table_t` is `uint16_t colors[4]` = 8 bytes, so **two
+  entries share every 16-byte SH-2 cache line**, and the actor range sits
+  directly against terrain's subsequent allocations. Without alignment the
+  boundary pair straddles one line, and once the two phases run on different
+  CPUs each write-back would discard the other's half. The range now starts on
+  an even index with an even length, costing at most two 8-byte entries. Same
+  hazard, same fix, as the lane workspace in `eddd2d38`.
+- **Step 2 — the twelve profile counters written inside
+  `demo_generic_actor_emit` moved into the uncached phase block**
+  (`instance_skipped`, `prims_seen`, `reject_switch_case`, `reject_near_far`,
+  `reject_degenerate`, `reject_backface`, `flat_replace`, `prims_emitted`,
+  `triangles_vdp1_emitted`, `triangles_emitted`, `actor_primitives_emitted`,
+  `texture_commands`). They were read-modify-writes into the shared frame
+  profile — the same shape S1.11 had to relocate for the meshlet counters. The
+  master folds the block once emit returns, a sequenced handoff.
+
+### Fixed
+
+- **Verified three ways, because two of them could not have caught a bad fold.**
+  Frame identity **with SH-2 caches emulated** is byte-identical to the
+  pre-change build (`7983335480d554ce...` at 1,200 frames), and cadence is
+  unchanged at 5.7237 / 5.4545 / 5.0000. Neither of those can detect a dropped
+  counter, so the fold was checked separately against a diagnostic build: the
+  per-present command means match to within 0.004% (actor 310.0847 -> 310.0976,
+  texture 176.1069 -> 176.1028), with the raw accumulator delta explained by one
+  fewer present sampled (1,937 vs 1,936). That check is only meaningful because
+  `main.c:1371-1373` feeds `commands_actor_accum` from
+  `profile.demo_actor_primitives_emitted` and `commands_texture_accum` from
+  `profile.texture_commands` — **both counters this change relocated** — which
+  was confirmed rather than assumed.
+
 ### Added
 
 - **Paper analysis of the actor-emit offload, before any code** —
