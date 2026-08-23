@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`drain_master` measurement resolved with data already captured, and it
+  kills the plan it was meant to validate.** Queue telemetry
+  (`latest_coherent_queue`): master claims per callback `qm = [0,0,0,0]`, slave
+  claims `qs = [1,1,1,1]`, zero failures on both. **The slave already drains
+  the entire render-job graph; the master claims nothing.** The graph is only
+  four jobs, so this is not a sampling fluke.
+  - The "let master and slave drain the graph concurrently" plan is therefore
+    **dead** — there is no master drain to overlap, and the sequential
+    lifecycle ordering costs nothing.
+  - The `demo_prepare_position_owners` shared-array race consequently blocks no
+    current work. It stays a genuine hazard if concurrency is ever introduced
+    there, but it is not a prerequisite for anything.
+- **Two of my own inferences corrected.** `saturn_render_overlap_phase.c:96-113`
+  defines `construction` as `(notification − construction_begin) +
+  finalization` — it **already includes** finalization rather than being a
+  separate span. So the pre-notification span is `construction − finalization`
+  = 7.345 − 5.000 = **2.345 VB**, and the "~4.4 VB of post-notify
+  `drain_master`" I reported was arithmetic on a misread definition. There is no
+  such block.
+
+### Added
+
+- **The frame now decomposes exactly** (10.483 VB/frame):
+  pre-notification **2.345 VB** (master works, slave idle) + `slave_work`
+  **2.897 VB** (slave works; master advances simulation, hence 0.00% master
+  idle) + `master_finalize` **5.000 VB** (master alone, **slave idle**) =
+  10.242, the residual being rounding across 29 intervals. This independently
+  corroborates the idle capture: the slave's 50.75% idle = 5.687 VB/frame sits
+  almost exactly on the 5.000 VB finalize window.
+- **The single biggest lever in the frame is VDP1 command emission: 5.000 VB,
+  47.7%, master-only, slave idle throughout** — the terrain emit loop, Mario
+  emit, generic actor emit, `vdp1_backend_finish` and `link_depth_bins`
+  (`saturn_demo_render.c:5118-5147`). Nothing else is close. Measured command
+  mix: actors 53.98%, the balance textures/terrain.
+- **VDP2 ground repriced upward a second time, and on better grounds.** It is
+  not the VDP1 *fill* argument (measurement already showed VDP1 is not the
+  limiter) nor CPU-side transform alone. Ground promoted to an RBG0 rotation
+  plane leaves **both** master-only spans: it is not admitted (cutting the
+  2.345 VB pre-notification span, 91% of which is `spatial_admit`) and it is not
+  emitted (cutting the 5.000 VB finalize span, where terrain is ~40% of
+  commands). Those two spans are the only places in the frame where the master
+  works alone. Full decomposition in
+  `docs/saturn/evidence/reports/frame-decomposition-settled.md`.
+
 ### Added
 
 - **Idle re-measured after S1.11: master 0.00% idle, slave 50.75% idle
