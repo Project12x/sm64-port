@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Star select drew nothing on boot: NBG0 was never switched on that early.**
+  Reported by owner manual test. The glyph plane lives on NBG0, and
+  `sourceboot_vdp2_layers_set()` -- the only caller of
+  `vdp2_scrn_display_set()` -- is wired as the VDP2 frame backend's
+  `.layers_set` callback (`main.c:1255`), so it is first invoked from inside
+  the game loop, which has not started when the selector runs. The atlas had
+  uploaded its patterns and configured the plane, and the cell writes were
+  landing correctly; they were landing on a layer that was not being
+  displayed.
+- The selector now enables NBG0 for its own lifetime and hands it back dark,
+  leaving the game loop's layer setup as what turns it on for gameplay.
+- **This is a class of bug the pause banner could not hit.** That draws
+  *during* the game loop, where the layer is already live. Anything that runs
+  UI before the loop starts owns display state that normally belongs to the
+  frame backend -- worth remembering for the star-get card and level-entry
+  screens, which will have the same problem if they run outside the loop.
+
 ### Added
 
 - **Star (act) select, Saturn-shaped.** Retail SM64 picks an act on a screen

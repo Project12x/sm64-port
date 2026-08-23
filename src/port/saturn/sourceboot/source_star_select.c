@@ -93,6 +93,17 @@ int sm64_saturn_star_select_run(const volatile uint32_t *vblank_counter)
     uint16_t previous = 0U;
     bool dirty = true;
 
+    /* NBG0 carries the glyph plane, and at this point in boot nothing has
+     * switched it on: sourceboot_vdp2_layers_set() is wired as the VDP2
+     * frame backend's .layers_set callback (main.c:1255) and is therefore
+     * first called from inside the game loop, which has not started. The
+     * atlas had uploaded its patterns and configured the plane, so cells
+     * were being written correctly to a layer that simply was not being
+     * displayed. Enable it for the menu, and hand it back dark afterwards so
+     * the game loop's own layer setup is what turns it on for gameplay. */
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG0, 7U);
+    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG0);
+
     for (uint32_t frame = 0U; frame < STAR_SELECT_TIMEOUT_FRAMES; frame++) {
         const uint16_t raw = star_select_read_raw();
         /* Edge-triggered: a held direction must not sweep the cursor, and a
@@ -129,6 +140,8 @@ int sm64_saturn_star_select_run(const volatile uint32_t *vblank_counter)
     sm64_saturn_hud_atlas_fill(0U, 0U, SM64_SATURN_HUD_COLS,
                                SM64_SATURN_HUD_ROWS,
                                SM64_SATURN_HUD_GLYPH_BLANK);
+    vdp2_sync();
+    vdp2_scrn_display_set(VDP2_SCRN_DISPTP_NONE);
     return (int)cursor + 1;
 }
 
