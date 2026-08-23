@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Animation root-translation channels now receive the baked GEO_SCALE fold**
+  (`actor_variant_bank.py`) - the Bob-omb floating/size defect. The geometry
+  fold scales vertices and joint translations at bake time (verified: baked
+  Bob-omb vertex extents are exactly 0.375x source on all axes), but animation
+  values are authored in unscaled model units and the target evaluator adds
+  channels 0..2 straight onto joint 0 (`saturn_actor_pose.c`). A Bob-omb's
+  walk therefore rode 0.375-scaled geometry on 1.0-scaled root motion -
+  floating at 2.67x its intended height offset.
+- **Only channels 0..2 are scaled; rotations are untouched by construction.**
+  Source values may be shared between channels, so scaled samples are
+  APPENDED to the value table and the translation channels repointed, never
+  scaled in place - rotation channels keep reading the originals. Identity
+  when no GEO_SCALE was folded, so the 17 switch-free/scale-free banks are
+  unchanged; the Bob-omb bank grows 6,288 -> 6,416 B. The root scale is taken
+  from the scope at the ROOT joint's declaration, not from any subtree fold.
+- Sealed build `id-56bdd6149eb8ce16`. Unit checks: scaling (round half away
+  from zero, matching `_scale_coordinate`), alias safety, identity, and
+  int16 overflow fail-closed.
+
 ### Changed
 
 - **Flat-shaded actor primitives now draw as constant-colour REPLACE instead

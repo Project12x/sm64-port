@@ -765,6 +765,11 @@ class _GeoCompiler:
         self.switch_joints: dict[int, tuple[int, int, tuple[int, int, int]]] = {}
         # part branch_ordinal -> (switch ordinal, case ordinal)
         self.switch_case_by_part: dict[int, tuple[int, int]] = {}
+        # The folded scale in force where the ROOT animated part was declared.
+        # Animation root-translation channels are authored in unscaled model
+        # units and are applied at joint 0, so they must be folded by exactly
+        # this factor -- geometry and joint translations already were.
+        self.root_anim_scale_q16: int = 65536
         self.billboards: list[dict[str, object]] = []
         self.reductions: list[dict[str, object]] = []
 
@@ -938,6 +943,8 @@ class _GeoCompiler:
                     joint = Joint(len(self.joints), parent, translation, ordinal)
                     if joint.joint_ordinal and parent < 0:
                         raise ActorJointOwnershipError("multiple root animation joints")
+                    if not self.joints:
+                        self.root_anim_scale_q16 = self.scope.scale_q16
                     self.joints.append(joint)
                     if switch is not None:
                         self.switch_joints[switch] = (
@@ -1679,6 +1686,7 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         # part branch_ordinal -> [switch ordinal, case ordinal], so the
         # material compiler can tag each primitive with the switch case
         # that selects it.  JSON keys must be strings.
+        "root_anim_scale_q16": geo.root_anim_scale_q16,
         "switch_case_by_part": {str(part): list(pair)
                                 for part, pair in sorted(geo.switch_case_by_part.items())},
         "saturn_reductions": geo.reductions,
@@ -1703,6 +1711,54 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         "switch_case_by_part": dict(geo.switch_case_by_part),
     }
     return joints, tuple(vertices), geometry, metadata, capture
+
+
+def _fold_animation_root_translations(
+        animations: tuple[AnimationRecord, ...], scale_q16: int
+) -> tuple[AnimationRecord, ...]:
+    """Fold the baked GEO_SCALE into animation root-translation channels.
+
+    The geometry fold scales vertices and joint translations at bake time,
+    but animation values are authored in unscaled model units and the target
+    evaluator adds the root-translation channels (0..2) straight onto joint 0
+    (saturn_actor_pose.c).  Without this fold a Bob-omb's walk cycle rides
+    24576/65536 = 0.375-scaled geometry on 1.0-scaled root motion -- observed
+    on hardware-accurate emulation as the actor floating above the ground.
+
+    Only channels 0..2 are translations; every later channel is a rotation
+    angle and must not be scaled.  Values may be shared between channels in
+    the source tables, so the scaled samples are APPENDED and the channel
+    indices repointed rather than scaled in place -- rotation channels keep
+    reading the untouched originals.
+    """
+    if scale_q16 == 65536:
+        return animations
+    folded: list[AnimationRecord] = []
+    for record in animations:
+        indices = list(record.indices)
+        values = list(record.values)
+        for channel in range(3):
+            count = indices[channel * 2]
+            offset = indices[channel * 2 + 1]
+            if count <= 0:
+                continue
+            if offset < 0 or offset + count > len(record.values):
+                raise ActorAnimationBindingError(
+                    f"animation {record.animation_id} channel {channel} "
+                    "indices are outside the value table")
+            scaled = []
+            for value in record.values[offset:offset + count]:
+                product = value * scale_q16
+                sample = (product + 32768) // 65536 if product >= 0                     else -((-product + 32768) // 65536)
+                if not -32768 <= sample <= 32767:
+                    raise ActorAnimationBindingError(
+                        "folded animation translation exceeds int16")
+                scaled.append(sample)
+            indices[channel * 2 + 1] = len(values)
+            values.extend(scaled)
+        folded.append(replace(record, indices=tuple(indices),
+                              values=tuple(values)))
+    return tuple(folded)
 
 
 def _animation_records(index: _SourceIndex, records: Sequence[dict[str, object]],
@@ -2001,6 +2057,8 @@ def compile_actor_variant(
         index, geo_path, geo_root, model_binding, family_ordinal, model_id)
     animations, animation_bindings = _animation_records(
         index, records, len(joints), geo_path)
+    animations = _fold_animation_root_translations(
+        animations, int(geometry_report["root_anim_scale_q16"]))
     sources = index.source_records()
     try:
         digest = source_identity(family_ordinal, model_id, sources)
