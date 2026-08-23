@@ -393,6 +393,19 @@ def main() -> int:
         help="emulated frames to hold each post-run input state (1..120)",
     )
     parser.add_argument(
+        "--sh2-cache",
+        action="store_true",
+        help=(
+            "emulate the SH-2 caches (requires a ymir-headless build with "
+            "--sh2-cache support, T2.26). A DIFFERENT basis, not a more "
+            "accurate one: frame hashes taken with it on are comparable only "
+            "against each other. Its purpose here is that cache coherency "
+            "defects in dual-CPU paths are invisible with caches off, so a "
+            "frame-identity check that is meant to clear such a path must be "
+            "run with this flag."
+        ),
+    )
+    parser.add_argument(
         "--dram-cart",
         action="store_true",
         help=(
@@ -626,6 +639,8 @@ def main() -> int:
     command = [str(args.ymir), "--ipl", str(args.ipl), "--game", str(args.game)]
     if args.dram_cart:
         command.append("--dram-cart")
+    if args.sh2_cache:
+        command.append("--sh2-cache")
     emulated_frames = sum(
         int(message.get("params", {}).get("frames", 0))
         for message in requests

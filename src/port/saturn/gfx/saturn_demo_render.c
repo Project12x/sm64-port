@@ -18,13 +18,18 @@
 /* S1.11: run the generic-actor phase on the slave CPU, overlapped with the
  * master's terrain/Mario preparation.
  *
- * Default OFF. The cadence harness runs with SH-2 cache emulation disabled
- * (`sh2_cache_emulation: false`, and every accepted baseline is caches-off),
- * so it cannot observe a coherency defect in this path -- a green cadence run
- * is not evidence that the offload is correct. Keeping the switch explicit
- * means the master-only arm remains the shipped default until the offload has
- * been measured on a caches-on basis, and makes the two arms directly
- * comparable from one build tree. */
+ * ON in the shipped profile. It was held off until it had been cleared on a
+ * caches-ON basis, because the default cadence harness runs with SH-2 cache
+ * emulation disabled and therefore cannot observe a coherency defect in this
+ * path at all -- a green caches-off run is not evidence of correctness here.
+ * With caches emulated the two arms render byte-identical frames and the
+ * offload still measures +5.76%, so the gate is met.
+ *
+ * The fallback below stays 0 deliberately: a build that never passed the -D
+ * (host fixtures) has no slave to dispatch to, and must run the phase inline.
+ * The Makefile always passes it, so the fallback never applies on target.
+ * `sourceboot-bob-coins-noslave-v1.json` is the offload-off control profile,
+ * which keeps both arms buildable from one tree for future A/B work. */
 #ifndef SATURN_FEATURE_ACTOR_PHASE_SLAVE
 #define SATURN_FEATURE_ACTOR_PHASE_SLAVE 0
 #endif

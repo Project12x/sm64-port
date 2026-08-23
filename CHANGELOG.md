@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **The slave offload is now the shipped default, because the caches-ON gate
+  it was waiting on has been run and passed.** The previous entry shipped
+  `SATURN_FEATURE_ACTOR_PHASE_SLAVE` OFF on the explicit grounds that the
+  default harness runs caches-off and so cannot observe a coherency defect in
+  a dual-CPU path. That gate is now met, on the basis that *can* see such
+  defects:
+
+  | caches-ON, 29 intervals | offload off | offload ON | delta |
+  |---|---:|---:|---:|
+  | FPS mean | 4.9857 | **5.2727** | **+5.76%** |
+  | FPS median | 5.0000 | 5.0000 | -- |
+  | 1% low | 4.6154 | 4.6154 | -- |
+
+  and, decisively, **the two arms render byte-identical frames with the caches
+  emulated** -- both hash to `7983335480d554ceee7a5fa9e7d42f21...` at 1,200
+  frames. Frame identity under emulated coherency is the evidence that clears
+  this path; the cadence number alone never could.
+- Shipped cadence on the default profile is **5.7237 mean / 5.4545 median /
+  5.0000 1%-low** (`id-2ff8718cc26fed8d`, caches-off basis, comparable to the
+  accepted baselines).
+- `sourceboot-bob-coins-v1.json` now carries `features.actor_phase_slave: 1`,
+  and the offload-off control moved to
+  **`sourceboot-bob-coins-noslave-v1.json`** so both arms stay buildable from
+  one tree for future A/B work. The C-side fallback stays 0 on purpose: a build
+  that never received the `-D` (host fixtures) has no slave to dispatch to and
+  must run the phase inline.
+
+### Added
+
+- **`capture_hwtest.py --sh2-cache`.** The frame-identity check that clears a
+  dual-CPU path has to run with the caches emulated, and this tool -- the only
+  one that produces a frame hash -- had no way to ask for it, while its
+  siblings did. Same warning as elsewhere: a different basis, not a more
+  accurate one, so hashes taken with it on compare only against each other.
+
 ### Added
 
 - **S1.11 lands: the generic-actor phase now runs on the slave CPU, overlapped
