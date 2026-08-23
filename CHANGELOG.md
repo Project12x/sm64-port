@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **T5's constant-pose memo: built, measured, reverted — and the reason
+  invalidates part of the remaining plan.** 17 of 18 banks are
+  `joint_count == 1` with a single animation, so their pose is a function of
+  (bank, frame, scale) alone; a per-lane memo keyed on the workspace vertex
+  pointer exploited that, with a self-validating contract test proving a hit is
+  indistinguishable from a recompute and that scale or animation changes are
+  never served stale.
+- **It works — 33.44% hit rate, 311 hits against 619 misses over 930
+  evaluations**, read off the target after a full boot handoff. And it bought
+  nothing: mean 6.1922 → 6.2143 (noise), median unchanged, **1% low regressed
+  5.4545 → 5.0000**.
+- **Why: pose evaluation no longer runs on the master.** S1.11 moved the whole
+  generic-actor phase to the slave, which is measured **50.75% idle (5.687
+  VB/frame)**. Saving cycles on a CPU that has spare cycles cannot move a frame
+  time the master determines. T5's 4.977% attribution came from S0.1, taken
+  *before* the offload — correct then, irrelevant now. The 1%-low regression is
+  consistent with the memo's own cost (a key comparison on all 930 evaluations,
+  including the 619 misses) tipping a worst-case frame across a rung.
+- **The general lesson, which applies to every remaining S0.1 item:** an
+  attribution measured before a phase moved to the slave says nothing about what
+  that phase is worth today. Everything now inside the actor phase is
+  effectively free until the slave saturates, so the ranked list is stale
+  precisely for the work that was most worth moving. Re-measure before
+  optimising anything in that region. Detail, including the key and the hit rate
+  to expect if it is ever revisited, in
+  `docs/saturn/evidence/reports/t5-pose-memo-negative-result.md`.
+
 ### Added
 
 - **S1.12 lands: the generic actors' VDP1 commands are now built on the slave,
