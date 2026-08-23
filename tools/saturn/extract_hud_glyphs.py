@@ -46,6 +46,17 @@ class GlyphAsset:
 GLYPH_MANIFEST = tuple(
     GlyphAsset(f"digit_{digit}", f"textures/segment2/segment2.{offset:05X}.rgba16.png")
     for digit, offset in enumerate(range(0x0000, 0x1400, 0x200))
+) + tuple(
+    # S4.2: the HUD alphabet, 16x16 RGBA16 at 0x1400 with a 0x200 stride, in
+    # A..Z order. J, Q, V, X and Z are JP/SH-only -- bin/segment2.c guards them
+    # behind VERSION_JP/VERSION_EU/VERSION_SH and assets.json carries no "us"
+    # region for them -- so the US HUD font is a 21-letter alphabet. Text drawn
+    # through it has to avoid those five; the dialog font (font_graphics, IA4)
+    # is the full-coverage source if that ever becomes intolerable.
+    GlyphAsset(f"letter_{chr(ord('A') + index)}",
+               f"textures/segment2/segment2.{0x1400 + index * 0x200:05X}.rgba16.png")
+    for index in range(26)
+    if chr(ord('A') + index) not in "JQVXZ"
 ) + (
     GlyphAsset("glyph_multiply", "textures/segment2/segment2.05600.rgba16.png"),
     GlyphAsset("glyph_coin", "textures/segment2/segment2.05800.rgba16.png"),

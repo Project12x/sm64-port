@@ -2,6 +2,67 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **RETRACTION: every "caches-on frame identity" claim made from
+  `capture_hwtest.py` in this sprint was vacuous.** The tool does not perform
+  the BIOS handoff unless `--bios-input` is passed, and I never passed it, so
+  the disc never booted. **All of those screenshots were the Saturn BIOS
+  language-selection screen.** Two identical BIOS screens hash identically no
+  matter what the renderer does. I compared hashes without ever opening the
+  images.
+- **What this does and does not invalidate**, checked rather than assumed:
+  - **Void**: the frame-identity evidence cited for S1.11, S1.12, and the
+    step 1-2 emit refactors. `capture_hwtest.py` contains **zero** references
+    to `run_bios_handoff`.
+  - **Still valid**: every cadence number.
+    `capture_sourceboot_throughput.py` calls `run_bios_handoff` (two call
+    sites), and its reports show target identity matching after 681 VBlanks
+    with 30 presentation events over 29 intervals -- it demonstrably ran the
+    game. The 5.0000 -> 6.1922 arc, S1.11's +5.92% and S1.12's +8.2% stand.
+  - **Still valid**: the T5 memo hit-rate measurement, which used the handoff.
+  - **Now load-bearing**: the owner's manual test is the *only* remaining
+    evidence that the slave offloads render correctly. It is good evidence --
+    free movement across arbitrary play is strictly stronger than a
+    fixed-route snapshot -- but it is no longer corroborated by an automated
+    check, and that is worse than this sprint has been claiming.
+- The tool was never broken; the invocation was, exactly like the earlier
+  `--presentation-events` omission. With `--bios-input` the same command
+  reaches gameplay, verified by opening the image rather than trusting a hash.
+
+### Added
+
+- **S4.2 groundwork: the HUD atlas gained an alphabet and text primitives.**
+  The atlas had digits, symbols and camera icons but **no letters**, so no
+  dialog, pause or course-name text was possible at all.
+  `extract_hud_glyphs.py` now pulls the 21 US HUD letters (segment2 `0x1400`,
+  `0x200` stride); `sm64_saturn_hud_glyph_for_char()`,
+  `..._write_string()` and `..._fill()` sit on top.
+- **The US HUD font is a 21-letter alphabet: J, Q, V, X and Z do not exist in
+  it.** They are guarded behind `VERSION_JP/EU/SH` in `bin/segment2.c` and
+  `assets.json` carries no `"us"` region for them. Verified against
+  `assets.json` rather than inferred. `glyph_for_char` returns `COUNT` for an
+  undrawable character and `write_string` reports it, so wording is constrained
+  at the point of use instead of silently rendering holes -- "PAUSE" and
+  "BOB-OMB BATTLEFIELD" are drawable, "EXIT COURSE" is not. The dialog font
+  (`font_graphics`, IA4) is the full-coverage source if that becomes
+  intolerable.
+- The pause/dialog mode now travels to the render side in the HUD snapshot's
+  spare byte as `menu_mode_plus_one`, keeping the fixed-width 22-byte ABI and
+  its `_Static_assert` intact.
+
+### Known issues
+
+- **S4.2 is not finished: the pause banner has not been demonstrated on
+  target.** The alphabet, text helpers, panel draw path and snapshot plumbing
+  are in and linked (`nm` confirms), and an unpaused gameplay frame is correct
+  and unchanged. But a capture with START pulsed produced a frame identical to
+  the unpaused one, so either the pulse did not reach `play_mode_paused()` or
+  the panel is not being reached. The pause path itself exists and is compiled
+  (`level_update.c:1037` sets `MENU_MODE_RENDER_PAUSE_SCREEN`). Not claimed as
+  working; needs a manual check with START held, which is the authoritative
+  test for UI in this project anyway.
+
 ### Added
 
 - **S4.1: camera control.** The fixed camera was stepped with literal `0, 0`

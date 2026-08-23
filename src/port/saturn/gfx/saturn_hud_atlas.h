@@ -2,6 +2,7 @@
 #ifndef SM64_SATURN_HUD_ATLAS_H
 #define SM64_SATURN_HUD_ATLAS_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /* One entry per distinct glyph the HUD can display. Order matches the
@@ -41,6 +42,34 @@ typedef enum sm64_saturn_hud_glyph {
     SM64_SATURN_HUD_GLYPH_POWER_METER_7,
     SM64_SATURN_HUD_GLYPH_POWER_METER_8,
     SM64_SATURN_HUD_GLYPH_CANNON_RETICLE,
+    /* S4.2: the HUD alphabet. Twenty-one letters, not twenty-six -- J, Q, V,
+     * X and Z exist only in the JP/SH ROMs (bin/segment2.c guards them behind
+     * VERSION_JP/EU/SH and assets.json has no "us" region for them), so text
+     * drawn through this atlas cannot contain them. That is a real constraint
+     * on wording, not a gap to paper over: sm64_saturn_hud_glyph_for_char()
+     * returns COUNT for an unavailable character so the caller can decide,
+     * rather than silently dropping it. */
+    SM64_SATURN_HUD_GLYPH_LETTER_A,
+    SM64_SATURN_HUD_GLYPH_LETTER_B,
+    SM64_SATURN_HUD_GLYPH_LETTER_C,
+    SM64_SATURN_HUD_GLYPH_LETTER_D,
+    SM64_SATURN_HUD_GLYPH_LETTER_E,
+    SM64_SATURN_HUD_GLYPH_LETTER_F,
+    SM64_SATURN_HUD_GLYPH_LETTER_G,
+    SM64_SATURN_HUD_GLYPH_LETTER_H,
+    SM64_SATURN_HUD_GLYPH_LETTER_I,
+    SM64_SATURN_HUD_GLYPH_LETTER_K,
+    SM64_SATURN_HUD_GLYPH_LETTER_L,
+    SM64_SATURN_HUD_GLYPH_LETTER_M,
+    SM64_SATURN_HUD_GLYPH_LETTER_N,
+    SM64_SATURN_HUD_GLYPH_LETTER_O,
+    SM64_SATURN_HUD_GLYPH_LETTER_P,
+    SM64_SATURN_HUD_GLYPH_LETTER_R,
+    SM64_SATURN_HUD_GLYPH_LETTER_S,
+    SM64_SATURN_HUD_GLYPH_LETTER_T,
+    SM64_SATURN_HUD_GLYPH_LETTER_U,
+    SM64_SATURN_HUD_GLYPH_LETTER_W,
+    SM64_SATURN_HUD_GLYPH_LETTER_Y,
     SM64_SATURN_HUD_GLYPH_BLANK, /* solid transparent: clears a dirty cell */
     SM64_SATURN_HUD_GLYPH_COUNT
 } sm64_saturn_hud_glyph_t;
@@ -64,5 +93,26 @@ void sm64_saturn_hud_atlas_init(void);
  * silently wasted on something nothing will ever display. */
 void sm64_saturn_hud_atlas_write_cell(uint8_t col, uint8_t row,
                                       sm64_saturn_hud_glyph_t glyph);
+
+/* Visible cell grid at this port's 320x224 VDP2 mode. */
+#define SM64_SATURN_HUD_COLS 20U
+#define SM64_SATURN_HUD_ROWS 14U
+
+/* Maps one ASCII character onto a glyph. Lower case folds to upper. Returns
+ * SM64_SATURN_HUD_GLYPH_COUNT for anything the US atlas cannot draw --
+ * including J, Q, V, X and Z -- so callers can fail loudly instead of
+ * rendering a hole. Space maps to BLANK. */
+sm64_saturn_hud_glyph_t sm64_saturn_hud_glyph_for_char(char value);
+
+/* Draws `text` starting at (col,row), clipped to the visible grid. Returns
+ * false if any character had no glyph, having drawn the rest -- a caller
+ * choosing wording for this alphabet wants to know at the point of use. */
+bool sm64_saturn_hud_atlas_write_string(uint8_t col, uint8_t row,
+                                        const char *text);
+
+/* Fills a rectangle with one glyph; BLANK is how a panel is erased. */
+void sm64_saturn_hud_atlas_fill(uint8_t col, uint8_t row,
+                                uint8_t cols, uint8_t rows,
+                                sm64_saturn_hud_glyph_t glyph);
 
 #endif /* SM64_SATURN_HUD_ATLAS_H */

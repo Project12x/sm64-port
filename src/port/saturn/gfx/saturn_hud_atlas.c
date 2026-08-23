@@ -139,6 +139,111 @@ sm64_saturn_hud_atlas_init(void)
                              SM64_SATURN_HUD_DIGIT_8_WIDTH, SM64_SATURN_HUD_DIGIT_8_WIDTH, SM64_SATURN_HUD_DIGIT_8_HEIGHT);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_DIGIT_9, sm64_saturn_hud_digit_9,
                              SM64_SATURN_HUD_DIGIT_9_WIDTH, SM64_SATURN_HUD_DIGIT_9_WIDTH, SM64_SATURN_HUD_DIGIT_9_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_A,
+                             sm64_saturn_hud_letter_A,
+                             SM64_SATURN_HUD_LETTER_A_WIDTH,
+                             SM64_SATURN_HUD_LETTER_A_WIDTH,
+                             SM64_SATURN_HUD_LETTER_A_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_B,
+                             sm64_saturn_hud_letter_B,
+                             SM64_SATURN_HUD_LETTER_B_WIDTH,
+                             SM64_SATURN_HUD_LETTER_B_WIDTH,
+                             SM64_SATURN_HUD_LETTER_B_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_C,
+                             sm64_saturn_hud_letter_C,
+                             SM64_SATURN_HUD_LETTER_C_WIDTH,
+                             SM64_SATURN_HUD_LETTER_C_WIDTH,
+                             SM64_SATURN_HUD_LETTER_C_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_D,
+                             sm64_saturn_hud_letter_D,
+                             SM64_SATURN_HUD_LETTER_D_WIDTH,
+                             SM64_SATURN_HUD_LETTER_D_WIDTH,
+                             SM64_SATURN_HUD_LETTER_D_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_E,
+                             sm64_saturn_hud_letter_E,
+                             SM64_SATURN_HUD_LETTER_E_WIDTH,
+                             SM64_SATURN_HUD_LETTER_E_WIDTH,
+                             SM64_SATURN_HUD_LETTER_E_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_F,
+                             sm64_saturn_hud_letter_F,
+                             SM64_SATURN_HUD_LETTER_F_WIDTH,
+                             SM64_SATURN_HUD_LETTER_F_WIDTH,
+                             SM64_SATURN_HUD_LETTER_F_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_G,
+                             sm64_saturn_hud_letter_G,
+                             SM64_SATURN_HUD_LETTER_G_WIDTH,
+                             SM64_SATURN_HUD_LETTER_G_WIDTH,
+                             SM64_SATURN_HUD_LETTER_G_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_H,
+                             sm64_saturn_hud_letter_H,
+                             SM64_SATURN_HUD_LETTER_H_WIDTH,
+                             SM64_SATURN_HUD_LETTER_H_WIDTH,
+                             SM64_SATURN_HUD_LETTER_H_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_I,
+                             sm64_saturn_hud_letter_I,
+                             SM64_SATURN_HUD_LETTER_I_WIDTH,
+                             SM64_SATURN_HUD_LETTER_I_WIDTH,
+                             SM64_SATURN_HUD_LETTER_I_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_K,
+                             sm64_saturn_hud_letter_K,
+                             SM64_SATURN_HUD_LETTER_K_WIDTH,
+                             SM64_SATURN_HUD_LETTER_K_WIDTH,
+                             SM64_SATURN_HUD_LETTER_K_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_L,
+                             sm64_saturn_hud_letter_L,
+                             SM64_SATURN_HUD_LETTER_L_WIDTH,
+                             SM64_SATURN_HUD_LETTER_L_WIDTH,
+                             SM64_SATURN_HUD_LETTER_L_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_M,
+                             sm64_saturn_hud_letter_M,
+                             SM64_SATURN_HUD_LETTER_M_WIDTH,
+                             SM64_SATURN_HUD_LETTER_M_WIDTH,
+                             SM64_SATURN_HUD_LETTER_M_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_N,
+                             sm64_saturn_hud_letter_N,
+                             SM64_SATURN_HUD_LETTER_N_WIDTH,
+                             SM64_SATURN_HUD_LETTER_N_WIDTH,
+                             SM64_SATURN_HUD_LETTER_N_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_O,
+                             sm64_saturn_hud_letter_O,
+                             SM64_SATURN_HUD_LETTER_O_WIDTH,
+                             SM64_SATURN_HUD_LETTER_O_WIDTH,
+                             SM64_SATURN_HUD_LETTER_O_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_P,
+                             sm64_saturn_hud_letter_P,
+                             SM64_SATURN_HUD_LETTER_P_WIDTH,
+                             SM64_SATURN_HUD_LETTER_P_WIDTH,
+                             SM64_SATURN_HUD_LETTER_P_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_R,
+                             sm64_saturn_hud_letter_R,
+                             SM64_SATURN_HUD_LETTER_R_WIDTH,
+                             SM64_SATURN_HUD_LETTER_R_WIDTH,
+                             SM64_SATURN_HUD_LETTER_R_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_S,
+                             sm64_saturn_hud_letter_S,
+                             SM64_SATURN_HUD_LETTER_S_WIDTH,
+                             SM64_SATURN_HUD_LETTER_S_WIDTH,
+                             SM64_SATURN_HUD_LETTER_S_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_T,
+                             sm64_saturn_hud_letter_T,
+                             SM64_SATURN_HUD_LETTER_T_WIDTH,
+                             SM64_SATURN_HUD_LETTER_T_WIDTH,
+                             SM64_SATURN_HUD_LETTER_T_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_U,
+                             sm64_saturn_hud_letter_U,
+                             SM64_SATURN_HUD_LETTER_U_WIDTH,
+                             SM64_SATURN_HUD_LETTER_U_WIDTH,
+                             SM64_SATURN_HUD_LETTER_U_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_W,
+                             sm64_saturn_hud_letter_W,
+                             SM64_SATURN_HUD_LETTER_W_WIDTH,
+                             SM64_SATURN_HUD_LETTER_W_WIDTH,
+                             SM64_SATURN_HUD_LETTER_W_HEIGHT);
+    hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_LETTER_Y,
+                             sm64_saturn_hud_letter_Y,
+                             SM64_SATURN_HUD_LETTER_Y_WIDTH,
+                             SM64_SATURN_HUD_LETTER_Y_WIDTH,
+                             SM64_SATURN_HUD_LETTER_Y_HEIGHT);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_MULTIPLY, sm64_saturn_hud_glyph_multiply,
                              SM64_SATURN_HUD_GLYPH_MULTIPLY_WIDTH, SM64_SATURN_HUD_GLYPH_MULTIPLY_WIDTH, SM64_SATURN_HUD_GLYPH_MULTIPLY_HEIGHT);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_COIN, sm64_saturn_hud_glyph_coin,
@@ -277,4 +382,81 @@ sm64_saturn_hud_atlas_write_cell(uint8_t col, uint8_t row,
      * the target-proven Task 9 blank-HUD defect (PND injection of the
      * CONFIG_3 word rendered the glyph pixel-exactly). */
     *pnd = (uint16_t)VDP2_SCRN_PND_CONFIG_3(0, cpd_addr, 0);
+}
+
+/* S4.2 text helpers. */
+sm64_saturn_hud_glyph_t sm64_saturn_hud_glyph_for_char(char value)
+{
+    if (value >= 'a' && value <= 'z') value = (char)(value - 'a' + 'A');
+    if (value == ' ') return SM64_SATURN_HUD_GLYPH_BLANK;
+    if (value >= '0' && value <= '9')
+        return (sm64_saturn_hud_glyph_t)(SM64_SATURN_HUD_GLYPH_DIGIT_0 +
+                                         (value - '0'));
+    switch (value) {
+    case '\'': return SM64_SATURN_HUD_GLYPH_APOSTROPHE;
+    case '"':  return SM64_SATURN_HUD_GLYPH_DOUBLE_QUOTE;
+    case '*':  return SM64_SATURN_HUD_GLYPH_MULTIPLY;
+    default: break;
+    }
+    switch (value) {
+    case 'A': return SM64_SATURN_HUD_GLYPH_LETTER_A;
+    case 'B': return SM64_SATURN_HUD_GLYPH_LETTER_B;
+    case 'C': return SM64_SATURN_HUD_GLYPH_LETTER_C;
+    case 'D': return SM64_SATURN_HUD_GLYPH_LETTER_D;
+    case 'E': return SM64_SATURN_HUD_GLYPH_LETTER_E;
+    case 'F': return SM64_SATURN_HUD_GLYPH_LETTER_F;
+    case 'G': return SM64_SATURN_HUD_GLYPH_LETTER_G;
+    case 'H': return SM64_SATURN_HUD_GLYPH_LETTER_H;
+    case 'I': return SM64_SATURN_HUD_GLYPH_LETTER_I;
+    case 'K': return SM64_SATURN_HUD_GLYPH_LETTER_K;
+    case 'L': return SM64_SATURN_HUD_GLYPH_LETTER_L;
+    case 'M': return SM64_SATURN_HUD_GLYPH_LETTER_M;
+    case 'N': return SM64_SATURN_HUD_GLYPH_LETTER_N;
+    case 'O': return SM64_SATURN_HUD_GLYPH_LETTER_O;
+    case 'P': return SM64_SATURN_HUD_GLYPH_LETTER_P;
+    case 'R': return SM64_SATURN_HUD_GLYPH_LETTER_R;
+    case 'S': return SM64_SATURN_HUD_GLYPH_LETTER_S;
+    case 'T': return SM64_SATURN_HUD_GLYPH_LETTER_T;
+    case 'U': return SM64_SATURN_HUD_GLYPH_LETTER_U;
+    case 'W': return SM64_SATURN_HUD_GLYPH_LETTER_W;
+    case 'Y': return SM64_SATURN_HUD_GLYPH_LETTER_Y;
+    default: break;
+    }
+    /* Includes J, Q, V, X, Z: absent from the US HUD font. */
+    return SM64_SATURN_HUD_GLYPH_COUNT;
+}
+
+bool sm64_saturn_hud_atlas_write_string(uint8_t col, uint8_t row,
+                                        const char *text)
+{
+    bool complete = true;
+    if (text == NULL || row >= SM64_SATURN_HUD_ROWS) return false;
+    for (uint8_t index = 0U; text[index] != '\0'; index++) {
+        const uint32_t target = (uint32_t)col + index;
+        sm64_saturn_hud_glyph_t glyph;
+        if (target >= SM64_SATURN_HUD_COLS) return false;
+        glyph = sm64_saturn_hud_glyph_for_char(text[index]);
+        if (glyph == SM64_SATURN_HUD_GLYPH_COUNT) {
+            /* Draw a blank rather than a wrong letter, and report it. */
+            sm64_saturn_hud_atlas_write_cell((uint8_t)target, row,
+                                             SM64_SATURN_HUD_GLYPH_BLANK);
+            complete = false;
+            continue;
+        }
+        sm64_saturn_hud_atlas_write_cell((uint8_t)target, row, glyph);
+    }
+    return complete;
+}
+
+void sm64_saturn_hud_atlas_fill(uint8_t col, uint8_t row,
+                                uint8_t cols, uint8_t rows,
+                                sm64_saturn_hud_glyph_t glyph)
+{
+    for (uint16_t y = row; y < (uint16_t)row + rows; y++) {
+        if (y >= SM64_SATURN_HUD_ROWS) break;
+        for (uint16_t x = col; x < (uint16_t)col + cols; x++) {
+            if (x >= SM64_SATURN_HUD_COLS) break;
+            sm64_saturn_hud_atlas_write_cell((uint8_t)x, (uint8_t)y, glyph);
+        }
+    }
 }

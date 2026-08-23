@@ -23,7 +23,11 @@ typedef struct sm64_saturn_hud_snapshot {
     int8_t power_meter_animation;
     int16_t power_meter_y;
     uint8_t cannon_active;
-    uint8_t reserved0;
+    /* S4.2: gMenuMode + 1, so MENU_MODE_NONE (-1) is 0 and "no menu" stays the
+     * zero value a cleared snapshot already has. Uses the spare byte rather
+     * than widening the struct, so the fixed-width ABI assert below still
+     * holds and no peer's view of the snapshot shifts. */
+    uint8_t menu_mode_plus_one;
 } sm64_saturn_hud_snapshot_t;
 
 _Static_assert(sizeof(sm64_saturn_hud_snapshot_t) == 22U,

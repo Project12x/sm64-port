@@ -4,6 +4,7 @@
 
 #include "audio/external.h"
 #include "game/camera.h"
+#include "game/ingame_menu.h"
 #include "game/area.h"
 #include "game/game_init.h"
 #include "game/hud.h"
@@ -516,7 +517,13 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
     snapshot->hud.cannon_active = (gCurrentArea != NULL &&
                                    gCurrentArea->camera->mode == CAMERA_MODE_INSIDE_CANNON)
                                        ? 1U : 0U;
-    snapshot->hud.reserved0 = 0U;
+    /* S4.2: the pause/dialog panel is drawn from the render side, which has
+     * no access to game globals, so the mode travels in the snapshot.
+     * gMenuMode is defined in ingame_menu.c with no extern in its header,
+     * so it is declared here rather than by editing shared game source. */
+    extern s16 gMenuMode;
+    snapshot->hud.menu_mode_plus_one =
+        (uint8_t)((gMenuMode < 0 ? -1 : gMenuMode) + 1);
     if (!sm64_saturn_render_snapshot_publish(&sourceboot_render_snapshots,
                                              snapshot)) {
         (void)sm64_saturn_render_snapshot_quarantine(&sourceboot_render_snapshots,
