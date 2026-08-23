@@ -5,6 +5,17 @@ This roadmap is subordinate to
 playable product capabilities, not technical subsystems. A milestone advances
 only with a newly built, uniquely identified CUE and its live evidence.
 
+## Now — Sprint 3: playable BOB, WF from the menu (2026-08-22)
+
+**Plan:** [`docs/superpowers/plans/2026-08-22-sprint3-playable-bob-wf-menu.md`](docs/superpowers/plans/2026-08-22-sprint3-playable-bob-wf-menu.md)
+
+Synthesizes three same-day audits (BOB functional gaps / second-level + W7 /
+performance). Deliverables: cadence recovered past 6.67 toward 7.5 (stretch
+8.57-10), BOB visually and playably complete (star, enemies, trees, props,
+camera control, dialog/pause overlay), and Whomp's Fortress selectable from a
+START pause menu via dual-linked terrain (W7 Shape 1). Critical path: the
+family_key re-keying of the ordinal-pinned material tables.
+
 ## Now — cadence recovery (Sprint 2)
 
 **Deliverable:** the accepted R1 capability set at a materially better frame

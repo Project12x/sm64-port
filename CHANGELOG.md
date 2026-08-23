@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Sprint 3 plan** (`docs/superpowers/plans/2026-08-22-sprint3-playable-bob-wf-menu.md`),
+  synthesizing three same-day read-only audits: (A) BOB functional gaps - the
+  simulation is complete, the presentation ~20-25%; (B) second-level + pause
+  menu - terrain is compile-time C so the W7 switcher's first move is
+  dual-linked banks, WF is far cheaper than the castle lobby, and the
+  ordinal-keyed material tables are the critical-path tool item; (C)
+  performance - the 6.90->5.00 closure regression is closed to within noise by
+  the unit-scale depth-kernel gate (36x slow path, ~1.7 VB/frame), per-corner
+  64-bit saturating math in the emit path (~1.1 VB/frame), and triple
+  bundle-resolve/double pose-eval over uncached CART. Owner-accepted deferred
+  defect: Bob-omb body invisible (S6.1; stale-Gouraud-DMA fix S1.6 is the
+  leading suspect). Owner-set targets: FPS toward 10 (honestly framed as the
+  stretch rung - reachable rungs are quantized 60/k), fully playable BOB, WF
+  selectable from a START menu.
+
 ### Fixed
 
 - **Animation root-translation channels now receive the baked GEO_SCALE fold**
