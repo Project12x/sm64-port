@@ -4,6 +4,27 @@
 
 ### Changed
 
+- **Sprint 3 plan gains the third structural lever: VDP2 (owner-spotted).**
+  VDP2 today draws only the sky bitmap and the HUD tilemap while VDP1 draws
+  every polygon in the scene, including the largest fill consumers - the
+  ground quads. **S1.12:** move the flat-ish ground onto an RBG0 rotation
+  plane (hardware perspective-correct textured plane; coefficient tables give
+  true 3D slope). This is the canonical Saturn technique and both reference
+  engines in `work/upstream/` (SlaveDriver/PowerSlave, Sonic Z-Treme) do it;
+  GPL-compatible per standing owner ruling. Each moved quad is a double win:
+  VDP1 fill freed AND its whole master-CPU pipeline cost (transform,
+  admission, depth bin, command, DMA) deleted. Honest caveat in-plan: BOB is
+  hilly - the mountain stays VDP1; candidates are the flat base ring and
+  low-slope clusters chosen by a bake-time flatness test, and the VDP2 budget
+  must still fund the S4.2 dialog/pause layers. **S0.6:** before committing
+  any VDP2 work, read the VDP1-wait counters that already exist in the
+  profile struct (overwrite fence, terminal fence, gouraud SCU-DMA, command
+  CPU-DMAC) - T2.16 says the frame is master-CPU-bound today, so the fill
+  wall arrives exactly as S1 relieves the CPU, and this reading repeated
+  after S1.1/S1.2 times it.
+
+### Changed
+
 - **Sprint 3 plan gains the two structural FPS levers it missed** (owner
   question: "whats the biggest FPS lever our plan misses?"). **S1.10:** every
   frame still runs the full N64 rendering-graph walk and display-list build,
