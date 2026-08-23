@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **T3 (bank depth carry) implemented, measured, and reverted — a negative
+  result worth recording so it is not re-attempted.** The generic actor path
+  passed `NULL` where Mario passes a depth carry, so its emission walk
+  recomputed every admitted meshlet's depth bounds that the admission walk had
+  already computed. The stated reason (`saturn_actor_meshlets.c:88`) was that
+  "a shared static would be a cross-CPU race, and the bank path is not on the
+  measured hot path" — the second half had gone stale, since S0.1 measured
+  `actor_meshlet_live_depth_bounds` at 3.359% of a saturated master. A per-lane,
+  cache-line-aligned carry answered the race cleanly.
+- **It measured exactly nothing.** `id-a87ada8d9e5a4093` vs
+  `id-2ff8718cc26fed8d`: mean 5.7237, median 5.4545, 1%-low 5.0000 on both. And
+  not merely equal in summary — **the 29 interval records are byte-identical,
+  down to every per-phase sub-counter on every frame.** That rules out the
+  usual excuse for a flat cadence result (a real saving hidden by the 60/k rung
+  quantisation), because the phase counters would still have moved.
+- **Root cause of the non-result: the banks are tiny.** Decoded from the
+  shipped bundle, the **maximum meshlet count across all 18 banks is 10**. The
+  carry only removes recomputation for *admitted* meshlets in the *emission*
+  walk; the admission walk still computes bounds for every meshlet of every
+  instance and no carry can remove it. So the 3.359% lives in the admission
+  walk and in Mario's path — and Mario already had a carry. The redundancy was
+  real; the half that was removable was immaterial.
+- **Reverted despite being correct** (meshlet golden hashes were unchanged, so
+  it was an exact equivalence) because it costs **1,056 bytes of HWRAM** for
+  nothing observable. HWRAM is the binding constraint on the full-port goal and
+  is watched like a build error; slack is 13,940 bytes above the 0x1F00 floor.
+  Details, including the per-bank meshlet table and what would have to change
+  to make it worth revisiting, are in
+  `docs/saturn/evidence/reports/t3-depth-carry-negative-result.md`.
+- Verification note carried forward: the carry really was being taken — the
+  64-entry capacity never fell back and `workspace->lane` is populated at bind
+  — so the null result is about magnitude, not a dead code path. Also,
+  `draw_records_per_instance` is **not** meshlet count:
+  `MODEL_BLACK_BOBOMB` has 68 draw records but only 7 meshlets, which briefly
+  looked like a carry-capacity overflow and was not.
+
 ### Changed
 
 - **The slave offload is now the shipped default, because the caches-ON gate
