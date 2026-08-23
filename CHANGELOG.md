@@ -4,6 +4,36 @@
 
 ### Fixed
 
+- **Measured, settling a question I had flip-flopped on: VDP1 is NOT the frame
+  limiter.** `previous_frame_reuse_count` — which W0's spec names as the
+  product-level count of missed presentation opportunities — has a delta of
+  **0 over 73 rendered frames** on `id-333e380c68636a58` (total 2, both accrued
+  at boot). The deferral mechanism that consumes a presentation is real but
+  never fires in practice. `vdp1_bank_late_dma` at 1.000/frame reconciles with
+  this: it fires when VDP1 is still drawing as the CPU *starts building* the
+  next frame, which is pipelining working as designed, not a stall — by
+  transfer time VDP1 is idle. **The master CPU is the limiter.** The earlier
+  correction ("S1.12 strengthened because deferral eats presentations") was an
+  over-correction drawn from spec text describing a path that measurement shows
+  is never taken.
+- **S1.12 keeps its value for the honest reason:** moving ground quads to a
+  VDP2 rotation plane deletes their whole master-CPU pipeline cost (transform,
+  admission, depth bin, command build, DMA) out of 540 triangles/frame emitted.
+  It is **not** fill relief and must not be justified as such.
+
+### Added
+
+- **New finding: the simulation is being starved.** `dropped_sim_tick_credits`
+  runs at **5.164 per rendered frame** (377 over 73). A frame spans 12.33
+  VBlanks so roughly six 30 Hz credits accrue, while the pipeline authorises at
+  most two and discards the rest via the bounded-state safe pause. This is a
+  consequence of slow rendering rather than an independent cause, but it has a
+  gameplay-feel dimension raw FPS hides: game logic advances far less per
+  wall-clock second than intended. **Every frame-time reduction recovers sim
+  credits too**, so cadence work pays twice; re-measure at each S1 landing.
+
+### Fixed
+
 - **S0.8 cancelled as specified and replaced: there is no VDP1 wait to time.**
   Verified two ways rather than by source reading alone (this project has been
   fooled by source-level reachability before): the shipped ELF for
