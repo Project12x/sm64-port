@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+### Added
+
+- **S0.1 landed: the idle-attribution capture that failed 3x now completes
+  clean, and it settles three open questions with real numbers.** Root cause
+  of the earlier failures: orphaned/competing emulator processes from
+  unrelated session mistakes, not a harness bug - a fully isolated run
+  completed on the first attempt (confirmed twice: a bare 17,000,000-step
+  `exec.stepi` probe with no attribution overhead in 1,722s zero errors, then
+  the real capture in 2,035.7s). Measured on `id-3481ef86ab8e531e` (post-S1.1)
+  at tick 30, 4.15 rendered frames traced contiguously.
+- **Master is measured 0.00% idle - fully saturated - while the slave is
+  74.04% idle** (`___slave_polling_entry`). Confirms and refreshes T2.16's
+  pre-closure 79% figure on the actual closure build: the entire actor
+  pipeline runs master-only, and the slave's productive work (terrain
+  lower/admit, `sm64_saturn_ir_transform_one`) sums to only ~26% of its
+  budget. **S1.11 (spend the slave's idle cycles) is the single
+  best-evidenced lever in the whole plan.**
+- **T2's "dominant cost" claim is walked back.** `_actor_saturating_mul_i64`,
+  `___divdi3`, `_demo_generic_actor_world_vertex` all measured **exactly 0
+  cycles standalone** - inlined into `demo_generic_actor_emit` (2.127% of
+  master). Real cost, but bundled, not the multi-percent line item the
+  original estimate assumed. Demoted in the plan.
+- **T5 (pose evaluation caching) is promoted to the clearest next target.**
+  `_sm64_saturn_actor_pose_evaluate_staged` measured **4.977% of master - the
+  single largest individually-attributed actor-pipeline cost**, ahead of the
+  depth walk (T3, measured 3.359%, 698,108 cyc). 17 of 18 banks are
+  1-joint/1-animation, so their pose is re-evaluated from CART every frame for
+  no reason.
+- **S1.10's scope corrected down from a speculative ~18% to a measured
+  ~5.03%.** The specific discarded-N64-walk suspects
+  (`_saturn_mtxq_refresh_float_mirror` + `_saturn_geo_enter_object` +
+  `_geo_process_node_and_siblings` + `_alloc_display_list`) total 1,045,893
+  cycles = 5.032% of master, not W1's 18.18% `SKIP_GEO_WALK` region size -
+  that figure disabled far more than pure waste. The float mirror alone is
+  2.362% and is the cleanest first target. Not an exhaustive trace of every
+  walk-adjacent symbol, so the true figure may be somewhat higher; treat as a
+  floor, not a ceiling.
+
 ### Fixed
 
 - **S1.1: closure actors now take the fast VDP1 depth kernel instead of the
