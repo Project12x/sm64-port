@@ -4,6 +4,54 @@
 
 ### Added
 
+- **Idle re-measured after S1.11: master 0.00% idle, slave 50.75% idle
+  (5.687 VB/frame)**, against S0.1's pre-offload 0.00%/74.04%. The master is
+  still the limiter and the slave still has real capacity — S1.11 consumed
+  about 23 points of slave idle, consistent with it having taken the actor
+  pipeline, and did not exhaust the peer. This was the gate on whether to keep
+  offloading at all.
+- **A wrong answer was avoided by re-running.** A first pass with
+  `--windows 1 --window-steps 20000` reported *both* CPUs at 0.00% idle — i.e.
+  "the slave is saturated, stop offloading". That was a sample-size artifact;
+  the default run traces more and contradicts it flatly. Acting on the short
+  trace would have killed the correct next task.
+- **The master's largest block is not `spatial_admit`.** The pre-notification
+  window is only ~2.90 VB of the master's 7.345 VB `construction`, so
+  `spatial_admit` at 91% of that window is ~2.6 VB/frame. The remaining ~4.4 VB
+  is **post-notify `drain_master`** — the master executing render-job-graph
+  work. The master is not stalled while the slave runs:
+  `sm64_saturn_render_lifecycle_poll` returns `PENDING` and its caller advances
+  simulation, which is why master idle reads 0.00%.
+
+### Known issues
+
+- **The render-job graph pass is sequential, not concurrent, and that is where
+  the remaining slave idle is being wasted.** `saturn_render_lifecycle.c:65`
+  makes the master wait for `slave_retired()` *before* `drain_master`, so the
+  slave claims what is ready in one pass and retires, then the master drains
+  the rest alone — even though `graph_claim` is built for concurrent
+  work-stealing with atomic per-index claims over a cache-through graph. It
+  compounds: `graph_claim` also returns false when nothing is *momentarily*
+  claimable (a predecessor still executing), and `poll_slave` exits on that
+  first failure, so work becoming ready afterwards all falls to the master.
+- **The obvious fix is not a one-liner, and the reason matters.** Reordering
+  the poll to drain concurrently would race:
+  `demo_prepare_position_owners()` (`saturn_demo_render.c:1112`) is called from
+  *inside* the terrain lower callback (`:3046`, `:3113`) — which either CPU can
+  claim — and it `memset`s and rebuilds two **shared file-scope arrays**,
+  `s_position_use_mask` and `s_position_owner`. On cached HWRAM with no
+  coherency that corruption would be silent. This is very likely the actual
+  reason the drain is sequential, a stronger reason than the payload-recycling
+  note attached to `slave_retired()`. Per-laning that owner state is a
+  prerequisite, mirroring what S1.11 did for the gouraud accumulator and the
+  meshlet counters.
+- **Consequence for planning:** the `spatial_admit` offload is the smaller
+  prize (~2.6 VB) *and* is the terrain admission a VDP2 ground plane would
+  shrink, so it should not be built ahead of the VDP2 decision. Full analysis
+  in `docs/saturn/evidence/reports/slave-idle-post-s1_11.md`.
+
+### Added
+
 - **Pre-notification breakdown after S1.11: `demo_spatial_admit` -- terrain
   scene/BSP admission -- is 91.03% of the window. Everything else is rounding
   error** (`work_order` 2.84%, `meshlet_depth_admit` 2.01%, `actor_closure`
