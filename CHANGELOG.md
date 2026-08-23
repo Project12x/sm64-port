@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- **S0.7: HWRAM waste audit, judged against the FULL port** (owner-directed).
+  Three N64-isms flagged by the residency audit as the sine table's siblings:
+  `gGfxPools` 32,844 B (double-buffered N64 display-list arena filled every
+  frame and never executed - prove no read path, shrink now, delete under
+  S1.10), the dbgio trio ~7,950 B (VT100 parser + debug font resident in a
+  retail-shaped build - demote cold/LWRAM, keep boot logging), and the
+  `gMatStack` float twin 2,048 B (dies with S1.10). ~40 KB / ~4% of HWRAM
+  recoverable. **New process rule 6, the full-port residency principle:**
+  placement decisions are judged against fifteen courses + castle + the full
+  roster + saves, not against what the BOB demo fits today - delete waste
+  rather than demoting it into tiers future levels need, and prefer
+  structural diets (the 608 B object struct) over migrations that merely
+  relocate an N64-shaped cost.
+
 ### Changed
 
 - **Sprint 3 plan gains the third structural lever: VDP2 (owner-spotted).**

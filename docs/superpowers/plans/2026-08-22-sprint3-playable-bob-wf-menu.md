@@ -81,6 +81,7 @@ and S2 interleave with measurements.
 | S0.4 | Fix build-config drift: `build-sourceboot.ps1` still defaults `DYNAMIC_ACTOR_CLOSURE=0`; make the coins profile the default profile | `tools/saturn/build-sourceboot.ps1:70`, `tools/saturn/profiles/` | one-liner |
 | S0.5 | Correct STATE.md: HUD is live (not "outstanding"), glyphs are cart-resident (not the HWRAM figure quoted) | `STATE.md:33-34,85-87` | doc |
 | S0.6 | **Read the VDP1-wait counters that already exist** — `vdp1_overwrite_wait_ticks_accum`, `vdp1_terminal_fence_wait_ticks_accum`, `gouraud_scu_dma_wait_ticks_accum`, `command_cpu_dmac_wait_ticks_accum` (all in `sm64_saturn_fast3d_profile_t`; peek live via the host-offsetof method, no rebuild) | establishes whether/when VDP1 fill is the wall. Today T2.16 says the master is CPU-bound, so S1.12's payoff grows exactly as S1 relieves the CPU — this reading, repeated after S1.1/S1.2 land, tells us when the fill wall arrives and sizes S1.12's win before any VDP2 work is committed | counter peek |
+| S0.7 | **HWRAM waste audit (owner-directed), scoped against the FULL port** — three items the residency audit flags as N64-isms burning 32-bit RAM: (a) **`gGfxPools` 32,844 B** — the double-buffered N64 display-list arena `alloc_display_list` fills every frame while `display_suppressed` guarantees nothing executes it; prove no read path exists (geo-ASM callbacks peeking `gDisplayListHead` are the one thing to check), then shrink/demote NOW and delete outright under S1.10; (b) **the dbgio trio ~7,950 B** (`__vt_parse_state_table` + `__state` + `__default_font_cg`) — a VT100 parser and debug font resident in a retail-shaped build; keep boot logging, move the tables cold/LWRAM; (c) **`gMatStack` 2,048 B float twin** of `gMatStackQ` — dies with S1.10. **Full-port framing is the audit's second mandate:** every residency decision is judged against what fifteen courses + castle + the full actor roster + saves will need resident, not against the BOB demo — e.g. the `gObjectPool` fix at full scale is the **struct diet** (608 B of union'd float fields per object, W6b territory), NOT an LWRAM demotion that S5.5's dual-linked terrain and future levels will need the room for; and do NOT demote `gGfxPools` into LWRAM space the full port needs — shrink or delete it. ~40 KB (~4% of HWRAM) of genuinely wasted spend recoverable | audit + small RT |
 
 ## S1 — Performance recovery (Audit C, in its recommended order)
 
@@ -211,3 +212,10 @@ unlocked by S5.5's data-driven terrain either way.)
    behavior-changing commit carries its entry.
 4. **S3.0 lands before any table-touching work** (S2 batches, S1.8, S5.4).
 5. Two-hour rule: any task that stalls twice gets re-chartered, not pushed.
+6. **Full-port residency principle (owner, 2026-08-22):** HWRAM/LWRAM/cart
+   placement decisions are judged against the FULL port's needs — fifteen
+   courses, the castle, the complete actor roster, saves — not against what
+   the BOB demo happens to fit today. Prefer deleting waste (gGfxPools, the
+   float mirror) over demoting it into tiers future levels will need, and
+   prefer structural diets (the object struct) over migrations that merely
+   relocate an N64-shaped cost.
