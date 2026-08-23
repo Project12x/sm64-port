@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+### Added
+
+- **S4.1: camera control.** The fixed camera was stepped with literal `0, 0`
+  for yaw and pitch (`saturn_camera_role.c:61`), so it could not be moved at
+  all. C-buttons now drive it, and `update_camera_hud_status()` is called on
+  this path -- it never was, leaving the camera HUD icon frozen on whatever the
+  last Lakitu update left behind.
+- **Owner-specified pad layout**, replacing a name-for-name N64
+  transliteration: Saturn A punch, B jump, C crouch, L/R camera left/right,
+  X/Y camera pitch, Z camera mode, START pause. The old mapping put jump on
+  Saturn A and, more importantly, produced **no `R_CBUTTONS` at all** -- X was
+  `L_CBUTTONS` and nothing was its opposite, so the camera could only ever
+  rotate one way.
+- **Pitch was made to actually do something.** `state->pitch` was accumulated
+  and then read only by `lakitu->oldPitch`; the camera position was computed
+  from yaw alone, so a pitch control wired to it would have moved a number that
+  never reached the screen. The step now orbits: horizontal reach scales by
+  `cos(pitch)` and height by `distance * sin(pitch)`, keeping the camera on a
+  sphere around the focus. Pitch is clamped to +/-0x2800 (~56 degrees) at the
+  call site, because the step adds input straight onto the stored angle with no
+  clamping of its own and would otherwise pass over vertical and invert.
+- Costs nothing measurable: cadence unchanged at 6.1922 / 6.0000 / 5.4545.
+
+### Fixed
+
+- **S4.3's premise was wrong, and measuring it is what showed that.** The plan
+  called `SATURN_DEMO_VIEW_RADIUS` "a deliberate perf lever" to be raised
+  toward a mountain-visible value. Built and measured at 6000, 9000 and
+  **12000** (double): **cadence is identical at all three** -- 6.1922 mean,
+  6.0000 median, 5.4545 1%-low.
+- Root cause: **`DEMO_FAR_DEPTH` is hardcoded to 8192**
+  (`saturn_demo_render.c:179`) and is what feeds `scene.frustum.far_depth`
+  (`:948`). It is not derived from the view radius, so the frustum clips at
+  8192 regardless and the radius knob sits downstream of a tighter limit.
+  Raising the radius alone can never increase draw distance; the real lever is
+  the far depth, which remains to be measured.
+
 ### Fixed
 
 - **Both slave offloads confirmed by owner manual testing on the desktop

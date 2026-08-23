@@ -31,15 +31,30 @@ static uint16_t buttons_to_n64(const smpc_peripheral_digital_t *digital) {
      * before publishing `pressed.raw`; its public examples therefore test
      * direction bits as active-high.  Keep this boundary active-high so a
      * neutral report remains zero instead of becoming every N64 button. */
-    if (raw & PERIPHERAL_DIGITAL_A) buttons |= A_BUTTON;
-    if (raw & PERIPHERAL_DIGITAL_B) buttons |= B_BUTTON;
+    /* S4.1 owner-specified layout. The previous mapping was a direct
+     * name-for-name transliteration of the N64 pad, which left the camera
+     * rotatable in one direction only (X was L_CBUTTONS, nothing produced
+     * R_CBUTTONS) and put jump on Saturn A, where a Saturn player expects it
+     * on B.
+     *
+     *   Saturn A -> B_BUTTON    punch
+     *   Saturn B -> A_BUTTON    jump
+     *   Saturn C -> Z_TRIG      crouch
+     *   Saturn L -> L_CBUTTONS  camera left
+     *   Saturn R -> R_CBUTTONS  camera right
+     *   Saturn X -> U_CBUTTONS  camera pitch up
+     *   Saturn Y -> D_CBUTTONS  camera pitch down
+     *   Saturn Z -> R_TRIG      camera mode
+     */
+    if (raw & PERIPHERAL_DIGITAL_A) buttons |= B_BUTTON;
+    if (raw & PERIPHERAL_DIGITAL_B) buttons |= A_BUTTON;
     if (raw & PERIPHERAL_DIGITAL_C) buttons |= Z_TRIG;
     if (raw & PERIPHERAL_DIGITAL_START) buttons |= START_BUTTON;
-    if (raw & PERIPHERAL_DIGITAL_L) buttons |= L_TRIG;
-    if (raw & PERIPHERAL_DIGITAL_R) buttons |= R_TRIG;
-    if (raw & PERIPHERAL_DIGITAL_X) buttons |= L_CBUTTONS;
+    if (raw & PERIPHERAL_DIGITAL_L) buttons |= L_CBUTTONS;
+    if (raw & PERIPHERAL_DIGITAL_R) buttons |= R_CBUTTONS;
+    if (raw & PERIPHERAL_DIGITAL_X) buttons |= U_CBUTTONS;
     if (raw & PERIPHERAL_DIGITAL_Y) buttons |= D_CBUTTONS;
-    if (raw & PERIPHERAL_DIGITAL_Z) buttons |= U_CBUTTONS;
+    if (raw & PERIPHERAL_DIGITAL_Z) buttons |= R_TRIG;
     return buttons;
 }
 

@@ -148,11 +148,31 @@ void sm64_saturn_camera_fixed_step(sm64_saturn_camera_fixed_state_t *state,
         state->desired_focus[axis] = sm64_saturn_camera_fixed_import_q16(mario->pos[axis]);
     state->desired_focus[1] = sm64_saturn_camera_fixed_add(
         state, state->desired_focus[1], state->vertical_offset);
-    target_position[0] = sm64_saturn_camera_fixed_add(
-        state, state->desired_focus[0], sm64_saturn_q16_mul_sh2(state->distance, sin_yaw));
-    target_position[1] = state->desired_focus[1];
-    target_position[2] = sm64_saturn_camera_fixed_add(
-        state, state->desired_focus[2], sm64_saturn_q16_mul_sh2(state->distance, cos_yaw));
+    /* S4.1: pitch now orbits the camera instead of only being reported to
+     * Lakitu. Before this it was accumulated and handed to lakitu->oldPitch
+     * and nothing else, so the camera position was a function of yaw alone --
+     * a pitch control wired to it would have moved a number that never
+     * reached the screen.
+     *
+     * Horizontal reach shrinks by cos(pitch) while height gains
+     * distance*sin(pitch), which keeps the camera on a sphere around the
+     * focus rather than sliding it vertically out of the level. */
+    {
+        const uint32_t pitch_index = ((uint16_t)state->pitch) >> 4;
+        const int32_t sin_pitch = gSaturnSineTableQ16[pitch_index];
+        const int32_t cos_pitch = gSaturnSineTableQ16[pitch_index + 0x400U];
+        const int32_t horizontal =
+            sm64_saturn_q16_mul_sh2(state->distance, cos_pitch);
+        target_position[0] = sm64_saturn_camera_fixed_add(
+            state, state->desired_focus[0],
+            sm64_saturn_q16_mul_sh2(horizontal, sin_yaw));
+        target_position[1] = sm64_saturn_camera_fixed_add(
+            state, state->desired_focus[1],
+            sm64_saturn_q16_mul_sh2(state->distance, sin_pitch));
+        target_position[2] = sm64_saturn_camera_fixed_add(
+            state, state->desired_focus[2],
+            sm64_saturn_q16_mul_sh2(horizontal, cos_yaw));
+    }
     for (axis = 0U; axis < 3U; axis++) {
         state->rendered_focus[axis] = sm64_saturn_camera_fixed_approach(
             state, state->rendered_focus[axis], state->desired_focus[axis]);
