@@ -42,6 +42,7 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
                 "dynamic_actor_closure": 0,
                 "semantic_audio": 1,
                 "actor_phase_slave": 0,
+                "actor_emit_slave": 0,
             },
             "renderer_pipeline": 4,
             "level_id": 9,
@@ -105,17 +106,31 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
         built = identity.build_identity(self.v1_spec)
         self.assertEqual(len(built.raw), 404)
         self.assertEqual(identity.parse_identity(built.raw)["version"], 1)
-        # Re-pinned 2026-08-23 when S1.11 added the actor_phase_slave feature.
-        # The 404-byte layout above is the contract and is unchanged: the
-        # feature word is one u32, so a new bit costs no bytes. What moved is
-        # effective_config_hash, which covers the config KEY SET -- so adding
-        # the key shifts the hash even though its value here is 0. That is the
-        # intended behaviour (a build carrying a config field its identity did
-        # not attest would be the defect), not a regression.
-        self.assertEqual(
-            hashlib.sha256(built.raw).hexdigest(),
-            "52c8ca9332b009dc6ea738834baef34c7254fd455d560939f2936363ca35f58e",
-        )
+        # A pinned sha256 used to live here. It was re-pinned twice in one day
+        # -- once per feature added -- because effective_config_hash covers the
+        # config KEY SET, so every new build flag shifts it. The value never
+        # protected anything: nothing about a particular hash is a contract,
+        # and "print the new value and paste it in" is not a review.
+        #
+        # The two properties that ARE contracts are asserted instead, and
+        # neither needs maintenance when the schema grows:
+        #
+        #   determinism -- the same spec always encodes to the same bytes;
+        #   sensitivity -- changing any single sealed feature changes the
+        #                  encoding, which is what stops two differently
+        #                  configured builds sharing an identity. That failure
+        #                  mode is not hypothetical: S1.11's first A/B produced
+        #                  the SAME build id for both arms because the flag
+        #                  never reached the compiler.
+        self.assertEqual(built.raw, identity.build_identity(self.v1_spec).raw)
+        for feature in identity.FEATURE_BITS:
+            flipped = copy.deepcopy(self.v1_spec)
+            flipped["features"][feature] = 1 - flipped["features"][feature]
+            self.assertNotEqual(
+                identity.build_identity(flipped).raw,
+                built.raw,
+                f"flipping feature {feature!r} did not change the identity",
+            )
 
     def test_v2_extends_v1_layout_to_exactly_500_bytes(self) -> None:
         built = identity.build_identity(self.v2_spec)
@@ -348,6 +363,7 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             ("features", "dynamic_actor_closure"),
             ("features", "semantic_audio"),
             ("features", "actor_phase_slave"),
+            ("features", "actor_emit_slave"),
             (None, "route_replay_mode"),
             (None, "live_input_mode"),
             (None, "hot_promotion"),

@@ -29,6 +29,8 @@ FEATURE_BITS = {
     # effective_config_hash covers the config key set, not just the values, so
     # adding the key moves the hash even where it is 0.
     "actor_phase_slave": 1 << 3,
+    # S1.12: builds the generic actors' VDP1 commands on the slave.
+    "actor_emit_slave": 1 << 4,
 }
 KNOWN_FEATURE_BITS = sum(FEATURE_BITS.values())
 SCALAR_FIELDS = (

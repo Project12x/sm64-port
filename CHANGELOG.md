@@ -2,6 +2,64 @@
 
 ## [Unreleased]
 
+### Added
+
+- **S1.12 lands: the generic actors' VDP1 commands are now built on the slave,
+  overlapped with the master's terrain and Mario lowering.** This targets the
+  largest single block left in the frame — `master_finalize`, measured 5.000 VB
+  (47.7%), executed by the master alone against a slave with 5.687 VB/frame of
+  measured idle sitting almost exactly on that window.
+
+  | caches-off, 29 intervals | emit off | emit ON | delta |
+  |---|---:|---:|---:|
+  | FPS mean | 5.7237 | **6.1922** | **+8.2%** |
+  | FPS median | 5.4545 | **6.0000** | **+10.0%** |
+  | 1% low | 5.0000 | **5.4545** | **+9.1%** |
+
+  **All three moved**, unlike S1.11 where only the mean did — the median
+  crossing 60/11 → 60/10 means the whole distribution shifted, not just the
+  good frames.
+- **Gate met on both bases before the default was flipped**: with SH-2 caches
+  emulated the arms render **byte-identical frames**
+  (`7983335480d554ce...` at 1,200 frames) and the offload still measures
+  5.2888 → 5.6494 (+6.8%, median and 1%-low each up a rung). Frame identity
+  under emulated coherency is the check that distinguishes a real offload from
+  one that quietly drops geometry; cadence alone cannot.
+- **Mechanism.** Emit writes into a caller-owned sink rather than the arena:
+  the slave stages commands in a 16 KB uncached buffer and the master splices
+  them in afterwards. Splicing goes through `backend_reserve` rather than a raw
+  `memcpy` so every arena invariant (cursor, `live_count`, `list.count`) stays
+  maintained by the code that owns them — `link_depth_bins` validates all three
+  and fails closed on a mismatch.
+- **Painter order is preserved by construction, not by luck.** `link_depth_bins`
+  sorts stably by arena index within a bin and runs only after all emission, so
+  appending the staged block after terrain and Mario keeps actor commands at the
+  highest indices exactly as inline emit did. This is why the paper analysis
+  concluded depth-bin ordering was not the blocker.
+- The staging buffer is **uncached** because producer and consumer are different
+  CPUs with no coherency — a cached array would leave the slave's commands in
+  its own dirty lines while the master read stale memory. It costs 16 KB of
+  LWRAM (remaining 0x107F0 → 0xC7F0, floor 0x4000). Over-capacity frames fall
+  back to inline master emit rather than truncating: silently dropping actor
+  geometry would register as a cadence *win*.
+
+### Changed
+
+- `SATURN_FEATURE_ACTOR_EMIT_SLAVE` sealed as identity feature bit 4 across all
+  four required places (Python `FEATURE_BITS`, the C mask, the Makefile, the
+  target profiles). `sourceboot-bob-coins-noslave-v1.json` keeps the control arm
+  buildable; the temporary `-emitslave` profile is removed now that the base
+  profile ships the offload.
+- **Replaced the last pinned hash in `test_gen_build_identity.py` with the
+  properties it was standing in for.** It had already been re-pinned twice —
+  once per feature added — because `effective_config_hash` covers the config key
+  set, so every new build flag shifts it. A particular hash was never the
+  contract. It now asserts **determinism** (the same spec always encodes to the
+  same bytes) and **sensitivity** (flipping any sealed feature changes the
+  encoding). The second is not hypothetical: S1.11's first A/B produced the same
+  build id for both arms because the flag never reached the compiler, and this
+  assertion is what would have caught it.
+
 ### Changed
 
 - **Step 3a: `demo_generic_actor_emit` now takes an explicit context and a

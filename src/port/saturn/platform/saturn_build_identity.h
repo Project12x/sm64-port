@@ -18,6 +18,9 @@ enum sm64_saturn_feature_bits {
      * boot path halts in an infinite loop rather than running a build it
      * cannot attest. */
     SM64_SATURN_FEATURE_ACTOR_PHASE_SLAVE = 1U << 3,
+    /* S1.12: generic-actor VDP1 emission on the slave. Must stay in
+     * step with FEATURE_BITS in tools/saturn/gen_build_identity.py. */
+    SM64_SATURN_FEATURE_ACTOR_EMIT_SLAVE = 1U << 4,
 };
 
 typedef struct sm64_saturn_build_identity {

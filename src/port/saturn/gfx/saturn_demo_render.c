@@ -34,6 +34,29 @@
 #define SATURN_FEATURE_ACTOR_PHASE_SLAVE 0
 #endif
 
+/* S1.12 step 3: build the generic actors' VDP1 commands on the slave.
+ *
+ * This targets the largest single block left in the frame -- `master_finalize`
+ * measured 5.000 VB, 47.7%, executed by the master alone while the slave sits
+ * idle (its measured idle is 5.687 VB/frame, almost exactly this window).
+ * Actors are 53.98% of emitted commands.
+ *
+ * ON in the shipped profile. It was held off until cleared on a caches-ON
+ * basis, because the default cadence harness runs with SH-2 cache emulation
+ * disabled and cannot observe a coherency defect in this path at all. With
+ * caches emulated the two arms render byte-identical frames and the offload
+ * still measures +6.8%, so the gate is met.
+ * `sourceboot-bob-coins-noslave-v1.json` keeps both arms buildable. */
+#ifndef SATURN_FEATURE_ACTOR_EMIT_SLAVE
+#define SATURN_FEATURE_ACTOR_EMIT_SLAVE 0
+#endif
+
+/* Staging capacity for slave-built actor commands. Measured need is ~310
+ * commands per present; this is deliberate headroom, and the dispatch falls
+ * back to inline master emit rather than truncating if a frame ever exceeds
+ * it -- silently dropping actor geometry would look like a win in cadence. */
+#define DEMO_ACTOR_EMIT_STAGING_CAPACITY 512U
+
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -3316,7 +3339,31 @@ typedef struct demo_actor_phase_accum {
     volatile uint32_t done;
     volatile uint32_t drained;
     volatile uint32_t ok;
+    /* --- S1.12 step 3: the emit phase, dispatched separately --- */
+    demo_actor_emit_context_t emit_ctx;
+    demo_actor_command_sink_t emit_sink;
+    volatile uint32_t emit_pending;
+    volatile uint32_t emit_done;
+    volatile uint32_t emit_ok;
 } demo_actor_phase_accum_t;
+
+/* Slave-built commands land here, then the master splices them into the arena.
+ * Uncached because the producer and consumer are different CPUs with no
+ * coherency: a cached staging array would leave the slave's commands sitting
+ * in its own dirty lines while the master read stale memory. ~16 KB. */
+static vdp1_cmdt_t s_actor_emit_staging[DEMO_ACTOR_EMIT_STAGING_CAPACITY]
+    __attribute__((section(".lwram_bss")))
+    __attribute__((aligned(DEMO_ACTOR_WORKSPACE_CACHE_LINE_BYTES)));
+
+static vdp1_cmdt_t *demo_actor_emit_staging_uncached(void)
+{
+#if defined(__sh__)
+    return (vdp1_cmdt_t *)(CPU_CACHE_THROUGH |
+                           (uintptr_t)s_actor_emit_staging);
+#else
+    return s_actor_emit_staging;
+#endif
+}
 
 static demo_actor_phase_accum_t s_actor_phase_accum;
 
@@ -3344,6 +3391,10 @@ static void demo_actor_phase_accum_reset(void)
     accum->done = 0U;
     accum->drained = 0U;
     accum->ok = 0U;
+    accum->emit_pending = 0U;
+    accum->emit_done = 0U;
+    accum->emit_ok = 0U;
+    memset((void *)&accum->emit_sink, 0, sizeof(accum->emit_sink));
 }
 
 /* The slave's half of the handshake. Registered once with the render job
@@ -3352,6 +3403,21 @@ static void demo_actor_phase_accum_reset(void)
 static bool demo_actor_phase_slave_task(void)
 {
     demo_actor_phase_accum_t *const accum = demo_actor_phase_accum_uncached();
+    /* S1.12 step 3: the emit dispatch is a separate wake-up raised later in
+     * the frame, after the Gouraud reservation. Check it first -- the two are
+     * never outstanding at the same time, because the master joins each before
+     * raising the next. */
+    if (accum->emit_pending != 0U) {
+        accum->emit_pending = 0U;
+        demo_render_fence();
+        accum->emit_ok = demo_generic_actor_emit(
+            (const demo_actor_emit_context_t *)&accum->emit_ctx,
+            (demo_actor_command_sink_t *)&accum->emit_sink, NULL) ? 1U : 0U;
+        demo_render_fence();
+        accum->emit_done = 1U;
+        demo_render_fence();
+        return true;
+    }
     if (accum->pending == 0U) return false;
     accum->pending = 0U;
     demo_render_fence();
@@ -4855,6 +4921,90 @@ static bool demo_generic_actor_emit(const demo_actor_emit_context_t *ctx,
 }
 #endif
 
+/* S1.12 step 3 master half. Publishes the emit context, then either hands it
+ * to the slave or runs it inline, exactly mirroring how the prepare phase is
+ * dispatched. Inline is the default and is byte-for-byte the previous path. */
+static bool demo_actor_emit_dispatch(demo_render_transaction_t *transaction,
+                                     sm64_saturn_gouraud_bank_t *gouraud_bank)
+{
+    demo_actor_phase_accum_t *const accum = demo_actor_phase_accum_uncached();
+    demo_actor_emit_context_t *const ctx =
+        (demo_actor_emit_context_t *)&accum->emit_ctx;
+    demo_actor_command_sink_t *const sink =
+        (demo_actor_command_sink_t *)&accum->emit_sink;
+
+    if (transaction->actor_handoff.state != SM64_SATURN_ACTOR_HANDOFF_BATCHED &&
+        transaction->scene_snapshot->actor_instance_count != 0U)
+        return false;
+    memset((void *)ctx, 0, sizeof(*ctx));
+    memset((void *)sink, 0, sizeof(*sink));
+    ctx->actor_runtime = transaction->actor_runtime;
+    ctx->snapshots = transaction->actor_handoff.snapshots;
+    ctx->gouraud_staging = gouraud_bank->staging;
+    ctx->gouraud_vram_base = gouraud_bank->vram_base;
+    ctx->actor_job = transaction->actor_job;
+    ctx->handoff_generation = transaction->actor_handoff.generation;
+    ctx->instance_count = transaction->scene_snapshot->actor_instance_count;
+    ctx->gouraud_first = transaction->generic_actor_gouraud_first;
+    ctx->gouraud_limit = transaction->generic_actor_gouraud_limit;
+    ctx->gouraud_capacity = gouraud_bank->capacity;
+    ctx->gouraud_count = transaction->generic_actor_gouraud_count;
+    ctx->output_count = transaction->generic_actor_output_count;
+    if (ctx->instance_count == 0U)
+        transaction->generic_actor_gouraud_count = 0U;
+
+    accum->emit_done = 0U;
+    accum->emit_ok = 0U;
+#if SATURN_FEATURE_ACTOR_EMIT_SLAVE && defined(__sh__)
+    /* Fall back to inline emit rather than truncate: a frame whose actor
+     * commands do not fit the staging array must still draw them all. */
+    if (transaction->generic_actor_output_count <=
+            DEMO_ACTOR_EMIT_STAGING_CAPACITY) {
+        sink->commands = demo_actor_emit_staging_uncached();
+        sink->capacity = (uint16_t)DEMO_ACTOR_EMIT_STAGING_CAPACITY;
+        accum->emit_pending = 1U;
+        demo_render_fence();
+        sm64_saturn_render_job_runtime_dispatch_slave_task();
+        return true;
+    }
+#endif
+    accum->emit_pending = 0U;
+    accum->emit_ok = demo_generic_actor_emit(ctx, sink, transaction->backend)
+        ? 1U : 0U;
+    demo_render_fence();
+    accum->emit_done = 1U;
+    return accum->emit_ok != 0U;
+}
+
+/* Master half of the join. When the slave staged commands, splice them into
+ * the arena in producer order; when emit ran inline they are already there. */
+static bool demo_actor_emit_join(demo_render_transaction_t *transaction,
+                                 sm64_saturn_vdp1_backend_t *backend)
+{
+    demo_actor_phase_accum_t *const accum = demo_actor_phase_accum_uncached();
+    demo_actor_command_sink_t *const sink =
+        (demo_actor_command_sink_t *)&accum->emit_sink;
+    (void)transaction;
+#if SATURN_FEATURE_ACTOR_EMIT_SLAVE && defined(__sh__)
+    {
+        uint32_t spins = 0U;
+        while (accum->emit_done == 0U) {
+            if (++spins > DEMO_ACTOR_PHASE_WAIT_LIMIT) return false;
+        }
+        demo_render_fence();
+    }
+#endif
+    if (accum->emit_done == 0U || accum->emit_ok == 0U) return false;
+    if (sink->overflowed != 0U) return false;
+    for (uint16_t index = 0U; index < sink->count; index++) {
+        vdp1_cmdt_t *const target =
+            sm64_saturn_vdp1_backend_reserve(backend, 1U);
+        if (target == NULL) return false;
+        *target = sink->commands[index];
+    }
+    return true;
+}
+
 static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
 {
     demo_render_transaction_t *transaction = opaque;
@@ -5212,8 +5362,13 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
         ? (uint16_t)(s_terrain_emit_count - terrain_command_budget) : 0U;
     profile->reject_vdp1_arena_capacity += terrain_first;
     profile->pipeline_faults += terrain_first;
-    /* The master owns all VDP1 lowering. Compact terrain results are merged
-     * above, then consumed in the stable baked painter order here. */
+    /* S1.12 step 3: publish exactly what emit needs and hand it to the slave
+     * before the master starts its own terrain lowering, so the two overlap.
+     * This is the earliest the dispatch can be raised: gouraud_first is an
+     * input and is only fixed by the reservation just above. */
+    if (!demo_actor_emit_dispatch(transaction, gouraud_bank)) return false;
+    /* The master owns terrain and Mario lowering. Compact terrain results are
+     * merged above, then consumed in the stable baked painter order here. */
     for (uint16_t ordinal = terrain_first;
          ordinal < s_terrain_emit_count; ordinal++) {
         const sm64_saturn_terrain_result_t *result =
@@ -5232,36 +5387,17 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
     if (actor_vertex_count != 0U)
         demo_emit_mario(snapshot, pose, backend, partitions, profile);
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
-    /* S1.12 step 3: publish exactly what emit needs, then run it. The context
-     * is built here, on the master, after the Gouraud reservation -- which is
-     * why the dispatch cannot be raised any earlier: gouraud_first is an
-     * input. `sink.commands == NULL` keeps this the direct-to-arena path. */
-    {
-        demo_actor_emit_context_t emit_ctx;
-        demo_actor_command_sink_t sink;
-        memset(&emit_ctx, 0, sizeof(emit_ctx));
-        memset(&sink, 0, sizeof(sink));
-        if (transaction->actor_handoff.state !=
-                SM64_SATURN_ACTOR_HANDOFF_BATCHED &&
-            transaction->scene_snapshot->actor_instance_count != 0U)
-            return false;
-        emit_ctx.actor_runtime = transaction->actor_runtime;
-        emit_ctx.snapshots = transaction->actor_handoff.snapshots;
-        emit_ctx.gouraud_staging = gouraud_bank->staging;
-        emit_ctx.gouraud_vram_base = gouraud_bank->vram_base;
-        emit_ctx.actor_job = transaction->actor_job;
-        emit_ctx.handoff_generation = transaction->actor_handoff.generation;
-        emit_ctx.instance_count =
-            transaction->scene_snapshot->actor_instance_count;
-        emit_ctx.gouraud_first = transaction->generic_actor_gouraud_first;
-        emit_ctx.gouraud_limit = transaction->generic_actor_gouraud_limit;
-        emit_ctx.gouraud_capacity = gouraud_bank->capacity;
-        emit_ctx.gouraud_count = transaction->generic_actor_gouraud_count;
-        emit_ctx.output_count = transaction->generic_actor_output_count;
-        if (emit_ctx.instance_count == 0U)
-            transaction->generic_actor_gouraud_count = 0U;
-        if (!demo_generic_actor_emit(&emit_ctx, &sink, backend)) return false;
-    }
+    /* S1.12 step 3: join the actor emit dispatched before the terrain loop and
+     * splice its commands into the arena.
+     *
+     * Splicing through backend_reserve rather than a raw memcpy keeps every
+     * arena invariant (cursor, live_count, list.count) maintained by the code
+     * that owns them; link_depth_bins validates all three and would fail
+     * closed on a mismatch. Appending here -- after terrain and Mario -- is
+     * what preserves painter order: link_depth_bins sorts stably by arena
+     * index within a bin, so actor commands keep the highest indices exactly
+     * as they did when emit ran inline. */
+    if (!demo_actor_emit_join(transaction, backend)) return false;
     /* S1.12 step 2: emit is single-owner and complete here, so folding its
      * uncached block into the frame profile is a sequenced handoff. Totals are
      * identical to the previous direct accumulation. */
