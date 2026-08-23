@@ -4,6 +4,26 @@
 
 ### Fixed
 
+- **S4.1 and S4.2 confirmed working by owner manual test: pause and camera both
+  behave.** The pause banner draws, and camera yaw/pitch respond on the new pad
+  layout.
+- **The code was right the whole time; the headless check was wrong.** The
+  previous commit recorded the pause banner as undemonstrated because a
+  `capture_hwtest` run with START pulsed produced a frame identical to the
+  unpaused one. That pulse simply never reached `play_mode_paused()` -- an
+  input-timing artifact of the probe, not a defect. Had that stood, the next
+  step would have been debugging a code path that was already correct.
+- **Second time this sprint that automated verification misled where a manual
+  check settled it immediately**, after the BIOS-screen frame captures. Both
+  failures share a shape: a headless probe that *looks* like it exercised the
+  thing, produces a confident-looking artifact, and is never eyeballed. The
+  standing correction is the owner's: when manual testing is the sensible
+  option, take it -- do not force an automated substitute. UI behaviour in this
+  project is owner-verified by policy anyway, so the headless attempt was
+  costing time it could never have saved.
+
+### Fixed
+
 - **RETRACTION: every "caches-on frame identity" claim made from
   `capture_hwtest.py` in this sprint was vacuous.** The tool does not perform
   the BIOS handoff unless `--bios-input` is passed, and I never passed it, so
@@ -53,8 +73,9 @@
 
 ### Known issues
 
-- **S4.2 is not finished: the pause banner has not been demonstrated on
-  target.** The alphabet, text helpers, panel draw path and snapshot plumbing
+- ~~**S4.2 is not finished: the pause banner has not been demonstrated on
+  target.**~~ **Resolved by owner manual test the same day -- see the entry
+  above. The code was correct throughout; the headless probe was not.** The alphabet, text helpers, panel draw path and snapshot plumbing
   are in and linked (`nm` confirms), and an unpaused gameplay frame is correct
   and unchanged. But a capture with START pulsed produced a frame identical to
   the unpaused one, so either the pulse did not reach `play_mode_paused()` or
