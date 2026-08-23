@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Post-S1.11 frame budget, derived from the cadence capture's own per-phase
+  VBlank records** —
+  `docs/saturn/evidence/reports/post-s1_11-frame-budget.md`. **This supersedes
+  the S0.1 symbol attribution as the steering instrument**, because S0.1 was
+  taken before the actor phase moved to the slave and its top entry
+  (`pose_evaluate_staged`, 4.977%) is no longer master work at all. No new
+  capture was needed — the data was already in the throughput JSON and had not
+  been read.
+
+  Mean frame 10.483 VB (5.7237 FPS): `construction` 7.345 VB (70.1%),
+  `master_finalization` 5.000 VB (47.7%), `simulation` 4.759 VB,
+  `slave_work_overlap_window` **2.897 VB**, `dropped_vblank_credit_delta`
+  4.241.
+- **Two findings that reprice the remaining sprint work:**
+  - **`master_finalization` is 5.000 VB — nearly half the frame — with the
+    slave completely idle for all of it.** Finalization runs *after* the
+    lifecycle's `slave_retired()` barrier, so by construction nothing overlaps
+    it. It is now the largest un-overlapped master-serial block in the frame.
+  - **S1.11 did not exhaust the slave.** It bought 2.897 VB of overlap against
+    7.345 VB of construction, so the slave still waits roughly 4.4 VB for the
+    graph notify after finishing the actor phase. The auxiliary-dispatch
+    mechanism can carry a second task; what is missing is a chunk of work whose
+    dependencies are satisfied that early.
+- **Recommended next step recorded with its risk asymmetry.** Offloading actor
+  emit into the finalization window is the bigger prize but touches VDP1
+  command memory the hardware reads — terrain, Mario and actor emit all append
+  into one backend and one Gouraud bank, and correctness depends on depth-bin
+  linking. Giving the slave a second construction chunk is smaller but reuses
+  machinery already validated this sprint and cannot corrupt command memory, so
+  a wrong answer costs a measurement rather than a frame. Take the safer one
+  first.
+
 ### Removed
 
 - **T3 (bank depth carry) implemented, measured, and reverted — a negative
