@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Sprint 3 gains S7, the content-side counterweight** — the workstream
+  that makes 10 FPS on a POPULATED BOB arithmetically reachable rather than
+  aspirational. **Reasoning:** every S1 performance figure was measured with
+  roughly one Bob-omb and one coin on screen, while S2 populates the level
+  with 17 trees, 13 signposts, ~16 prop families, enemies, the star and
+  shadows — and actor cost scales close to linearly with instances. Without
+  S7, S2 can plausibly consume the whole of S1's gain. Contents: **S7.1**
+  terrain mesh decimation at 75% with per-material ratios — **owner-approved
+  earlier in the program, queued behind the actor pipeline, and dropped from
+  this plan's first draft by omission**; the owner already reviewed the
+  visual result (75% near-identical, 50% not), so 75% is a settled setting
+  rather than a guess, and it is the only lever that cuts transform,
+  admission, command build, DMA and fill simultaneously. **S7.2** per-instance
+  actor LOD by distance (pairs with raising the view radius). **S7.3**
+  distance-ordered pose-slot claiming (designed in r2, never built; today a
+  distant actor can hold a slot while a near one renders at bind pose).
+  **S7.4** per-actor primitive budgets in the manifests, extending the
+  bobomb.json pattern so no S2 batch can silently regress cadence.
+  Sequencing rule: S7.1 lands before or alongside the first S2 batch, or the
+  roster gets re-baked twice.
+- **The 10 FPS question answered in-plan, without inflation:** the S1 ladder
+  targets 7.50 confidently and 8.57 plausibly on a sparse scene; S1 alone
+  does not reach 10 on a full stage. The three structural levers scale WITH
+  content (geo-walk cost grows with object count, the VDP2 ground plane
+  removes fill and CPU where props cluster, slave headroom is a fixed pool),
+  and S7 attacks the per-primitive and per-instance terms that content
+  multiplies. New milestone S7: a populated BOB holds the rung the empty BOB
+  reached — the real test of whether the counterweight works.
+
 ### Changed
 
 - **Owner ruling pinned into S1.10's acceptance criteria: `gGfxPools` is

@@ -34,21 +34,28 @@ sprint path anyway and is the leading suspect.
 
 ## 0. The shape of the sprint
 
-Six workstreams. S0 and the S3.0 re-keying are prerequisites that everything
+Seven workstreams. S0 and the S3.0 re-keying are prerequisites that everything
 else queues behind; S1 (perf) and S2 (visual completeness) then interleave in
-measured steps so cadence never regresses silently; S4 makes BOB *play*; S5
-delivers WF behind a pause menu.
+measured steps so cadence never regresses silently, with **S7 paying for S2's
+added load**; S4 makes BOB *play*; S5 delivers WF behind a pause menu.
 
 ```
-S0 hygiene gates ──┬─► S1 perf recovery (T1..T8) ──► S1 stretch (T6/T7/T9)
+S0 hygiene gates ──┬─► S1 perf recovery ──► S1.10/S1.11/S1.12 structural levers
                    │
 S3.0 re-keying ────┼─► S2 bake batches (star, enemies, trees, props)
-                   │            │
-                   │            ▼
-                   │       S4 camera + dialog/pause overlay
+                   │            ▲  │
+                   │   S7 pays ──┘  ▼
+                   │  for S2   S4 camera + dialog/pause overlay
                    │
                    └─► S5 WF bake ──► S5 dual-link + menu (W7 Shape 1)
 ```
+
+**S7 is the content-side counterweight and it is not optional.** Every S1
+figure was measured on a scene holding roughly one Bob-omb and one coin.
+S2 populates the level — 17 trees, 13 signposts, ~16 prop families, Goombas,
+Koopas, the star, shadows on everything — and actor cost scales close to
+linearly with instances. Without S7, S2 can plausibly consume the whole of
+S1's gain. S7 cuts cost per instance and per primitive so the two balance.
 
 **Cadence rungs are quantized.** The presentation loop grants simulation
 credit in whole field pairs, so reachable frame rates are 60/k:
@@ -65,9 +72,20 @@ the walk's recoverable half is worth roughly a rung on its own, the slave's
 re-measured idle sets the ceiling for everything offloaded, and T6 is one
 tenant of S1.11, not the whole answer. **10.00 means halving today's frame
 time (200 → 100 ms); it is the sprint's stretch rung, not a promise** — but
-it is now a rung with named levers under it rather than a wish. Each S2 bake
-batch adds VDP1/master work that must be paid for as we go — which is why S1
-and S2 interleave with measurements.
+it is now a rung with named levers under it rather than a wish.
+
+**On 10 FPS with a FULL playable BOB, stated plainly:** the S1 ladder above
+targets **7.50 confidently and 8.57 plausibly**, and every figure in it was
+measured with about one Bob-omb and one coin on screen. A populated BOB is
+several times that primitive load. **S1 alone does not reach 10 on a full
+stage — S7 is what makes 10 arithmetically reachable rather than
+aspirational**, because it attacks cost per primitive and per instance,
+which is the term that grows with content. The three structural levers help
+here too: geo-walk cost scales with object count, so deleting it pays MORE
+on a populated level; the VDP2 ground plane removes fill and CPU together
+exactly where props cluster; slave headroom is a fixed pool more work can
+move into. Each S2 bake batch still adds VDP1/master work that must be paid
+for as we go — which is why S1, S2 and S7 interleave with measurements.
 
 ---
 
@@ -188,6 +206,30 @@ Order per Audit B; castle lobby is explicitly **out of this sprint** (Phase 3).
 **Milestone S5 (owner check):** press START in BOB, pick Whomp's Fortress,
 land in WF. Rebuild-free. (CD re-staging / Shape 2 is the follow-on program,
 unlocked by S5.5's data-driven terrain either way.)
+
+## S7 — Content-side cost reduction (the counterweight to S2)
+
+Owner-approved earlier and **not yet landed**: mesh decimation at 75% with
+per-material ratios. It was queued behind the actor-pipeline work and then
+dropped from the first draft of this plan by omission. It is the missing
+content-side lever: it cuts primitives at the source, so transform cost,
+VDP1 command count and fill all fall together, and it compounds with every
+item in S1.
+
+| # | Task | Mechanism | Expected | Risk |
+|---|---|---|---|---|
+| S7.1 | **Terrain mesh decimation at 75%, per-material ratios** (owner-approved, unlanded) | Decimate the baked terrain mesh with a per-material ratio table so texture-critical surfaces keep density and flat/low-detail ones lose it. Owner already reviewed the visual result: **75% looks nearly identical; 50% does not** — 75% is the approved setting, not a starting guess. Lands in the bake, so it costs nothing at runtime | fewer primitives through transform, admission, command build, DMA and fill — the only lever that hits all five stages at once | med (visual acceptance is owner-gated; re-bake invalidates pinned terrain figures) |
+| S7.2 | **Actor LOD by distance** | Bake 2 tiers per actor bank (full / reduced) and select per instance from the distance the admission path already computes. A signpost or tree at the far edge of a 6,000-unit view radius does not need its full primitive set. Pairs with S4.3 (raising the view radius) — LOD is what makes a larger radius affordable | cuts the per-instance term that S2 multiplies; strongest exactly when the level is populated | med (bake-side tier generation; tier selection must be stable to avoid popping) |
+| S7.3 | **Distance-ordered pose-slot claiming** | The pose pool is first-come today, so under pressure a distant actor can hold a slot while a near one renders at bind pose. Noted in the pose-pool design (r2 §6 item 3) and never built. With S2's roster this becomes reachable, not hypothetical | correctness under load, not raw FPS — prevents the worst-looking failure mode | low-med |
+| S7.4 | **Per-actor primitive budget in the manifests** | The Bob-omb manifest (`tools/saturn/manifests/actors/bobomb.json`) already declares and enforces a Saturn budget. Extend the pattern: every actor admitted in an S2 batch declares its primitive/texture/CLUT ceiling, and the build fails if a re-bake breaks it | stops S2 from silently regressing cadence one batch at a time | low |
+
+**Sequencing rule:** S7.1 lands **before or alongside the first S2 bake
+batch**, not after — decimating after the roster grows means re-baking
+everything twice. S7.2/S7.4 land with the batch that first needs them.
+
+**Milestone S7 (owner check):** a populated BOB (post-S2) holds the cadence
+rung the empty BOB reached post-S1. That is the real test of whether the
+counterweight works.
 
 ## S6 — Tracked but deferred (owner-accepted or out of sprint)
 
