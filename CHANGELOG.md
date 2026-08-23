@@ -4,6 +4,36 @@
 
 ### Fixed
 
+- **S0.8 cancelled as specified and replaced: there is no VDP1 wait to time.**
+  Verified two ways rather than by source reading alone (this project has been
+  fooled by source-level reachability before): the shipped ELF for
+  `id-333e380c68636a58` contains **no** `vdp1_sync_wait`, `scu_dma_wait` or
+  `cpu_dmac_wait` symbol at all — only the non-blocking poll `vdp1_sync_busy`
+  and `sm64_saturn_frame_pipeline_transfer_deferred` — and W0's own design
+  spec states outright that *"fence/overwrite-wait tick fields are zero
+  because the runtime performs no wait in this path"*
+  (`2026-08-17-vdp1-overwrite-fence-design.md:246-247`). Live measurement
+  agrees: `dma_wait_ticks` delta 0 over 48 steady-state frames, 0.000% of
+  render FRT ticks, `pipeline_faults` 0. Wiring the four timers would have
+  produced correct zeros and taught nothing.
+- **Correction, before it reached the plan: downgrading S1.12 was WRONG.**
+  "The master never blocks on VDP1" does NOT imply "VDP1 is not the frame
+  limiter". The same W0 spec (`:24-40`) documents the deferral's real cost:
+  when VDP1 is still plotting, *"the current presentation opportunity is
+  consumed in the scheduler as previous-frame retention"*, and once the
+  two-tick budget is exhausted **simulation, input consumption and the audio
+  tick pause** until the retained generation publishes. `vdp1_bank_late_dma`
+  fires at **1.02/frame** — VDP1 is still busy at essentially every frame
+  boundary. VDP1 can therefore gate cadence by consuming presentations while
+  never blocking the master; the two facts are compatible. **S1.12 (VDP2 RBG0
+  ground plane) is strengthened, not weakened.**
+- **The right instrument already exists and was never sampled:**
+  `previous_frame_reuse_count` (`saturn_frame_pipeline.c:182,231,255,307`),
+  which the spec names as *"the product-level count of missed presentation
+  opportunities"*. Queued as the replacement S0.8.
+
+### Fixed
+
 - **Correction: `gGfxPools` cannot be reclaimed early. The "shrink it now"
   plan item was wrong** and S0.7a proved it. It is **not** double-buffered on
   Saturn (`GFX_NUM_POOLS` is 2 only under `TARGET_N64`), and the 32,768 B
