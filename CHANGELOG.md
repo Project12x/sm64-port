@@ -4,6 +4,34 @@
 
 ### Fixed
 
+- **Correction: `gGfxPools` cannot be reclaimed early. The "shrink it now"
+  plan item was wrong** and S0.7a proved it. It is **not** double-buffered on
+  Saturn (`GFX_NUM_POOLS` is 2 only under `TARGET_N64`), and the 32,768 B
+  `Gfx buffer[]` is **not dead memory**: `exec_display_list` is indeed never
+  reached on the demo path — so the pool's original RSP purpose is dead — but
+  the arena is a live *same-frame* CPU scratch heap the geo walk reads back
+  constantly (master-list matrices via `DisplayListNode.transform`,
+  generated-list geo callbacks, `obj_orient_graph`'s `throwMatrix`). Two hard
+  blockers on shrinking: the top-down `Mtx` allocation peak was **never
+  measured** (T2.1 measured only the bottom-up `Gfx` side, 443/4096; both
+  directions share the one array), and several call sites **null-deref rather
+  than degrade** on exhaustion (`level_geo.c:37-42`, `skybox.c:247,293`, both
+  plausibly live in BOB). Reclaimable today: the 76 B `spTask` member only.
+  **The full 32,844 B still returns — with S1.10, not before.** Recoverable-now
+  revised from ~40 KB to ~8 KB. No cross-frame pool read exists.
+- **Correction: the VDP1-wait counters are dead instrumentation, not measured
+  zeros.** All four tick fields are hardcoded `= 0U` every frame
+  (`main.c:1680,1853,1855`; the terminal fence additionally gated behind
+  `SATURN_DIAGNOSTIC_MODE`, off in shipped builds), so a 0% reading would have
+  been a false negative. Live counters that ARE wired show `vdp1_bank_late_dma`
+  at 0.98/render-frame and `vdp1_transfer_queued_not_started` at 1.00 over a
+  49-frame window — VDP1 is still busy from the prior frame essentially every
+  frame, with `vdp1_bank_overwrite_attempts` at 0 (soft deferral, never
+  starvation). Circumstantial, not conclusive. **New S0.8 wires the timers;
+  S1.12 (VDP2 ground plane) cannot be sized until it lands.**
+
+### Fixed
+
 - **S0.2: one bad actor instance no longer drops the whole frame.**
   `demo_generic_actor_prepare` and `demo_generic_actor_emit` returned false
   from inside their per-instance loops on any bank/residency resolve or
