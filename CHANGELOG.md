@@ -4,6 +4,55 @@
 
 ### Added
 
+- **Pre-notification breakdown after S1.11: `demo_spatial_admit` -- terrain
+  scene/BSP admission -- is 91.03% of the window. Everything else is rounding
+  error** (`work_order` 2.84%, `meshlet_depth_admit` 2.01%, `actor_closure`
+  0.80%, `position_set` 0.67%). Captured on a new `SATURN_DIAGNOSTIC_MODE=2`
+  profile (`sourceboot-bob-coins-diag2-v1.json`, `id-32587bb992b1d320`), 1,934
+  windows, all 12 acceptance checks passing.
+- **Two reasons the 91% is not an instrumentation artifact**, both checked
+  rather than assumed: `spatial_admit` is a **single push/pop per window**, and
+  profiler overhead is charged per PUSH/POP, so a one-call node cannot be
+  inflated by it; and the `SM64_SATURN_ADMIT_DIAG` blocks around it
+  (`saturn_demo_render.c:882,935,958`) are FRT reads and a publish, not extra
+  geometry work. Usefully, the nodes that *are* plausibly inflated are the
+  many-call ones -- `meshlet_depth_admit` (57 calls) and `meshlet_depth_emit`
+  (26) -- which independently corroborates the T3 negative result: the
+  depth-bounds work stays small even with the instrument biased in its favour.
+- **Also measured:** actors are 53.98% of emitted VDP1 commands, and
+  `prepare_mario_stage` is only 4.34% of the window -- so Mario preparation is
+  not a worthwhile offload target, which rules out the obvious alternative.
+
+### Fixed
+
+- **The capture tooling's absolute-path trap, which cost two tool failures
+  before being diagnosed.** `capture_route_views.YmirClient` launches ymir with
+  `cwd=game.parent` but passes `--game`/`--elf` through unchanged, so a
+  *relative* path stops resolving from the new cwd, ymir exits at startup, and
+  the tool dies with `RuntimeError: Ymir closed its protocol stream with exit
+  status None` inside `_wait_ready()`. That reads as an emulator or environment
+  fault and is nothing of the kind. Diagnosed by running the ymir command by
+  hand -- it worked -- rather than by retrying the tool.
+  `capture_sourceboot_throughput.py` resolves paths itself and so tolerates
+  relative ones, which is what makes the inconsistency easy to miss. Recorded
+  in project memory.
+
+### Known issues
+
+- **`capture_prenotification_profile.py`'s own cross-check fails on this build:
+  `ticks_per_vblank_agreement = 7.47`** (measured 26,227 vs nominal 3,509), and
+  the tool documents that a large disagreement means one instrument is lying
+  and the numbers must not be used. **Only relative shares are quoted above**,
+  never absolute VBlank-equivalents: every node is timed by the same FRT with
+  the same divider and `unattributed_share` is 0.00044, so a systematic
+  conversion error cancels in a ratio. The diagnostic build's own cadence-rig
+  figures also track the product build's closely (construction 8.21 vs 7.345
+  VB/frame), so diagnostic mode is not grossly distorting the workload -- only
+  the conversion constant is suspect. Worth chasing separately; it leaves the
+  tool unable to answer "how many VBlanks" for anything.
+
+### Added
+
 - **Post-S1.11 frame budget, derived from the cadence capture's own per-phase
   VBlank records** —
   `docs/saturn/evidence/reports/post-s1_11-frame-budget.md`. **This supersedes
