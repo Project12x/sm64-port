@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Both slave offloads confirmed by owner manual testing on the desktop
+  emulator**: frame rate visibly better, **no new visual artifacts**, coins
+  unchanged, Bob-omb body still invisible (the pre-existing S6.1 defect, not a
+  regression).
+- **This is the evidence the automated harness structurally cannot produce.**
+  Caches-on frame identity proved only that one route position at frame 1,200
+  was byte-identical; it says nothing about arbitrary play. A cache-coherency
+  defect in S1.11's actor phase or S1.12's command staging would most plausibly
+  surface as intermittent flicker, popping, or misplaced actors under free
+  movement -- exactly what manual observation covers and a fixed-route snapshot
+  does not. Both offloads are now cleared by measurement (caches-on cadence and
+  frame identity) **and** by observation.
+
 ### Removed
 
 - **T5's constant-pose memo: built, measured, reverted — and the reason
