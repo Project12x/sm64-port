@@ -4,6 +4,60 @@
 
 ### Fixed
 
+- **S1.1: closure actors now take the fast VDP1 depth kernel instead of the
+  ~36x slower reference path.** `actor_depth_kernel_prepare`
+  (`saturn_actor_meshlets.c:541-569`) only enables its fast path when all
+  three scale axes are exactly unit (Q16.16 65536) - a precondition every
+  closure actor failed, since `cur_obj_scale` sets a real runtime scale
+  (Bob-omb 1.2x, coins 0.6-0.7x, a growing 1.0+oTimer/5.0 during the Bob-omb's
+  fuse). Every one of them therefore fell to `actor_depth_reference`, which
+  the project already measured (T2.6) at 3,725.8 cycles per position visit
+  against 102.9 for the fast path.
+- **Fix: fold the instance's real scale into the pose evaluator's output
+  vertices** (`sm64_saturn_actor_pose_evaluate`/`_staged`, new `scale_q16`
+  parameter, NULL = unit/no-op) rather than reporting the raw scale to the
+  depth kernel. The depth kernel then receives a TRUTHFULLY unit scale - not
+  spoofed - because the vertices already carry the real extent. The
+  now-redundant second scale multiply in `demo_generic_actor_world_vertex`
+  (which would otherwise double-apply scale) is removed.
+- **Reused an existing, previously-unwired primitive** rather than inventing
+  new matrix math: `sm64_saturn_mtxq_scale_vec3f`
+  (`saturn_matrix_ctors.h:372`), a documented Q16 mirror of `mtxf_scale_vec3f`
+  built for exactly this case and never called until now. Considered and
+  rejected folding scale into the root joint matrix instead (mathematically
+  equivalent for the uniform-scale case every current actor uses, but the
+  vertex-level fold has a smaller blast radius and needs no change to joint
+  composition).
+- **Every real call site updated, all 3 of them plus 8 host-test call sites**:
+  Mario's two evaluator calls (`saturn_actor_bridge.c`) pass NULL - zero
+  behavior change; the generic actor PROCESS phase
+  (`sm64_saturn_actor_meshlets_prepare_bank`) and EMIT phase
+  (`demo_generic_actor_emit`) both pass the instance's real `scale_q16`.
+  Saturating to int16 with the same round-half-away-from-zero convention
+  `matrix_apply`'s existing clamp and this session's earlier bake-time
+  `_scale_coordinate` both use.
+- **Found and fixed a latent regression while validating, unrelated to this
+  change:** `verify-actor-meshlets`'s golden hashes went stale the moment
+  `d34574a8` (S0.2) appended `actor_instance_skipped` to
+  `sm64_saturn_fast3d_profile_t` (173 -> 174 fields) - that commit's own build
+  never ran this host-test target. Confirmed Mario-neutral before re-pinning
+  (the new field is written only from the generic actor paths, never from
+  Mario's own prepare function, and `stats` is fully zeroed before every
+  hashed call, so the only difference is 4 extra zero bytes at the tail) by
+  printing the actual computed hashes rather than guessing them.
+- **3 new host tests added**, exercising the fold directly rather than relying
+  on incidental coverage: unit scale is a byte-identical no-op, a deliberately
+  non-uniform per-axis scale matches a hand-computed reference, and an extreme
+  scale saturates to INT16_MAX/MIN in both directions on the actual known
+  reference vertex. **4/4 mutations caught, 0 escaped**, including a redo
+  after a first mutation attempt hit a compile error instead of a real test
+  failure.
+- **Measured: mean 5.0000 -> 5.3870 (+7.7%), median 5.0000 -> 5.4545 (+9.1%,
+  crossing a cadence rung: 60/12 -> 60/11), 1%-low 4.2857 -> 5.0000 (+16.7%)**
+  on the capture route, 29 intervals. Sealed build `id-3481ef86ab8e531e`.
+
+### Fixed
+
 - **Measured, settling a question I had flip-flopped on: VDP1 is NOT the frame
   limiter.** `previous_frame_reuse_count` — which W0's spec names as the
   product-level count of missed presentation opportunities — has a delta of

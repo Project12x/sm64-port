@@ -101,16 +101,30 @@ static uint64_t legacy_output_hash(int32_t z, int16_t yaw, uint16_t capacity)
     return hash_bytes(hash, &stats, sizeof(stats));
 }
 
+/* Golden hashes over the full sm64_saturn_fast3d_profile_t byte image, so
+ * they are load-bearing on struct SIZE as well as content -- ANY field
+ * appended to the struct (even zero-valued, even semantically untouched by
+ * Mario's own prepare path) changes every value here. Re-pinned 2026-08-23
+ * after `d34574a8` appended `actor_instance_skipped` (173 -> 174 fields);
+ * that commit's own build never ran this host-test target, so the previous
+ * values went stale silently. Confirmed Mario-neutral: actor_mario_prepare_
+ * with_carry() never touches the new field (it is written only from the
+ * GENERIC actor prepare/emit paths in saturn_demo_render.c), and `stats` is
+ * fully zeroed by memset before every call here, so the only difference in
+ * the hashed byte stream is 4 extra zero bytes at the tail -- confirmed by
+ * printing the actual computed hashes rather than guessed. Re-pin here again
+ * if a future struct-tail append changes sizeof(sm64_saturn_fast3d_profile_t)
+ * and this test starts failing. */
 static int legacy_output_hashes_match(void)
 {
     return legacy_output_hash(512, 0, SM64_MARIO_PRIMITIVE_COUNT) ==
-               UINT64_C(0x0b829cbd1c980a96) &&
+               UINT64_C(0xc950b089e4cf1ed6) &&
         legacy_output_hash(-30, -0x4000, SM64_MARIO_PRIMITIVE_COUNT) ==
-               UINT64_C(0xd3dbd9102b6f7cfa) &&
+               UINT64_C(0x71b1fe713204deba) &&
         legacy_output_hash(-4096, 0, SM64_MARIO_PRIMITIVE_COUNT) ==
-               UINT64_C(0x509222a1063ae826) &&
+               UINT64_C(0x9849f1047a1ab266) &&
         legacy_output_hash(512, 0, 1U) ==
-               UINT64_C(0x65d76ae8ccac5820);
+               UINT64_C(0x65b4ec6adafaa420);
 }
 
 static int has_primitive(const sm64_saturn_actor_draw_ref_t *refs,
@@ -385,7 +399,7 @@ static int bank_driven_cases(const char *path)
         sm64_saturn_actor_pose_view_t expected_pose;
         if (!sm64_saturn_actor_pose_evaluate(
                 &bank, instance.animation_id, instance.animation_frame,
-                &workspace[0].pose_work, &expected_pose)) {
+                &workspace[0].pose_work, instance.scale_q16, &expected_pose)) {
             fprintf(stderr, "cannot evaluate bank pose preservation fixture\n");
             result = 0;
             goto cleanup;

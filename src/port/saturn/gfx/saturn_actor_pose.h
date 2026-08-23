@@ -31,11 +31,27 @@ typedef struct sm64_saturn_actor_pose_view {
 
 /* Evaluate exactly one source-selected pose.  The caller owns all scratch,
  * and Saturn never advances an animation frame here; frame/id are inputs from
- * the authoritative source geo tick. */
+ * the authoritative source geo tick.
+ *
+ * `scale_q16` is the instance's per-axis Fast3D object scale (Q16.16), or
+ * NULL for unit scale.  When non-NULL and not exactly {65536,65536,65536},
+ * every output vertex is scaled in the SAME object-local space the bank's
+ * vertices are already in -- before the depth kernel or the emit path ever
+ * sees them -- and saturated to int16, matching `matrix_apply`'s own
+ * clamp. Folding scale here rather than at emit time means a caller with
+ * unit scale (every current Mario call site) can report that truthfully to
+ * `actor_meshlet_core`'s fast depth kernel, which requires exactly unit
+ * scale on all three axes; a non-unit instance previously always fell to
+ * the ~36x slower reference path (measured T2.6: 3,725.8 vs 102.9 cycles
+ * per position visit) purely because its scale was reported raw instead of
+ * folded. NULL is a strict no-op: every existing caller that cannot supply
+ * a real per-instance scale (Mario, and every host test) passes NULL and
+ * sees byte-identical output to before this parameter existed. */
 bool sm64_saturn_actor_pose_evaluate(
     const sm64_saturn_actor_bank_view_t *bank,
     int16_t animation_id, int16_t animation_frame,
     sm64_saturn_actor_pose_work_t *work,
+    const int32_t *scale_q16,
     sm64_saturn_actor_pose_view_t *pose);
 
 /* Same evaluation, with the two per-frame-invariant bank slices supplied by
@@ -54,6 +70,7 @@ bool sm64_saturn_actor_pose_evaluate_staged(
     sm64_saturn_actor_pose_work_t *work,
     const sm64_saturn_actor_vertex_t *staged_vertices,
     const sm64_saturn_actor_joint_t *staged_joints,
+    const int32_t *scale_q16,
     sm64_saturn_actor_pose_view_t *pose);
 
 #endif

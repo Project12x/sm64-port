@@ -59,10 +59,27 @@ bool sm64_saturn_actor_pose_evaluate(
     const sm64_saturn_actor_bank_view_t *bank,
     int16_t animation_id, int16_t animation_frame,
     sm64_saturn_actor_pose_work_t *work,
+    const int32_t *scale_q16,
     sm64_saturn_actor_pose_view_t *pose)
 {
     return sm64_saturn_actor_pose_evaluate_staged(
-        bank, animation_id, animation_frame, work, NULL, NULL, pose);
+        bank, animation_id, animation_frame, work, NULL, NULL, scale_q16, pose);
+}
+
+/* Scale one object-local vertex axis by a Q16.16 factor and saturate to
+ * int16, matching matrix_apply's own clamp exactly (same rounding style:
+ * round-half-away-from-zero via a +-32768 bias before the >>16 narrowing,
+ * the same convention tools/saturn/actor_variant_bank.py's bake-time
+ * _scale_coordinate uses, so a baked GEO_SCALE fold and this runtime
+ * instance-scale fold behave identically on a tied value). */
+static int16_t pose_scale_axis(int16_t value, int32_t scale_q16)
+{
+    int64_t product = (int64_t)value * (int64_t)scale_q16;
+    int64_t scaled = product >= 0 ? (product + 32768) >> 16
+                                  : -(((-product) + 32768) >> 16);
+    if (scaled > INT16_MAX) return INT16_MAX;
+    if (scaled < INT16_MIN) return INT16_MIN;
+    return (int16_t)scaled;
 }
 
 bool sm64_saturn_actor_pose_evaluate_staged(
@@ -71,6 +88,7 @@ bool sm64_saturn_actor_pose_evaluate_staged(
     sm64_saturn_actor_pose_work_t *work,
     const sm64_saturn_actor_vertex_t *staged_vertices,
     const sm64_saturn_actor_joint_t *staged_joints,
+    const int32_t *scale_q16,
     sm64_saturn_actor_pose_view_t *pose)
 {
     sm64_saturn_actor_animation_record_t record;
@@ -165,6 +183,15 @@ bool sm64_saturn_actor_pose_evaluate_staged(
                      work->vertices[vertex]);
         if (work->light_intensity != NULL)
             work->light_intensity[vertex] = SM64_SATURN_ACTOR_POSE_LIGHT_DEFAULT;
+    }
+    if (scale_q16 != NULL &&
+        (scale_q16[0] != (1 << 16) || scale_q16[1] != (1 << 16) ||
+         scale_q16[2] != (1 << 16))) {
+        for (vertex = 0U; vertex < bank->bank.vertex_count; vertex++) {
+            for (uint16_t axis = 0U; axis < 3U; axis++)
+                work->vertices[vertex][axis] = pose_scale_axis(
+                    work->vertices[vertex][axis], scale_q16[axis]);
+        }
     }
     pose->vertices = (const int16_t (*)[3])work->vertices;
     pose->light_intensity = work->light_intensity;

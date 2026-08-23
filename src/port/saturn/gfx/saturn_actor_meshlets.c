@@ -989,15 +989,25 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
         !actor_bank_source(bank, &source) ||
         !sm64_saturn_actor_pose_evaluate(
             bank, instance->animation_id, instance->animation_frame,
-            pose_work, &pose))
+            pose_work, instance->scale_q16, &pose))
         return false;
     memset(&transform, 0, sizeof(transform));
     transform.vertices = pose.vertices;
     transform.vertex_count = pose.vertex_count;
     for (uint16_t axis = 0U; axis < 3U; axis++)
         transform.position_q16[axis] = instance->position_q16[axis];
-    memcpy(transform.scale_q16, instance->scale_q16,
-           sizeof(transform.scale_q16));
+    /* The instance scale is already folded into `pose.vertices` above (see
+     * sm64_saturn_actor_pose_evaluate's scale_q16 parameter), so what the
+     * depth kernel sees here is truthfully unit -- not spoofed -- and its
+     * fast path (actor_depth_kernel_prepare, unit-scale gated) engages for
+     * every instance instead of only the ones that happened to already be
+     * unit scale. T2.6 measured the gated-out reference path at 3,725.8
+     * cycles per position visit vs 102.9 for the fast path; prior to this
+     * fold every closure actor (bobomb 1.2x, coins 0.6-0.7x) failed the
+     * gate on every one of them. */
+    transform.scale_q16[0] = 1 << 16;
+    transform.scale_q16[1] = 1 << 16;
+    transform.scale_q16[2] = 1 << 16;
     transform.yaw = instance->angle[1];
     if (!actor_meshlet_core(
             &source, &transform, view, output->position_seen,

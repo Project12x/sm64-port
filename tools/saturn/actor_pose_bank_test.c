@@ -202,7 +202,7 @@ int main(int argc, char **argv)
         uint8_t seen[209] = {0};
         for (int16_t animation = 0; animation < 209; animation++) {
             if (!sm64_saturn_actor_pose_evaluate(
-                    &view, animation, -3, &work, &pose) ||
+                    &view, animation, -3, &work, NULL, &pose) ||
                 pose.animation_id != (uint16_t)animation || pose.frame != 0U ||
                 pose.vertex_count != 424U || pose.joint_count != 20U ||
                 pose.vertices != (const int16_t (*)[3])vertices ||
@@ -224,18 +224,18 @@ int main(int argc, char **argv)
                 return 1;
             }
         if (!sm64_saturn_actor_pose_evaluate(&view, 208, INT16_MAX,
-                                             &work, &pose) ||
+                                             &work, NULL, &pose) ||
             pose.frame != pose.frame_count - 1U ||
-            sm64_saturn_actor_pose_evaluate(&view, -1, 0, &work, &pose) ||
-            sm64_saturn_actor_pose_evaluate(&view, 209, 0, &work, &pose) ||
-            sm64_saturn_actor_pose_evaluate(&view, 0, 0, &work, NULL)) {
+            sm64_saturn_actor_pose_evaluate(&view, -1, 0, &work, NULL, &pose) ||
+            sm64_saturn_actor_pose_evaluate(&view, 209, 0, &work, NULL, &pose) ||
+            sm64_saturn_actor_pose_evaluate(&view, 0, 0, &work, NULL, NULL)) {
             fprintf(stderr, "evaluator bounds/overflow contract failed\n");
             free(bytes);
             return 1;
         }
         {
             int16_t sample;
-            if (!sm64_saturn_actor_pose_evaluate(&view, 0, 0, &work, &pose) ||
+            if (!sm64_saturn_actor_pose_evaluate(&view, 0, 0, &work, NULL, &pose) ||
                 !sm64_saturn_actor_bank_sample_channel(&view, 0U, 0U, 0U,
                                                        &sample) ||
                 pose.root_translation[0] != sample) {
@@ -253,7 +253,7 @@ int main(int argc, char **argv)
          * 4x skeleton/vertex values must be reduced to the source world
          * coordinate result before the renderer sees them.  These values are
          * independently derived from the source GeoLayout at this frame. */
-        if (!sm64_saturn_actor_pose_evaluate(&view, 196, 14, &work, &pose) ||
+        if (!sm64_saturn_actor_pose_evaluate(&view, 196, 14, &work, NULL, &pose) ||
             vertices[0][1] == INT16_MAX || vertices[0][1] == INT16_MIN ||
             vertices[0][2] == INT16_MAX || vertices[0][2] == INT16_MIN ||
             vertices[0][0] != -9 || vertices[0][1] != 34 ||
@@ -264,6 +264,64 @@ int main(int argc, char **argv)
                     vertices[0][0], vertices[0][1], vertices[0][2]);
             free(bytes);
             return 1;
+        }
+        /* S1.1: the instance-scale fold. The check above just proved
+         * vertex[0] at (animation 196, frame 14) is exactly (-9, 34, 19)
+         * under NULL scale. Re-evaluate the SAME pose through the new
+         * scale_q16 parameter and confirm three properties independently:
+         * unit scale is a byte-identical no-op, a real (non-uniform, to
+         * exercise per-axis correctness rather than only the uniform case
+         * every actual actor happens to use) scale matches a hand-computed
+         * reference using the documented round-half-away-from-zero rule,
+         * and an extreme scale saturates to INT16_MAX/MIN rather than
+         * wrapping -- all three expected values computed once in Python
+         * against the exact formula and pinned here, not guessed. */
+        {
+            const int32_t unit_scale[3] = {1 << 16, 1 << 16, 1 << 16};
+            if (!sm64_saturn_actor_pose_evaluate(
+                    &view, 196, 14, &work, unit_scale, &pose) ||
+                vertices[0][0] != -9 || vertices[0][1] != 34 ||
+                vertices[0][2] != 19) {
+                fprintf(stderr,
+                        "unit scale_q16 was not a no-op (%d, %d, %d)\n",
+                        vertices[0][0], vertices[0][1], vertices[0][2]);
+                free(bytes);
+                return 1;
+            }
+        }
+        {
+            /* 1.5x, 0.5x, 3.0x -- deliberately non-uniform per axis. */
+            const int32_t scale[3] = {98304, 32768, 196608};
+            if (!sm64_saturn_actor_pose_evaluate(
+                    &view, 196, 14, &work, scale, &pose) ||
+                vertices[0][0] != -14 || vertices[0][1] != 17 ||
+                vertices[0][2] != 57) {
+                fprintf(stderr,
+                        "non-uniform scale fold gave (%d, %d, %d), "
+                        "expected (-14, 17, 57)\n",
+                        vertices[0][0], vertices[0][1], vertices[0][2]);
+                free(bytes);
+                return 1;
+            }
+        }
+        {
+            /* Large enough that even the smallest-magnitude component of
+             * the known (-9, 34, 19) reference vertex overflows int16 in
+             * both directions: -9 * 500,000,000 / 65536 ~= -68665, clamps
+             * to INT16_MIN; the positive components clamp to INT16_MAX. */
+            const int32_t huge_scale[3] = {500000000, 500000000, 500000000};
+            if (!sm64_saturn_actor_pose_evaluate(
+                    &view, 196, 14, &work, huge_scale, &pose) ||
+                vertices[0][0] != INT16_MIN || vertices[0][1] != INT16_MAX ||
+                vertices[0][2] != INT16_MAX) {
+                fprintf(stderr,
+                        "huge scale did not saturate as expected "
+                        "(%d, %d, %d), expected (%d, %d, %d)\n",
+                        vertices[0][0], vertices[0][1], vertices[0][2],
+                        INT16_MIN, INT16_MAX, INT16_MAX);
+                free(bytes);
+                return 1;
+            }
         }
     }
     {
@@ -292,7 +350,7 @@ int main(int argc, char **argv)
         extreme[joint_table + 3U] = 0xFFU;
         if (!sm64_saturn_actor_bank_validate(extreme, size, &extreme_view) ||
             !sm64_saturn_actor_pose_evaluate(
-                &extreme_view, 0, 0, &extreme_work, &extreme_pose)) {
+                &extreme_view, 0, 0, &extreme_work, NULL, &extreme_pose)) {
             fprintf(stderr, "raw extreme translation took Q16 reject route\n");
             free(extreme);
             free(bytes);

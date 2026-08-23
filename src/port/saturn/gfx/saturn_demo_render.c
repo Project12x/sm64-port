@@ -3122,9 +3122,14 @@ static bool demo_generic_actor_world_vertex(
     if (instance == NULL || pose == NULL || pose->vertices == NULL ||
         world == NULL || vertex >= pose->vertex_capacity)
         return false;
-    scaled_x = (int64_t)pose->vertices[vertex][0] * instance->scale_q16[0];
-    scaled_y = (int64_t)pose->vertices[vertex][1] * instance->scale_q16[1];
-    scaled_z = (int64_t)pose->vertices[vertex][2] * instance->scale_q16[2];
+    /* Instance scale is already folded into pose->vertices by
+     * sm64_saturn_actor_pose_evaluate (see saturn_actor_pose.c); left-shift
+     * to Q16.16 to match the rotate math below, do not re-scale here --
+     * this used to multiply by instance->scale_q16 a second time, which
+     * would now double-apply it. */
+    scaled_x = (int64_t)pose->vertices[vertex][0] << 16;
+    scaled_y = (int64_t)pose->vertices[vertex][1] << 16;
+    scaled_z = (int64_t)pose->vertices[vertex][2] << 16;
     rotated_x = demo_generic_saturating_add_i64(
         demo_generic_saturating_mul_i64(scaled_x, cosine),
         demo_generic_saturating_mul_i64(scaled_z, sine)) >> 32;
@@ -4324,7 +4329,7 @@ static bool demo_generic_actor_emit(demo_render_transaction_t *transaction)
         sm64_saturn_actor_pose_view_t pose;
         bool valid = sm64_saturn_actor_pose_evaluate(
             &resolution.bank, snapshot->animation_id, snapshot->animation_frame,
-            &resolution.workspace.pose_work, &pose);
+            &resolution.workspace.pose_work, snapshot->scale_q16, &pose);
         const sm64_saturn_actor_texture_publication_t *const publication =
             sm64_saturn_source_scene_bundle_textures(
                 resolution.residency_generation);

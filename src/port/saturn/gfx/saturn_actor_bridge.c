@@ -819,7 +819,8 @@ static uint8_t complete_actor_evaluate(
     work.light_capacity = SM64_MARIO_VERTEX_COUNT;
     if (!sm64_saturn_actor_pose_evaluate_staged(
             bank, snapshot->animation_id, snapshot->animation_frame,
-            &work, staged_vertices, staged_joints, &slot->evaluated)) {
+            &work, staged_vertices, staged_joints, NULL,
+            &slot->evaluated)) {
         /* Constitution 6: degrade at the smallest safe unit.  The reduced
          * bake already aliases every unbaked ID onto a baked neighbour, so
          * reaching here means the bank cannot serve the requested ID at all.
@@ -833,7 +834,7 @@ static uint8_t complete_actor_evaluate(
         if (!sm64_saturn_actor_pose_evaluate_staged(
                 bank, COMPLETE_ACTOR_FALLBACK_ANIMATION_ID,
                 snapshot->animation_frame, &work, staged_vertices,
-                staged_joints, &slot->evaluated)) {
+                staged_joints, NULL, &slot->evaluated)) {
             slot->valid = 0U;
             return 0U;
         }
