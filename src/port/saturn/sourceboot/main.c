@@ -38,6 +38,7 @@
 #include "saturn_peak_probe.h"
 #include "saturn_prenotify_profile.h"
 #include "source_cart.h"
+#include "source_star_select.h"
 #include "source_camera_acceptance_route.h"
 #include "source_camera_idle_probe.h"
 #include "source_q16_kernel_probe.h"
@@ -2036,6 +2037,19 @@ sourceboot_post_cart_init(void)
     sourceboot_reset_lwram_state();
     sourceboot_init_sky_bitmap();
     sm64_saturn_hud_atlas_init();
+    /* S4.2b: choose the act before the level script runs. Act-gated objects
+     * are placed during level load from `1 << (gCurrActNum - 1)`, so a choice
+     * made later would spawn the wrong population -- see source_entry.c's
+     * note on why that value could not stay at its BSS zero. */
+    {
+        extern s16 gCurrActNum;
+        if (!sm64_saturn_star_select_labels_are_drawable()) {
+            dbgio_puts("sourceboot: star select label is undrawable\n");
+            dbgio_flush();
+            for (;;) {}
+        }
+        gCurrActNum = (s16)sm64_saturn_star_select_run(&sourceboot_vblank_out_count);
+    }
     sm64_saturn_vdp2_frame_init(&sourceboot_vdp2_frame);
 
     dbgio_init();

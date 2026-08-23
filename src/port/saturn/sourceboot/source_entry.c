@@ -218,8 +218,14 @@ static const LevelScript sSourcebootLevelLoop[] = {
      * default a fresh file's star select would offer. Placed before the
      * SET_REG(LEVEL_BOB) sequence below because GET_OR_SET consumes
      * sRegister. */
-    SET_REG(/* value */ 1),
-    GET_OR_SET(/* op */ OP_SET, /* var */ VAR_CURR_ACT_NUM),
+    /* S4.2b: the act now comes from the boot-time star select
+     * (source_star_select.c), which runs before this script and writes
+     * gCurrActNum directly. The hardcoded SET_REG(1)/GET_OR_SET pair that
+     * used to live here would overwrite that choice with act 1, so it is
+     * gone -- but the hazard it was added to fix is unchanged and still
+     * covered: gCurrActNum must be a valid 1..6 before level_cmd_place_object
+     * computes `1 << (gCurrActNum - 1)`, and the selector always returns
+     * 1..6, including on its timeout path. */
     /* The retail entry reaches a menu before selecting a level.  E2 needs a
      * bounded source-gameplay bootstrap, so select Bob here through the same
      * source level-state functions before executing its unmodified script.

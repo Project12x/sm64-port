@@ -456,7 +456,7 @@ SOURCEBOOT_GODDARD_SRCS := $(wildcard $(ROOT)/src/goddard/*.c) $(wildcard $(ROOT
 # This is intentionally a source closure, not a Castle viewer dependency list.
 # The Bob script, Bob level data, shared source actor banks, and generated Mario
 # animation table are all consumed through source LevelScript/GeoLayout state.
-SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_cart.c source_q16_kernel_probe.c \
+SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_cart.c source_q16_kernel_probe.c source_star_select.c \
   source_exception_record.c source_exception_trampolines.sx \
   $(ROOT)/src/port/saturn/runtime/saturn_geo_walk.c \
   $(ROOT)/src/port/saturn/runtime/saturn_geo_walk_runtime.c \

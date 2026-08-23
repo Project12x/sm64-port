@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Star (act) select, Saturn-shaped.** Retail SM64 picks an act on a screen
+  that renders 3D star models through Goddard and labels them with the dialog
+  system (`src/menu/star_select.c`). None of it was reachable: sourceboot boots
+  straight into the level via `level_bob_entry` and never runs the castle ->
+  course-entry flow, so `src/menu/*.c` compiles but is **dead-stripped** --
+  `nm` on the shipped ELF found zero `act_selector` symbols. Bringing up
+  Goddard and the dialog renderer to choose a number between one and six is
+  exactly the N64-shaped cost worth refusing; this draws the choice on the
+  VDP2 HUD tilemap instead, on hardware that is already initialised.
+- **It runs at boot, before the level script, and that placement is forced.**
+  Act-gated objects are placed during level load:
+  `level_cmd_place_object` (`src/engine/level_script.c:470`) computes the act
+  mask as `1 << (gCurrActNum - 1)`, so choosing later would spawn the wrong
+  population. Everything the selector needs already exists by `main.c:2038` --
+  `smpc_peripheral_init` (`:1949`), `vdp2_tvmd_display_set` (`:1964`), the
+  VBlank handler (`:1969`) and the glyph atlas.
+- **The level script's hardcoded act is gone.** `source_entry.c` used to force
+  `SET_REG(1)` + `GET_OR_SET(VAR_CURR_ACT_NUM)`, which would have overwritten
+  the player's choice. The hazard that pair was originally added to fix is
+  unchanged and still covered: `gCurrActNum` must be a valid 1..6 before the
+  act mask is computed, and the selector always returns 1..6 including on its
+  timeout path.
+- **Two failure modes closed by construction.** The loop is **edge-triggered**,
+  so a direction held from the BIOS handoff cannot sweep the cursor and a START
+  still down cannot select instantly; and it is **bounded at 600 fields**,
+  falling back to act 1 -- a disconnected or stuck pad cannot hang the boot
+  before the level ever loads. It also paces off the caller's VBlank-out
+  counter: without that wait the loop would burn its whole budget in
+  microseconds and take the default before anything appeared on screen.
+- **Wording is constrained by the 21-letter US HUD font and checked at boot.**
+  Act two cannot read "KOOPA THE QUICK" and act six cannot read "BEHIND CHAIN
+  CHOMP'S GATE" -- no Q, no J/V/X/Z. Labels are shortened to the drawable
+  alphabet, and `sm64_saturn_star_select_labels_are_drawable()` is asserted
+  before the selector runs, so a future reword halts the build target loudly
+  instead of rendering holes on screen.
+
+### Known issues
+
+- **Not yet manually verified.** Built (`id-37789f4594b77d6e`), star-select
+  symbols confirmed linked, memory map OK (HWRAM 0x4D74, LWRAM 0xC7F0). Whether
+  the menu appears, the cursor moves, and the chosen act actually changes which
+  objects spawn is an owner check -- per the standing correction, this is not
+  something to infer from a headless capture.
+
 ### Fixed
 
 - **S4.1 and S4.2 confirmed working by owner manual test: pause and camera both
