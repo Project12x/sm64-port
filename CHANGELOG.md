@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+### Added
+
+- **VDP2 RBG0 ground scoped and rejected for BOB** —
+  `docs/saturn/evidence/reports/vdp2-ground-scoping.md`. It had the right
+  shape on paper: terrain promoted to a rotation plane leaves **both** spans
+  where the master works alone (pre-notification admission and finalize
+  emission). It fails on BOB's actual geometry.
+- **BOB is a mountain and RBG0 is one surface.** The world is 16,383 x 16,383
+  with a **4,677-unit height span**. Classifying all 867 terrain primitives by
+  face normal: floor/ceiling <=15deg is 278 prims (32.1%, 44.1% of area), slope
+  15-45deg 193, steep 45-75deg 83, wall >75deg 313. The 263 up-facing flat
+  faces are spread over **~35 distinct height levels**; the best single level
+  (Y~768) carries 15.6% of total terrain *area* but only **42 of 867
+  primitives**. A coefficient table can tilt or curve the plane per scanline,
+  but it is still one continuous surface and cannot represent 35 terraces.
+- **Valued in the currency that actually costs.** VDP1 *fill* is not the
+  limiter (measured: `previous_frame_reuse_count` delta 0); command *emission*
+  is, at 5.000 VB/frame, and command cost is per-primitive rather than per-area.
+  That is exactly where the Y~768 level is weakest -- 15.6% of area but 4.8% of
+  primitives, i.e. a few large quads. Against a measured **574.4 VDP1 commands
+  per present** (actors 310.1 = 53.98%), removing 42 primitives is an upper
+  bound of ~7% of commands and only when all 42 are admitted, so roughly
+  **0.2-0.4 VB/frame, about 2-4% FPS** -- for RBG0 plane setup, a rotation
+  parameter table updated per frame, a ground-texture bake, VRAM/CRAM budgeting
+  beside the existing NBG1 sky, and sprite-vs-plane priority work. **Rejected.**
+- **Re-scope per level rather than globally.** The calculus flips wherever
+  ground genuinely is one plane; Whomp's Fortress platforms and the castle
+  grounds/lobby are plausible candidates and should be measured with the same
+  classification before any commitment.
+- **The underused-VDP2 point still stands, with a better target.** VDP2
+  currently carries only an NBG1 sky bitmap and HUD text, leaving NBG0/2/3 and
+  RBG0/RBG1 idle. The promising use is **distant terrain as a VDP2 backdrop
+  layer**: far-LOD geometry has high primitive counts at small per-primitive
+  screen area -- the opposite shape to the Y~768 ground quads, and therefore the
+  right shape for removing commands. Deserves its own scoping pass.
+- **Prior art checked rather than assumed.** `sonic-z-treme` (GPL, cloned in
+  `work/upstream/`) has an **empty `ztSetRBG0()`** -- it sets an RBG0 priority
+  and colour-calc flags but never configures a rotation plane; its terrain is
+  VDP1 polygons, so it is not prior art here. `slavedriver-engine` does
+  reference RBG0 (`FLASH/INITMAIN.C`, `MENU.C`, `MOV.C`, `PLAX.C`) and is worth
+  reading if RBG0 is pursued for another level.
+  `libyaul-examples/vdp2-rbg0{,-bitmap}` is the working API reference
+  (`vdp2_scrn_rotation_params_t`, `rp_table_base`, `kast` coefficient table,
+  `VDP2_SCRN_RBG0_PA`).
+
 ### Fixed
 
 - **`drain_master` measurement resolved with data already captured, and it
