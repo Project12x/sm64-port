@@ -4,6 +4,62 @@
 
 ### Added
 
+- **Paper analysis of the actor-emit offload, before any code** —
+  `docs/saturn/evidence/reports/actor-emit-offload-paper-analysis.md`. Headline:
+  **depth-bin ordering is not the blocker**, which was the risk that motivated
+  the analysis.
+  `sm64_saturn_vdp1_backend_link_depth_bins` runs *after* all emission over one
+  contiguous range, and its pass 2 walks backwards prepending onto per-bin
+  intrusive chains — so within a bin the order is **ascending arena index**, and
+  producer order *is* arena index order. Actor commands already occupy the
+  highest indices (`saturn_demo_render.c:5118-5137`). **Any design that keeps
+  the actor block at higher indices than terrain and Mario reproduces today's
+  ordering exactly**, because the sort does not run until both producers are
+  done and disjoint index ranges never interact.
+- **The real blockers, all of the class S1.11 already solved:**
+  - The command arena is a shared bump allocator, **and terrain's command count
+    is not predictable in advance** — the terrain loop `continue`s on
+    out-of-range primitive ids, so the slave cannot be told a start index. Note
+    the arena *already* reserves a tail for `essential_actor_commands`
+    (`:5084-5087`, `budget_before_tail`); only the placement is sequential.
+  - `gouraud_bank->used` is **live-read** by actor emit (`:4710`) while terrain
+    emit advances it — a stale-read hazard. The actor range is already fully
+    reserved at `:5099` before emission, so a snapshot fixes it.
+  - **Gouraud staging false-shares**: `sm64_saturn_gouraud_table_t` is 8 bytes
+    (`uint16_t colors[4]`), so **two entries per 16-byte SH-2 cache line**, and
+    the actor range sits immediately adjacent to terrain's. Even-aligning the
+    reservation costs at most one 8-byte entry. Identical hazard to the lane
+    workspace fixed in `eddd2d38`.
+  - `profile->actor_flat_replace++` and siblings are shared counters written
+    during emit — the uncached per-phase block from S1.11 applies directly.
+  - **Scheduling**: the slave has already retired by finalize (retirement is
+    what *ends* `slave_work` and starts `master_finalize`), so this needs a
+    third dispatch, after the Gouraud reservation at `:5099` because
+    `generic_actor_gouraud_first` is an input.
+  - **It breaks an explicit invariant.** `saturn_demo_render.c:5117` states "The
+    master owns all VDP1 lowering", and the existing split is built the other way
+    round — slave produces terrain *results*, master lowers them. Recorded as a
+    deliberate change rather than slipped in.
+- **Design chosen: slave writes a staging buffer, master memcpys into the arena
+  tail.** Ordering preserved by construction, no shared cursor, no gap. Cost is
+  one ~10 KB copy per frame (310 commands x 32 B) on the critical path. The
+  fixed-tail-plus-compaction variant has the same copy cost with more coupling
+  to arena internals; a two-arena variant is rejected outright because
+  `link_depth_bins` validates a single contiguous range and its contract is
+  pinned byte-for-byte by `tools/saturn/vdp1_painter_chain_test.c`.
+- **Expected value: ~2 VB/frame, 10.483 -> ~8.5 VB, about 5.72 -> 7.0 FPS
+  (+23%)**, from actors being 53.98% of 574.4 measured commands per present.
+  Two caveats stated: it assumes emission cost tracks command count (unverified
+  — actor commands build Gouraud tables and re-resolve a bundle per instance, so
+  they may be dearer each, which would *improve* the split), and it ignores
+  two-CPU bus contention on command memory, which cuts the other way.
+- **Sequenced so the risky part comes last:** the Gouraud snapshot and
+  even-alignment, then the profile counters, both frame-identity verifiable with
+  **no concurrency introduced**; only then the third dispatch and staging
+  buffer, behind a feature flag, validated caches-ON as S1.11 was.
+
+### Added
+
 - **VDP2 RBG0 ground scoped and rejected for BOB** —
   `docs/saturn/evidence/reports/vdp2-ground-scoping.md`. It had the right
   shape on paper: terrain promoted to a rotation plane leaves **both** spans
