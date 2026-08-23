@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Owner ruling pinned into S1.10's acceptance criteria: `gGfxPools` is
+  deleted, never replaced.** It is the N64 rendering ABI itself (each pool
+  carries an RSP `SPTask` for a coprocessor the Saturn does not have); the
+  observer -> banks -> VDP1 command arena architecture already replaced the
+  contract, so no successor arena is ever built. Its 20 client files are the
+  accounted inventory: the geo walk's 17 alloc sites die with S1.10; shadows,
+  HUD/text, and fades are already chartered (S2.5/S4.2/S4.4); envfx follows
+  the existing effect-emitter pattern; `moving_texture.c` water surfaces and
+  `paintings.c` are the two genuinely new full-port emitters, and they target
+  the EXISTING VDP1 command arena; the misc callers are per-case items in the
+  S0.7 audit annex.
+
 ### Added
 
 - **S0.7: HWRAM waste audit, judged against the FULL port** (owner-directed).
