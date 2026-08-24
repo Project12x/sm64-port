@@ -4,6 +4,55 @@
 
 ### Added
 
+- **The current build has been profiled for the first time** --
+  `docs/saturn/evidence/reports/current-cycle-profile-2026-08-24.md`. Every
+  cycle share used in sprint planning traced back to
+  `sprint2-t2_14-softfloat-profile-a61d5203.json`, whose own summary reads
+  **11.2069 VB/frame = 5.354 FPS**. The dynamic actor closure, S1.1, T5, S1.11
+  and S1.12 -- including **both** slave offloads -- all landed after it. We were
+  selecting optimisation targets from a map of a machine that no longer exists.
+- **The finding is that the frame is diffuse.** On the shipped 6.1922 FPS
+  baseline at gameplay tick 150 (6 phases x 900 bursts, **1,182,549 working
+  cycles, 532 symbols**), the largest single symbol is `_demo_render_finalize`
+  at **9.49%**, and a **360-symbol tail carries 31.60%**. Group shares:
+  terrain/admission/render 24.04%, actor pipeline 17.00%, N64 geo walk + matrix
+  stack 10.06%, soft-float 9.46%, memcpy/memset/movmem 7.85%. **This is the
+  structural reason every lever this sprint returned low single digits** --
+  quad pairing 5.9%, terrain decimation <=4%, SCU DSP ~5.5%, admission hierarchy
+  already spent. There is no hot spot to remove, and micro-optimisation cannot
+  compound out of a distribution this flat.
+- **The one non-diffuse fact: `___slave_polling_entry` is 49.28% of the
+  machine's cycles** while `_sm64_saturn_source_runtime_wait_vblank` is 1.97%.
+  The master runs ~96% busy and the slave is essentially idle. An independent
+  `capture_idle_attribution.py` run on the same build agrees exactly: **master
+  idle 0.00%, slave idle 100.00%**, joint state `work|idle:notification-wait` at
+  100% of traced cycles. Half the available compute is unused. That is a
+  factor-of-two lever, not a percentage one, and it is the only one of that size
+  on the board.
+
+### Fixed
+
+- **Withdrawn: the "not even in the profile" leg of the SCU DSP decline.**
+  `sm64_saturn_ir_transform_one` is **3.02%** on the current build (with
+  `ir_project_view` 2.09%, the transform kernel is **5.11%**); its absence from
+  the stale profile was an artefact of that profile's age, not a property of the
+  code. DSP-shaped arithmetic is therefore roughly **10%**, not 5.5%. **The
+  verdict is unchanged** -- the DSP still cannot divide while the kernel is
+  built around overlapping the SH-2 `DIVU`, 1 KB of data RAM still forces 50-110
+  DMA round trips per frame, and no Saturn engine in `work/upstream/` uses it --
+  but the reasoning is corrected, and it remains behind the slave, which is both
+  a larger prize and a far easier one.
+- **The fixed-point purge is NOT done.** Soft-float is **9.46%** of non-idle
+  work (`float_share_of_working` 11.65%), with `___addsf3` alone at 3.65%.
+- **Retracted as noise: a first short re-capture** (default sampling, ~81k
+  cycles, ~2% of one frame) reported memory movement at 17.8% and soft-float at
+  2.49%. The 14x longer run supports neither. Sample size is now recorded with
+  every figure, and the reproduction notes state that `--warmup-ticks 0` samples
+  during CD streaming (`_cd_block_cmd_execute` 49.6%) and is useless for
+  gameplay profiling.
+
+### Added
+
 - **SCU DSP priced and DECLINED** --
   `docs/saturn/evidence/reports/scu-dsp-priced-and-declined.md`. The hypothesis
   was that batch vertex transform on the unused DSP is the lever that adds a
