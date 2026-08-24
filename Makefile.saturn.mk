@@ -2373,13 +2373,50 @@ compile-castle-area1: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_area1.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-source-root-ir-2026-07-18.json"
 
+.PHONY: build-terrain-decimator
+build-terrain-decimator:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) g++ -std=c++11 -O2 \
+	  -I"$(SATURN_REPO_ROOT)/work/upstream/meshoptimizer/src" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/decimate_terrain_mesh.cpp" \
+	  "$(SATURN_REPO_ROOT)/work/upstream/meshoptimizer/src/simplifier.cpp" \
+	  "$(SATURN_REPO_ROOT)/work/upstream/meshoptimizer/src/allocator.cpp" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/decimate_terrain_mesh$(HOST_EXEEXT)"
+
+SATURN_TERRAIN_DECIMATE_RATIO ?= 1.0
+
+# Decimation writes a separate file rather than rewriting the extractor's
+# output, so the mesh IR the extractor owns stays the mesh IR on disk (see also
+# tools/saturn/test_mesh_ir_obj_shim.py, which reads that path directly).
+# Downstream baking reads whichever of the two this selects.
+ifeq ($(SATURN_TERRAIN_DECIMATE_RATIO),1.0)
+BOB_MESH_IR_BAKED := $(BOB_MESH_GENERATED)/bob_area1_mesh_ir_v2.json
+else
+BOB_MESH_IR_BAKED := $(BOB_MESH_GENERATED)/bob_area1_mesh_ir_v2_decimated.json
+endif
+
 compile-bob-area: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/extract_bob_area.py" \
 	  --area "$(BOB_AREA_DIR)" \
 	  --intake-output "$(BOB_MESH_GENERATED)/bob_area1_intake.json" \
 	  --mesh-ir-output "$(BOB_MESH_GENERATED)/bob_area1_mesh_ir_v2.json"
-	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/saturn_mesh_ir.py" \
+# S7.1: optional terrain decimation between extraction and quad pairing.
+# Default 1.0 leaves the pipeline byte-identical; set
+# SATURN_TERRAIN_DECIMATE_RATIO=0.75 to enable. Placed before pairing so
+# every downstream stage -- pairing, clustering, BSP, admission, VDP1
+# emission -- sees the reduced mesh. Render geometry only: collision.inc.c
+# is a separate source and never passes through here.
+ifneq ($(SATURN_TERRAIN_DECIMATE_RATIO),1.0)
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/decimate_terrain_ir.py" \
 	  --input "$(BOB_MESH_GENERATED)/bob_area1_mesh_ir_v2.json" \
+	  --output "$(BOB_MESH_IR_BAKED)" \
+	  --tool "$(SATURN_REPO_ROOT)/build/saturn/host-tests/decimate_terrain_mesh$(HOST_EXEEXT)" \
+	  --ratio "$(SATURN_TERRAIN_DECIMATE_RATIO)" \
+	  --report "$(BOB_MESH_GENERATED)/bob_area1_decimation.json" \
+	  --work "$(BOB_MESH_GENERATED)/decimation"
+endif
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/saturn_mesh_ir.py" \
+	  --input "$(BOB_MESH_IR_BAKED)" \
 	  --output "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
 	  --report "$(BOB_MESH_GENERATED)/bob_area1_report.json"
 

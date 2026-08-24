@@ -511,6 +511,20 @@ basis and retired the estimate. The remaining 99.5% is state the demo renderer
 reads; see `docs/saturn/evidence/reports/sprint2-t2_15-geo-walk-display-list.md`
 sections 2 and 6 for the full site classification and where to attack instead.
 
+**Primitive count is a weak lever -- elasticity ~0.15 (S7.1, 2026-08-24).**
+Terrain decimation at ratio 0.75 removes **26.6%** of BOB's baked primitives
+(867 -> 636) and returns **+4.07%**: 6.1922 -> 6.4444 FPS, 281 -> 270 vblanks
+over the same 29 frames, same route span and warmup tick, distinct sealed
+identities. 1% low 5.4545 -> 6.0000; the median rung does not move. Quad-pairing
+tolerance was measured first and was worse (5.9% of primitives for real texture
+warp). Together these bound the whole bake-side family: **a QuadriFlow / neural
+remesh that perfectly halved primitives would be worth ~7-8%**, less than S1.12
+returned from moving actor emission to the slave, and it is declined on that
+basis. See `docs/saturn/evidence/reports/terrain-decimation-s7_1.md`. The knob
+ships off (`SATURN_TERRAIN_DECIMATE_RATIO ?= 1.0`, default path verified inert);
+enabling it requires a package-generation bump because `scene_package_hash`
+moves.
+
 ## Product truth
 
 **Historical prior owner-accepted CUE: `id-86d3880727ed1d10`.** ELF

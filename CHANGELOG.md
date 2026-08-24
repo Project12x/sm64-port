@@ -4,6 +4,59 @@
 
 ### Added
 
+- **S7.1 terrain decimation, landed behind `SATURN_TERRAIN_DECIMATE_RATIO`
+  (default 1.0, inert)** -- `tools/saturn/decimate_terrain_mesh.cpp` (a
+  meshoptimizer front end) plus `tools/saturn/decimate_terrain_ir.py`, wired
+  into `compile-bob-area` between extraction and quad pairing so every
+  downstream stage sees the reduced mesh. Upstream meshoptimizer, MIT,
+  HEAD 97bbdce (2026-08-08), verified live 2026-08-23; reuse mode dependency,
+  no upstream code copied. `meshopt_simplifyWithAttributes` is used over
+  `meshopt_simplify` because VDP1 maps textures affinely across a quad, so UVs
+  must participate in the error metric, and because `vertex_lock` is what keeps
+  a collapse from dragging one material's UVs onto another's triangles.
+- **Measured, and it caps the reduce-primitives thesis** --
+  `docs/saturn/evidence/reports/terrain-decimation-s7_1.md`. At ratio 0.75 BOB
+  goes 1,101 -> 825 source triangles and **867 -> 636 baked primitives
+  (-26.6%)**, for **6.1922 -> 6.4444 FPS (+4.07%)**: 281 -> 270 vblanks over the
+  same 29 frames, same route span, same warmup tick, distinct sealed identities.
+  1% low 5.4545 -> 6.0000; median rung unchanged. **Elasticity is only ~0.15** --
+  a quarter of the primitives returns 4% of the frame.
+- **Therefore the QuadriFlow / neural-remesh escalation is declined.** It is a
+  large new asset pipeline aimed at the lever just measured to be weak: even a
+  perfect quad remesh halving primitives would be worth ~7-8% on this
+  elasticity, less than S1.12 returned from moving actor emission to the slave.
+  Dropping below 0.75 is likewise declined -- the owner already rejected 0.5
+  visually. The remaining headroom is runtime-side; S1.10 (N64 geo-tree walk
+  removal) is the outstanding candidate.
+- Cost of the win: material 16 eliminated (4 triangles, 0.0047% of terrain area,
+  under the 0.1% guard and reported), geometric error 0.0169. Collision is
+  untouched by construction -- `collision.inc.c` is a separate source from
+  `geo.inc.c` and never enters this pipeline.
+
+### Fixed
+
+- **Terrain decimation compounded across make's concurrent invocations.**
+  `compile-bob-area` is phony and make runs it several times in parallel, while
+  the step rewrote the extractor's own output **in place**. One invocation
+  re-read an already-decimated mesh and decimated it again -- 1,101 -> 825 ->
+  705 -- eliminating materials 12 and 13 (0.64% of terrain area each); a second
+  read a half-written intermediate and died on a JSON decode. Root cause was
+  treating a pipeline stage as a mutation rather than a function. Decimation now
+  writes `bob_area1_mesh_ir_v2_decimated.json`, refuses the in-place case
+  outright, keeps intermediates per-process, and publishes by rename. Consumers
+  choose via `BOB_MESH_IR_BAKED`. This also un-breaks
+  `tools/saturn/test_mesh_ir_obj_shim.py`, which reads the extractor's path
+  directly and would have been silently reading decimated geometry. The rule
+  directly below it already documented this hazard class for
+  `bob_area1_bsp_report.json` (`Makefile.saturn.mk:2414`).
+- Rebuilt triangles were all stamped with their material's template `source` id,
+  so `saturn_mesh_ir.py`'s uniqueness check rejected the first decimated bake
+  with `duplicate source triangle id 0`. A decimated triangle is new geometry
+  formed by edge collapses and has no single originating source triangle, so it
+  is renumbered instead of inheriting one.
+
+### Added
+
 - **Frame decomposition re-measured after S1.12** (9.690 VB/frame, 6.1922 FPS):
   pre-notification **2.483 VB** (master alone) + slave window **2.793 VB**
   (master advances simulation) + `master_finalize` **4.310 VB** (master alone,
