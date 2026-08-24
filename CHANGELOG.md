@@ -2,6 +2,64 @@
 
 ## [Unreleased]
 
+### Added
+
+- **SCU DSP priced and DECLINED** --
+  `docs/saturn/evidence/reports/scu-dsp-priced-and-declined.md`. The hypothesis
+  was that batch vertex transform on the unused DSP is the lever that adds a
+  processor rather than shaving a percentage. It is not. **The transform kernel
+  does not appear in the profile at all** (`ir_transform_one`,
+  `ir_transform_batch`, `ir_project_view` are absent from all 146 symbols), and
+  everything DSP-shaped totals **~5.5% of working cycles (73,263 cyc/frame)**
+  once `refresh_float_mirror` is excluded as already-claimed by S1.10 -- an
+  upper bound near **+0.2 FPS** assuming zero transfer overhead.
+- Four structural disqualifiers, all static facts: **1 KB of data RAM** (our own
+  `scu/dsp.h`: 256 instructions, 4 pages x 64 words) means ~21 vertices per
+  round trip and 50-110 DMA round trips per frame; **the DSP cannot divide**
+  while our kernel is a deliberate close-port of libmic3d's pattern built around
+  overlapping the SH-2 hardware `DIVU` with the X/Y dot products
+  (`saturn_ir_transform.c:80-93`); **SCU bus contention** with the VDP1 command
+  DMA already running at ~1.02 late banks/frame; and **zero prior art** -- the
+  string `dsp` appears nowhere in `slavedriver-engine` or `sonic-z-treme`, and
+  libmic3d does not use it either.
+- **What the DSP is actually for, recorded so the question is not re-asked:**
+  fixed-point MAC, no division, <=64 words per bank, **contiguous** data (its
+  DMA is a block mover, not a gatherer), latency-tolerant, independent items.
+  Plausible future tenants are Gouraud/vertex lighting, animation blending and
+  collision broadphase. `actor_meshlet_live_depth_bounds` is arithmetically a
+  fit but gathers through `actor_position_ref`, which fights linear DMA.
+- **It is last in the queue because the second CPU is still idle**:
+  `___slave_polling_entry` was 43.2% of all cycles, and post-S1.12 the slave
+  window is 2.793 of 9.690 VB (**29% of the frame**) while the master works
+  alone for 70%. A full SH-2 with cache and unrestricted memory is an order of
+  magnitude more capable than a 256-instruction DSP and far cheaper to program.
+
+- **Baked visibility scoped, and the blocking finding is not portals** --
+  `docs/saturn/evidence/reports/baked-visibility-scoping.md`.
+  `saturn_scene_admission.c` already implements cell-and-portal visibility in
+  full (node hierarchy, portal windows with `node_a`/`node_b`/`open`, and stats
+  down to `cycle_edges`), and BOB simply supplies no portals. But the T2.10
+  counters show the real problem is one level below that: **`nodes_tested` = 1,
+  `nodes_admitted` = 1.** The node hierarchy collapses to a single root, so
+  admission performs a **linear frustum test over all 867 clusters every frame**
+  and rejects 560 of them one at a time (`admitted_share_of_tested` 35.4%).
+- **Two stages that buy different things, which is easy to conflate.** A real
+  node hierarchy makes the *test* cheaper while admitting the *same* clusters --
+  it attacks the 8.40% in `scene_admit_with_scratch` only. Portals/occlusion
+  reduce the *admitted set*, which is the only thing that also reaches
+  `demo_terrain_queue_world_lower` (8.19%) and `actor_meshlet_live_depth_bounds`
+  (7.28%). The ~24% headline needs both.
+- **Stage A first, unconditionally; Stage B per level and not on BOB.** BOB is
+  an open mountain -- the same 16,383 x 16,383 world with ~35 distinct height
+  levels that defeated the VDP2 RBG0 ground plane -- and open topology is the
+  worst case for portal culling. A linear scan over every cluster is wasteful
+  whatever the topology, so the hierarchy pays regardless. Stage A carries an
+  exact oracle: the admitted cluster list must stay **byte-identical**.
+- Stage 0 for that work is a binding check, not construction: determine whether
+  `sm64_saturn_bob_scene_admission_nodes` is genuinely one entry or a populated
+  hierarchy being rejected by validation, since `tools/saturn/compile_bob_bsp.py`
+  already emits a BSP that is not currently feeding `scene.nodes`.
+
 ### Fixed
 
 - **RETRACTED: the S7.1 "+4.07% FPS" result was measured on a corrupted mesh.**
