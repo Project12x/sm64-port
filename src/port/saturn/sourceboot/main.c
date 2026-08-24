@@ -38,6 +38,10 @@
 #include "saturn_peak_probe.h"
 #include "saturn_prenotify_profile.h"
 #include "source_cart.h"
+/* S4.2b parked: see the act-selection block in user_init(). */
+#ifndef SATURN_FEATURE_STAR_SELECT
+#define SATURN_FEATURE_STAR_SELECT 0
+#endif
 #include "source_star_select.h"
 #include "source_camera_acceptance_route.h"
 #include "source_camera_idle_probe.h"
@@ -2043,12 +2047,29 @@ sourceboot_post_cart_init(void)
      * note on why that value could not stay at its BSS zero. */
     {
         extern s16 gCurrActNum;
+        /* PARKED (SATURN_FEATURE_STAR_SELECT defaults 0). The selector builds
+         * and its labels check out, but it does not display. NBG0 not being
+         * enabled this early was one cause and is fixed; something else
+         * remains. Leaving it on costs a ten-second stall on every boot for a
+         * menu nobody can see, which would tax every unrelated test, so it is
+         * off until someone returns to it.
+         *
+         * Act 1 is the deterministic fallback -- the same value the level
+         * script used to hardcode, and a valid 1..6 so level_cmd_place_object's
+         * `1 << (gCurrActNum - 1)` act mask stays well-defined. */
+#if SATURN_FEATURE_STAR_SELECT
         if (!sm64_saturn_star_select_labels_are_drawable()) {
             dbgio_puts("sourceboot: star select label is undrawable\n");
             dbgio_flush();
             for (;;) {}
         }
-        gCurrActNum = (s16)sm64_saturn_star_select_run(&sourceboot_vblank_out_count);
+        gCurrActNum =
+            (s16)sm64_saturn_star_select_run(&sourceboot_vblank_out_count);
+#else
+        (void)sm64_saturn_star_select_labels_are_drawable;
+        (void)sm64_saturn_star_select_run;
+        gCurrActNum = 1;
+#endif
     }
     sm64_saturn_vdp2_frame_init(&sourceboot_vdp2_frame);
 
