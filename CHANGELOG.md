@@ -4,6 +4,39 @@
 
 ### Added
 
+- **Measured: the frame cost is fixed, not content-driven** --
+  `docs/saturn/evidence/reports/frame-cost-is-fixed-not-content.md`. Sweeping
+  `DEMO_FAR_DEPTH` on the shipped baseline, matched route span and warmup tick:
+  **8192 -> 4096 (half the visible world) is +8.49%** (9.6897 -> 8.9310
+  VB/frame), and **8192 -> 2048 (a quarter) is only +10.20%** (8.7931). The
+  curve saturates almost immediately -- drawing a quarter of BOB, which would
+  look unacceptable, leaves the frame within 10% of where it started.
+- **This closes content reduction as a strategy, and it explains the whole
+  sprint.** Three independent measurements are one fact seen three ways:
+  primitive elasticity <=0.15 (decimation, -26.6% primitives for at most +4%),
+  draw distance saturating at +10.2%, and a cycle profile whose largest symbol
+  is 9.49% with a 444-symbol tail at 18.96%. **Roughly 90% of the frame is fixed
+  per-frame cost that does not scale with what is visible.** Terrain decimation,
+  quad pairing, occlusion/portals and draw distance all attack the same ~10%;
+  none of them can reach the rest. Do not re-open them.
+- **The target is the per-frame fixed machinery.** On the master-only profile
+  that is soft-float + libm 16.33%, N64 geo walk + matrix stack 13.54%, actor
+  pipeline 12.04%, memory ops 7.37%, and an 18.96% tail.
+  `_demo_render_prepare_publish` (6.03%), `_actor_pose_evaluate_staged` (4.20%),
+  `_matrix_mul` (4.36%), `_saturn_geo_enter_object` (3.70%) and
+  `_refresh_float_mirror` (2.02%) all run per actor per frame whether or not
+  that actor is drawn. **The port is not slow because it draws too much; it is
+  slow because every frame it re-does N64-shaped bookkeeping for the entire
+  actor and scene graph.** That is S1.10 and the actor pipeline, and it is now
+  the plan of record.
+- The sweep needs no new build flag and no package-generation bump: the far
+  plane is a runtime frustum parameter, so editing the constant changes
+  `source_hash` and reseals identity on its own. Identities measured:
+  `684490199c21c5f8` (8192), `65741bf2db8a27d9` (4096), `bb299b25f799d26c`
+  (2048). The constant is restored to 8192.
+
+### Added
+
 - **Per-CPU profiles captured, and the master/slave rebalance ceiling is now a
   measured number** -- `profile-master-only-2026-08-24.json`,
   `profile-slave-only-2026-08-24.json`. **Master 96.4% busy (3.6% idle), slave
