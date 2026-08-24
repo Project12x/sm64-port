@@ -34,31 +34,33 @@
   alone for 70%. A full SH-2 with cache and unrestricted memory is an order of
   magnitude more capable than a 256-instruction DSP and far cheaper to program.
 
-- **Baked visibility scoped, and the blocking finding is not portals** --
-  `docs/saturn/evidence/reports/baked-visibility-scoping.md`.
-  `saturn_scene_admission.c` already implements cell-and-portal visibility in
-  full (node hierarchy, portal windows with `node_a`/`node_b`/`open`, and stats
-  down to `cycle_edges`), and BOB simply supplies no portals. But the T2.10
-  counters show the real problem is one level below that: **`nodes_tested` = 1,
-  `nodes_admitted` = 1.** The node hierarchy collapses to a single root, so
-  admission performs a **linear frustum test over all 867 clusters every frame**
-  and rejects 560 of them one at a time (`admitted_share_of_tested` 35.4%).
-- **Two stages that buy different things, which is easy to conflate.** A real
-  node hierarchy makes the *test* cheaper while admitting the *same* clusters --
-  it attacks the 8.40% in `scene_admit_with_scratch` only. Portals/occlusion
-  reduce the *admitted set*, which is the only thing that also reaches
-  `demo_terrain_queue_world_lower` (8.19%) and `actor_meshlet_live_depth_bounds`
-  (7.28%). The ~24% headline needs both.
-- **Stage A first, unconditionally; Stage B per level and not on BOB.** BOB is
-  an open mountain -- the same 16,383 x 16,383 world with ~35 distinct height
-  levels that defeated the VDP2 RBG0 ground plane -- and open topology is the
-  worst case for portal culling. A linear scan over every cluster is wasteful
-  whatever the topology, so the hierarchy pays regardless. Stage A carries an
-  exact oracle: the admitted cluster list must stay **byte-identical**.
-- Stage 0 for that work is a binding check, not construction: determine whether
-  `sm64_saturn_bob_scene_admission_nodes` is genuinely one entry or a populated
-  hierarchy being rejected by validation, since `tools/saturn/compile_bob_bsp.py`
-  already emits a BSP that is not currently feeding `scene.nodes`.
+- **Baked visibility scoped -- and Stage A turned out to be already shipped** --
+  `docs/saturn/evidence/reports/baked-visibility-scoping.md`. The scope was
+  first written around a `nodes_tested: 1` counter reading as "the hierarchy
+  collapses to a single root, so admission linearly scans all 867 clusters every
+  frame". **That counter is stale.** It is dated 2026-08-16, the same day as
+  commit `0d3450f4` *"bake a median-split admission hierarchy instead of one
+  node"* and `031a575e` *"descend a real hierarchy and inherit the frustum
+  result"* -- it predates the fix it appears to indict.
+  `SM64_SATURN_BOB_ADMISSION_NODE_COUNT` is **255**.
+- **Measured current state** via the existing `verify-admission-hierarchy` T2.12
+  oracle: 255 nodes, **flat 802.2 tests/pose -> tree 147.9 + 106.0 = 31.6%**,
+  `clusters_tested` 38,668,200 -> **12,953,180 (-66.5%)**, 48,200 poses,
+  0 divergences, admitted-set digest `a99b76b99477a4ff`, PASS. The gate's own
+  leaf-size sweep shows the shipped leaf8 is the **minimum** (leaf4 36.0%,
+  leaf16 33.2%), so the hierarchy is not merely done but tuned. The 8.40% in
+  `scene_admit_with_scratch` is what remains *after* that reduction.
+- **Stage B is weak on BOB and now quantified**: the same gate reports
+  **admitted per pose min 125 max 867** -- from some viewpoints the frustum
+  admits every cluster in the level. That is the open-mountain topology in
+  numbers, the same property that defeated the VDP2 RBG0 ground plane.
+  Cell-and-portal support is fully implemented and unfed; feeding it is a
+  per-level decision that should pilot **indoors** (castle), never on BOB.
+- **The earlier "~24% visibility lever" claim is withdrawn.** The hierarchy half
+  is spent; the downstream half (`demo_terrain_queue_world_lower` 8.19%,
+  `actor_meshlet_live_depth_bounds` 7.28%) scales with an admitted set that is
+  large because BOB genuinely is visible. Shrinking it is a draw-distance/LOD
+  product decision, not an optimisation.
 
 ### Fixed
 

@@ -1,108 +1,82 @@
-# Baked visibility — scoped against the admission API we already have
+# Baked visibility — scoped, and Stage A turned out to be already shipped
 
-**Date:** 2026-08-24 · Scoped from the shipped admission implementation, BOB's
-live scene binding, and the T2.10 admission counters. No new capture.
+**Date:** 2026-08-24 · Corrected the same day it was written. The first version
+of this document scoped a spatial hierarchy as the main prize on the strength of
+a `nodes_tested = 1` counter. **That counter was stale**, and the work was
+already done. Corrected below from the `verify-admission-hierarchy` gate run on
+the current tree.
 
-## The finding that sets the scope
+## Correction, and how the error happened
 
-`sm64_saturn_scene_admission.c` already implements **cell-and-portal
-visibility** in full: nodes carrying bounds, cluster refs, portal refs and a
-child hierarchy; portal windows carrying bounds, `node_a`/`node_b` and an `open`
-flag; and statistics for `portals_tested`, `portals_open`,
-`portals_rejected_closed`, `portals_rejected_frustum` and `cycle_edges` (so
-cyclic portal graphs are handled).
+The T2.10 evidence (`sprint2-t2_10-spatial-admit-fixes.json`,
+`/summary/spatial_admit/counts`) reports `nodes_tested: 1`, `nodes_admitted: 1`
+against `clusters_tested: 867`, which reads as "the node hierarchy collapses to
+a single root, so admission linearly scans every cluster". It was written on
+**2026-08-16** — the same day as commit `0d3450f4`, *"feat(scene): bake a
+median-split admission hierarchy **instead of one node**"*, and its companion
+`031a575e`, *"feat(admission): descend a real hierarchy and inherit the frustum
+result"*. The counter predates the fix it appears to indict.
 
-BOB feeds it (`saturn_demo_render.c:931-947`) clusters, nodes, cluster refs — and
-then:
+The generated header states the true position plainly:
+`SM64_SATURN_BOB_ADMISSION_NODE_COUNT` is **255**, and node 0 carries
+`child_first = 1, child_count = 2` with real bounds. **The lesson is the same
+one that produced the decimation seam bug earlier the same day: a number that
+supports a convenient conclusion needs its provenance checked before it is built
+on.** Both errors were "an old measurement, still true-looking, quietly wrong".
 
-```c
-scene.portal_ref_count = 0U;
-scene.root_node        = 0U;          /* hardcoded, not the camera's cell */
-.portal_capacity       = 0U           /* output */
+## Measured current state
+
+From `mingw32-make -f Makefile.saturn.mk verify-admission-hierarchy` (the T2.12
+equivalence oracle, which already implements the byte-identical admitted-set
+check this document was about to propose building):
+
+```
+bob-generated   nodes 255 | flat 802.2 tests/pose -> tree 147.9 + 106.0 (31.6%)
+clusters_tested reference 38,668,200 -> shipped 12,953,180   (-66.5%)
+48,200 poses, 13,835,970 cluster admissions, 0 divergences
+admitted-set digest a99b76b99477a4ff        FIXTURE: PASS
 ```
 
-`scene.portals` is never assigned at all. But the decisive number is from the
-T2.10 counters:
+**Stage A is shipped, and it is already at its optimum.** The gate sweeps leaf
+size, and the shipped configuration is the minimum of that sweep:
 
-| counter | value |
-|---|---:|
-| `clusters_tested` | 867 |
-| `clusters_admitted` | 307 |
-| `clusters_rejected_frustum` | 560 |
-| `admitted_share_of_tested` | **35.4%** |
-| **`nodes_tested`** | **1** |
-| **`nodes_admitted`** | **1** |
-| `portals_tested` | 0 |
+| leaf size | 1 | 2 | 4 | **8 (shipped)** | 16 | 32 | 64 | 128 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| tests/pose as % of flat | 67.8 | 48.9 | 36.0 | **31.6** | 33.2 | 39.7 | 48.4 | 63.0 |
 
-**The node hierarchy is a single root node.** Despite `scene.nodes` being
-supplied and the traversal being implemented, there is no spatial subdivision:
-admission performs a **linear frustum test over all 867 clusters, every frame**,
-and throws away 560 of them one at a time.
+So `sm64_saturn_scene_admit_with_scratch` (8.40% of working cycles) is the cost
+that **remains after** a 66.5% reduction, at the best leaf size available. There
+is no hierarchy headroom left to claim.
 
-That is what `sm64_saturn_scene_admit_with_scratch` (8.40% of working cycles,
-112,369 cyc/frame) is spending its time on.
+## Stage B (occlusion / portals) is also weak on BOB, and now quantified
 
-## Two stages, and they buy different things
+The same gate reports **`admitted per pose min 125 max 867`**. From some
+viewpoints the frustum admits *every cluster in the level*. That is the
+open-mountain topology stated numerically, and it is the same property that
+defeated the VDP2 RBG0 ground plane: a 16,383 x 16,383 world whose up-facing
+faces spread across ~35 height levels has few large occluders.
 
-This distinction matters and is easy to get wrong:
+Cell-and-portal visibility is fully implemented already
+(`saturn_scene_admission.c`: portal windows with `node_a`/`node_b`/`open`, stats
+down to `cycle_edges`), and BOB supplies none. That remains true — but it is a
+deliberate configuration, not an oversight, and feeding it on BOB is not
+obviously worth it.
 
-**Stage A — a real node hierarchy. Makes the test cheaper; admits the same
-clusters.** Rejecting a subtree by its bounds removes hundreds of individual
-cluster tests, turning an O(n) scan into O(log n) plus the admitted set. It
-attacks the **8.40%** admission cost. It does **not** reduce the 307 admitted
-clusters, so it does not touch the downstream per-cluster work.
+## What is actually left here
 
-**Stage B — portals / occlusion. Reduces the admitted set.** Only this attacks
-the downstream work that scales with admitted clusters:
-`demo_terrain_queue_world_lower` (8.19%, 109,574 cyc) and
-`actor_meshlet_live_depth_bounds` (7.28%, 97,412 cyc). Together with admission
-itself that is the **~24%** headline — but only Stage B reaches the other 15.5%.
+- **Nothing on the hierarchy.** Shipped, optimal, oracle-gated.
+- **Portals: measure occlusion per level before committing, and start indoors.**
+  The castle interior and room-based areas are where a portal graph pays. BOB is
+  the worst case and should not be the pilot.
+- **The remaining admission-adjacent cost is downstream, not in admission.**
+  `demo_terrain_queue_world_lower` (8.19%) and `actor_meshlet_live_depth_bounds`
+  (7.28%) scale with the *admitted* set, and on BOB that set is large because
+  the level genuinely is visible. Reducing it needs either real occluders
+  (levels that have them) or a draw-distance/LOD policy decision — which is a
+  product call about what the port draws, not an optimisation.
 
-## The honest risk on BOB
+## Reproducing
 
-**BOB is an open mountain, which is the worst case for portal visibility.** The
-VDP2 RBG0 ground scoping already established the shape of this terrain: a
-16,383 x 16,383 world with a 4,677-unit height span and up-facing faces spread
-over ~35 distinct height levels. Cell-and-portal culling pays where sightlines
-are bounded by geometry — corridors, rooms, the castle interior. On an outdoor
-mountain you can see much of the level from much of it, so the open-portal set
-stays large and Stage B's prize shrinks.
-
-Stage A is **level-agnostic** and pays regardless: a linear scan over every
-cluster is wasteful whatever the topology.
-
-Therefore: **Stage A first, unconditionally. Stage B measured per level, castle
-and interior areas first, and never assumed from BOB's numbers.**
-
-## Prior art already in the tree
-
-- **A BSP compiler exists**: `tools/saturn/compile_bob_bsp.py` produces
-  `bob_bsp.h` and `bob_area1_bsp_report.json`. It is not currently feeding
-  `scene.nodes` — that binding is the first thing to check, because the
-  hierarchy may be half-built already.
-- `sonic-z-treme` (GPL, `work/upstream/`) — its frustum type is already
-  referenced by our admission header (`sm64_saturn_ztreme_frustum_t`), so its
-  traversal is the natural comparison for Stage A.
-
-## Scope
-
-**Stage 0 — confirm the binding (hours).** Establish why `node_count` collapses
-to one usable node: is `sm64_saturn_bob_scene_admission_nodes` genuinely a
-single entry, or is a populated hierarchy being rejected by validation? The
-answer changes Stage A from "build a hierarchy" to "fix a binding". Re-read the
-counters on the current build — T2.10's numbers predate S1.11/S1.12.
-
-**Stage A — spatial hierarchy (the main prize).** Bake a bounded-depth node tree
-over BOB's clusters, emit it into the scene package beside the existing cluster
-arrays, and let admission reject subtrees. Acceptance: `nodes_tested` >> 1,
-`clusters_tested` well below 867, identical admitted set (the admitted cluster
-list must be **byte-identical** to today's — this is a pure speed change and any
-difference is a bug).
-
-**Stage B — portals, per level.** Bake portal windows between adjacent cells and
-set `root_node` from a per-frame camera point-locate. Gate on a measured
-occlusion ratio per level before committing; do not start on BOB.
-
-**Risk:** low for Stage A — it is a pure acceleration structure with an exact
-oracle (the admitted set must not change). Medium for Stage B, which changes
-what is drawn and needs visual verification.
+```bash
+pwsh -NoProfile -File ./tools/saturn/with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-admission-hierarchy
+```
