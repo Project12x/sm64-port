@@ -2,6 +2,46 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Frame decomposition re-measured after S1.12** (9.690 VB/frame, 6.1922 FPS):
+  pre-notification **2.483 VB** (master alone) + slave window **2.793 VB**
+  (master advances simulation) + `master_finalize` **4.310 VB** (master alone,
+  slave idle). S1.12 cut finalize from 5.000 to 4.310, but **master-only work is
+  still 6.793 of 9.690 VB -- 70% of the frame.** Further offloading nibbles at
+  that; it does not change the shape.
+- **Quad-pairing headroom measured, and it is NOT the FPS lever** --
+  `docs/saturn/evidence/reports/quad-pairing-headroom.md`. BOB bakes 1,101
+  source triangles into 867 primitives: only **234 quads against 633 triangle
+  fallbacks**, with `pairing_forbidden_triangles` at 0, so nothing is refused by
+  policy. 84% of the failures (**532**) are `uv_affine_error` -- VDP1 maps a
+  texture affinely across a quad while the N64 source is perspective-correct
+  per-triangle -- and the threshold is a single plain default,
+  `DEFAULT_TEXTURED_AFFINE_ERROR_LIMIT = 256`. That looked like a large win
+  available from one constant.
+- **Re-baked at 4x tolerance (1024) it is worth 5.9%**: 867 -> 816 primitives.
+  And the rejections **move rather than shrink** -- `uv_affine_error` 532 -> 321
+  while `planar_quad_not_convex` rises 60 -> **187** and `normal_divergence`
+  27 -> 48. Relaxing the UV test only exposes triangles that then fail the
+  *geometric* tests. The ceiling is that BOB's triangle soup largely is not
+  pairs of coplanar, convex, similarly-facing triangles; it is not a tunable.
+  Roughly 6% for a 4x tolerance increase and real texture warp is a bad trade.
+- **This narrows the reduce-primitives thesis rather than weakening it.**
+  Terrain decimation (S7.1) removes triangles outright instead of merging them,
+  so the convexity and normal-divergence ceilings do not apply to it. It is
+  already owner-approved at 75% ("75% looks nearly identical; 50% does not") and
+  unlanded, and on these numbers it is the strongest remaining bake-side lever.
+
+### Changed
+
+- Star select **parked** behind `SATURN_FEATURE_STAR_SELECT` (default 0) after
+  owner testing showed it still does not display. NBG0 not being enabled that
+  early was one real cause and is fixed; something else remains. Leaving it on
+  cost a ten-second stall on every boot for an invisible menu, which would tax
+  every unrelated test while FPS is the priority. Act 1 is restored as the
+  deterministic fallback -- the value the level script used to hardcode, and a
+  valid 1..6 so the act mask stays well-defined.
+
 ### Fixed
 
 - **Star select drew nothing on boot: NBG0 was never switched on that early.**
