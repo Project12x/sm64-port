@@ -1,4 +1,27 @@
-# S7.1 terrain decimation — landed, measured, and it caps the primitive thesis
+# S7.1 terrain decimation
+
+> **RETRACTED 2026-08-24 -- the +4.07% below was measured on a corrupted mesh,
+> and terrain decimation is not viable on BOB.** Owner testing found textures
+> badly broken on the decimated build. `vertex_lock` was computed from vertices
+> shared *by index* between materials, but the source duplicates its vertices at
+> material boundaries, so **nothing was ever locked** -- the "0/1625 vertices
+> locked" line, read at the time as evidence of disjoint material islands, was
+> the bug reporting itself. meshoptimizer welds coincident positions to build
+> its edge graph, so a collapse could move a triangle onto a neighbouring
+> material's texture at zero geometric cost. Geometry and collision stayed
+> correct, which is why it passed every check that was run.
+>
+> Fixed: seams are keyed by **position** (763/1625 lock on BOB) and a
+> per-material retention guard fails the build on migration. With that fix the
+> mesh will not decimate usefully -- **0.95 is the last clean ratio** (-5%
+> triangles), 0.90 wipes material 16, 0.75 wipes 12 and 16. The knob stays off.
+>
+> What survives: the corrupted build genuinely drew 636 primitives against 867
+> and genuinely ran 4.07% faster, so **that figure is an upper bound** on
+> primitive elasticity (~0.15 at most), and the QuadriFlow / neural-remesh
+> decline stands. The measurement methodology below is sound and reusable; the
+> conclusion about decimation as a shipping option is not.
+
 
 **Date:** 2026-08-24 · Measured end-to-end through the real bake and a sealed
 capture, not a reconstruction.
@@ -83,12 +106,23 @@ upstream code. `meshopt_simplifyWithAttributes` is used rather than
 affinely across a quad and is less forgiving of UV distortion than the
 perspective-correct N64 source) and so `vertex_lock` can pin material seams.
 
-Measured aside: BOB's lock count is **0 of 1,625 vertices**, which is correct
-rather than a bug — the source display lists duplicate vertices at material
-boundaries, so the 18 materials are already disjoint vertex islands. The
-locking is retained because a level that violates that property would otherwise
-silently drag one material's UVs onto another's triangles; `decimate_terrain_ir.py`
-re-verifies the property every run and fails closed instead of guessing.
+**The lock count was the bug, and this is how it was rationalised.** The tool
+reported **0 of 1,625 vertices locked**, and that was written up here as
+correct: the source display lists duplicate vertices at material boundaries, so
+the 18 materials are index-disjoint islands, so nothing *needs* locking. Every
+step of that is true and the conclusion is still wrong. Index-disjointness does
+not stop a collapse from crossing materials, because meshoptimizer welds
+coincident positions to build its edge graph -- the duplicated seam vertices are
+one vertex to the simplifier, and collapsing between them costs **zero**
+geometric error precisely because they occupy the same point. A zero lock count
+on a mesh with 18 textured materials should have read as an alarm, not a
+property.
+
+Seams are now keyed by position: **763 of 1,625 vertices** lock on BOB, and the
+report emits `vertices_locked_material_seam` alongside `vertices_shared_by_index`
+so the two are never conflated again. The lesson generalises past this tool: a
+guard that reports "nothing to do" is making a claim about the input, and that
+claim needs its own check.
 
 ## Two design defects found while landing this
 

@@ -4,14 +4,20 @@ The C++ tool (decimate_terrain_mesh.cpp) owns the geometry decision and returns
 a surviving triangle list; this owns the document, because material/tile/source
 metadata is the bake's to understand, not the decimator's.
 
-Reassigning materials after decimation is only sound because of a property this
-script re-verifies every run rather than assuming: in the shipped mesh IR every
-vertex belongs to exactly one material -- the source display lists duplicate
-vertices at material boundaries, so materials are disjoint vertex islands
-(measured on BOB: 0 of 1625 vertices touched by more than one material). That
-makes a decimated triangle's material unambiguous: the material of its
-vertices. If a level ever violates that, this fails closed instead of guessing,
-because a wrong material silently swaps a triangle's texture.
+Every vertex index belongs to exactly one material, because the source display
+lists duplicate their vertices at material boundaries. That makes a surviving
+triangle's material readable from its vertices -- but ONLY as long as an edge
+collapse cannot move a triangle from one material's island onto another's.
+Index-disjointness does not give that guarantee: meshoptimizer welds coincident
+positions to build its edge graph, so the duplicated seam vertices are one
+vertex to the simplifier and a cross-material collapse costs zero geometric
+error. The decimator's position-keyed vertex_lock is what actually prevents it.
+
+This script therefore verifies the outcome rather than trusting the input
+property: retention per material must stay near the requested ratio. Wholesale
+migration of triangles onto a neighbour's texture is invisible in the geometric
+error (measured 0.0169 while it was happening) and invisible in the triangle
+count, but it is obvious in the per-material histogram.
 """
 from __future__ import annotations
 
@@ -27,6 +33,14 @@ from pathlib import Path
 # A material below this share of terrain area may vanish without anyone
 # noticing; above it, losing the material is a visible hole.
 LOST_MATERIAL_AREA_LIMIT = 0.001  # 0.1%
+
+# Seam locking legitimately holds some materials well ABOVE the requested
+# ratio (a small material ringed by locked seams may not decimate at all), so
+# only shortfalls are interesting. These bound how far below the request a
+# material may sit before it reads as migration rather than decimation.
+RETENTION_TOLERANCE = 0.10
+MIGRATION_RATIO_FLOOR = 0.5
+MIGRATION_MIN_TRIANGLES = 8
 
 
 def main() -> int:
@@ -151,6 +165,42 @@ def main() -> int:
               f"{100 * LOST_MATERIAL_AREA_LIMIT:.2f}% of terrain area and were "
               "eliminated entirely -- a visible surface would disappear. "
               "Raise --ratio or exclude those materials.", file=sys.stderr)
+        return 1
+
+    # Per-material retention is the test that actually catches cross-material
+    # migration, and it is the reason this guard exists at all: when seam
+    # locking failed, BOB kept 100% of six materials and 18% of material 12
+    # while the geometric error read a reassuring 0.0169 and the total triangle
+    # count hit its target exactly. Neither the error nor the count can see a
+    # triangle that was relabelled onto a neighbour's texture; the histogram
+    # can. With seams locked, decimation can only ever REMOVE triangles from a
+    # material, so retention below a fraction of the requested ratio means
+    # triangles left the material by some other route.
+    counts_before: dict[int, int] = defaultdict(int)
+    for triangle in triangles:
+        counts_before[triangle["material"]] += 1
+    counts_after: dict[int, int] = defaultdict(int)
+    for entry in rebuilt:
+        counts_after[entry["material"]] += 1
+
+    migrated = []
+    for material in sorted(counts_before):
+        before = counts_before[material]
+        after = counts_after.get(material, 0)
+        retention = after / before
+        if retention < args.ratio - RETENTION_TOLERANCE:
+            print(f"decimate: material {material} retained {after}/{before} "
+                  f"({100.0 * retention:.0f}%) against a requested "
+                  f"{100.0 * args.ratio:.0f}%", file=sys.stderr)
+            if before >= MIGRATION_MIN_TRIANGLES and \
+                    retention < args.ratio * MIGRATION_RATIO_FLOOR:
+                migrated.append(material)
+    if migrated:
+        print(f"decimate: materials {migrated} lost far more triangles than "
+              "the requested ratio. Seam locking is not holding, so triangles "
+              "are being relabelled onto a neighbouring material's texture -- "
+              "geometry stays correct while surfaces draw with the wrong "
+              "texture. Refusing.", file=sys.stderr)
         return 1
 
     document["triangles"] = rebuilt

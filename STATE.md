@@ -511,19 +511,29 @@ basis and retired the estimate. The remaining 99.5% is state the demo renderer
 reads; see `docs/saturn/evidence/reports/sprint2-t2_15-geo-walk-display-list.md`
 sections 2 and 6 for the full site classification and where to attack instead.
 
-**Primitive count is a weak lever -- elasticity ~0.15 (S7.1, 2026-08-24).**
-Terrain decimation at ratio 0.75 removes **26.6%** of BOB's baked primitives
-(867 -> 636) and returns **+4.07%**: 6.1922 -> 6.4444 FPS, 281 -> 270 vblanks
-over the same 29 frames, same route span and warmup tick, distinct sealed
-identities. 1% low 5.4545 -> 6.0000; the median rung does not move. Quad-pairing
-tolerance was measured first and was worse (5.9% of primitives for real texture
-warp). Together these bound the whole bake-side family: **a QuadriFlow / neural
-remesh that perfectly halved primitives would be worth ~7-8%**, less than S1.12
-returned from moving actor emission to the slave, and it is declined on that
-basis. See `docs/saturn/evidence/reports/terrain-decimation-s7_1.md`. The knob
-ships off (`SATURN_TERRAIN_DECIMATE_RATIO ?= 1.0`, default path verified inert);
-enabling it requires a package-generation bump because `scene_package_hash`
-moves.
+**Primitive count is a weak lever -- elasticity AT MOST ~0.15 (S7.1,
+2026-08-24), and terrain decimation itself is not viable on BOB.** The 0.75
+decimated build emitted 636 primitives against the baseline's 867 and ran
++4.07% (6.1922 -> 6.4444 FPS, 281 -> 270 vblanks over 29 frames) -- but owner
+testing found its textures broken, and the cause was a seam-locking defect that
+let edge collapses relabel triangles onto neighbouring materials at zero
+geometric cost. That figure is therefore an **upper bound**, not a result: the
+corruption merged material runs, which if anything made it cheaper. Seam
+detection is fixed (position-keyed; 763/1625 vertices lock on BOB) and a
+per-material retention guard now fails the build on migration.
+
+With seams correctly locked the mesh will not decimate usefully: **0.95 is the
+last clean ratio** (1,101 -> 1,045 triangles, -5%, nothing lost), while 0.90
+wipes material 16, 0.80 guts materials 3 and 5, and 0.75 wipes 12 and 16. Only
+material interiors can collapse once 47% of vertices are pinned, so small
+materials are deleted rather than simplified. **The knob stays off.**
+
+The bake-side family is closed: quad-pairing tolerance was worth 5.9% of
+primitives for real texture warp, decimation is not viable, and **a QuadriFlow /
+neural remesh perfectly halving primitives is worth at most ~7-8%** -- less than
+S1.12 returned from moving actor emission to the slave. Declined. Remaining
+headroom is runtime-side. See
+`docs/saturn/evidence/reports/terrain-decimation-s7_1.md`.
 
 ## Product truth
 

@@ -21,6 +21,19 @@
  *     is textured per-material with no shared atlas, so collapsing an edge
  *     across a seam would drag one material's UVs onto another's triangles.
  *     Locking is what keeps decimation inside a material.
+ *
+ *     Seams MUST be detected by position, not by vertex index. The source
+ *     display lists duplicate their vertices at material boundaries, so no
+ *     index is ever shared between two materials -- an index-based seam test
+ *     finds zero seams on BOB and locks nothing. meshoptimizer welds
+ *     coincident positions internally to build its edge graph, so those
+ *     duplicated vertices are a single vertex to the simplifier: an edge
+ *     collapse can move a triangle from one material's island onto another's
+ *     at ZERO geometric cost, because the two vertices occupy the same point.
+ *     The result is silent retexturing -- geometry and collision look correct
+ *     while whole surfaces draw with a neighbour's texture. That shipped once
+ *     (measured: BOB kept 100% of six materials and 18% of material 12, with a
+ *     reassuring 0.0169 error) and is what this test exists to prevent.
  *   - UVs are passed as weighted attributes, so the error metric penalises
  *     texture stretch, not just silhouette change. VDP1 maps textures affinely
  *     across a quad, which makes it less forgiving of UV distortion than the
@@ -224,18 +237,33 @@ int main(int argc, char **argv)
         attribute_count = 2;
     }
 
-    /* Lock every vertex that more than one material touches. Terrain is
-     * textured per material with no shared atlas, so a collapse across a seam
-     * drags one material's UVs onto another's triangles. */
+    /* Lock every vertex sitting on a material boundary, keyed by POSITION so
+     * that seam vertices duplicated by the source are recognised as the single
+     * vertex the simplifier will treat them as. See the header comment. */
     std::vector<std::set<int> > vertex_materials(vertex_count);
     for (size_t t = 0; t < source_triangles; t++)
         for (int k = 0; k < 3; k++)
             vertex_materials[indices[t * 3 + (size_t)k]].insert(
                 triangle_material[t]);
-    std::vector<unsigned char> vertex_lock(vertex_count, 0);
-    size_t locked = 0;
+
+    typedef std::vector<long> Point;
+    std::map<Point, std::set<int> > materials_at_point;
     for (size_t v = 0; v < vertex_count; v++) {
-        if (vertex_materials[v].size() > 1) {
+        if (vertex_materials[v].empty()) continue;
+        Point point(3);
+        for (int k = 0; k < 3; k++) point[(size_t)k] = positions[v * 3 + (size_t)k];
+        materials_at_point[point].insert(vertex_materials[v].begin(),
+                                         vertex_materials[v].end());
+    }
+
+    std::vector<unsigned char> vertex_lock(vertex_count, 0);
+    size_t locked = 0, index_shared = 0;
+    for (size_t v = 0; v < vertex_count; v++) {
+        if (vertex_materials[v].empty()) continue;
+        if (vertex_materials[v].size() > 1) index_shared++;
+        Point point(3);
+        for (int k = 0; k < 3; k++) point[(size_t)k] = positions[v * 3 + (size_t)k];
+        if (materials_at_point[point].size() > 1) {
             vertex_lock[v] = 1;
             locked++;
         }
@@ -257,10 +285,11 @@ int main(int argc, char **argv)
     const size_t kept_triangles = result_count / 3;
     fprintf(stderr,
             "decimate: %zu -> %zu triangles (ratio %.3f requested, %.3f "
-            "achieved), %zu/%zu vertices locked on material seams, error %.4f\n",
+            "achieved), %zu/%zu vertices locked on material seams "
+            "(%zu shared by index), error %.4f\n",
             source_triangles, kept_triangles, ratio,
             (double)kept_triangles / (double)source_triangles, locked,
-            vertex_count, (double)result_error);
+            vertex_count, index_shared, (double)result_error);
 
     if (report_path != NULL) {
         FILE *r = fopen(report_path, "wb");
@@ -269,11 +298,13 @@ int main(int argc, char **argv)
                 "{\"schema\":\"saturn-terrain-decimation-v1\",\"ratio_requested\":%.6f,"
                 "\"source_triangles\":%zu,\"kept_triangles\":%zu,"
                 "\"ratio_achieved\":%.6f,\"vertices\":%zu,"
-                "\"vertices_locked_material_seam\":%zu,\"result_error\":%.6f,"
+                "\"vertices_locked_material_seam\":%zu,"
+                "\"vertices_shared_by_index\":%zu,\"result_error\":%.6f,"
                 "\"attribute_metric\":%s}\n",
                 ratio, source_triangles, kept_triangles,
                 (double)kept_triangles / (double)source_triangles, vertex_count,
-                locked, (double)result_error, has_uv ? "\"uv\"" : "null");
+                locked, index_shared, (double)result_error,
+                has_uv ? "\"uv\"" : "null");
         fclose(r);
     }
 

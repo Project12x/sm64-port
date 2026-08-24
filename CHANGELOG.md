@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **RETRACTED: the S7.1 "+4.07% FPS" result was measured on a corrupted mesh.**
+  Owner testing found textures "very broken" on the decimated build (geometry
+  and collision correct). Root cause: `vertex_lock` was computed from vertices
+  **shared by index** between materials, and the source display lists duplicate
+  their vertices at material boundaries -- so **zero** vertices were ever
+  locked. meshoptimizer welds coincident positions to build its edge graph, so
+  those duplicated seam vertices are a single vertex to the simplifier and an
+  edge collapse could move a triangle from one material's island onto another's
+  at **zero geometric cost**, silently retexturing whole surfaces. The
+  "0/1625 vertices locked" line was read at the time as proof that materials
+  were disjoint islands; it was actually the bug reporting itself. Seams are now
+  detected by **position** (763/1625 vertices lock on BOB), and the report
+  carries both counts so the two can never be confused again.
+- **Per-material retention guard added**, because nothing else could see this
+  failure: the geometric error read 0.0169 while it was happening, the triangle
+  count hit its target exactly, and no surviving triangle had corners spanning
+  two materials (whole triangles migrated together). Only the per-material
+  histogram showed it -- BOB kept 100% of six materials and 18% of material 12.
+  Decimation with seams locked can only remove triangles from a material, so
+  retention far below the requested ratio now fails the build.
+
+### Changed
+
+- **S7.1 terrain decimation is not viable on BOB and stays off.** With seams
+  correctly locked, 47% of vertices are pinned and only material interiors can
+  collapse, so small materials are deleted rather than simplified. Measured
+  sweep: ratio 0.95 is the last clean setting (1,101 -> 1,045 triangles, -5%,
+  worst-material retention 74%, nothing lost); 0.90 already wipes material 16
+  entirely, 0.80 guts materials 3 and 5, and 0.75 wipes 12 and 16. A 5%
+  primitive cut is worth well under 1% on the measured elasticity, so the knob
+  stays at `SATURN_TERRAIN_DECIMATE_RATIO ?= 1.0` and the tool is retained only
+  as a measured negative result.
+- **The QuadriFlow / neural-remesh decline still stands, and is strengthened.**
+  The corrupted build genuinely emitted 636 primitives against the baseline's
+  867 and genuinely ran 4.07% faster, so that figure is an **upper bound** on
+  what a correct 636-primitive mesh would return (the corruption merged
+  material runs, which if anything made it cheaper). Primitive-count elasticity
+  is therefore **at most ~0.15**, and a perfect remesh halving primitives is
+  worth at most ~7-8% -- less than S1.12 returned from moving actor emission to
+  the slave. Remaining headroom is runtime-side.
+
 ### Added
 
 - **S7.1 terrain decimation, landed behind `SATURN_TERRAIN_DECIMATE_RATIO`
