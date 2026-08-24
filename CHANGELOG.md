@@ -4,6 +4,44 @@
 
 ### Added
 
+- **Per-CPU profiles captured, and the master/slave rebalance ceiling is now a
+  measured number** -- `profile-master-only-2026-08-24.json`,
+  `profile-slave-only-2026-08-24.json`. **Master 96.4% busy (3.6% idle), slave
+  23.8% busy (76.2% idle).** Combined work is 1.202 CPU-frames; perfectly
+  balanced that is 0.601 each, shrinking the frame to 0.623x -- **6.04 VB/frame
+  = 9.94 FPS**.
+- **Correction: rebalancing is worth up to +60%, NOT the "factor of two" the
+  pooled profile suggested.** The pooled 49.28% `___slave_polling_entry` figure
+  is a share of *both* CPUs' cycles and reads as "half the machine is off"; the
+  slave is genuinely 76.2% idle, but it already carries real work, and the
+  master's load can at best be split evenly rather than halved. +60% is also a
+  frictionless ceiling assuming perfectly divisible work and zero
+  synchronisation cost.
+- **The master's critical path, ranked** (584 symbols, 1,670,342 working cycles):
+  `_demo_render_finalize` **13.79%**, `_sm64_saturn_ztreme_frustum_aabb` 6.47%,
+  `_demo_render_prepare_publish` 6.03%, `___addsf3` 5.33%,
+  `_sm64_saturn_matrix_mul` 4.36%, `_sm64_saturn_actor_pose_evaluate_staged`
+  4.20%, `_saturn_geo_enter_object` 3.70%, `_memcpy` 3.66%. Grouped:
+  terrain/admission/render 31.75%, everything-else tail 18.96% over 444 symbols,
+  soft-float+libm 16.33%, geo walk + matrix 13.54%, actor pipeline 12.04%,
+  memory ops 7.37%. The top 30 symbols are 82% of master work.
+- **The transform kernel is 0.00% of master work** -- `ir_transform_one` (2.54%
+  of slave) and `ir_project_view` (1.69% of slave) run **entirely on the slave**.
+  This closes the SCU DSP question for good: the arithmetic a DSP would take is
+  not on the critical path at all, so offloading it could not shorten the frame.
+- **Where the slave actually idles: the pre-notification phase.** Scene
+  admission runs at `saturn_demo_render.c:972`, while the slave is not woken
+  until `sm64_saturn_render_job_runtime_notify()` at `:5211`. The finalize phase
+  is **already** parallel -- `demo_actor_emit_dispatch` hands actor emission to
+  the slave, the master emits terrain concurrently, and `demo_actor_emit_join`
+  joins them -- so the idle slave is not there. The prize is prenotify:
+  admission (`ztreme_frustum_aabb` 6.47% + `scene_admit_with_scratch` 1.80% =
+  **8.27% of master work**) runs with the slave asleep, and its inputs are
+  immutable (`metadata_immutable = 1`, arrays in `.cart_rodata`, i.e. A-bus
+  cartridge ROM), which makes it the safest possible slave tenant.
+
+### Added
+
 - **The current build has been profiled for the first time** --
   `docs/saturn/evidence/reports/current-cycle-profile-2026-08-24.md`. Every
   cycle share used in sprint planning traced back to
