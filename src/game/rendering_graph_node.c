@@ -327,6 +327,20 @@ struct RenderModeContainer renderModeTable_2Cycle[2] = { { {
 struct GraphNodeRoot *gCurGraphNodeRoot = NULL;
 struct GraphNodeMasterList *gCurGraphNodeMasterList = NULL;
 struct GraphNodePerspective *gCurGraphNodeCamFrustum = NULL;
+/* obj_is_in_view() derives its horizontal screen edge from the camera fov,
+ * which is fixed for the whole frame: the perspective node claims
+ * gCurGraphNodeCamFrustum and every object beneath it reads one value. Caching
+ * the sine and cosine here rather than recomputing them per object removes the
+ * fov-to-angle conversion (soft-float divides and multiplies) and two table
+ * lookups from every object's cull test.
+ *
+ * The sine and cosine are cached SEPARATELY rather than as a single tangent on
+ * purpose: obj_is_in_view evaluates (-depth * sin) / cos, and precomputing
+ * sin/cos would reassociate that to -depth * (sin/cos), which does not round
+ * identically in float. Keeping both terms preserves the original operation
+ * order exactly. */
+static f32 sSaturnFrustumSinHalfFov = 0.0f;
+static f32 sSaturnFrustumCosHalfFov = 1.0f;
 struct GraphNodeCamera *gCurGraphNodeCamera = NULL;
 struct GraphNodeObject *gCurGraphNodeObject = NULL;
 struct GraphNodeHeldObject *gCurGraphNodeHeldObject = NULL;
@@ -560,6 +574,13 @@ static bool saturn_geo_enter_perspective(struct GraphNodePerspective *node) {
         gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(mtx), G_MTX_PROJECTION | G_MTX_LOAD | G_MTX_NOPUSH);
 
         gCurGraphNodeCamFrustum = node;
+        {
+            /* Same expression obj_is_in_view used to evaluate per object. */
+            const s16 halfFov =
+                (node->fov / 2.0f + 1.0f) * 32768.0f / 180.0f + 0.5f;
+            sSaturnFrustumSinHalfFov = sins(halfFov);
+            sSaturnFrustumCosHalfFov = coss(halfFov);
+        }
         return true;
     }
     return false;
@@ -1461,7 +1482,6 @@ static void geo_process_shadow(struct GraphNodeShadow *node) {
  */
 static s32 obj_is_in_view(struct GraphNodeObject *node, Mat4 matrix) {
     s16 cullingRadius;
-    s16 halfFov; // half of the fov in in-game angle units instead of degrees
     struct GraphNode *geo;
     f32 hScreenEdge;
 
@@ -1474,9 +1494,11 @@ static s32 obj_is_in_view(struct GraphNodeObject *node, Mat4 matrix) {
     // ! @bug The aspect ratio is not accounted for. When the fov value is 45,
     // the horizontal effective fov is actually 60 degrees, so you can see objects
     // visibly pop in or out at the edge of the screen.
-    halfFov = (gCurGraphNodeCamFrustum->fov / 2.0f + 1.0f) * 32768.0f / 180.0f + 0.5f;
-
-    hScreenEdge = -matrix[3][2] * sins(halfFov) / coss(halfFov);
+    // halfFov and its sine/cosine are loop-invariant across every object under
+    // the perspective node, and are computed once in
+    // saturn_geo_enter_perspective(). The expression below is unchanged.
+    hScreenEdge =
+        -matrix[3][2] * sSaturnFrustumSinHalfFov / sSaturnFrustumCosHalfFov;
     // -matrix[3][2] is the depth, which gets multiplied by tan(halfFov) to get
     // the amount of units between the center of the screen and the horizontal edge
     // given the distance from the object to the camera.

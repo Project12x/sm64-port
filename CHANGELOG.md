@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Hoisted the loop-invariant camera-fov trig out of `obj_is_in_view`**
+  (`src/game/rendering_graph_node.c`). The half-fov angle and its sine/cosine
+  were recomputed for **every object, every frame**, from
+  `gCurGraphNodeCamFrustum->fov` -- which the perspective node fixes once for
+  the whole frame. They are now computed in `saturn_geo_enter_perspective()` and
+  cached, removing a soft-float divide/multiply chain and two sine-table lookups
+  from every object's cull test. Identified by T2.15 and left unimplemented
+  there as out of charter.
+- **Sine and cosine are cached separately rather than as one tangent, on
+  purpose.** `obj_is_in_view` evaluates `(-depth * sin) / cos`; precomputing
+  `sin/cos` would reassociate that to `-depth * (sin/cos)`, which does not round
+  identically in float. Caching both terms keeps the original operation order,
+  so the change is **bit-identical by construction** and needs no behavioural
+  oracle.
+- **Measured +0.36%**: 6.1922 -> 6.2143 FPS, 281 -> 280 vblanks over 29 frames,
+  matched route span and warmup tick, sealed identity `0b061d044348928c` against
+  baseline `684490199c21c5f8`. **That is exactly one vblank, the resolution
+  limit of this measurement** -- the harness was confirmed deterministic by
+  re-running the baseline, which reproduced 281 vblanks exactly. Real, but at
+  the floor, and consistent with `obj_is_in_view` being inlined into
+  `saturn_geo_enter_object` at only 3.70% of master work.
+
+### Fixed
+
+- **Declined: making the Q16->float matrix mirror lazy.** The S1.10 scope
+  proposed a dirty-flag/refresh-on-read scheme for
+  `saturn_mtxq_refresh_float_mirror` (2.02% of master work). The codebase
+  already documents why it cannot be done: at the per-object site -- the
+  dominant share of that cost -- an inline comment states the refresh *"MUST
+  happen here, immediately, not deferred... `cameraToObject` (positional audio)
+  and `obj_is_in_view` (frustum culling, a gameplay-visible decision) both read
+  `gMatStack[gMatStackIndex]` before this function reaches that point."*
+  Compounding it, `throwMatrix` publishes a **raw pointer** into `gMatStack`, so
+  a lazy scheme would need a refresh barrier at every dereference site, which is
+  unbounded. The scope proposed this without reading that comment first.
+
 ### Added
 
 - **Measured: the frame cost is fixed, not content-driven** --
