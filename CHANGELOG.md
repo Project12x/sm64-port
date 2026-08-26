@@ -2,6 +2,54 @@
 
 ## [Unreleased]
 
+### Added
+
+- **S1.10 equivalence oracle: `saturn_geo_walk_digest`.** S1.10 replaces the N64
+  geo walk, and the walk cannot simply be deleted -- W1 measured that at +18.18%
+  and produced a build that can never ship, because the walk feeds animation,
+  camera, the actor observer, positional audio and a gameplay-visible cull
+  decision. A replacement is only safe if it reproduces that published stream
+  exactly, so this digest exists to check that tick by tick instead of asserting
+  it. New gates: `verify-geo-walk-digest` and `verify-geo-walk-digest-mutation`.
+- **It is a STREAMING digest over publication events, not an end-of-walk
+  snapshot, and that is the load-bearing design decision.** Most of the walk's
+  observable output does not survive the walk: `throwMatrix` publishes a
+  *pointer* into `gMatStack` whose slot the next sibling reuses, the animation
+  globals are saved and restored around held objects, and the frustum-cull
+  verdict is consumed immediately. Digesting at end-of-walk would miss nearly
+  everything that matters and would certify a replacement that got the
+  intermediate stream wrong. Folding at each publication point captures the
+  values **and their order**, which is what equivalence means here.
+- Byte order is pinned big-endian explicitly rather than folding native words,
+  because the digest is compared between a host fixture and a big-endian SH-2;
+  a native-word fold would make every cross-machine comparison vacuous. FNV-1a
+  64 is used rather than `saturn_sha256` because this runs per tick on a
+  28.6 MHz SH-2 and only needs to detect accidental divergence.
+
+### Fixed
+
+- **Mutation testing found a real gap in the oracle's own test before it was
+  ever used.** The suite claimed tag sensitivity but only exercised
+  `fold_u32`'s tag fold -- removing the tag fold from the byte-payload
+  `sm64_saturn_geo_walk_digest_fold()` **survived the entire suite**, because
+  nothing published identical bytes under two different tags through that entry
+  point. A case for it was added and the mutant is now killed. This is exactly
+  the failure mode the oracle exists to prevent, caught in the oracle itself.
+- **One mutant is provably equivalent and is now documented as such rather than
+  chased.** Removing the length fold changes no digest, because every event
+  folds a tag first and the tag positions already pin the payload boundaries --
+  two streams with identical tags and identical concatenated bytes cannot have
+  different splits. The length fold is kept as cheap defence in depth for any
+  future tagless event, and the mutation harness now *asserts it continues to
+  survive*: if a tagless event is ever added, the length fold becomes
+  load-bearing, the mutant starts getting killed, and the harness says so.
+  The test comment no longer claims a separately-testable "length framing"
+  property, which would have been hollow.
+- Final result: **7/7 killable mutants killed**, one documented equivalent
+  mutant surviving as designed. Mutation testing is justified here specifically
+  because the digest is a load-bearing oracle whose weakness would certify a
+  broken walk -- not as a blanket policy.
+
 ### Changed
 
 - **Hoisted the depth rejection above the lateral work in

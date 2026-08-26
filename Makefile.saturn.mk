@@ -731,6 +731,19 @@ verify-ztreme-frustum:
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/ztreme-frustum-smoke$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/ztreme-frustum-smoke$(HOST_EXEEXT)"
 
+verify-geo-walk-digest:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" 	  "$(SATURN_REPO_ROOT)/tools/saturn/geo_walk_digest_test.c" 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_geo_walk_digest.c" 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-digest-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-digest-test$(HOST_EXEEXT)"
+
+# The digest is the S1.10 equivalence oracle: if it is weak, a replacement geo
+# walk can be certified while actually diverging. Mutation testing is therefore
+# justified here specifically, not as a blanket policy -- it already found one
+# real gap (the byte-payload tag fold was untested) and one provably equivalent
+# mutant, which the harness now asserts continues to survive.
+verify-geo-walk-digest-mutation: verify-geo-walk-digest
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" 	  "tools/saturn/geo_walk_digest_mutation.py"
+
 verify-bob-bsp-header: compile-bob-scene
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
