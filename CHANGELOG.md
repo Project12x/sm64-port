@@ -4,6 +4,38 @@
 
 ### Changed
 
+- **Hoisted the depth rejection above the lateral work in
+  `sm64_saturn_ztreme_frustum_aabb`.** The test computed the right/up dot
+  products, their support radii and four lateral limits *before* testing the
+  depth interval -- and both classification paths then led with that depth test
+  and returned OUTSIDE, discarding all of it. The depth test now runs
+  immediately after `z`/`z_radius`, so a depth reject costs two int64 dot
+  products instead of six plus the lateral limits.
+- **86% of the culling work was being wasted on boxes already rejected by
+  depth.** The `verify-frustum-equivalence` sweep reports **231,165 of 269,968**
+  cross-multiply domain cases now rejected on depth before reaching the lateral
+  block, leaving 38,803 that genuinely need it.
+- **Classification is provably unchanged.** `verify-frustum-equivalence`:
+  516,090 cases, **shipped vs reference 0 divergences, shipped vs model 0**,
+  admitted-set 1,024 poses / 29,109 admissions / 0 divergences.
+  `verify-admission-hierarchy`: 48,200 poses, 13,835,970 admissions, **0
+  divergences**, admitted-set digest `a99b76b99477a4ff` **unchanged**. The
+  reference implementation was deliberately left un-hoisted so it remains a
+  differential oracle for the reordering.
+- The fixture's coverage assertion was **corrected rather than weakened**:
+  `crossed_cases == g_domain_cases` no longer holds once depth rejects early, so
+  it now asserts `crossed_cases == g_domain_cases - g_domain_depth_rejected`,
+  with the fixture modelling the same depth test independently, plus a new
+  `g_domain_depth_rejected > 1000` assertion so the fixture cannot pass against
+  a body that never gained the early-out.
+- **Measured, cumulative with the fov hoist: +1.08%** -- 6.1922 -> 6.2590 FPS,
+  **281 -> 278 vblanks** over 29 frames, matched route span and warmup tick,
+  identity `33b45965474d279e`. The frustum change contributes +0.72% on top of
+  the fov hoist's +0.36%. Small, as the diffuse profile predicts, but real and
+  deterministic.
+
+### Changed
+
 - **Hoisted the loop-invariant camera-fov trig out of `obj_is_in_view`**
   (`src/game/rendering_graph_node.c`). The half-fov angle and its sine/cosine
   were recomputed for **every object, every frame**, from

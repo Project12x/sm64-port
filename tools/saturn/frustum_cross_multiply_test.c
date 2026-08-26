@@ -339,6 +339,15 @@ static const int32_t k_random_bands[] = {512, 8192, 1 << 20, 1 << 30};
 
 static unsigned long g_cases;
 static unsigned long g_domain_cases;
+/* Domain cases the shipped body rejects on depth before it ever reaches the
+ * cross-multiply block. The shipped implementation hoists the depth interval
+ * test above the right/up dot products, their support radii and the lateral
+ * limits, because an OUTSIDE-on-depth verdict discards all of that work. Those
+ * cases are in the cross-multiply domain but correctly never enter it, so the
+ * coverage assertion below must exclude them rather than demand they be
+ * counted. The reference body does not early-out, which is what keeps it a
+ * usable oracle for the reordering. */
+static unsigned long g_domain_depth_rejected;
 static unsigned long g_outside_domain_cases;
 static unsigned long g_skipped_cases;
 static unsigned long g_verdicts[3];
@@ -379,6 +388,12 @@ static void compare_case(const sm64_saturn_ztreme_frustum_t *frustum,
     }
     if (model_domain(frustum, &state)) {
         g_domain_cases++;
+        /* Mirror of interval_outside(z, z_radius, near_limit, far_limit) --
+         * the shipped body's hoisted depth rejection. */
+        if (state.z + state.z_radius < state.near_limit ||
+            state.z - state.z_radius > state.far_limit) {
+            g_domain_depth_rejected++;
+        }
         const sm64_saturn_ztreme_frustum_result_t model =
             model_classify(frustum, &state);
         if (shipped != model) {
@@ -628,8 +643,9 @@ int main(void)
     printf("frustum divergences: shipped vs reference %lu, "
            "shipped vs model %lu\n",
            g_shipped_vs_reference, g_shipped_vs_model);
-    printf("frustum cross-multiply path taken: %lu of %lu domain cases\n",
-           crossed_cases, g_domain_cases);
+    printf("frustum cross-multiply path taken: %lu of %lu domain cases "
+           "(%lu rejected on depth before reaching it)\n",
+           crossed_cases, g_domain_cases, g_domain_depth_rejected);
     printf("admitted-set equivalence: %lu poses, %lu cluster admissions, "
            "%lu divergences\n",
            g_poses, g_admitted_total, g_set_divergences);
@@ -654,8 +670,11 @@ int main(void)
      * quietly delivering none of the saving; a shipped guard that widened
      * would leave cases un-modelled. Neither is allowed to pass silently.
      * Zero would also mean the sweep proved nothing about the new path. */
-    assert(crossed_cases == g_domain_cases);
+    assert(crossed_cases == g_domain_cases - g_domain_depth_rejected);
     assert(crossed_cases > 1000UL);
+    /* The depth early-out must actually be exercised, or this fixture would
+     * pass just as well against a body that never gained one. */
+    assert(g_domain_depth_rejected > 1000UL);
 
     assert(g_shipped_vs_reference == 0UL);
     assert(g_shipped_vs_model == 0UL);

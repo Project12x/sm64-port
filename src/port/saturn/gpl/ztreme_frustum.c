@@ -96,16 +96,28 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
         center_world[1] - frustum->position[1],
         center_world[2] - frustum->position[2]};
     const int64_t z = dot_q16(frustum->forward, delta) >> 16;
-    const int64_t x = dot_q16(frustum->right, delta) >> 16;
-    const int64_t y = dot_q16(frustum->up, delta) >> 16;
     const int64_t z_radius =
         support_radius_q16(frustum->forward, extent_world);
+    const int64_t near_limit = frustum->near_depth;
+    const int64_t far_limit = frustum->far_depth;
+    /* Depth rejects before any lateral work is computed. Both classification
+     * paths below already lead with this same test, but only after paying for
+     * the right/up dot products, their support radii, and four lateral limits
+     * -- the majority of this function -- all of which the OUTSIDE return then
+     * discards. Hoisting it is classification-identical by construction: when
+     * the depth interval is outside, both paths return OUTSIDE regardless of x
+     * and y. The reference implementation below is deliberately NOT changed, so
+     * SM64_SATURN_ZTREME_FRUSTUM_REFERENCE stays a differential oracle for this
+     * reordering. */
+    if (interval_outside(z, z_radius, near_limit, far_limit)) {
+        return SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE;
+    }
+    const int64_t x = dot_q16(frustum->right, delta) >> 16;
+    const int64_t y = dot_q16(frustum->up, delta) >> 16;
     const int64_t x_radius =
         support_radius_q16(frustum->right, extent_world);
     const int64_t y_radius =
         support_radius_q16(frustum->up, extent_world);
-    const int64_t near_limit = frustum->near_depth;
-    const int64_t far_limit = frustum->far_depth;
     const int64_t far_z = z + z_radius > near_limit
         ? z + z_radius : near_limit;
     const int64_t near_z = z - z_radius > near_limit
