@@ -24,6 +24,26 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Both macro expansions must be valid C, and the gate compiles this file twice
+ * -- once with SM64_SATURN_GEO_WALK_DIGEST=0 and once with 1 -- so neither can
+ * rot. The disabled expansion is the one that ships, and it must also leave no
+ * unused-variable warnings behind at the call sites, which -Werror enforces. */
+static void macro_expansion_check(void)
+{
+    static const uint8_t payload[4] = {1U, 2U, 3U, 4U};
+    static const int32_t matrix[4][4] = {{0}};
+    const uint32_t verdict = 1U;
+    SM64_SATURN_GEO_WALK_DIGEST_FOLD(
+        SM64_SATURN_GEO_WALK_EVENT_OBJECT_OBSERVED, payload, 4U);
+    SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+        SM64_SATURN_GEO_WALK_EVENT_CULL_VERDICT, verdict);
+    SM64_SATURN_GEO_WALK_DIGEST_FOLD_MATRIX(
+        SM64_SATURN_GEO_WALK_EVENT_THROW_MATRIX, matrix);
+    (void)payload;
+    (void)matrix;
+    (void)verdict;
+}
+
 static uint64_t run_events(uint32_t generation, const uint32_t *tags,
                            const uint32_t *values, uint32_t count)
 {
@@ -37,6 +57,7 @@ static uint64_t run_events(uint32_t generation, const uint32_t *tags,
 
 int main(void)
 {
+    macro_expansion_check();
     const uint32_t tags[4] = {
         SM64_SATURN_GEO_WALK_EVENT_OBJECT_OBSERVED,
         SM64_SATURN_GEO_WALK_EVENT_CULL_VERDICT,

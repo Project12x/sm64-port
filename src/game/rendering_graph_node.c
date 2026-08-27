@@ -47,6 +47,7 @@ Mtx *gMatStackFixed[32];
 #include "port/saturn/gfx/saturn_matrix_ctors.h"
 #include "port/saturn/gfx/saturn_render_native_math.h"
 #include "port/saturn/gfx/saturn_geo_state_observer.h"
+#include "port/saturn/gfx/saturn_geo_walk_digest.h"
 #include "port/saturn/runtime/saturn_geo_walk_runtime.h"
 #include "port/saturn/runtime/saturn_geo_walk_storage.h"
 #include "object_fields.h"
@@ -179,7 +180,20 @@ static bool saturn_source_observe_object_begin(struct Object *node)
      * fields may be inferred from generic feature_state bits. */
     source.opacity = 255U;
     source.switch_count = 0U;
-    return sm64_saturn_geo_state_observer_begin_object(observer, &source);
+    const bool accepted =
+        sm64_saturn_geo_state_observer_begin_object(observer, &source);
+    /* S1.10 oracle: the fully populated observation is the walk's primary
+     * published output to the actor pipeline, so it is folded whole rather
+     * than field by field -- a replacement that gets any field wrong, or
+     * publishes the right record for the wrong object, diverges here. The
+     * accept/reject outcome is carried in the tag because a replacement that
+     * observed everything and one that observed nothing would otherwise fold
+     * identical bytes. */
+    SM64_SATURN_GEO_WALK_DIGEST_FOLD(
+        accepted ? SM64_SATURN_GEO_WALK_EVENT_OBJECT_OBSERVED
+                 : SM64_SATURN_GEO_WALK_EVENT_OBJECT_REJECTED,
+        &source, (uint32_t)sizeof(source));
+    return accepted;
 }
 
 /* The camera's look-at matrix is exposed to descendants (shadow nodes)
@@ -341,6 +355,17 @@ struct GraphNodePerspective *gCurGraphNodeCamFrustum = NULL;
  * order exactly. */
 static f32 sSaturnFrustumSinHalfFov = 0.0f;
 static f32 sSaturnFrustumCosHalfFov = 1.0f;
+
+#if SM64_SATURN_GEO_WALK_DIGEST
+/* S1.10 equivalence oracle state. Diagnostic-only: with the flag unset none of
+ * this exists and every fold site compiles to nothing, which matters because
+ * the sites are inside the walk S1.10 is trying to make cheaper. The last
+ * completed digest and the tick count are non-static so a probe can read them
+ * from the ELF by symbol without a dedicated trace field. */
+static sm64_saturn_geo_walk_digest_t sSaturnGeoWalkDigest;
+uint64_t gSaturnGeoWalkDigestLast;
+uint32_t gSaturnGeoWalkDigestTicks;
+#endif
 struct GraphNodeCamera *gCurGraphNodeCamera = NULL;
 struct GraphNodeObject *gCurGraphNodeObject = NULL;
 struct GraphNodeHeldObject *gCurGraphNodeHeldObject = NULL;
@@ -1627,6 +1652,14 @@ static struct saturn_geo_object_children saturn_geo_enter_object(struct Object *
      * data left over from whatever previously occupied this stack
      * slot. */
     saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+    /* S1.10 oracle: throwMatrix publishes a POINTER into gMatStack, whose slot
+     * the next sibling reuses, so the matrix must be folded HERE at the moment
+     * of publication. Folding the Q16 source rather than the float mirror
+     * keeps the digest independent of the mirror's rounding, which S1.10 may
+     * legitimately change. */
+    SM64_SATURN_GEO_WALK_DIGEST_FOLD_MATRIX(
+        SM64_SATURN_GEO_WALK_EVENT_THROW_MATRIX,
+        gMatStackQ[gMatStackIndex].m);
 #else
     if (node->header.gfx.throwMatrix != NULL) {
         mtxf_mul(gMatStack[gMatStackIndex + 1], *node->header.gfx.throwMatrix,
@@ -1650,6 +1683,31 @@ static struct saturn_geo_object_children saturn_geo_enter_object(struct Object *
     // FIXME: correct types
     if (node->header.gfx.animInfo.curAnim != NULL) {
         geo_set_animation_globals(&node->header.gfx.animInfo, hasAnimation);
+        /* S1.10 oracle: the animation globals are overwritten by the next
+         * animated object and saved/restored around held objects, so their
+         * value is only observable at the instant they are set. The two
+         * pointers are folded as identity, not contents -- a replacement must
+         * select the same animation data, and the data itself is immutable
+         * cart content that cannot drift. animFrame is folded because it is
+         * advanced by geo_update_animation_frame() inside the call above,
+         * making this a mutation site and not merely a read. */
+        SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+            SM64_SATURN_GEO_WALK_EVENT_ANIMATION_GLOBALS, (uint32_t)gCurAnimType);
+        SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+            SM64_SATURN_GEO_WALK_EVENT_ANIMATION_GLOBALS,
+            (uint32_t)(uint16_t)gCurrAnimFrame);
+        SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+            SM64_SATURN_GEO_WALK_EVENT_ANIMATION_GLOBALS,
+            (uint32_t)gCurAnimEnabled);
+        SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+            SM64_SATURN_GEO_WALK_EVENT_ANIMATION_GLOBALS,
+            (uint32_t)(uintptr_t)gCurrAnimAttribute);
+        SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+            SM64_SATURN_GEO_WALK_EVENT_ANIMATION_GLOBALS,
+            (uint32_t)(uintptr_t)gCurAnimData);
+        SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+            SM64_SATURN_GEO_WALK_EVENT_ANIMATION_GLOBALS,
+            (uint32_t)node->header.gfx.animInfo.animFrame);
     }
     {
         const s32 saturn_geo_visible =
@@ -1660,6 +1718,19 @@ static struct saturn_geo_object_children saturn_geo_enter_object(struct Object *
          * normal geo walk; it is a scalar telemetry seam for snapshots. */
         sm64_saturn_geo_state_observer_record_authoritative_geo_decision(
             saturn_geo_visible != 0);
+        /* S1.10 oracle: the cull verdict is a gameplay-visible decision that is
+         * consumed immediately and leaves no trace afterwards, so it has to be
+         * folded at the point of decision. cameraToObject is folded with it --
+         * it is read for positional audio, was written from the same matrix
+         * just above, and a replacement that got the matrix subtly wrong could
+         * still land on the same visible/not verdict. */
+        SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+            SM64_SATURN_GEO_WALK_EVENT_CULL_VERDICT,
+            saturn_geo_visible != 0 ? 1U : 0U);
+        SM64_SATURN_GEO_WALK_DIGEST_FOLD(
+            SM64_SATURN_GEO_WALK_EVENT_CULL_VERDICT,
+            node->header.gfx.cameraToObject,
+            (uint32_t)sizeof(node->header.gfx.cameraToObject));
 #endif
         if (saturn_geo_visible) {
             Mtx *mtx = alloc_display_list(sizeof(*mtx));
@@ -3003,9 +3074,51 @@ void geo_process_root(struct GraphNodeRoot *node, Vp *b, Vp *c, s32 clearColor) 
         gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(gMatStackFixed[gMatStackIndex]),
                   G_MTX_MODELVIEW | G_MTX_LOAD | G_MTX_NOPUSH);
         gCurGraphNodeRoot = node;
+#if SM64_SATURN_GEO_WALK_DIGEST
+        /* S1.10 oracle: one digest per walk. The generation is the observer's,
+         * so a replacement that froze the walk cannot match a stationary
+         * reference tick for tick. */
+        sm64_saturn_geo_walk_digest_begin(
+            &sSaturnGeoWalkDigest,
+            sm64_saturn_geo_state_observer_generation(
+                sm64_saturn_geo_state_observer_bound()));
+        sm64_saturn_geo_walk_digest_bind(&sSaturnGeoWalkDigest);
+#endif
         if (node->node.children != NULL) {
             geo_process_node_and_siblings(node->node.children);
         }
+#if SM64_SATURN_GEO_WALK_DIGEST
+        {
+            /* Fold the observer's own totals last. They are a cheap
+             * cross-check on the per-object stream above: a replacement that
+             * published the right records but miscounted evaluated/rendered/
+             * rejected has diverged in a way the stream alone might not show,
+             * because the counters are what the snapshot consumer reads. */
+            const sm64_saturn_geo_state_observer_t *const observer =
+                sm64_saturn_geo_state_observer_bound();
+            if (observer != NULL) {
+                SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+                    SM64_SATURN_GEO_WALK_EVENT_OBSERVER_TOTALS,
+                    observer->count);
+                SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+                    SM64_SATURN_GEO_WALK_EVENT_OBSERVER_TOTALS,
+                    observer->geo_evaluation_count);
+                SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+                    SM64_SATURN_GEO_WALK_EVENT_OBSERVER_TOTALS,
+                    observer->geo_rendered_count);
+                SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+                    SM64_SATURN_GEO_WALK_EVENT_OBSERVER_TOTALS,
+                    observer->geo_rejected_count);
+                SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(
+                    SM64_SATURN_GEO_WALK_EVENT_OBSERVER_TOTALS,
+                    observer->overflow_latched);
+            }
+        }
+        gSaturnGeoWalkDigestLast =
+            sm64_saturn_geo_walk_digest_finish(&sSaturnGeoWalkDigest);
+        gSaturnGeoWalkDigestTicks++;
+        sm64_saturn_geo_walk_digest_bind(NULL);
+#endif
         gCurGraphNodeRoot = NULL;
         if (gShowDebugText) {
 #ifndef USE_SYSTEM_MALLOC

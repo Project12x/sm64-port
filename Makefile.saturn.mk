@@ -733,8 +733,14 @@ verify-ztreme-frustum:
 
 verify-geo-walk-digest:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" 	  "$(SATURN_REPO_ROOT)/tools/saturn/geo_walk_digest_test.c" 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_geo_walk_digest.c" 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-digest-test$(HOST_EXEEXT)"
+# Built twice on purpose. The publication-site macros must be valid C in BOTH
+# configurations, and the disabled expansion is the one that ships -- it must
+# also leave no unused-variable warnings at the call sites, which -Werror
+# catches here rather than in a target build ten minutes later.
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror 	  -DSM64_SATURN_GEO_WALK_DIGEST=0 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" 	  "$(SATURN_REPO_ROOT)/tools/saturn/geo_walk_digest_test.c" 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_geo_walk_digest.c" 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-digest-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-digest-test$(HOST_EXEEXT)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror 	  -DSM64_SATURN_GEO_WALK_DIGEST=1 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" 	  "$(SATURN_REPO_ROOT)/tools/saturn/geo_walk_digest_test.c" 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_geo_walk_digest.c" 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-digest-armed$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-digest-armed$(HOST_EXEEXT)"
 
 # The digest is the S1.10 equivalence oracle: if it is weak, a replacement geo
 # walk can be certified while actually diverging. Mutation testing is therefore

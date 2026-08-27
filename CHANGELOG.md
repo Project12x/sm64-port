@@ -4,6 +4,49 @@
 
 ### Added
 
+- **Wired the S1.10 oracle into the geo walk's publication sites**, behind
+  `SM64_SATURN_GEO_WALK_DIGEST` (default 0). Sites, chosen from T2.15 section
+  2.2's STATE-OWNING table: the observer record in
+  `saturn_source_observe_object_begin` (whole struct, accept/reject carried in
+  the tag), the `throwMatrix` publication, the frustum cull verdict together
+  with `cameraToObject`, the animation globals after
+  `geo_set_animation_globals`, and the observer's own totals at end of walk.
+- **Each site folds where the value is published, not where it is convenient**,
+  because that is the whole reason the digest is a stream. `throwMatrix`
+  publishes a *pointer* into a `gMatStack` slot the next sibling reuses; the
+  animation globals are overwritten by the next animated object and
+  saved/restored around held objects; the cull verdict is consumed immediately
+  and leaves no trace. A digest taken anywhere later would miss all three.
+- **`throwMatrix` folds the Q16 source, not the float mirror.** S1.10 may
+  legitimately change the mirror's rounding, and pinning the oracle to it would
+  make it reject correct replacements. Animation data pointers are folded as
+  identity rather than contents, since the data is immutable cart content.
+- **The fold sites compile to nothing when the flag is unset -- not to a call
+  and a NULL test.** They sit inside the exact code S1.10 exists to make
+  cheaper, so a shipped build must pay zero. **Verified by measurement, not by
+  inspection: the digest-wired build with the flag off measures 278 vblanks /
+  6.2590 FPS, byte-for-byte the same cadence as the build before the wiring
+  existed.** Because the macros do not evaluate their arguments when disabled,
+  every argument at every site is side-effect free.
+- The gate now compiles the contract test **twice**, with the flag off and on.
+  The disabled expansion is the one that ships, and `-Werror` catches
+  unused-variable fallout at the call sites in seconds instead of in a
+  ten-minute target build.
+
+### Fixed
+
+- **NOT YET SAFE TO TRUST A GREEN DIGEST.** The oracle's failure mode is a
+  *missed* publication site, which is silent. The BOTH-sites from T2.15 section
+  2.2 -- `gMovtexCounter`, `gPaintingUpdateCounter`, `gEnvFxMode`,
+  `gShadowAboveWaterOrLava` / `gMarioOnIceOrCarpet`, and the `sPowerMeterHUD`
+  snapshot field that `SATURN_EXPERIMENTAL_SKIP_GEO_WALK` was found to freeze --
+  are **not folded yet**. Steps 2-4 (publish the per-tick digest into the
+  sourceboot trace, capture a reference sequence from the shipped walk, then
+  begin replacing) remain, and the reference sequence must not be captured
+  until those sites are covered.
+
+### Added
+
 - **S1.10 equivalence oracle: `saturn_geo_walk_digest`.** S1.10 replaces the N64
   geo walk, and the walk cannot simply be deleted -- W1 measured that at +18.18%
   and produced a build that can never ship, because the walk feeds animation,

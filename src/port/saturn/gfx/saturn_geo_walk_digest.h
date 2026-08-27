@@ -86,4 +86,31 @@ uint64_t sm64_saturn_geo_walk_digest_finish(
 sm64_saturn_geo_walk_digest_t *sm64_saturn_geo_walk_digest_bound(void);
 void sm64_saturn_geo_walk_digest_bind(sm64_saturn_geo_walk_digest_t *digest);
 
+/* Publication sites use these macros, never the functions directly.
+ *
+ * The sites sit inside the geo walk -- the exact code S1.10 exists to make
+ * cheaper -- so in a shipped build they must cost nothing at all, not a call
+ * and a NULL test. With SM64_SATURN_GEO_WALK_DIGEST unset they expand to
+ * `(void)0` and the arguments are not evaluated, which is why every argument
+ * at every site must be free of side effects. */
+#ifndef SM64_SATURN_GEO_WALK_DIGEST
+#define SM64_SATURN_GEO_WALK_DIGEST 0
+#endif
+
+#if SM64_SATURN_GEO_WALK_DIGEST
+#define SM64_SATURN_GEO_WALK_DIGEST_FOLD(tag, bytes, size)                    \
+    sm64_saturn_geo_walk_digest_fold(sm64_saturn_geo_walk_digest_bound(),     \
+                                     (tag), (bytes), (size))
+#define SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(tag, value)                      \
+    sm64_saturn_geo_walk_digest_fold_u32(sm64_saturn_geo_walk_digest_bound(), \
+                                         (tag), (uint32_t)(value))
+#define SM64_SATURN_GEO_WALK_DIGEST_FOLD_MATRIX(tag, matrix)                  \
+    sm64_saturn_geo_walk_digest_fold_matrix_q16(                              \
+        sm64_saturn_geo_walk_digest_bound(), (tag), (matrix))
+#else
+#define SM64_SATURN_GEO_WALK_DIGEST_FOLD(tag, bytes, size) ((void)0)
+#define SM64_SATURN_GEO_WALK_DIGEST_FOLD_U32(tag, value) ((void)0)
+#define SM64_SATURN_GEO_WALK_DIGEST_FOLD_MATRIX(tag, matrix) ((void)0)
+#endif
+
 #endif /* SM64_SATURN_GEO_WALK_DIGEST_H */
