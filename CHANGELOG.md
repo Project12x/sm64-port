@@ -4,6 +4,58 @@
 
 ### Added
 
+- **MODEL_STAR renders. Owner-confirmed on hardware-accurate emulation.** BOB's
+  goal object previously rendered **nothing at all**: `bhvStar`,
+  `bhvSpawnedStar` and `bhvStarSpawnCoordinates` were all in the closure and
+  `star_geo` was a supported family, but `MODEL_STAR` never reached the identity
+  registry, and `saturn_source_observe_object_begin()` refuses models
+  `saturn_actor_identity_registry_apply()` cannot resolve -- they fall back to
+  the authoritative geo walk, whose display list `display_suppressed` discards.
+  A star could spawn, tick and collide while being invisible.
+- **The bundle report's rejection reason was misleading, and that matters for
+  every future actor.** Ten actors report `"unsupported rigid-group source:
+  textured"`, which reads as one shared capability gap. It is not:
+  `actor_variant_bank.py` computes `allow_v2 = key in BOB_DIRECT_TEXTURED_KEYS`
+  and only then filters the `"textured"` reason out, so that message means
+  **"not admitted"** and nothing more. Each actor's real blocker only appears
+  after admission and differs -- the star's was `G_TEXTURE_GEN`, Goomba's is
+  `gsSPNumLights`. Planning from those reasons would mis-scope the work.
+- **Five gates cleared, in order.** (1) `G_TEXTURE_GEN` -- N64 spherical
+  environment mapping, the reason a star looks polished -- is now
+  **accepted-and-ignored**, the owner-directed Saturn-shaped degradation. It is
+  inert by construction: only `G_LIGHTING` and `G_CULL_BACK` are ever read out
+  of `geometry_mode`. The star's vertex UVs are all `{0, 0}` because the N64
+  replaces them under texgen, so it samples a single texel and renders flat
+  gold. (2) The capture digest was **measured, not invented** -- the bake
+  reports its own digest when a key is admitted without one. (3)
+  `G_CC_DECALFADE` joins the already-approved `G_CC_DECALFADEA` on
+  `CLUT16_REPLACE`; on VDP1 the two collapse to "write the texel".
+  (4) tile extent. (5) texture budget.
+- **The tile-extent gate was the degradation's own consequence surfacing.** The
+  star's display list declares a **32x64** load for a **32x32** texture, and the
+  decomp source flags it inline as *"harmless due to environment mapping"* --
+  true only *because* texgen's generated coordinates never reached the bottom
+  half. Removing the shine removed exactly what made it safe. Fixed by clamping
+  **sampling only**, in `actor_variant_bank.py` where the declared and actual
+  dimensions are both in scope; the shared `bake_castle_uv.py:223` guard is left
+  untouched because the Castle bake relies on it and it has caught a real
+  regression before. `tile_state` -- and therefore the material signature and
+  its approved digest -- still records what the source declared, so a source
+  whose real dimensions change still fails approval.
+- **The actor VDP1 budget was raised 21,120 -> 21,504 / 3,744 -> 3,840**, the
+  star's **measured** cost of 384 B texture + 96 B CLUT (480 B total). Worth
+  recording precisely: the previous values were **exactly** the then-current
+  residency, so the budget was not "full with slack to find" -- it is sized to
+  what is resident, and *any* new actor overflows it by construction. The limit
+  is a budget rather than hardware, drawn from 52,672 B of unallocated VDP1 with
+  27,808 B unclaimed, and the 2026-08-22 coin raise is the precedent. Actor
+  residency is now 25,344 B, leaving 27,328 B. No actor was evicted; the
+  per-actor residency table was checked first in case a trade was needed.
+- Registry entries went 32 -> **35**: rows are keyed **(model_id, behavior)**,
+  so the star's three behaviours each take one.
+
+### Added
+
 - **Wired the S1.10 oracle into the geo walk's publication sites**, behind
   `SM64_SATURN_GEO_WALK_DIGEST` (default 0). Sites, chosen from T2.15 section
   2.2's STATE-OWNING table: the observer record in

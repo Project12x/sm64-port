@@ -36,8 +36,18 @@ class ResourceLimits:
     # CLUT each -- 3,072 B + 768 B in total.  After the raise the actor
     # residency is 24,864 B against the 52,672 B remaining, leaving 27,808 B
     # (`future_repartition_margin_bytes`) still unclaimed.
-    actor_texture_bytes: int = 21120
-    actor_clut_bytes: int = 3744
+    #
+    # 2026-09-01: raised from 21,120 / 3,744 to admit MODEL_STAR, which BOB
+    # cannot be completed without -- until it was admitted, bhvStar and its two
+    # siblings fell out of the generic actor pipeline and rendered nothing at
+    # all.  Measured cost, not estimated: 384 B of texture and 96 B of CLUT,
+    # 480 B in total, taken from the same unclaimed VDP1 margin.  Note the
+    # previous values were exactly the then-current residency, so the star did
+    # not overflow a budget with slack in it -- it overflowed one sized
+    # precisely to what was already resident.  Actor residency is now 25,344 B
+    # against the 52,672 B remaining, leaving 27,328 B unclaimed.
+    actor_texture_bytes: int = 21504
+    actor_clut_bytes: int = 3840
     shared_post_command_gouraud_bytes: int = 446432
     terrain_texture_bytes: int = 333696
     mario_texture_bytes: int = 25600

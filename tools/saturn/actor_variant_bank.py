@@ -12,6 +12,7 @@ encoder. Unknown source constructs fail closed instead of being omitted.
 from __future__ import annotations
 
 import ast
+import sys
 import hashlib
 import re
 import struct
@@ -174,7 +175,26 @@ def _fast3d_scalar(value: str, label: str) -> int:
 
 def _geometry_modes(value: str, label: str) -> tuple[str, ...]:
     fields = tuple(item.strip() for item in value.split("|"))
-    allowed = {"G_LIGHTING", "G_SHADING_SMOOTH", "G_CULL_BACK"}
+    # G_TEXTURE_GEN is accepted and then deliberately ignored -- a Saturn-shaped
+    # degradation, not an implementation of the mode.
+    #
+    # On N64 it is spherical environment mapping: the RSP GENERATES texture
+    # coordinates per vertex from the vertex normal and the view, which is what
+    # makes MODEL_STAR look polished and rotate its highlight with the camera.
+    # VDP1 has no equivalent, and computing it per vertex per frame would land
+    # on the master SH-2, which is already 96% busy and is the thing S1.10 is
+    # trying to unload.
+    #
+    # Accepting it changes nothing downstream by construction: only G_LIGHTING
+    # and G_CULL_BACK are ever read out of `geometry_mode`. The practical effect
+    # is that texgen geometry bakes with the vertex UVs actually stored in the
+    # model, and for the star those are all {0, 0} -- because the N64 replaces
+    # them -- so it samples a single texel and renders as a flat gold star. The
+    # shine is gone; the star is visible, which it currently is not at all.
+    #
+    # The mode still participates in the material signature, so a source whose
+    # texgen usage changes cannot silently inherit an approved capture digest.
+    allowed = {"G_LIGHTING", "G_SHADING_SMOOTH", "G_CULL_BACK", "G_TEXTURE_GEN"}
     if not fields or any(item not in allowed for item in fields) or len(set(fields)) != len(fields):
         raise UnsupportedActorSourceError(f"unapproved geometry mode state in {label}")
     return fields
@@ -1171,7 +1191,35 @@ class _Fast3DCompiler:
             "sp_scale_s": self.texture_scale_s,
             "sp_scale_t": self.texture_scale_t,
         }
-        texture = (int(source["width"]), int(source["height"]),
+        rom_width, rom_height = int(source["width"]), int(source["height"])
+        if width > rom_width or height > rom_height:
+            # A display list may declare a load larger than the image actually
+            # in ROM. MODEL_STAR does exactly this -- gsDPLoadTextureBlock
+            # declares 32x64 for a 32x32 texture, and the decomp source flags it
+            # inline as "harmless due to environment mapping": with G_TEXTURE_GEN
+            # the generated coordinates never reach the bottom half, so the rows
+            # past the image are never sampled on N64 either.
+            #
+            # Saturn drops texgen (see _geometry_modes), which removes exactly
+            # the thing that made the over-declaration safe, so the sampler's
+            # extent guard in bake_castle_uv.py correctly refuses it. That guard
+            # is shared with the Castle bake and has caught a real regression
+            # before (T-clamp/S-wrap walls becoming streaks), so it is left
+            # alone; the mismatch is resolved here instead, where the declared
+            # and actual dimensions are both in scope.
+            #
+            # Clamping SAMPLING only. tile_state above -- and therefore the
+            # material signature and its approved capture digest -- still record
+            # what the source declared, so a source whose real dimensions change
+            # still fails approval rather than silently sampling a new region.
+            sample_state["width"] = min(width, rom_width)
+            sample_state["height"] = min(height, rom_height)
+            print(
+                f"actor bank: {source['path']} declares a "
+                f"{width}x{height} tile for a {rom_width}x{rom_height} ROM "
+                f"texture; sampling clamped to the image",
+                file=sys.stderr)
+        texture = (rom_width, rom_height,
                    source["pixels"], source["sha256"].hex(),
                    int(source["source_bytes"]))
         return signature, sample_state, texture

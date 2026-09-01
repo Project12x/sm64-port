@@ -36,6 +36,15 @@ BOB_DIRECT_TEXTURED_KEYS = (
     (18, 0x00A4), (19, 0x00C9), (21, 0x00A8), (24, 0x007F),
     (28, 0x0084), (29, 0x0080), (32, 0x0096), (39, 0x00A5),
     (40, 0x0095), (45, 0x0074), (46, 0x00A6),
+    # MODEL_STAR (star_geo). The level's goal object: until it is admitted
+    # here, bhvStar / bhvSpawnedStar / bhvStarSpawnCoordinates all fall out
+    # of the generic actor pipeline and render NOTHING, because
+    # saturn_source_observe_object_begin() refuses models the identity
+    # registry does not resolve. Its reported "unsupported rigid-group
+    # source: textured" was never a capability limit -- "textured" is a
+    # supported reason for keys on this list. Its real blocker was
+    # G_TEXTURE_GEN, now accepted-and-ignored (see actor_variant_bank.py).
+    (30, 0x007A),
 )
 
 BAKE_POLICY_ID = 0x53423601
@@ -112,6 +121,13 @@ _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
     (40, 0x0095): "92357dc51fcc0b157596b9df97455eb30a949ff860111c4b569e7c8d2974628f",
     (45, 0x0074): "896d859e2628e0c93e76934a7bfb0d9eff737ef4ebb14e81ffc1e348bb40870d",
     (46, 0x00A6): "a9a763a4ca33fac8c6dea8dbe4fd6f5dda773d462762b50d9d3e86ada407a45d",
+    # MODEL_STAR, admitted 2026-09-01 for end-to-end BOB. Measured, not
+    # invented: the bake reports its own capture digest when a key is
+    # admitted without one, and this is that value. Approving it fixes the
+    # star's exact material/source state, so any later drift in the star
+    # source or its Fast3D state fails the build instead of baking
+    # something different under the same approval.
+    (30, 0x007A): "fe50d1763a1e0151cc8b0eda3a89e42d1b65206dfbefaa9173d32c2f34c1ad62",
 }
 _EXPECTED_CATEGORY_HASHES: dict[tuple[int, int], dict[str, str]] = {
     (7, 0x00BC): {
@@ -295,7 +311,15 @@ def _target_material(signature: MaterialSignatureV2) -> TargetMaterialV2:
             ("G_CC_DECALRGBA", "G_CC_DECALRGBA"),
             ("G_CC_MODULATERGBA", "G_CC_MODULATERGBA"),
             ("G_CC_MODULATEIA", "G_CC_MODULATEIA"),
-            ("G_CC_DECALFADEA", "G_CC_DECALFADEA")):
+            ("G_CC_DECALFADEA", "G_CC_DECALFADEA"),
+            # MODEL_STAR's combiner. G_CC_DECALFADE is G_CC_DECALFADEA without
+            # the alpha cycle -- it decals the texture and fades RGB by the
+            # environment alpha. The alpha-carrying variant directly above is
+            # already approved onto CLUT16_REPLACE, and on VDP1 the two collapse
+            # to the same thing: the recipe writes the texel, and there is no
+            # per-pixel environment fade to honour either way. Mapping it
+            # anywhere else would claim a distinction the target cannot make.
+            ("G_CC_DECALFADE", "G_CC_DECALFADE")):
         recipe = ActorMaterialRecipeV2.CLUT16_REPLACE
     else:
         raise ActorMaterialV2Error(
