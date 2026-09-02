@@ -33,6 +33,17 @@ enum {
     SM64_SATURN_SOURCE_SCENE_BUNDLE_PROBE_MAGIC = 0x5342554EU,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_LEVEL_ID = 9U,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_AREA_ID = 1U,
+    /* MUST be >= the bake's SM64_SATURN_ACTOR_BUNDLE_WORKSPACE_BYTES in the
+     * generated actor_bundle_capacity.h. That header is not on this include
+     * path, so this constant is maintained by hand and
+     * compile_actor_family_bundle.py enforces the relationship at bake time.
+     *
+     * It is enforced because getting it wrong is silent: when BOB's actor
+     * roster grew from 18 to 27 variants the bake needed 3,328 B while this
+     * still said 3,072, and the result was a clean build that booted, matched
+     * its sealed identity, and then presented zero frames forever -- a black
+     * screen with no fault reported by either CPU. A build error is a much
+     * cheaper way to learn that. */
     SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES = 3072U,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES = 3348U,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES = 2560U,

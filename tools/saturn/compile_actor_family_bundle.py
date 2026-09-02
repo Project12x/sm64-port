@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import os
 import shutil
 import tempfile
@@ -37,7 +38,11 @@ from actor_variant_bank import (
 )
 from gen_actor_identity_registry import closure_family_key, parse_model_ids
 from hermetic_manifest import normalize_repo_path
-from inventory_actor_family_bundles import AUTHORITATIVE_LIMITS, prove_resource_inventory
+from inventory_actor_family_bundles import (
+    AUTHORITATIVE_LIMITS,
+    BOB_WORKSPACE_CAPACITY_BYTES,
+    prove_resource_inventory,
+)
 from compile_actor_bank import compile_actor_family_banks
 from target_profile import PACKAGE_CLASSES, resolve_target_profile
 
@@ -281,12 +286,46 @@ def validate_publication(
     return report
 
 
+def _require_runtime_workspace(root: Path, required_bytes: int) -> None:
+    """Fail the bake when the runtime workspace buffer is too small.
+
+    src/port/saturn/sourceboot/source_scene_bundle.h hand-maintains
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES, and the generated
+    actor_bundle_capacity.h is not on that translation unit's include path, so
+    nothing in the C build can compare them.
+
+    Left unchecked the mismatch is silent and expensive: growing BOB's actor
+    roster from 18 to 27 variants raised the bake's requirement from 3,072 B to
+    3,328 B while the runtime constant stayed at 3,072, and the result was a
+    clean build that booted, matched its sealed identity, reported no master or
+    slave fault, and then presented zero frames forever. A black screen is a
+    terrible way to discover an off-by-one-granule buffer.
+    """
+    header = root / "src/port/saturn/sourceboot/source_scene_bundle.h"
+    text = header.read_text(encoding="utf-8")
+    match = re.search(
+        r"SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES\s*=\s*(\d+)U", text)
+    if match is None:
+        raise ValueError(
+            "cannot find SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES in "
+            f"{header}; the bake cannot prove the runtime buffer is large enough")
+    runtime_bytes = int(match.group(1))
+    if runtime_bytes < required_bytes:
+        raise ValueError(
+            f"runtime workspace buffer is {runtime_bytes} B but this bundle "
+            f"needs {required_bytes} B -- raise "
+            "SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES in "
+            "src/port/saturn/sourceboot/source_scene_bundle.h")
+
+
 def compile_scene_bundle(
     root: Path, closure_path: Path, family_report_path: Path,
     model_ids_path: Path, package_generation: int, output_dir: Path,
 ) -> dict[str, object]:
     """Build the real BOB bundle and publish all artifacts report-last."""
     root = Path(root).resolve()
+    _require_runtime_workspace(
+        root, int(BOB_WORKSPACE_CAPACITY_BYTES))
     _require_fresh_publication(Path(output_dir))
     if type(package_generation) is not int or not 0 < package_generation <= 0xFFFFFFFF:
         raise ValueError("package generation must be a nonzero uint32")

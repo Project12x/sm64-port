@@ -4,6 +4,64 @@
 
 ### Added
 
+- **Four more BOB objects render alongside the star**: MODEL_1UP, MODEL_HEART,
+  MODEL_METALLIC_BALL, MODEL_KOOPA_FLAG. 23 actor banks, and the build measures
+  **6.3043 FPS** -- up from 6.1922, the fastest of the day, because actor flat
+  shading removes gouraud tables that cost per-frame VDP1 budget.
+- **`gsSPNumLights` handled as a capability**, accepted **only** for
+  `NUMLIGHTS_1` -- the one-diffuse-plus-ambient configuration the bank models.
+  Any other count is refused rather than ignored: silently accepting
+  `NUMLIGHTS_2` would bake the wrong shading under a single-light model. This is
+  the piece that generalises to Whomp's Fortress, which is full of lit character
+  models.
+- **Actors bake FLAT** (owner decision). `CLUT16_GOURAUD` costs one gouraud
+  table per primitive per instance out of a fixed 892-per-frame share; lit,
+  MODEL_GOOMBA alone wanted **202 tables per instance**, dropping the guaranteed
+  any-mix service floor to 4 for *every* actor in the scene. Flat costs zero.
+  `SATURN_ACTOR_GOURAUD_LIGHTING=1` restores the lit recipe, with that cost
+  documented at the switch.
+- `G_CC_DECALRGB` joins `G_CC_DECALRGBA` on `CLUT16_REPLACE`, same argument as
+  `G_CC_DECALFADE`.
+
+### Fixed
+
+- **The runtime workspace buffer was a hand-maintained duplicate of a generated
+  value, and nothing compared them.** `source_scene_bundle.h` hardcodes
+  `SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES` while the bake emits
+  `SM64_SATURN_ACTOR_BUNDLE_WORKSPACE_BYTES`, and the generated header is not on
+  that translation unit's include path. When the roster needed 3,328 B against a
+  3,072 B buffer the result was a clean build that booted, matched its sealed
+  identity, reported **zero faults from either CPU**, and presented **0 frames
+  across 3,600 vblanks**. `compile_actor_family_bundle.py` now reads the C
+  constant and refuses the bake when it is too small, naming the file to edit.
+
+### Changed
+
+- **Three actors are excluded on measured evidence, with their digests
+  recorded**: MODEL_WOODEN_SIGNPOST, MODEL_KOOPA_SHELL and MODEL_GOOMBA all bake
+  cleanly, pass every capacity check the bake has, and reach the identity
+  registry -- then black-screen. Goomba was **retested in isolation** without
+  Bob-omb Buddy and still failed, so this is intrinsic rather than cumulative
+  load.
+- **The evidence points at an unenforced runtime capacity, not a bake limit.**
+  Admitted sets summing **273-282** texture commands per instance present
+  frames; **303** (signpost) and **403** (goomba) do not. That is the same class
+  of defect as the workspace constant above -- a runtime bound the bake cannot
+  see -- and it must be found on the runtime side before these three are
+  retried.
+- **MODEL_BOBOMB_BUDDY is held back as a framerate choice, not a defect.** It
+  presents frames but costs **14%**: 6.3043 -> 5.4206 FPS, 9.52 -> 11.07
+  VB/frame. Re-adding is one key plus its digest.
+- Method note: each actor was verified by **building and running** it, not
+  merely baking it. Admitting eight at once produced a black screen that took
+  three wrong hypotheses to unpick -- the workspace constant (a real bug, but
+  not the cause), Goomba's service floor, and flat shading regressing existing
+  actors. Per-actor build-and-run isolation found it in one pass. The bake
+  cannot see this class of failure, so bake-only verification is not sufficient
+  evidence that an actor works.
+
+### Added
+
 - **BOB's object and enemy roster now renders: eight more actors admitted.**
   Goomba, Bob-omb Buddy, Koopa Shell, Koopa Flag, wooden signpost, 1UP, heart
   and metallic ball join the star. Actor banks 18 -> 27, registry rows 32 -> 46.

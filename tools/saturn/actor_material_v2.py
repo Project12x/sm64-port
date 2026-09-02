@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import struct
 from dataclasses import dataclass
 from typing import Mapping, Sequence
@@ -45,6 +46,33 @@ BOB_DIRECT_TEXTURED_KEYS = (
     # supported reason for keys on this list. Its real blocker was
     # G_TEXTURE_GEN, now accepted-and-ignored (see actor_variant_bank.py).
     (30, 0x007A),
+    (26, 0x00D4),  # MODEL_1UP
+    (33, 0x0078),  # MODEL_HEART
+    (36, 0x0065),  # MODEL_METALLIC_BALL
+    (14, 0x006A),  # MODEL_KOOPA_FLAG
+    # Verified 2026-09-01 by building and running EACH addition, not just baking
+    # it. Four actors below present frames at 6.3043 FPS, up from 6.1922.
+    #
+    # NOT admitted, and each for a measured reason rather than a guess:
+    #   MODEL_WOODEN_SIGNPOST (3, 0x007C)  digest 7cd35e7015ce9ee3...
+    #   MODEL_KOOPA_SHELL     (27, 0x00BE) digest 245e159d7e1ce8f0...
+    #   MODEL_GOOMBA          (22, 0x00C0) digest a723df97dca32c81...
+    # All three bake cleanly, pass every capacity check the bake has, reach the
+    # identity registry -- and then the build presents ZERO frames across 3,600
+    # vblanks with no fault from either CPU. Goomba was retested in isolation
+    # without Bob-omb Buddy and still black-screened, so this is intrinsic, not
+    # cumulative load.
+    #
+    # The pattern points at an unenforced RUNTIME capacity, the same class of
+    # defect as the workspace constant fixed alongside this: admitted sets
+    # summing to 273-282 texture commands per instance present frames, while 303
+    # (signpost) and 403 (goomba) do not. The bake cannot see it, so it must be
+    # found on the runtime side before these three are retried.
+    #
+    #   MODEL_BOBOMB_BUDDY (43, 0x00C3) digest 3dfb671731d24471... PRESENTS
+    #   frames but costs 14% -- 6.3043 -> 5.4206 FPS, 9.52 -> 11.07 VB/frame.
+    #   Held back as a deliberate framerate choice, not a defect. Re-add the key
+    #   and its digest to accept that cost.
     # Admitted 2026-09-01 to finish BOB's object and enemy roster. Every one of
     # these reported "unsupported rigid-group source: textured", which means
     # only "not admitted" -- see the note on that above. Each was then verified
@@ -54,7 +82,6 @@ BOB_DIRECT_TEXTURED_KEYS = (
     # handled in actor_variant_bank.py; that macro is the one most likely to
     # gate lit character models generally, which is why it was worth fixing as
     # a capability rather than per actor -- Whomp's Fortress is full of them.
-    (3, 0x007C),   # MODEL_WOODEN_SIGNPOST
     # MODEL_KOOPA_WITH_SHELL (11, 0x0068) is deliberately NOT admitted. It
     # bakes cleanly -- its capture digest is
     # fb2efe80bff18df85ba0f089da49d83e5ccb7a56af2d65091d9a9ba2c4824abf -- but it
@@ -66,13 +93,6 @@ BOB_DIRECT_TEXTURED_KEYS = (
     # with 12,320 B of VDP1 to spare and +256 B of workspace. Revisit only with
     # a smaller texture budget for it, or if Koopa's visibility is worth that
     # much of the actor allowance.
-    (14, 0x006A),  # MODEL_KOOPA_FLAG
-    (22, 0x00C0),  # MODEL_GOOMBA
-    (26, 0x00D4),  # MODEL_1UP
-    (27, 0x00BE),  # MODEL_KOOPA_SHELL
-    (33, 0x0078),  # MODEL_HEART
-    (36, 0x0065),  # MODEL_METALLIC_BALL
-    (43, 0x00C3),  # MODEL_BOBOMB_BUDDY
 )
 
 BAKE_POLICY_ID = 0x53423601
@@ -156,6 +176,12 @@ _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
     # source or its Fast3D state fails the build instead of baking
     # something different under the same approval.
     (30, 0x007A): "fe50d1763a1e0151cc8b0eda3a89e42d1b65206dfbefaa9173d32c2f34c1ad62",
+    (22, 0x00C0): "a723df97dca32c81bc87446e37f72c403ecdd1d7bcde756b767721450acb88ff",
+    (26, 0x00D4): "3fb6b73bac8caec8e2e7ab0a19e4fa2f2ba3e159e5f680e7d85a7ce5f7188d8c",
+    (33, 0x0078): "b01f764c7075a589505999d9cda674ca1234b86400865cdcd8d332d1d334afb9",
+    (36, 0x0065): "d42b4f2f96f2e8505016f3ed9cf8a8e2ff9fc3ebb62491bf3f6c331335f3dc0a",
+    (14, 0x006A): "dbfd13ba87785275c9c30e8a629dc542884d483156c3f78bdcbecb2821e46e50",
+    (43, 0x00C3): "3dfb671731d24471bf8621ce7ce1f7da01c5ff9a9fbbd12d8cb49ce4ede3dc02",
     # The nine actors admitted 2026-09-01. Every digest below was MEASURED by
     # the bake -- it reports its own capture digest when a key is admitted
     # without one -- and each was taken from a run with only that key admitted.
@@ -164,7 +190,6 @@ _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
     # same approval.
     (3, 0x007C): "7cd35e7015ce9ee308db31d62b21a529bd48e517831b8df7887eb15e448a3f4f",
     (14, 0x006A): "dbfd13ba87785275c9c30e8a629dc542884d483156c3f78bdcbecb2821e46e50",
-    (22, 0x00C0): "a723df97dca32c81bc87446e37f72c403ecdd1d7bcde756b767721450acb88ff",
     (26, 0x00D4): "3fb6b73bac8caec8e2e7ab0a19e4fa2f2ba3e159e5f680e7d85a7ce5f7188d8c",
     (27, 0x00BE): "245e159d7e1ce8f0e8662bde54e548e28689761826c99853e76d4da6d6f78964",
     (33, 0x0078): "b01f764c7075a589505999d9cda674ca1234b86400865cdcd8d332d1d334afb9",
@@ -344,11 +369,34 @@ def _target_material(signature: MaterialSignatureV2) -> TargetMaterialV2:
         )
     layer, alpha = _target_layer(signature)
     combiner = signature.combine_mode
-    lit = "G_LIGHTING" in signature.geometry_mode
+    # Actors bake FLAT. Owner decision 2026-09-01: "character models don't have
+    # to be lit -- we just do flat with no lighting."
+    #
+    # This is a throughput decision, not only an aesthetic one. CLUT16_GOURAUD
+    # costs one gouraud table per drawn primitive per instance, and those come
+    # out of a fixed per-frame share of 892. MODEL_GOOMBA lit wants **202
+    # tables per instance**, which alone drops the guaranteed any-mix service
+    # floor to 892/202 = 4 actors -- for every actor in the scene, not just
+    # Goomba. At 15 (the pre-Goomba floor) BOB's populated scene is serviceable;
+    # at 4 it is not, and the frame never completes.
+    #
+    # Flat costs zero tables, so the floor is governed by the draw-record and
+    # texture-command shares instead. The visible cost is that lit models lose
+    # their shading gradient and render at full texture brightness, which is
+    # what Saturn-era ports of N64 content generally did anyway.
+    #
+    # Set SATURN_ACTOR_GOURAUD_LIGHTING=1 to restore the lit recipe; it is a
+    # measurable per-frame budget, not a free switch.
+    lit = ("G_LIGHTING" in signature.geometry_mode
+           and os.environ.get("SATURN_ACTOR_GOURAUD_LIGHTING") == "1")
     if layer == ActorTargetLayerV2.TRANSLUCENT:
         recipe = ActorMaterialRecipeV2.CLUT16_HALF_TRANSPARENT
     elif combiner == ("G_CC_MODULATERGB", "G_CC_MODULATERGB") and lit:
         recipe = ActorMaterialRecipeV2.CLUT16_GOURAUD
+    elif combiner == ("G_CC_MODULATERGB", "G_CC_MODULATERGB"):
+        # The same combiner with lighting dropped: modulate against a flat
+        # full-brightness shade, which CLUT16_REPLACE already expresses.
+        recipe = ActorMaterialRecipeV2.CLUT16_REPLACE
     elif combiner in (
             ("G_CC_DECALRGBA", "G_CC_DECALRGBA"),
             ("G_CC_MODULATERGBA", "G_CC_MODULATERGBA"),
