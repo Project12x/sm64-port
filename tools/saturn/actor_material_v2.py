@@ -45,6 +45,34 @@ BOB_DIRECT_TEXTURED_KEYS = (
     # supported reason for keys on this list. Its real blocker was
     # G_TEXTURE_GEN, now accepted-and-ignored (see actor_variant_bank.py).
     (30, 0x007A),
+    # Admitted 2026-09-01 to finish BOB's object and enemy roster. Every one of
+    # these reported "unsupported rigid-group source: textured", which means
+    # only "not admitted" -- see the note on that above. Each was then verified
+    # individually, one key per bake so the reported error was unambiguously
+    # its own, and all nine reached the capture-signature stage with no
+    # capability gap. MODEL_GOOMBA additionally needed gsSPNumLights, now
+    # handled in actor_variant_bank.py; that macro is the one most likely to
+    # gate lit character models generally, which is why it was worth fixing as
+    # a capability rather than per actor -- Whomp's Fortress is full of them.
+    (3, 0x007C),   # MODEL_WOODEN_SIGNPOST
+    # MODEL_KOOPA_WITH_SHELL (11, 0x0068) is deliberately NOT admitted. It
+    # bakes cleanly -- its capture digest is
+    # fb2efe80bff18df85ba0f089da49d83e5ccb7a56af2d65091d9a9ba2c4824abf -- but it
+    # costs 15,296 B of texture+CLUT against a 52,672 B pool (29% of the whole
+    # actor allowance for one model) and its 7,147 B of scratch is, by itself,
+    # more than twice the workspace every other actor needs combined. Admitting
+    # it alone pushed actor residency to 55,648 B, over the pool, and forced the
+    # workspace capacity from 3,072 B to 7,168 B of HWRAM. The other eight fit
+    # with 12,320 B of VDP1 to spare and +256 B of workspace. Revisit only with
+    # a smaller texture budget for it, or if Koopa's visibility is worth that
+    # much of the actor allowance.
+    (14, 0x006A),  # MODEL_KOOPA_FLAG
+    (22, 0x00C0),  # MODEL_GOOMBA
+    (26, 0x00D4),  # MODEL_1UP
+    (27, 0x00BE),  # MODEL_KOOPA_SHELL
+    (33, 0x0078),  # MODEL_HEART
+    (36, 0x0065),  # MODEL_METALLIC_BALL
+    (43, 0x00C3),  # MODEL_BOBOMB_BUDDY
 )
 
 BAKE_POLICY_ID = 0x53423601
@@ -128,6 +156,20 @@ _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
     # source or its Fast3D state fails the build instead of baking
     # something different under the same approval.
     (30, 0x007A): "fe50d1763a1e0151cc8b0eda3a89e42d1b65206dfbefaa9173d32c2f34c1ad62",
+    # The nine actors admitted 2026-09-01. Every digest below was MEASURED by
+    # the bake -- it reports its own capture digest when a key is admitted
+    # without one -- and each was taken from a run with only that key admitted.
+    # Approving them fixes each actor's exact material/source state, so later
+    # drift fails the build instead of baking something different under the
+    # same approval.
+    (3, 0x007C): "7cd35e7015ce9ee308db31d62b21a529bd48e517831b8df7887eb15e448a3f4f",
+    (14, 0x006A): "dbfd13ba87785275c9c30e8a629dc542884d483156c3f78bdcbecb2821e46e50",
+    (22, 0x00C0): "a723df97dca32c81bc87446e37f72c403ecdd1d7bcde756b767721450acb88ff",
+    (26, 0x00D4): "3fb6b73bac8caec8e2e7ab0a19e4fa2f2ba3e159e5f680e7d85a7ce5f7188d8c",
+    (27, 0x00BE): "245e159d7e1ce8f0e8662bde54e548e28689761826c99853e76d4da6d6f78964",
+    (33, 0x0078): "b01f764c7075a589505999d9cda674ca1234b86400865cdcd8d332d1d334afb9",
+    (36, 0x0065): "d42b4f2f96f2e8505016f3ed9cf8a8e2ff9fc3ebb62491bf3f6c331335f3dc0a",
+    (43, 0x00C3): "3dfb671731d24471bf8621ce7ce1f7da01c5ff9a9fbbd12d8cb49ce4ede3dc02",
 }
 _EXPECTED_CATEGORY_HASHES: dict[tuple[int, int], dict[str, str]] = {
     (7, 0x00BC): {
@@ -312,6 +354,11 @@ def _target_material(signature: MaterialSignatureV2) -> TargetMaterialV2:
             ("G_CC_MODULATERGBA", "G_CC_MODULATERGBA"),
             ("G_CC_MODULATEIA", "G_CC_MODULATEIA"),
             ("G_CC_DECALFADEA", "G_CC_DECALFADEA"),
+            # Same argument as G_CC_DECALFADE below: G_CC_DECALRGB is
+            # G_CC_DECALRGBA without the alpha cycle, the alpha-carrying form is
+            # already approved on this recipe, and CLUT16_REPLACE writes the
+            # texel either way.
+            ("G_CC_DECALRGB", "G_CC_DECALRGB"),
             # MODEL_STAR's combiner. G_CC_DECALFADE is G_CC_DECALFADEA without
             # the alpha cycle -- it decals the texture and fades RGB by the
             # environment alpha. The alpha-carrying variant directly above is

@@ -12,7 +12,11 @@ from typing import Mapping, Sequence
 
 
 UINT32_MAX = (1 << 32) - 1
-BOB_MAXIMUM_SCRATCH_BYTES = 2915
+# Measured maximum per-actor scratch across the admitted set. 2026-09-01: 2915
+# -> 3267 with BOB's eight new objects and enemies; MODEL_GOOMBA is now the
+# high-water mark. Capacity rounds this up to the 256 B granule, so the HWRAM
+# cost of the whole roster expansion is 3,072 -> 3,328 B, one granule.
+BOB_MAXIMUM_SCRATCH_BYTES = 3267
 ACTOR_WORKSPACE_GRANULE_BYTES = 256
 BOB_WORKSPACE_CAPACITY_BYTES = (
     BOB_MAXIMUM_SCRATCH_BYTES + ACTOR_WORKSPACE_GRANULE_BYTES - 1
@@ -46,8 +50,19 @@ class ResourceLimits:
     # not overflow a budget with slack in it -- it overflowed one sized
     # precisely to what was already resident.  Actor residency is now 25,344 B
     # against the 52,672 B remaining, leaving 27,328 B unclaimed.
-    actor_texture_bytes: int = 21504
-    actor_clut_bytes: int = 3840
+    #
+    # 2026-09-01 (second raise): 21,504 / 3,840 -> 33,664 / 6,688 to admit eight
+    # more BOB objects and enemies -- signpost, koopa flag, koopa shell, goomba,
+    # 1up, heart, metallic ball, bob-omb buddy. Measured, not estimated. Actor
+    # residency is now 40,352 B against the 52,672 B pool, leaving 12,320 B.
+    #
+    # MODEL_KOOPA_WITH_SHELL was left out deliberately: it alone wanted 15,296 B
+    # (29% of the pool) and 7,147 B of scratch, which would have pushed
+    # residency to 55,648 B -- over the pool -- and the workspace capacity from
+    # 3,072 B to 7,168 B of HWRAM. See the note beside its key in
+    # actor_material_v2.py.
+    actor_texture_bytes: int = 33664
+    actor_clut_bytes: int = 6688
     shared_post_command_gouraud_bytes: int = 446432
     terrain_texture_bytes: int = 333696
     mario_texture_bytes: int = 25600

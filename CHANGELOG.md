@@ -4,6 +4,60 @@
 
 ### Added
 
+- **BOB's object and enemy roster now renders: eight more actors admitted.**
+  Goomba, Bob-omb Buddy, Koopa Shell, Koopa Flag, wooden signpost, 1UP, heart
+  and metallic ball join the star. Actor banks 18 -> 27, registry rows 32 -> 46.
+  Each was verified **one key per bake** so the reported error was unambiguously
+  its own -- the earlier bulk probe took the first error from a log that also
+  contains the bundle's reason-gathering for other actors, and mis-attributed
+  the star's blocker as a result.
+- **`gsSPNumLights` handled as a capability, which is the part that unlocks
+  Whomp's Fortress.** It was Goomba's real blocker and gates lit character
+  models generally, which is what WF is made of. Accepted **only** for
+  `NUMLIGHTS_1` -- the one-diffuse-plus-ambient configuration `self.light` /
+  `self.ambient_light` already model. Any other count is **refused**, not
+  ignored: two or more diffuse lights would mean the single-light model
+  silently bakes the wrong shading, and a quietly-accepted `NUMLIGHTS_2` is
+  exactly the "looks fine, renders wrong" defect that is expensive to find
+  later. Ignoring the macro wholesale would have unblocked marginally more
+  actors and been wrong.
+- `G_CC_DECALRGB` joins `G_CC_DECALRGBA` on `CLUT16_REPLACE`, the same argument
+  as `G_CC_DECALFADE`: the non-alpha form of an already-approved combiner, and
+  VDP1 writes the texel either way. It only surfaced once the digests were
+  approved, because the capture check runs first -- the gates are layered.
+
+### Changed
+
+- **Actor VDP1 budget raised to the measured 33,664 / 6,688** (from 21,504 /
+  3,840), and the workspace high-water mark from 2,915 to **3,267**, which is
+  one 256 B granule of HWRAM (3,072 -> 3,328). Actor residency is now
+  **40,352 B against the 52,672 B pool, leaving 12,320 B**. Budgets are set to
+  exact measured values rather than left loose, which is what keeps the next
+  actor's cost visible instead of hidden in slack.
+- **`MODEL_KOOPA_WITH_SHELL` is deliberately NOT admitted, and this is a real
+  trade rather than an oversight.** It bakes cleanly and its capture digest is
+  recorded beside its key, but it alone wants **15,296 B of texture+CLUT --
+  29% of the entire actor pool for one model** -- and **7,147 B of scratch**,
+  more than twice what every other actor needs combined. Admitting it pushed
+  residency to 55,648 B, over the pool, and would have forced workspace from
+  3,072 B to 7,168 B of HWRAM, which is the genuinely scarce resource. The
+  consequence is that **Koopa the Quick stays invisible**; re-admitting him is a
+  one-line change once his texture budget is reduced or the cost is judged worth
+  it.
+
+### Fixed
+
+- Owner's flat-shading latitude was **not** spent, because it was not needed:
+  the blocker was a macro the parser did not recognise, not a lighting
+  capability, and the baker already has an unlit path (`rgb = (31,31,31)`,
+  `light = None`). Forcing every actor flat would additionally have changed four
+  already-approved actors that bake through the lit recipe -- BLACK_BOBOMB (56
+  gouraud tables/instance), CANNON_BARREL (46), CANNON_BASE (30), DL_CANNON_LID
+  (2) -- trading a visual regression on working content for no benefit. It stays
+  available for the first model that genuinely declares multiple lights.
+
+### Added
+
 - **MODEL_STAR renders. Owner-confirmed on hardware-accurate emulation.** BOB's
   goal object previously rendered **nothing at all**: `bhvStar`,
   `bhvSpawnedStar` and `bhvStarSpawnCoordinates` were all in the closure and

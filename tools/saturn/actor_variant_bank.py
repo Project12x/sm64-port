@@ -173,6 +173,32 @@ def _fast3d_scalar(value: str, label: str) -> int:
     return result
 
 
+def _require_single_light(args: str, label: str) -> None:
+    """Accept gsSPNumLights only where it declares the configuration we model.
+
+    gsSPNumLights sets the RSP's active light count. It carries no state this
+    baker needs -- the lights themselves arrive via gsSPLight, which is already
+    handled -- so for NUMLIGHTS_1 it is a declaration that the source uses
+    exactly one diffuse light plus ambient, which is precisely what
+    `self.light` / `self.light_rgb` / `self.ambient_light` model.
+
+    Any other count is REFUSED rather than ignored. Two or more diffuse lights
+    would mean the single-light model silently bakes the wrong shading, and a
+    quietly-accepted NUMLIGHTS_2 is exactly the kind of "looks fine, renders
+    wrong" defect that is expensive to find later. Ignoring the macro wholesale
+    would have unblocked marginally more actors and been wrong.
+
+    This is what gated MODEL_GOOMBA -- and, on the same reasoning, is expected
+    to gate lit character models generally, which is why it is worth handling
+    as a capability rather than per actor.
+    """
+    fields = tuple(item.strip() for item in args.split(","))
+    if len(fields) != 1 or fields[0] != "NUMLIGHTS_1":
+        raise UnsupportedActorSourceError(
+            f"unsupported light count {args.strip()!r} in {label}: this bank "
+            "models exactly one diffuse light plus ambient")
+
+
 def _geometry_modes(value: str, label: str) -> tuple[str, ...]:
     fields = tuple(item.strip() for item in value.split("|"))
     # G_TEXTURE_GEN is accepted and then deliberately ignored -- a Saturn-shaped
@@ -1393,6 +1419,8 @@ class _Fast3DCompiler:
                 1, 1, 0, 0,
             )
             self.load_complete = True
+        elif macro == "gsSPNumLights":
+            _require_single_light(args, name)
         else:
             raise UnsupportedActorSourceError(f"unknown Fast3D material/list state: {macro}")
 
@@ -1513,6 +1541,8 @@ class _Fast3DCompiler:
             elif macro == "gsSPEndDisplayList":
                 if args.strip():
                     raise MalformedActorSourceError(f"malformed gsSPEndDisplayList in {name}")
+            elif macro == "gsSPNumLights":
+                _require_single_light(args, name)
             else:
                 raise UnsupportedActorSourceError(f"unknown Fast3D material/list state: {macro}")
             if macro == "gsSPEndDisplayList":
