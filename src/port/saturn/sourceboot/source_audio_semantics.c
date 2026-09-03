@@ -368,6 +368,24 @@ void play_sound(s32 soundBits, f32 *pos)
     u8 bank;
 
     play_sound_probe_note_call(soundBits);
+    /* Strip the SOUND_STATUS nibble before the value becomes an identity.
+     * sounds.h documents bits 0-3 as runtime status (STOPPED/WAITING/PLAYING),
+     * and SOUND_ARG_LOAD ORs SOUND_STATUS_WAITING into EVERY define, so each
+     * caller hands us e.g. 0x400A0001 for SOUND_ENV_UNKNOWN2. The 68K driver
+     * resolves a request by exact 32-bit compare against the bundle's mapping
+     * keys, and compile_sourceboot_sfx_bundle.py builds those keys not from
+     * the macro but by scraping the hex annotation written in a comment beside
+     * each define (0x400A0000 for this one) -- the value WITHOUT the status
+     * bit. Two spellings of one
+     * identity that nothing tied together. Measured 2026-09-03 on
+     * e662adc713fb0b48: the bowling balls' SOUND_ENV_UNKNOWN2 arrived as
+     * 0x400A0001 every tick, the compare fell through, and mb.invalid_samples
+     * counted 933 of 938 consumed requests -- the driver received everything
+     * and could resolve almost none of it. Status is not identity, so the
+     * wire carries the status-free value the bake keyed on; the probe records
+     * the raw value above so any other stamping stays visible. Done before the
+     * NO_SOUND test so a bare status value reads as no sound, not sound id 0. */
+    soundBits = (s32)((u32)soundBits & ~(u32)SOUNDARGS_MASK_STATUS);
     if (!source_audio_ensure_initialized()) {
         g_sm64_saturn_play_sound_probe.reject_uninitialized++;
         return;

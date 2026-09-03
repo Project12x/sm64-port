@@ -4,6 +4,34 @@
 
 ### Fixed
 
+- **SFX requests reached the 68K driver and were rejected as unresolvable:
+  the runtime and the bake spell the same sound identity differently.**
+  `SOUND_ARG_LOAD` in `include/sounds.h` ORs `SOUND_STATUS_WAITING` into
+  every define, so each `play_sound()` call carries bit 0 set
+  (`SOUND_ENV_UNKNOWN2` arrives as `0x400A0001`). The SFX bundle's mapping
+  keys come from `compile_sourceboot_sfx_bundle.py::_sound_bits_by_symbol`,
+  which does not evaluate the macro -- it regex-scrapes the hex annotation
+  written in a comment beside each define, and those annotations omit the
+  status bit (`0x400A0000`). `pcm_voice.c`'s `sm64_saturn_pcm_play_semantic`
+  resolves a request by exact 32-bit compare, so essentially every request
+  fell through to `invalid_samples++`. Measured on `e662adc713fb0b48`:
+  `mb.sfx_consumed` 74 -> 938 while `mb.invalid_samples` 73 -> 933.
+- **Fix:** `play_sound()` in `source_audio_semantics.c` masks
+  `SOUNDARGS_MASK_STATUS` (bits 0-3) before the value is used as an identity
+  -- the header documents that nibble as runtime status, not identity, so the
+  wire now carries the status-free value the bake keyed on. Done before the
+  `NO_SOUND` test so a bare status value reads as no sound. The probe still
+  records the raw value so any other stamping stays visible. Verified on build `205371c9e43162c2`. `probe_play_sound.py`: admission unchanged at 1,060/1,060 with 0 rejects, and the probe now shows the raw `last_sound_bits` `0x400A0001` beside the accepted `0x400A0000`. `probe_audio_timeseries.py` over the same 98 s: `mb.invalid_samples` 933 -> 647, `music.sfx_refreshes` 72 -> 286, `mb.voices_started` 3 -> 6, and SCSP slots 1-3 key on with `attenuation` 0 and `eg` 31 where before every slot register was frozen -- SFX requests reach the hardware. **Still not audible from the player's position (manual, 2026-09-03), and the reason is coverage, not plumbing:** of the 54 baked sounds there are 0 `SOUND_MARIO_*` and 1 `SOUND_ACTION_*` (READ_SIGN); every sound Mario's own actions request is unbaked and correctly counted invalid. The only continuous sound that resolves on the route is the bowling balls' rumble, distance-attenuated. Baking Mario's sounds is a closure and sound-RAM decision, logged separately.
+- **Fragility worth naming:** the bake keys sound identity on a *comment*.
+  A define whose annotation drifts from its macro mis-keys silently; a define
+  with no annotation already fails the bake loudly. Computing from the macro
+  arguments (and masking the status nibble) with an assertion against the
+  annotation would close it; logged as follow-up hardening, not done here.
+- Fourth instance today of one defect class -- two representations of one
+  fact that nothing ties together (workspace constant, upload stage, host
+  VDP1 fixture, and now sound identity). The signature is always the same:
+  every layer upstream reports success and nothing happens.
+
 - **Sound effects never played because the audio policy was never ticked.**
   `game_init.c`'s `TARGET_SATURN` arm replaces `audio_game_loop_tick()` with
   `sm64_saturn_source_runtime_audio_tick()`, and that function was a bare
