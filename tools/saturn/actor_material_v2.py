@@ -51,23 +51,35 @@ BOB_DIRECT_TEXTURED_KEYS = (
     (36, 0x0065),  # MODEL_METALLIC_BALL
     (14, 0x006A),  # MODEL_KOOPA_FLAG
     # Verified 2026-09-01 by building and running EACH addition, not just baking
-    # it. Four actors below present frames at 6.3043 FPS, up from 6.1922.
+    # it. The five above present frames at 6.3043 FPS, up from 6.1922.
     #
-    # NOT admitted, and each for a measured reason rather than a guess:
-    #   MODEL_WOODEN_SIGNPOST (3, 0x007C)  digest 7cd35e7015ce9ee3...
-    #   MODEL_KOOPA_SHELL     (27, 0x00BE) digest 245e159d7e1ce8f0...
-    #   MODEL_GOOMBA          (22, 0x00C0) digest a723df97dca32c81...
-    # All three bake cleanly, pass every capacity check the bake has, reach the
-    # identity registry -- and then the build presents ZERO frames across 3,600
-    # vblanks with no fault from either CPU. Goomba was retested in isolation
-    # without Bob-omb Buddy and still black-screened, so this is intrinsic, not
-    # cumulative load.
+    # The three below black-screened on 2026-09-01 and were held back pending a
+    # runtime cause. Found 2026-09-03: TWO hand-maintained runtime capacities
+    # that nothing compared against the bake, both in source_scene_bundle.h.
     #
-    # The pattern points at an unenforced RUNTIME capacity, the same class of
-    # defect as the workspace constant fixed alongside this: admitted sets
-    # summing to 273-282 texture commands per instance present frames, while 303
-    # (signpost) and 403 (goomba) do not. The bake cannot see it, so it must be
-    # found on the runtime side before these three are retried.
+    #   SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES was 2,560 B, and
+    #   preflight_span() rejects any bundle containing a single bank larger than
+    #   it. Signpost is 2,688 B, goomba 3,072 B, koopa shell 3,584 B -- each one
+    #   over on its own, which is why goomba still failed when retested in
+    #   isolation and why this looked "intrinsic" rather than cumulative.
+    #
+    #   SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES was 3,072 B against
+    #   goomba's 3,267 B of scratch.
+    #
+    # Both failures take the same silent path -- init returns false, sourceboot
+    # spins at its `for (;;)`, and the build boots, matches its sealed identity,
+    # reports no fault from either CPU and presents zero frames. Both constants
+    # are now raised and both are enforced at bake time, so the next actor that
+    # outgrows one fails the build with the byte count instead.
+    #
+    # The earlier "texture commands per instance" correlation (273-282 present,
+    # 303 and 403 do not) was a coincidence of the same ordering, and so was a
+    # reading of VDP1 texture partition bytes: VDP1 has 64,960 B remaining and
+    # was never the constraint. Only the two capacities above separate every
+    # observation.
+    (3, 0x007C),   # MODEL_WOODEN_SIGNPOST
+    (27, 0x00BE),  # MODEL_KOOPA_SHELL
+    (22, 0x00C0),  # MODEL_GOOMBA
     #
     #   MODEL_BOBOMB_BUDDY (43, 0x00C3) digest 3dfb671731d24471... PRESENTS
     #   frames but costs 14% -- 6.3043 -> 5.4206 FPS, 9.52 -> 11.07 VB/frame.

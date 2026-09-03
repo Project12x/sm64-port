@@ -4,35 +4,65 @@
 
 ### Fixed
 
-- **Found the runtime capacity that black-screens the remaining BOB actors:
-  VDP1 is never partitioned for actor textures at all** --
-  `docs/saturn/evidence/reports/actor-texture-partition-gap.md`. The largest
-  actor texture residency that presents frames is **25,600 bytes exactly**;
-  25,984 does not. That number is
-  `SOURCEBOOT_MARIO_TEXTURE_BYTES = 50 x 16 x 16 x 2`, and
-  `SOURCEBOOT_TEXTURE_BYTES` -- the value handed to
-  `vdp1_vram_partitions_set()` -- is **terrain (333,696) + Mario (25,600) and
-  nothing else**. There is no actor term. The residency writer is initialised
-  with `partitions->texture_base`/`texture_size` and lays banks from a zero
-  cursor, so it fits only while it stays inside a region that was never sized
-  for it, and runs off the end past 25,600 B.
-- **The bake's actor VDP1 budget is a paper allocation.**
-  `inventory_actor_family_bundles.py` justifies `actor_texture_bytes` /
-  `actor_clut_bytes` as drawn from "52,672 B of unallocated VDP1 that no current
-  binder owns". Nothing owns it because nothing partitions it -- the space the
-  bake spends is not space the runtime hands out. Raising that budget, as the
-  2026-08-22 coin raise and the 2026-09-01 star raise both did, moves a number
-  that has no runtime counterpart.
-- **Same class as the workspace constant fixed the same day**, and that is the
-  more useful conclusion than either instance: a capacity the bake reasons about
-  and the runtime does not implement, with nothing comparing the two. Assume
-  there are more.
-- A fix means adding an actor term to `SOURCEBOOT_TEXTURE_BYTES` and the CLUT
-  count, then tying the bake's budgets to the runtime constants the way
-  `compile_actor_family_bundle.py` now ties the workspace, so an unhonourable
-  budget fails the build. Only then retry MODEL_WOODEN_SIGNPOST,
-  MODEL_KOOPA_SHELL and MODEL_GOOMBA -- their capture digests are already
-  recorded beside their keys, so re-admitting them is mechanical.
+- **The three remaining BOB objects render**: MODEL_WOODEN_SIGNPOST,
+  MODEL_KOOPA_SHELL and MODEL_GOOMBA. Verified on build
+  `dfb8a95b7f8f7258` (generation g93, 26 actor banks): headless capture
+  reports `status: complete`, 30 presentation events over 29 intervals, at
+  **6.0000 FPS** (60/10 exactly). The cost of the three is 6.3043 -> 6.0000,
+  **-4.8%**, most of it MODEL_GOOMBA's 403 texture commands per instance.
+  They were never blocked by a capability gap, a VDP1 budget, or cumulative
+  load -- they were blocked by **two hand-maintained runtime capacities in
+  `source_scene_bundle.h` that nothing compared against the bake**:
+  `SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES` (3,072 B against goomba's
+  3,267 B of scratch) and `SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES`
+  (2,560 B against koopa shell's 3,584 B bank).
+  See `docs/saturn/evidence/reports/actor-runtime-capacity-gates.md`.
+- **Root cause of the silence**: `sm64_saturn_source_scene_bundle_init()`
+  returning false makes sourceboot spin at `main.c:2284`. A clean validation
+  failure is therefore indistinguishable from a hardware fault that isn't
+  there -- builds, boots, sealed identity matches, no CPU fault, zero frames
+  across 3,600 vblanks. Every check the bake has passes, because the violated
+  values are on the runtime side and the bake never saw them.
+- **The upload stage is a PER-BANK limit, not a total**, which is why each of
+  the three failed alone and why "intrinsic, not cumulative" was a correct
+  observation that pointed at the wrong conclusion. Boot stages every bank's
+  texture and CLUT through one fixed buffer, so the binding number is the
+  largest single bank.
+- Both constants are raised at **zero memory cost** -- the workspace is a union
+  overlaid on the boot scene view (3,348 B ceiling), the stage borrows the idle
+  command bank (53,248 B) -- and `compile_actor_family_bundle.py` now reads both
+  out of the header and fails the bake with the byte count and the offending
+  model. That enforcement, not either constant, is the durable fix: this is the
+  second capacity of this class found by bisecting builds in three days.
+- **`source_scene_bundle_test.c`'s fake VDP1 was smaller than the real one** --
+  20,000 B of texture and 4,096 B of CLUT, against a hardware actor arena of
+  64,960 B. The g93 roster fits real VDP1 with 26,176 B to spare and still
+  failed this test. The fixture is now sized to the arena the partition
+  arithmetic actually leaves (49,152 + 15,808 = 64,960, static-asserted), so it
+  fails exactly when a bundle would not fit hardware either, instead of at an
+  arbitrary number that drifts below it unnoticed. Third instance today of the
+  same shape: a capacity asserted somewhere that nothing ties to the real one.
+
+### Fixed (retracted)
+
+- **RETRACTED: "VDP1 is never partitioned for actor textures"** (commit
+  `f1161698`). The claim was false in every part.
+  `source_scene_bundle.c:288-299` carves the actor regions out of
+  `partitions.remaining_base` with a bounds check; the real remaining size is
+  **64,960 B** against a largest failing roster of 40,352 B, so VDP1 had room
+  throughout and the bake's 52,672 B model is conservative rather than
+  overdrawn. The reported "25,600 B exactly" boundary came from **one
+  mislabelled row** -- g84 was recorded as WORKS but is the signpost
+  generation, whose 2,688 B bank overflows the 2,560 B stage. That single wrong
+  cell produced a boundary which then matched `SOURCEBOOT_MARIO_TEXTURE_BYTES`
+  by coincidence.
+- The lesson is worth more than the retraction: **a number matching a known
+  constant to the byte felt like proof and was not.** It was one arithmetic
+  identity resting on one unverified label, published without opening the
+  allocator that would have had to be true for it to mean anything. What
+  actually worked was correlating every boot gate against every generation on
+  disk at once -- minutes of reading, a separator with no exceptions, first
+  pass.
 
 ### Added
 

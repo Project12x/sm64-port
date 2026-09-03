@@ -16,7 +16,13 @@ UINT32_MAX = (1 << 32) - 1
 # -> 3267 with BOB's eight new objects and enemies; MODEL_GOOMBA is now the
 # high-water mark. Capacity rounds this up to the 256 B granule, so the HWRAM
 # cost of the whole roster expansion is 3,072 -> 3,328 B, one granule.
-BOB_MAXIMUM_SCRATCH_BYTES = 2915
+#
+# 2026-09-03: this number was already correct on 2026-09-01 and was then
+# wrongly discounted. 3,267 B against a runtime buffer of 3,072 B is exactly
+# what black-screened MODEL_GOOMBA -- see the note in source_scene_bundle.h.
+# The runtime constant is now 3,328 and compile_actor_family_bundle.py proves
+# the relationship at bake time instead of leaving it to be rediscovered.
+BOB_MAXIMUM_SCRATCH_BYTES = 3267
 ACTOR_WORKSPACE_GRANULE_BYTES = 256
 BOB_WORKSPACE_CAPACITY_BYTES = (
     BOB_MAXIMUM_SCRATCH_BYTES + ACTOR_WORKSPACE_GRANULE_BYTES - 1
@@ -61,8 +67,17 @@ class ResourceLimits:
     # residency to 55,648 B -- over the pool -- and the workspace capacity from
     # 3,072 B to 7,168 B of HWRAM. See the note beside its key in
     # actor_material_v2.py.
-    actor_texture_bytes: int = 22912
-    actor_clut_bytes: int = 4192
+    #
+    # 2026-09-03: 22,912 / 4,192 -> 32,256 / 6,528 to admit MODEL_WOODEN_SIGNPOST,
+    # MODEL_KOOPA_SHELL and MODEL_GOOMBA, the three that black-screened on
+    # 2026-09-01. VDP1 was never what stopped them -- the real partition has
+    # 64,960 B remaining, not the 52,672 B modelled here, so this pool has been
+    # conservative throughout and the budget was never the binding constraint.
+    # They were stopped by two hand-maintained RUNTIME capacities that nothing
+    # compared against the bake: the 3,072 B workspace and the 2,560 B boot
+    # upload stage. Both are now raised and both are bake-enforced.
+    actor_texture_bytes: int = 32256
+    actor_clut_bytes: int = 6528
     shared_post_command_gouraud_bytes: int = 446432
     terrain_texture_bytes: int = 333696
     mario_texture_bytes: int = 25600

@@ -146,8 +146,22 @@ static bool fixture_reseal_root(uint8_t *root, uint32_t root_bytes)
 
 int main(int argc, char **argv)
 {
-    _Alignas(32) static uint8_t texture_vram[20000];
-    _Alignas(32) static uint8_t clut_vram[4096];
+    /* Model the REAL actor arena, not an arbitrary scratch size. Sourceboot
+     * hands sm64_saturn_source_scene_bundle_init_from() the region left over
+     * by vdp1_vram_partitions_set():
+     *
+     *   524,256 - (53,248 cmdt + 359,296 texture + 12,288 gouraud
+     *              + 34,464 clut) = 64,960 B
+     *
+     * split into an aligned texture span followed by the CLUTs. Sizing the
+     * fixture to that total means this test fails exactly when a bundle would
+     * not fit real VDP1 either. The previous 20,000 / 4,096 were smaller than
+     * the hardware arena, so they under-sized silently: the g93 roster fits
+     * VDP1 with 26,176 B to spare and still failed here. */
+    _Alignas(32) static uint8_t texture_vram[49152];
+    _Alignas(32) static uint8_t clut_vram[15808];
+    _Static_assert(sizeof(texture_vram) + sizeof(clut_vram) == 64960,
+                   "actor arena fixture must match the VDP1 remaining region");
     vdp1_vram_partitions_t partitions = {0};
     uint8_t *root, *bundle;
     uint32_t root_bytes = 0U, bundle_bytes = 0U;

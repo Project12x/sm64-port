@@ -43,10 +43,28 @@ enum {
      * still said 3,072, and the result was a clean build that booted, matched
      * its sealed identity, and then presented zero frames forever -- a black
      * screen with no fault reported by either CPU. A build error is a much
-     * cheaper way to learn that. */
-    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES = 3072U,
+     * cheaper way to learn that.
+     *
+     * 3072 -> 3328 (2026-09-03) to admit that roster for real. The ceiling is
+     * sizeof(sm64_saturn_scene_package_view_t) == LIFETIME_BYTES below, which
+     * the union in source_scene_bundle.c overlays this on, so everything up to
+     * 3,348 B is free; past that the boot view must grow first. */
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES = 3328U,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES = 3348U,
-    SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES = 2560U,
+    /* Boot staging for ONE actor bank's texture or CLUT payload, borrowed
+     * from the idle command bank (53,248 B, so this is free space, not a
+     * budget). preflight_span() in saturn_actor_texture_residency.c rejects
+     * any single bank whose resident bytes exceed this, and a rejected bundle
+     * takes the same silent path as the workspace overflow above: init fails,
+     * sourceboot spins at main.c's `for (;;)`, and the console shows a black
+     * screen with no fault from either CPU.
+     *
+     * 2560 -> 4096 (2026-09-03): BOB's eight new objects and enemies put
+     * MODEL_GOOMBA's texture bank at 3,584 B, over the old value. This is a
+     * PER-BANK limit, not a total -- growing the roster with small actors
+     * never trips it, and one large actor trips it alone.
+     * compile_actor_family_bundle.py enforces the relationship at bake time. */
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES = 4096U,
 };
 
 bool sm64_saturn_source_scene_bundle_bind_workspace(void *workspace,

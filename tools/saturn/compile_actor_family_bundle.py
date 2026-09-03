@@ -286,36 +286,72 @@ def validate_publication(
     return report
 
 
-def _require_runtime_workspace(root: Path, required_bytes: int) -> None:
-    """Fail the bake when the runtime workspace buffer is too small.
-
-    src/port/saturn/sourceboot/source_scene_bundle.h hand-maintains
-    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES, and the generated
-    actor_bundle_capacity.h is not on that translation unit's include path, so
-    nothing in the C build can compare them.
-
-    Left unchecked the mismatch is silent and expensive: growing BOB's actor
-    roster from 18 to 27 variants raised the bake's requirement from 3,072 B to
-    3,328 B while the runtime constant stayed at 3,072, and the result was a
-    clean build that booted, matched its sealed identity, reported no master or
-    slave fault, and then presented zero frames forever. A black screen is a
-    terrible way to discover an off-by-one-granule buffer.
-    """
+def _runtime_capacity(root: Path, name: str) -> int:
+    """Read one hand-maintained runtime capacity out of the sourceboot header."""
     header = root / "src/port/saturn/sourceboot/source_scene_bundle.h"
     text = header.read_text(encoding="utf-8")
-    match = re.search(
-        r"SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES\s*=\s*(\d+)U", text)
+    match = re.search(rf"{name}\s*=\s*(\d+)U", text)
     if match is None:
         raise ValueError(
-            "cannot find SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES in "
-            f"{header}; the bake cannot prove the runtime buffer is large enough")
-    runtime_bytes = int(match.group(1))
+            f"cannot find {name} in {header}; the bake cannot prove the "
+            "runtime honours what this bundle spends")
+    return int(match.group(1))
+
+
+def _require_runtime_capacity(root: Path, name: str, required_bytes: int,
+                              what: str) -> None:
+    """Fail the bake when a runtime buffer is too small for this bundle.
+
+    src/port/saturn/sourceboot/source_scene_bundle.h hand-maintains these
+    capacities, and the generated actor_bundle_capacity.h is not on that
+    translation unit's include path, so nothing in the C build can compare
+    them.
+
+    Left unchecked the mismatch is silent and expensive. Both known instances
+    end identically: sm64_saturn_source_scene_bundle_init() returns false,
+    sourceboot spins at its `for (;;)`, and the build boots, matches its sealed
+    identity, reports no master or slave fault, and presents zero frames
+    forever.
+
+      - WORKSPACE_BYTES: growing BOB's actor roster from 18 to 27 variants
+        raised the requirement from 3,072 B to 3,328 B while the constant
+        stayed at 3,072.
+      - UPLOAD_STAGE_BYTES: the same roster put MODEL_GOOMBA's texture bank at
+        3,584 B against a 2,560 B boot stage. This one is PER BANK, so it is
+        tripped by one large actor rather than by the roster's total.
+
+    A black screen is a terrible way to discover either. Diagnosing the pair of
+    them cost two multi-build bisects on 2026-09-01 and 2026-09-03, which is
+    the whole reason these are checked here rather than reasoned about.
+    """
+    runtime_bytes = _runtime_capacity(root, name)
     if runtime_bytes < required_bytes:
         raise ValueError(
-            f"runtime workspace buffer is {runtime_bytes} B but this bundle "
-            f"needs {required_bytes} B -- raise "
-            "SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES in "
+            f"runtime {what} is {runtime_bytes} B but this bundle needs "
+            f"{required_bytes} B -- raise {name} in "
             "src/port/saturn/sourceboot/source_scene_bundle.h")
+
+
+def _require_runtime_workspace(root: Path, required_bytes: int) -> None:
+    _require_runtime_capacity(
+        root, "SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES",
+        required_bytes, "workspace buffer")
+
+
+def _require_runtime_upload_stage(root: Path, bank_rows) -> None:
+    """Fail the bake when one bank's payload overflows the boot upload stage.
+
+    preflight_span() stages every bank's texture and CLUT through a single
+    fixed buffer, so the binding number is the LARGEST bank, not the sum.
+    """
+    largest = max(
+        ((int(row[field]), row["model"], field)
+         for row in bank_rows
+         for field in ("texture_resident_bytes", "clut_resident_bytes")),
+        default=(0, "", ""))
+    _require_runtime_capacity(
+        root, "SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES",
+        largest[0], f"boot upload stage ({largest[1]} {largest[2]})")
 
 
 def compile_scene_bundle(
@@ -444,6 +480,8 @@ def compile_scene_bundle(
     parsed_once = tuple(validate_actor_bank(raw) for raw in embedded_bank_payloads(bundle))
     if len(parsed_once) != len(supported):
         raise ValueError("supported BOB bank count mismatch")
+    _require_runtime_workspace(root, int(bundle.maximum_scratch))
+    _require_runtime_upload_stage(root, bank_rows)
     texture_bytes = sum(row["texture_resident_bytes"] for row in bank_rows)
     clut_bytes = sum(row["clut_resident_bytes"] for row in bank_rows)
     embedded_bytes = sum(row["payload_bytes"] for row in bank_rows)
