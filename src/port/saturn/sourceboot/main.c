@@ -2111,6 +2111,13 @@ sourceboot_post_cart_init(void)
     sm64_saturn_source_runtime_configure(sm64_saturn_fast3d_frontend_submit,
                                          &sourceboot_fast3d);
 #endif
+    /* Drive the semantic audio policy once per source tick. Without this the
+     * runtime's audio tick was a bare counter and sm64_saturn_audio_policy_tick
+     * never ran: play_sound() filled its 256-entry request table in ~80 s of
+     * gameplay and every later sound was refused (probe_play_sound.py,
+     * 2026-09-03). With SATURN_FEATURE_SEMANTIC_AUDIO=0 this resolves to
+     * source_audio_stub.c's empty body, so the call is harmless there. */
+    sm64_saturn_source_runtime_configure_audio_tick(audio_signal_game_loop_tick);
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
     {
         uint16_t sample_count = 0U;

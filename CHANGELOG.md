@@ -4,6 +4,38 @@
 
 ### Fixed
 
+- **Sound effects never played because the audio policy was never ticked.**
+  `game_init.c`'s `TARGET_SATURN` arm replaces `audio_game_loop_tick()` with
+  `sm64_saturn_source_runtime_audio_tick()`, and that function was a bare
+  counter increment left over from the early visual slice -- its own comment
+  said the AudioAPI would replace the no-op, and nothing ever did. So
+  `sm64_saturn_audio_policy_tick()` had no caller: `play_sound()` appended
+  requests to the policy's 256-entry table, nothing drained or published
+  them, and once the table filled every later sound was refused. Measured on
+  build `1373745fe9536f7a` with the new `tools/saturn/probe_play_sound.py`:
+  over 98 s of route gameplay `calls` reached 1,349 while `accepted` stopped
+  at **exactly 256 = `SM64_SATURN_AUDIO_REQUEST_CAPACITY`** and
+  `reject_policy_refresh` absorbed the remaining 1,093; every other gate
+  read 0. `probe_audio_timeseries.py` over the same window showed only
+  `mb.heartbeat` and `scsp.monitor` changing -- the 68K driver alive with
+  every mailbox ring frozen.
+- **Fix:** `saturn_source_runtime.c` gains a registered audio-tick hook
+  (`sm64_saturn_source_runtime_configure_audio_tick`) mirroring the existing
+  task-submit callback, and sourceboot installs `audio_signal_game_loop_tick`
+  on it. Registered rather than called directly because the file is also
+  linked into castleviewer and the host runtime-contract test, neither of
+  which has an `audio_signal_game_loop_tick`. Game-loop and renderer
+  ownership are unchanged. Verified on build `e662adc713fb0b48`: `probe_play_sound.py` reports calls 1,060 / accepted 1,060 / `reject_policy_refresh` 0 where accepted previously froze at 256; `probe_audio_timeseries.py` over the same 98 s shows 156 of 1,079 mailbox/SCSP words changing (before: 2), with `mb.sfx_consumed` 74 -> 938 and `mb.commands_consumed` 77 -> 941 -- the 68K driver now receives and consumes SFX requests. **SFX are not yet audible:** `mb.invalid_samples` rose 73 -> 933, so ~99% of consumed requests are rejected by the driver as unresolvable samples, and `mb.sfx_saturated` reached 1,141. That is the next link -- sample resolution on the 68K side -- and a different defect. This change closes the drain; it does not claim sound.
+- **`play_sound()` is now instrumented per drop path.** It has six silent
+  early returns and only two of them touched a counter (`gAudioErrorFlags`,
+  shared). `g_sm64_saturn_play_sound_probe` (`.lwram_bss`) counts calls,
+  each rejection reason, acceptances and the last sound bits;
+  `probe_play_sound.py` resolves it from the ELF and reads it live. It also
+  splits `pos == NULL` from `soundBits == NO_SOUND`, which were one branch.
+- The 256 cap is a symptom amplifier, not the bug: with no drain, nothing
+  would have played at any table size -- the cap only turned "no SFX" into
+  "permanently no SFX".
+
 - **The three remaining BOB objects render**: MODEL_WOODEN_SIGNPOST,
   MODEL_KOOPA_SHELL and MODEL_GOOMBA. Verified on build
   `dfb8a95b7f8f7258` (generation g93, 26 actor banks): headless capture

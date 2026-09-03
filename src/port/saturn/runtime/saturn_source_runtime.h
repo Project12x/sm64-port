@@ -26,6 +26,14 @@ struct SPTask;
 typedef void (*sm64_saturn_source_task_submit_fn)(struct SPTask *task,
                                                    void *context);
 
+/* Per-source-tick audio service, installed by the target the same way the
+ * task submitter is. game_init.c calls sm64_saturn_source_runtime_audio_tick()
+ * where the original loop called audio_game_loop_tick(); this hook is what
+ * that call reaches. Registered rather than linked directly because this file
+ * is also built into castleviewer and the host runtime-contract test, neither
+ * of which links an audio_signal_game_loop_tick. */
+typedef void (*sm64_saturn_source_audio_tick_fn)(void);
+
 typedef struct sm64_saturn_source_runtime_state {
     uint32_t input_polls;
     uint32_t submitted_tasks;
@@ -49,6 +57,8 @@ typedef struct sm64_saturn_source_runtime_state {
 
 void sm64_saturn_source_runtime_configure(
     sm64_saturn_source_task_submit_fn submit, void *context);
+void sm64_saturn_source_runtime_configure_audio_tick(
+    sm64_saturn_source_audio_tick_fn tick);
 void sm64_saturn_source_runtime_configure_input_replay(
     const sm64_saturn_input_replay_sample_t *samples, uint16_t sample_count);
 void sm64_saturn_source_runtime_init_controllers(

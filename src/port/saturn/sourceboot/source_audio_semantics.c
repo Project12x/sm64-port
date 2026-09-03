@@ -8,6 +8,7 @@
  * in s_spatial on the source SH-2.
  */
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include <ultra64.h>
 
@@ -29,6 +30,50 @@
 #else
 #define SOURCE_AUDIO_STATIC_ABI
 #endif
+
+/* play_sound() has SIX silent drop paths and only two of them touch a counter
+ * (gAudioErrorFlags, shared between them), so a sound that never plays leaves
+ * no trace of WHY. One counter per path says which.
+ *
+ * Measured 2026-09-03 on build 1373745fe9536f7a, 98 s of route gameplay:
+ * calls 1349, accepted 256, reject_policy_refresh 1093, every other gate 0.
+ * `accepted` saturates at exactly SM64_SATURN_AUDIO_REQUEST_CAPACITY (256) and
+ * never moves again, so the request table fills once and is never retired.
+ * probe_audio_timeseries.py over the same window reports only two fields
+ * changing at all -- mb.heartbeat and scsp.monitor -- so the 68K driver is
+ * alive while the control, SFX and completion rings never move. The policy
+ * layer accepts requests and publishes none of them.
+ *
+ * .lwram_bss for the same reason the rest of this file's state is: the master
+ * writes it and an external reader peeks it, so it must not sit dirty in an
+ * SH-2 write-back cache line. */
+typedef struct sm64_saturn_play_sound_probe {
+    uint32_t magic;
+    uint32_t calls;
+    uint32_t reject_uninitialized;
+    uint32_t reject_null_pos;
+    uint32_t reject_no_sound;
+    uint32_t reject_bank_range;
+    uint32_t reject_sound_id_invalid;
+    uint32_t reject_no_source_token;
+    uint32_t reject_policy_refresh;
+    uint32_t accepted;
+    uint32_t last_sound_bits;
+    uint32_t last_accepted_sound_bits;
+} sm64_saturn_play_sound_probe_t;
+
+#define SM64_SATURN_PLAY_SOUND_PROBE_MAGIC 0x50534E44U /* 'PSND' */
+
+volatile sm64_saturn_play_sound_probe_t
+    g_sm64_saturn_play_sound_probe SOURCE_AUDIO_STATIC_ABI;
+
+static void play_sound_probe_note_call(s32 soundBits)
+{
+    g_sm64_saturn_play_sound_probe.magic =
+        SM64_SATURN_PLAY_SOUND_PROBE_MAGIC;
+    g_sm64_saturn_play_sound_probe.calls++;
+    g_sm64_saturn_play_sound_probe.last_sound_bits = (uint32_t)soundBits;
+}
 
 typedef struct source_audio_semantic_workspace {
     sm64_saturn_audio_policy_t policy;
@@ -322,23 +367,33 @@ void play_sound(s32 soundBits, f32 *pos)
     sm64_saturn_audio_spatial_params_t params;
     u8 bank;
 
+    play_sound_probe_note_call(soundBits);
     if (!source_audio_ensure_initialized()) {
+        g_sm64_saturn_play_sound_probe.reject_uninitialized++;
         return;
     }
-    if (pos == NULL || soundBits == NO_SOUND) {
+    if (pos == NULL) {
+        g_sm64_saturn_play_sound_probe.reject_null_pos++;
+        return;
+    }
+    if (soundBits == NO_SOUND) {
+        g_sm64_saturn_play_sound_probe.reject_no_sound++;
         return;
     }
     bank = (u8)(((u32)soundBits & SOUNDARGS_MASK_BANK) >>
                 SOUNDARGS_SHIFT_BANK);
     if (bank >= SM64_SATURN_AUDIO_BANK_COUNT) {
+        g_sm64_saturn_play_sound_probe.reject_bank_range++;
         return;
     }
     if (!sm64_saturn_audio_policy_sound_id_valid((u32)soundBits)) {
+        g_sm64_saturn_play_sound_probe.reject_sound_id_invalid++;
         return;
     }
     refresh.source_token = sm64_saturn_audio_spatial_acquire(
         &s_spatial, pos, s_package_generation);
     if (refresh.source_token == 0U) {
+        g_sm64_saturn_play_sound_probe.reject_no_source_token++;
         gAudioErrorFlags++;
         return;
     }
@@ -354,7 +409,12 @@ void play_sound(s32 soundBits, f32 *pos)
     refresh.freshness_generation = s_policy.freshness_generation;
     if (!sm64_saturn_audio_policy_play_refresh(&s_policy, &refresh,
                                                 params.priority_score)) {
+        g_sm64_saturn_play_sound_probe.reject_policy_refresh++;
         gAudioErrorFlags++;
+    } else {
+        g_sm64_saturn_play_sound_probe.accepted++;
+        g_sm64_saturn_play_sound_probe.last_accepted_sound_bits =
+            (uint32_t)soundBits;
     }
 }
 

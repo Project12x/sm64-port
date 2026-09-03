@@ -37,6 +37,7 @@ static void vdp2_tvmd_vblank_out_wait(void)
 
 static sm64_saturn_source_task_submit_fn sTaskSubmit;
 static void *sTaskSubmitContext;
+static sm64_saturn_source_audio_tick_fn sAudioTick;
 static sm64_saturn_source_runtime_state_t sState;
 static sm64_saturn_input_replay_t sInputReplay;
 static bool sDisplaySuppressed;
@@ -135,11 +136,27 @@ void sm64_saturn_source_runtime_read_controllers(OSContPad *pads,
     }
 }
 
+SM64_SATURN_CART_COLD
+void sm64_saturn_source_runtime_configure_audio_tick(
+        sm64_saturn_source_audio_tick_fn tick) {
+    sAudioTick = tick;
+}
+
 void sm64_saturn_source_runtime_audio_tick(void) {
-    /* Audio is intentionally a source-frame service even while the early E2
-     * visual slice has no SCSP transport. Replacing this no-op with AudioAPI
-     * must not change game-loop or renderer ownership. */
+    /* This is the Saturn stand-in for audio_game_loop_tick() at
+     * game_init.c's TARGET_SATURN arm. From the early E2 visual slice until
+     * 2026-09-03 it was a counter increment and nothing else, which left
+     * sm64_saturn_audio_policy_tick() with no caller: play_sound() appended
+     * requests to a 256-entry table that nothing ever drained, the table
+     * filled once (measured: accepted saturates at exactly
+     * SM64_SATURN_AUDIO_REQUEST_CAPACITY), and every later sound was refused
+     * forever while the 68K driver idled with empty rings. The hook keeps
+     * game-loop and renderer ownership unchanged; the target decides what,
+     * if anything, a tick means. */
     sState.audio_ticks++;
+    if (sAudioTick != NULL) {
+        sAudioTick();
+    }
 }
 
 void sm64_saturn_source_runtime_wait_vblank(void) {

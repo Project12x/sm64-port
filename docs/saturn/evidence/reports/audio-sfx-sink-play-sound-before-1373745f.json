@@ -1,0 +1,67 @@
+{
+ "symbol": "g_sm64_saturn_play_sound_probe",
+ "address": 3025824,
+ "elf": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\saturn-recovery\\build\\saturn\\sourceboot\\e2-bob-identity-id-1373745fe9536f7a\\obj\\sm64-saturn-sourceboot-e2.elf",
+ "samples": [
+  {
+   "magic": 1347636804,
+   "calls": 116,
+   "reject_uninitialized": 0,
+   "reject_null_pos": 0,
+   "reject_no_sound": 0,
+   "reject_bank_range": 0,
+   "reject_sound_id_invalid": 0,
+   "reject_no_source_token": 0,
+   "reject_policy_refresh": 0,
+   "accepted": 116,
+   "last_sound_bits": 1074397185,
+   "last_accepted_sound_bits": 1074397185,
+   "frames": 3000
+  },
+  {
+   "magic": 1347636804,
+   "calls": 526,
+   "reject_uninitialized": 0,
+   "reject_null_pos": 0,
+   "reject_no_sound": 0,
+   "reject_bank_range": 0,
+   "reject_sound_id_invalid": 0,
+   "reject_no_source_token": 0,
+   "reject_policy_refresh": 270,
+   "accepted": 256,
+   "last_sound_bits": 1074397185,
+   "last_accepted_sound_bits": 1074397185,
+   "frames": 4800
+  },
+  {
+   "magic": 1347636804,
+   "calls": 861,
+   "reject_uninitialized": 0,
+   "reject_null_pos": 0,
+   "reject_no_sound": 0,
+   "reject_bank_range": 0,
+   "reject_sound_id_invalid": 0,
+   "reject_no_source_token": 0,
+   "reject_policy_refresh": 605,
+   "accepted": 256,
+   "last_sound_bits": 1074397185,
+   "last_accepted_sound_bits": 1074397185,
+   "frames": 6600
+  },
+  {
+   "magic": 1347636804,
+   "calls": 1349,
+   "reject_uninitialized": 0,
+   "reject_null_pos": 0,
+   "reject_no_sound": 0,
+   "reject_bank_range": 0,
+   "reject_sound_id_invalid": 0,
+   "reject_no_source_token": 0,
+   "reject_policy_refresh": 1093,
+   "accepted": 256,
+   "last_sound_bits": 1074397185,
+   "last_accepted_sound_bits": 1074397185,
+   "frames": 8400
+  }
+ ]
+}
