@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Found the runtime capacity that black-screens the remaining BOB actors:
+  VDP1 is never partitioned for actor textures at all** --
+  `docs/saturn/evidence/reports/actor-texture-partition-gap.md`. The largest
+  actor texture residency that presents frames is **25,600 bytes exactly**;
+  25,984 does not. That number is
+  `SOURCEBOOT_MARIO_TEXTURE_BYTES = 50 x 16 x 16 x 2`, and
+  `SOURCEBOOT_TEXTURE_BYTES` -- the value handed to
+  `vdp1_vram_partitions_set()` -- is **terrain (333,696) + Mario (25,600) and
+  nothing else**. There is no actor term. The residency writer is initialised
+  with `partitions->texture_base`/`texture_size` and lays banks from a zero
+  cursor, so it fits only while it stays inside a region that was never sized
+  for it, and runs off the end past 25,600 B.
+- **The bake's actor VDP1 budget is a paper allocation.**
+  `inventory_actor_family_bundles.py` justifies `actor_texture_bytes` /
+  `actor_clut_bytes` as drawn from "52,672 B of unallocated VDP1 that no current
+  binder owns". Nothing owns it because nothing partitions it -- the space the
+  bake spends is not space the runtime hands out. Raising that budget, as the
+  2026-08-22 coin raise and the 2026-09-01 star raise both did, moves a number
+  that has no runtime counterpart.
+- **Same class as the workspace constant fixed the same day**, and that is the
+  more useful conclusion than either instance: a capacity the bake reasons about
+  and the runtime does not implement, with nothing comparing the two. Assume
+  there are more.
+- A fix means adding an actor term to `SOURCEBOOT_TEXTURE_BYTES` and the CLUT
+  count, then tying the bake's budgets to the runtime constants the way
+  `compile_actor_family_bundle.py` now ties the workspace, so an unhonourable
+  budget fails the build. Only then retry MODEL_WOODEN_SIGNPOST,
+  MODEL_KOOPA_SHELL and MODEL_GOOMBA -- their capture digests are already
+  recorded beside their keys, so re-admitting them is mechanical.
+
 ### Added
 
 - **Four more BOB objects render alongside the star**: MODEL_1UP, MODEL_HEART,
