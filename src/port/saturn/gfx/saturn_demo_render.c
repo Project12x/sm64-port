@@ -1420,6 +1420,13 @@ static void demo_transform_mario_range(void *opaque, uint16_t begin,
         end > context->transform_ref_count) {
         return;
     }
+    /* Yaw convention verified, NOT a suspect (2026-09-03): this rotation is
+     * term-for-term identical to the generic-actor kernel, castleviewer and
+     * marioturntable; gSaturnSineTableQ16 matches true sin/cos to 1e-5;
+     * faceAngle agrees with the velocity heading to 1 deg and gfx.angle
+     * equals it exactly. Adding a half turn here was tried and rejected --
+     * see docs/saturn/evidence/reports/mario-facing-eliminations.md. Do not
+     * reintroduce a constant offset. */
     const int32_t sine = sm64_saturn_sins_q16(context->snapshot.yaw);
     const int32_t cosine = sm64_saturn_coss_q16(context->snapshot.yaw);
     for (uint16_t i = begin; i < end; i++) {
@@ -1477,7 +1484,18 @@ static void demo_classify_mario_range(void *opaque, uint16_t begin,
             (int32_t)(b->projected.y - a->projected.y) *
                 (c->projected.x - a->projected.x);
         /* Every generated Mario primitive in this target carries G_CULL_BACK;
-         * sourceboot's Y-down projection therefore rejects nonpositive area. */
+         * sourceboot's Y-down projection therefore rejects nonpositive area.
+         *
+         * OPEN QUESTION, do not "fix" by inspection (2026-09-03): the fast3d
+         * frontend culls with cross = (v0-v1) x (v2-v1) in Y-UP clip space and
+         * rejects G_CULL_BACK when cross >= 0 (saturn_fast3d_frontend.c
+         * ~L689-699). This site uses (v1-v0) x (v2-v0) in Y-DOWN space. The
+         * vertex-order flip and the Y flip each negate the area, so they
+         * cancel and the two expressions are arguably the same quantity under
+         * opposite predicates -- but that argument was tested by flipping this
+         * sign and it did NOT change the reported symptom, so at least one
+         * step in it is wrong. Settle it with the reject counter and a known
+         * primitive, not with the algebra. */
         if (cross <= 0)
             continue;
         result->primitive_id = primitive_id;

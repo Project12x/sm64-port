@@ -108,6 +108,37 @@ static sm64_saturn_pose_handle_t complete_actor_mario_handle[
     COMPLETE_ACTOR_POSE_SLOT_COUNT];
 static uint8_t complete_actor_pools_ready;
 
+/* See the fill site in sm64_saturn_mario_actor_snapshot() for why this exists
+ * and what its two comparisons decide. */
+typedef struct sm64_saturn_mario_orient_probe {
+    uint32_t magic;
+    uint32_t samples;
+    uint32_t face_angle;   /* gMarioState->faceAngle[1], u16 */
+    uint32_t gfx_angle;    /* graph object's rendered angle[1], u16; ~0 = absent */
+    uint32_t camera_yaw;   /* gLakituState.yaw, u16 */
+    uint32_t vel_x;        /* world units, int32 */
+    uint32_t vel_z;
+    uint32_t forward_vel;
+    uint32_t action;
+    /* Frame of reference. Mario's own pipeline measured clean on 2026-09-03
+     * (faceAngle == gfx.angle exactly; faceAngle == heading(vel) to 1 deg once
+     * negative forwardVel is accounted for), so the remaining question is
+     * where the camera stands relative to the way he faces: a camera that
+     * LEADS instead of TRAILS shows his face when you expect his back, and
+     * still reads correctly in profile -- exactly the reported symptom. */
+    uint32_t pos_x;
+    uint32_t pos_z;
+    uint32_t cam_pos_x;
+    uint32_t cam_pos_z;
+    uint32_t cam_focus_x;
+    uint32_t cam_focus_z;
+} sm64_saturn_mario_orient_probe_t;
+
+#define SM64_SATURN_MARIO_ORIENT_PROBE_MAGIC 0x4D4F5249U /* 'MORI' */
+
+volatile sm64_saturn_mario_orient_probe_t g_sm64_saturn_mario_orient_probe
+    __attribute__((section(".lwram_bss"), used, aligned(4)));
+
 static sm64_saturn_pose_pool_t complete_actor_hot_pool
     __attribute__((section(".lwram_bss"), used, aligned(4)));
 static sm64_saturn_pose_pool_t complete_actor_cold_pool
@@ -900,6 +931,41 @@ uint8_t sm64_saturn_mario_actor_snapshot(
     snapshot->camera_pitch = gLakituState.oldPitch;
     snapshot->yaw = gMarioState->faceAngle[1];
     snapshot->action = gMarioState->action;
+    /* Mario-orientation probe (2026-09-03). He is reported as facing the wrong
+     * way moving forward/back but not left/right. Four candidate causes have
+     * been ruled out by measurement rather than argument -- the yaw rotation
+     * here is term-for-term identical to the generic-actor kernel
+     * (saturn_actor_meshlets.c actor_depth_fast) AND to castleviewer's
+     * mario_world_point, gSaturnSineTableQ16 matches true sin/cos to 1e-5 over
+     * the whole circle, and flipping the Mario back-face cull changed nothing.
+     * So record the inputs instead of reasoning about them: whether the
+     * SIMULATION is self-consistent (does faceAngle agree with the velocity
+     * direction?) and whether the RENDER angle matches the sim (does the graph
+     * object's gfx.angle agree with faceAngle?). Those two comparisons split
+     * the remaining space cleanly, and neither can be answered from source.
+     *
+     * Written straight through to .lwram_bss for the same reason as
+     * g_sm64_saturn_play_sound_probe: an external reader peeks it, so it must
+     * not sit dirty in an SH-2 write-back cache line. */
+    g_sm64_saturn_mario_orient_probe.magic = SM64_SATURN_MARIO_ORIENT_PROBE_MAGIC;
+    g_sm64_saturn_mario_orient_probe.samples++;
+    g_sm64_saturn_mario_orient_probe.face_angle = (uint32_t)(uint16_t)gMarioState->faceAngle[1];
+    g_sm64_saturn_mario_orient_probe.gfx_angle = gMarioObject != NULL
+        ? (uint32_t)(uint16_t)gMarioObject->header.gfx.angle[1] : 0xFFFFFFFFU;
+    g_sm64_saturn_mario_orient_probe.camera_yaw = (uint32_t)(uint16_t)gLakituState.yaw;
+    g_sm64_saturn_mario_orient_probe.vel_x =
+        (uint32_t)sm64_saturn_world_unit_from_float(gMarioState->vel[0]);
+    g_sm64_saturn_mario_orient_probe.vel_z =
+        (uint32_t)sm64_saturn_world_unit_from_float(gMarioState->vel[2]);
+    g_sm64_saturn_mario_orient_probe.forward_vel =
+        (uint32_t)sm64_saturn_world_unit_from_float(gMarioState->forwardVel);
+    g_sm64_saturn_mario_orient_probe.action = gMarioState->action;
+    g_sm64_saturn_mario_orient_probe.pos_x = (uint32_t)snapshot->position[0];
+    g_sm64_saturn_mario_orient_probe.pos_z = (uint32_t)snapshot->position[2];
+    g_sm64_saturn_mario_orient_probe.cam_pos_x = (uint32_t)snapshot->camera_position[0];
+    g_sm64_saturn_mario_orient_probe.cam_pos_z = (uint32_t)snapshot->camera_position[2];
+    g_sm64_saturn_mario_orient_probe.cam_focus_x = (uint32_t)snapshot->camera_focus[0];
+    g_sm64_saturn_mario_orient_probe.cam_focus_z = (uint32_t)snapshot->camera_focus[2];
     /* The simulation state is authoritative and can outlive its graph object
      * during level/bootstrap transitions. Keep the actor seam live in that
      * interval by using the neutral generated pose; once the graph object is

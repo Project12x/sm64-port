@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Mario-orientation probe, and the measurement that corrects a wrong claim
+  about why Mario faces the wrong way.** `g_sm64_saturn_mario_orient_probe`
+  (`.lwram_bss`, read by `tools/saturn/probe_mario_orient.py`) records
+  faceAngle, the graph object's `gfx.angle`, velocity, camera position and
+  camera focus each snapshot, so the two questions source cannot answer --
+  is the simulation self-consistent, and does the render angle match it --
+  are settled by measurement. Both came back clean: `gfx.angle` equals
+  `faceAngle` exactly, and `faceAngle` agrees with the velocity heading to
+  1 deg once negative `forwardVel` is folded in.
+- **Why this matters:** the rendered facing behaves as `phi = 180 - theta`,
+  a mirror through the view axis rather than a rotation, which is why a
+  half-turn offset could not fix it (tried and reverted) and why the error
+  vanishes in profile. With rotation, trig, mesh, camera basis, projection
+  and simulation all eliminated, the remaining mechanism is paint order.
+- **Correction:** an earlier session claim that actors have no intra-model
+  depth sort is **wrong**. `actor_meshlet_core()` does run a far-first
+  counting sort over 64 depth bins for both passes. The real defect is
+  resolution: the bin is 128 world units keyed on each meshlet's furthest
+  vertex, and the bin table is local to one actor. Reproducing
+  `actor_depth_bin` over Mario's 31 meshlets across 17,112 camera samples,
+  his 644 primitives collapse into **1 painter bin 49.9% of the time and 2
+  the rest**, with a maximum meshlet depth spread of **84.9 units** against
+  that 128-unit bin -- and a 2-bin split is a straddle artifact of absolute
+  distance, never a front/back separation. Inside a bin the order is bake
+  order, independent of the camera. Full write-up and the proposed test:
+  `docs/saturn/evidence/reports/mario-facing-eliminations.md`. Not yet
+  fixed; no behaviour change in this commit.
+
 ### Fixed
 
 - **SFX requests reached the 68K driver and were rejected as unresolvable:
