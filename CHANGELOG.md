@@ -4,6 +4,46 @@
 
 ### Added
 
+- **Mario's own 29 sound effects are now baked; resident accounting describes
+  what actually ships.** Mario is not a scene-closure behaviour --
+  `collect_scene_closure.py` derives `sfx_ids` from placed objects' behaviour
+  sources -- so no level's closure ever carried `SOUND_MARIO_*` or his
+  `SOUND_ACTION_*` sounds. With the SFX chain fixed end to end (216a37d4,
+  974f6adb) the player still heard nothing, because every sound his actions
+  request was absent from the bundle and correctly counted unresolvable.
+  `tools/saturn/manifests/audio/mario-sfx-v1.json` lists the 29 (11 action,
+  18 voice); `compile_catalog` merges it into a COPY of the loaded closure
+  document, leaving the on-disk closure byte-identical because that file also
+  feeds every actor bake and its identity.
+- **Why it did not fit, and the fix:** in closure mode `_closure()` kept every
+  music bank whole-bank resident -- correct for the sequence-VM layout, where
+  the 68K plays the `.m64` from resident instrument samples. Sourceboot does
+  not ship that layout: music is one owner-provided looped PCM8 row
+  (`--music-pcm`), bank 22 is never loaded, and nothing under
+  `src/port/saturn` consumes `AUDIO.DAT` (verified by grep, not assumed).
+  Bank 22's 16 instrument samples (244,752 B, full rate, decimation-exempt)
+  nonetheless counted against `RESIDENT_LIMIT`, leaving 18,432 B of 491,520
+  for everything else and refusing Mario's set outright at 587,776 B,
+  fail-closed. A music bank now contributes only chain-reached samples in
+  closure mode, the same rule as every other bank; the non-closure fallback is
+  untouched. This supersedes the 2026-08-09 framing in which bank 22 was the
+  protected full-rate row; the 2:1 decimation rule itself is unchanged.
+- **Measured** on build `3b57f03a29442a5c`, scene package generation 94:
+  BOB's resident closure 473,088 -> **344,064 B** of 491,520 (margin 18,432 ->
+  **147,456**), 52 samples, bank 22 still named but with **zero** samples
+  resident. SFX bundle 54 -> **83 mappings**, 100 sample rows, metadata 1,896 B,
+  PCM 383,561 B. Both audio suites pass (14/14 and 4/4).
+- **Generation bump required, and why it is not optional:** `audio` is one of
+  the ten package classes in the actor bundle report's
+  `resource_inventory.package_class_source_bytes`, which moved 299,978 ->
+  421,652. The published g93 report therefore goes stale for current inputs,
+  so this ships as generation 94. Publishing it had to be done by hand because
+  the sourceboot build cannot create a new generation at all -- logged
+  separately.
+- **Not verified:** audibility from the player's position. The bundle resolves
+  and the rows reach sound RAM, but whether Mario is audible in play needs a
+  listen, not a counter.
+
 - **Mario-orientation probe, and the measurement that corrects a wrong claim
   about why Mario faces the wrong way.** `g_sm64_saturn_mario_orient_probe`
   (`.lwram_bss`, read by `tools/saturn/probe_mario_orient.py`) records

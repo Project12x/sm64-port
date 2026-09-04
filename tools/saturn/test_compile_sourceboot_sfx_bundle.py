@@ -108,13 +108,18 @@ class SourcebootSfxBundleTest(unittest.TestCase):
         self.assertEqual(bundle.metadata[:4], BUNDLE_MAGIC.to_bytes(4, "big"))
         self.assertEqual(int.from_bytes(bundle.metadata[4:6], "big"), BUNDLE_VERSION)
         self.assertEqual(int.from_bytes(bundle.metadata[6:8], "big"), BUNDLE_HEADER_BYTES)
-        self.assertEqual(bundle.mapping_count, 54)
-        # 54 semantic rows resolve to 63 sample descriptors; eleven rows use
-        # two layered PCM samples and two waveform-only rows remain explicit
+        # 54 scene-closure sounds plus the 29 Mario sounds merged from
+        # tools/saturn/manifests/audio/mario-sfx-v1.json (2026-09-03).
+        self.assertEqual(bundle.mapping_count, 83)
+        # 83 semantic rows resolve to 99 sample descriptors; layered rows use
+        # two PCM samples and two waveform-only rows remain explicit
         # zero-sample capability gaps rather than proof-tone substitutions.
-        # The former 64th row (the sequence-VM's bank-22 music instrument)
-        # left with the VM: music is now the optional --music-pcm looped row.
-        self.assertEqual(bundle.sample_count, 63)
+        # The sequence-VM's bank-22 music instrument row left with the VM:
+        # music is the optional --music-pcm looped row.
+        self.assertEqual(bundle.sample_count, 99)
+        for sound_id in ("SOUND_MARIO_YAHOO", "SOUND_ACTION_TERRAIN_JUMP",
+                         "SOUND_MARIO_PUNCH_YAH"):
+            self.assertGreaterEqual(bundle.mapping_for(sound_id).sample_count, 1, sound_id)
         self.assertEqual(bundle.music_sequence_offset, 0)
         self.assertEqual(bundle.music_sequence_bytes, 0)
         self.assertEqual(bundle.music_sample_index, 0)

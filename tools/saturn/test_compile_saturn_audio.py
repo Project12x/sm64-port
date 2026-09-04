@@ -499,10 +499,13 @@ def test_closure_selection_exact() -> None:
         # instrument banks the synthetic sound player maps the SFX to.
         assert bob["sequence_ids"] == [3], bob["sequence_ids"]
         assert bob["bank_names"] == ["01_terrain", "04", "22"], bob["bank_names"]
-        expected_samples = (_whole_bank_samples(root, "22") |
-                            _instrument_chain_samples(root, "01_terrain", 0) |
+        # Music bank 22 is still named (its VM mappings are enumerated below)
+        # but contributes no samples in closure mode: sourceboot delivers
+        # music as one looped PCM8 row and never loads the bank.
+        expected_samples = (_instrument_chain_samples(root, "01_terrain", 0) |
                             _instrument_chain_samples(root, "04", 2))
         assert set(bob["sample_ids"]) == expected_samples, bob["sample_ids"]
+        assert not (_whole_bank_samples(root, "22") & set(bob["sample_ids"]))
         assert len(bob["sample_ids"]) == len(set(bob["sample_ids"]))
         # SFX-only banks carry only the resolved instrument mappings; the
         # music bank keeps its full enumeration.
@@ -602,14 +605,20 @@ def test_closure_resident_overflow_fails_closed() -> None:
 
 def test_closure_real_bob_sfx_halving_fits_resident_budget() -> None:
     """Task 3's real BOB closure (54 SFX IDs across 9 instrument banks plus
-    music bank 22, 48 unique samples) needs 679,936 resident bytes at full
-    rate against the 491,520-byte SM64_SATURN_AUDIO_RESIDENT_LIMIT -- a
-    deterministic 188,416-byte overflow (the fail-closed mechanism itself
-    stays covered by test_closure_resident_overflow_fails_closed's synthetic
-    fixture).  Owner-approved fix (2026-08-09 session, explicit approval:
-    "halve the sample rate - thats fine"): 2:1 PCM decimation on
-    closure-mode SFX samples only; music bank 22 stays full rate.  This must
-    now fit, with real margin, end to end against the real repo inputs."""
+    music bank 22).  History: at full rate with bank 22 whole-bank resident
+    this needed 679,936 bytes against the 491,520-byte
+    SM64_SATURN_AUDIO_RESIDENT_LIMIT; the owner-approved 2026-08-09 fix
+    ("halve the sample rate - thats fine") 2:1-decimated the 32 SFX-only
+    samples and left 18,432 bytes of margin.
+
+    2026-09-03: bank 22's 16 instrument samples (244,752 B, full rate) were
+    still counted resident although the sourceboot target never loads them --
+    it ships music as one looped PCM8 row (--music-pcm) and nothing under
+    src/port/saturn consumes AUDIO.DAT.  That phantom residency was the only
+    thing blocking Mario's own SFX (587,776 B with them, fail-closed).  In
+    closure mode a music bank now contributes only chain-reached samples, so
+    the resident figure describes what actually ships: the 32 halved SFX
+    samples alone."""
     import collect_scene_closure as csc
     with tempfile.TemporaryDirectory() as temp:
         root = copy_complete_sound(temp)
@@ -627,45 +636,39 @@ def test_closure_real_bob_sfx_halving_fits_resident_budget() -> None:
                                  scene_closure=closure_path)
         bob = result["closures"]["bob"]
         assert bob["selection"] == "scene-closure-v1"
-        assert len(bob["sample_ids"]) == 48, bob["sample_ids"]
-        # Real, independently re-derived numbers: full rate needs 679,936
-        # bytes (661,504 aligned PCM + 18,432 aligned metadata).  Halving the
-        # 32 SFX-only samples (16 music-bank-22 samples untouched) drops raw
-        # PCM from 660,864 to 452,808 bytes, 2048-aligning to 454,656; plus
-        # the unchanged 18,432 aligned metadata gives 473,088 resident bytes
-        # -- 18,432 bytes (18.0 KiB) of real margin under the 491,520-byte
-        # (480.0 KiB) limit.
-        assert bob["resident_bytes"] == 473_088, bob["resident_bytes"]
+        assert len(bob["sample_ids"]) == 32, bob["sample_ids"]
+        # Measured 2026-09-03 (tools/saturn/saturn_audio_package.py, option B):
+        # the 32 halved SFX-only samples plus aligned metadata come to 227,328
+        # resident bytes -- 264,192 bytes of margin under the 491,520-byte
+        # limit, versus 18,432 when bank 22 was counted.
+        assert bob["resident_bytes"] == 227_328, bob["resident_bytes"]
         assert bob["resident_bytes"] <= RESIDENT_LIMIT
-        assert RESIDENT_LIMIT - bob["resident_bytes"] == 18_432
+        assert RESIDENT_LIMIT - bob["resident_bytes"] == 264_192
 
         sample_by_id = {s["id"]: s for s in result["samples"]}
-        # Spot-check two music-bank-22 samples against an independent direct
-        # AIFF parse: rate, frame count, packaged PCM bytes, and the
-        # closure's own chunk hash all agree -- music never passes through
-        # the SFX decimation path.
+        # Music bank 22 is still named in the closure (its VM mappings stay
+        # enumerated) but none of its samples are resident: not in the
+        # closure's sample list and not among its SAMP chunks. They remain in
+        # the global catalog byte-identical -- the catalog, not the closure,
+        # is what a sequence-VM consumer would read.
+        assert "22" in bob["bank_names"]
         for stable_id in ("instruments/06_kick_drum_1", "instruments/07_rimshot"):
+            assert stable_id not in bob["sample_ids"], stable_id
+            assert not any(c["kind"] == "SAMP" and c["id"] == stable_id
+                           for c in bob["chunk_hashes"]), stable_id
             direct = parse_aiff(ROOT / "sound/samples" / f"{stable_id}.aiff")
             assert sample_by_id[stable_id]["rate"] == direct.rate
             assert sample_by_id[stable_id]["pcm8_bytes"] == len(direct.pcm8)
-            expected_hash = hashlib.sha256(direct.pcm8).hexdigest()
-            chunk = next(c for c in bob["chunk_hashes"]
-                        if c["kind"] == "SAMP" and c["id"] == stable_id)
-            assert chunk["sha256"] == expected_hash, stable_id
 
-        # Every one of the closure's 48 samples is either exactly half its
-        # source rate/length (the 32 SFX-only samples) or byte-identical to
-        # the source (the 16 music samples) -- never anything else.
+        # Every one of the closure's 32 samples is exactly half its source
+        # rate/length -- there is no longer a full-rate music row to exempt.
         halved = 0
         for stable_id in bob["sample_ids"]:
             direct = parse_aiff(ROOT / "sound/samples" / f"{stable_id}.aiff")
             record = sample_by_id[stable_id]
-            if record["rate"] == direct.rate // 2:
-                assert record["pcm8_bytes"] == len(direct.pcm8[::2])
-                halved += 1
-            else:
-                assert record["rate"] == direct.rate
-                assert record["pcm8_bytes"] == len(direct.pcm8)
+            assert record["rate"] == direct.rate // 2, stable_id
+            assert record["pcm8_bytes"] == len(direct.pcm8[::2])
+            halved += 1
         assert halved == 32, halved
 
         # GREEN-twice: independent compiles of the real closure agree byte
@@ -702,6 +705,76 @@ def test_generated_sequences_bin_fail_closed() -> None:
                        "entry 00 out of range")
 
 
+def _write_mario_manifest(root: Path, document: object) -> Path:
+    path = root / "tools/saturn/manifests/audio/mario-sfx-v1.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n",
+                    encoding="utf-8")
+    return path
+
+
+def test_closure_merges_mario_sfx_manifest() -> None:
+    """Mario is not a scene-closure behavior, so his sounds arrive through
+    tools/saturn/manifests/audio/mario-sfx-v1.json, merged into a COPY of the
+    loaded closure (the on-disk closure is untouched; it feeds the actor
+    bakes). The merged ids resolve like any other, the declared banks grow by
+    exactly what they derive, and the provenance is recorded."""
+    with tempfile.TemporaryDirectory() as temp:
+        root = copy_complete_sound(temp)
+        write_closure_join_inputs(root)
+        closure_path = write_scene_closure(
+            root / "closure.json",
+            sfx_ids=["SOUND_GENERAL_TEST_STAR"], sfx_banks=["general"],
+            music=["SEQ_LEVEL_GRASS"])
+        before = closure_path.read_bytes()
+        manifest = _write_mario_manifest(root, {
+            "schema": "sm64-saturn-mario-sfx-v1",
+            "sfx_banks": ["action"],
+            "sfx_ids": ["SOUND_ACTION_TEST_JUMP"]})
+        result = compile_catalog(root, Path(temp) / "AUDIO.DAT",
+                                 Path(temp) / "audio_manifest.json",
+                                 scene_closure=closure_path)
+        bob = result["closures"]["bob"]
+        assert set(bob["sfx_resolution"]) == {
+            "SOUND_GENERAL_TEST_STAR", "SOUND_ACTION_TEST_JUMP"}, bob["sfx_resolution"]
+        assert bob["sfx_resolution"]["SOUND_ACTION_TEST_JUMP"] == [
+            {"bank": "01_terrain", "instrument_index": 0, "instrument": "inst0"}]
+        assert bob["mario_sfx_ids"] == ["SOUND_ACTION_TEST_JUMP"]
+        assert bob["mario_sfx_source"].endswith("mario-sfx-v1.json")
+        assert bob["mario_sfx_sha256"] == hashlib.sha256(manifest.read_bytes()).hexdigest()
+        # The scene closure on disk was never modified.
+        assert closure_path.read_bytes() == before
+
+
+def test_mario_sfx_manifest_fails_closed() -> None:
+    """A malformed manifest, or one declaring a bank no id derives, fails
+    packaging closed rather than silently shipping a partial Mario set."""
+    with tempfile.TemporaryDirectory() as temp:
+        root = copy_complete_sound(temp)
+        write_closure_join_inputs(root)
+        closure_path = write_scene_closure(
+            root / "closure.json",
+            sfx_ids=["SOUND_GENERAL_TEST_STAR"], sfx_banks=["general"],
+            music=["SEQ_LEVEL_GRASS"])
+        _write_mario_manifest(root, {"schema": "wrong", "sfx_banks": ["action"],
+                                     "sfx_ids": ["SOUND_ACTION_TEST_JUMP"]})
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "a",
+                                               scene_closure=closure_path),
+                       "unsupported Mario SFX manifest schema")
+        _write_mario_manifest(root, {"schema": "sm64-saturn-mario-sfx-v1",
+                                     "sfx_banks": ["action"], "sfx_ids": []})
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "b",
+                                               scene_closure=closure_path),
+                       "sfx_ids must be a non-empty unique string list")
+        # A declared bank that no id reaches is caught by the derivation check.
+        _write_mario_manifest(root, {"schema": "sm64-saturn-mario-sfx-v1",
+                                     "sfx_banks": ["action", "voice"],
+                                     "sfx_ids": ["SOUND_ACTION_TEST_JUMP"]})
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "c",
+                                               scene_closure=closure_path),
+                       "closure sfx_banks disagree")
+
+
 if __name__ == "__main__":
     for test in (test_aiff_and_catalog, test_source_fail_closed,
                  test_alignment_hash_drift_and_duplicate, test_residency_safety_contract,
@@ -711,6 +784,8 @@ if __name__ == "__main__":
                  test_closure_unresolvable_fails_closed,
                  test_closure_resident_overflow_fails_closed,
                  test_closure_real_bob_sfx_halving_fits_resident_budget,
-                 test_generated_sequences_bin_fail_closed):
+                 test_generated_sequences_bin_fail_closed,
+                 test_closure_merges_mario_sfx_manifest,
+                 test_mario_sfx_manifest_fails_closed):
         test()
-    print("compile_saturn_audio: 12/12")
+    print("compile_saturn_audio: 14/14")

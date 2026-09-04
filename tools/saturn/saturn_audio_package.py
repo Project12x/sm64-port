@@ -912,8 +912,20 @@ def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, objec
     seqs = [x for x in sequences if x["id"] in sequence_ids]
     music_banks = sorted({bank for seq in seqs for bank in seq["banks"] if isinstance(bank, str)})
     # Closure-driven SFX selection: banks/instruments reached by the resolved
-    # chains contribute only their chain samples; music banks stay whole-bank
-    # (their m64 bodies are opaque by policy, so any instrument may be used).
+    # chains contribute only their chain samples.
+    #
+    # Music banks used to stay whole-bank here ("their m64 bodies are opaque,
+    # so any instrument may be used") -- the sequence-VM layout, in which the
+    # 68K plays the .m64 from resident instrument samples. The sourceboot
+    # target does not ship that layout: compile_sourceboot_sfx_bundle.py
+    # delivers music as one owner-provided looped PCM8 row (--music-pcm) and
+    # never loads bank 22, and nothing under src/port/saturn consumes
+    # AUDIO.DAT. Counting 244,752 B of bank-22 instruments as resident left
+    # 18,432 B of the 491,520 B limit for everything else and blocked Mario's
+    # own SFX outright (2026-09-03, measured: 587,776 B with them, fail-closed).
+    # In closure mode a music bank therefore contributes only samples an SFX
+    # chain reaches, the same rule as every other bank. The non-closure
+    # fallback keeps whole-bank inclusion untouched.
     sfx_allowed: dict[str, set[str]] = {}
     sfx_pairs: set[tuple[str, int]] = set()
     if sfx_resolution is not None:
@@ -936,7 +948,7 @@ def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, objec
         sample_bank = str(bank["sample_bank"])
         chain_names = sfx_allowed.get(str(bank["name"]), set())
         allowed = set(chain_names)
-        if sfx_resolution is None or bank["name"] in music_banks:
+        if sfx_resolution is None:
             allowed |= _sample_names(bank)
         for sample_name in sorted(allowed):
             sample = sample_map.get(f"{sample_bank}/{sample_name}")
@@ -996,6 +1008,61 @@ def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, objec
             "active_generation_eviction": "rejected", "post_boot_sound_ram_clear": "rejected"}
 
 
+MARIO_SFX_MANIFEST = Path("tools/saturn/manifests/audio/mario-sfx-v1.json")
+MARIO_SFX_SCHEMA = "sm64-saturn-mario-sfx-v1"
+
+
+def _augment_closure_with_mario_sfx(
+        root: Path, closure: dict[str, object]
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Merge Mario's curated SFX into a COPY of the loaded scene closure.
+
+    Mario is not a scene-closure behavior -- collect_scene_closure.py derives
+    sfx_ids from placed objects' behavior sources -- so no level's closure ever
+    carries SOUND_MARIO_* or his SOUND_ACTION_* sounds. Measured 2026-09-03 on
+    build 205371c9e43162c2: with the SFX chain otherwise working end to end,
+    the player heard nothing because every sound Mario's own actions request
+    was absent from the bundle and correctly counted as an unresolvable sample.
+
+    The merge happens here, after _load_scene_closure has validated the
+    on-disk document against its record union, and never touches that file:
+    the scene closure is also the input to every actor bake and its identity,
+    and a synthetic Mario record there would be picked up as an actor family.
+    The audio bundle is the only consumer that needs these ids.
+
+    Returns the augmented copy and the provenance to record beside it.
+    """
+    path = root / MARIO_SFX_MANIFEST
+    if not path.is_file():
+        return closure, {}
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        raise AudioPackageError(f"invalid Mario SFX manifest {path}: {error}") from error
+    if not isinstance(manifest, dict) or manifest.get("schema") != MARIO_SFX_SCHEMA:
+        raise AudioPackageError(
+            f"unsupported Mario SFX manifest schema in {path}: expected {MARIO_SFX_SCHEMA}")
+    for field in ("sfx_ids", "sfx_banks"):
+        values = manifest.get(field)
+        if (not isinstance(values, list) or not values or
+                any(not isinstance(v, str) or not v for v in values) or
+                len(set(values)) != len(values)):
+            raise AudioPackageError(
+                f"Mario SFX manifest {path}: {field} must be a non-empty unique string list")
+    # _resolve_closure_sfx demands sfx_banks == the banks derived from the
+    # declarations, so the declared banks grow by exactly what the new ids
+    # derive; a manifest bank no id reaches fails there, naming the bank.
+    augmented = dict(closure)
+    augmented["sfx_ids"] = sorted(set(closure["sfx_ids"]) | set(manifest["sfx_ids"]))
+    augmented["sfx_banks"] = sorted(set(closure["sfx_banks"]) | set(manifest["sfx_banks"]))
+    provenance = {
+        "mario_sfx_source": _relative_source(path, root),
+        "mario_sfx_sha256": _sha(path.read_bytes()),
+        "mario_sfx_ids": sorted(manifest["sfx_ids"]),
+    }
+    return augmented, provenance
+
+
 def compile_catalog(root: Path, output: Path, manifest_output: Path | None = None,
                     sequences_bin: Path | None = None,
                     scene_closure: Path | None = None) -> dict[str, object]:
@@ -1027,10 +1094,13 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
                     "the sequence catalog")
             closure_music_ids.append(number)
         closure_music_ids = sorted(set(closure_music_ids))
+        closure_document, mario_provenance = _augment_closure_with_mario_sfx(
+            root, closure_document)
         sfx_resolution = _resolve_closure_sfx(root, closure_document, banks)
         closure_provenance = {
             "closure_source": _relative_source(scene_closure, root),
-            "closure_sha256": _sha(scene_closure.read_bytes())}
+            "closure_sha256": _sha(scene_closure.read_bytes()),
+            **mario_provenance}
     # Closure-mode SFX-only rate halving (owner-approved, 2026-08-09 session):
     # the real BOB closure needs 679,936 resident bytes at full rate against
     # the 491,520-byte RESIDENT_LIMIT.  2:1-decimating the SFX-only samples

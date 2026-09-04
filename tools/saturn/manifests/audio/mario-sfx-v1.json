@@ -1,0 +1,42 @@
+{
+  "schema": "sm64-saturn-mario-sfx-v1",
+  "purpose": "Mario is not a scene-closure behavior, so his own sounds never enter a level's sfx_ids. compile_catalog merges this set into the loaded closure document (never into the closure file on disk) so the resident SFX bundle can resolve the sounds his actions request.",
+  "sizing": "Measured 2026-09-03 with the bake's own resolver against BOB's bundle: actions 11 sounds / 6 samples / 36,512 B at source rate, voice 18 sounds / 17 samples / 210,272 B at 16 kHz. Both banks are SFX-only, so the owner-approved 2:1 closure decimation applies: ~123 KB resident against 218,295 B of PCM headroom.",
+  "sfx_banks": ["action", "voice"],
+  "sfx_ids": [
+    "SOUND_ACTION_TERRAIN_JUMP",
+    "SOUND_ACTION_TERRAIN_LANDING",
+    "SOUND_ACTION_TERRAIN_STEP",
+    "SOUND_ACTION_TERRAIN_BODY_HIT_GROUND",
+    "SOUND_ACTION_HIT",
+    "SOUND_ACTION_BONK",
+    "SOUND_ACTION_SPIN",
+    "SOUND_ACTION_TWIRL",
+    "SOUND_ACTION_SIDE_FLIP_UNK",
+    "SOUND_ACTION_BOUNCE_OFF_OBJECT",
+    "SOUND_ACTION_THROW",
+    "SOUND_MARIO_YAH_WAH_HOO",
+    "SOUND_MARIO_HOOHOO",
+    "SOUND_MARIO_YAHOO",
+    "SOUND_MARIO_UH",
+    "SOUND_MARIO_HRMM",
+    "SOUND_MARIO_WAH2",
+    "SOUND_MARIO_WHOA",
+    "SOUND_MARIO_ATTACKED",
+    "SOUND_MARIO_OOOF",
+    "SOUND_MARIO_PUNCH_YAH",
+    "SOUND_MARIO_PUNCH_HOO",
+    "SOUND_MARIO_PUNCH_WAH",
+    "SOUND_MARIO_GROUND_POUND_WAH",
+    "SOUND_MARIO_DOH",
+    "SOUND_MARIO_DYING",
+    "SOUND_MARIO_HERE_WE_GO",
+    "SOUND_MARIO_WAAAOOOW",
+    "SOUND_MARIO_TWIRL_BOUNCE"
+  ],
+  "deliberately_omitted": {
+    "SOUND_ACTION_TERRAIN_HEAVY_LANDING": "unbakeable: its sound-player subroutine (.heavy_landing_common) mutates instrument state, which _resolve_closure_sfx refuses by design",
+    "extra voice (EEUH, HAHA, UH2, ON_FIRE, PANTING, MAMA_MIA, YAHOO_WAHA_YIPPEE, YAWNING, SNORING1/2, IMA_TIRED)": "165,632 B at 16 kHz for sounds BOB rarely or never triggers; Saturn-shaped means these stay out until a level needs them"
+  },
+  "known_limitation": "SM64 adds a per-terrain offset (mario_get_terrain_sound_addend, up to 8 variants) to TERRAIN_JUMP/LANDING/STEP/BODY_HIT_GROUND with no define per variant, and the bake keys sounds on declared symbols, so only the default-addend variant (BOB's grass) resolves. Stone/slippery-floor footsteps stay silent until the bake can key symbol+offset variants."
+}
