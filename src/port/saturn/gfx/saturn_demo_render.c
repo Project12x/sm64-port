@@ -2033,9 +2033,23 @@ static void demo_classify_exact(demo_classify_context_t *context,
             s_primitive_visible[i] = 0U;
             continue;
         }
+        /* LOD keys on the NEAREST corner, deliberately unlike the painter key
+         * below (L2141), which takes the furthest corner because ordering
+         * wants a primitive's back edge. Detail selection wants the opposite:
+         * a primitive is only cheap to degrade if ALL of it is far away.
+         *
+         * This used to take the maximum too, and that is what made near
+         * geometry lose its texture (owner-reported 2026-09-04). BOB's ground
+         * is large quads viewed at a grazing angle: the far corner is
+         * thousands of units away while the near corner is under Mario's
+         * feet, and the grazing angle compresses the quad on screen so the
+         * projected span stays under far_enter_span (40). Max-corner depth
+         * plus a small span is exactly the MID/FAR predicate, so a polygon the
+         * player is standing on scored as distant and had its texture
+         * dropped. Min-corner depth makes "far" mean entirely far. */
         int32_t depth = demo_view_read(lane, primitive->indices[0])->z;
         for (uint8_t corner = 1U; corner < 4U; corner++)
-            if (demo_view_read(lane, primitive->indices[corner])->z > depth)
+            if (demo_view_read(lane, primitive->indices[corner])->z < depth)
                 depth = demo_view_read(lane, primitive->indices[corner])->z;
         const uint16_t projected_span =
             demo_primitive_projected_span(lane, primitive);

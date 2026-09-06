@@ -74,6 +74,36 @@
 
 ### Fixed
 
+- **Near geometry lost its texture because LOD scored each primitive by its
+  FURTHEST corner.** `saturn_demo_render.c` took the maximum view-space z
+  across the four corners and fed that to `demo_lod_select()`. BOB's ground is
+  large quads seen at a grazing angle: the far corner sits thousands of units
+  away while the near corner is under Mario's feet, and the grazing angle
+  compresses the quad on screen so its projected span stays below
+  `far_enter_span` (40). Far-corner depth plus a small span is exactly the
+  MID/FAR predicate in `saturn_lod_select()`, so a polygon the player was
+  standing on scored as distant and had its texture dropped by
+  `saturn_lod_can_degrade_material()`.
+- **Fix:** LOD now keys on the **nearest** corner, so a primitive is only
+  eligible for degrading when *all* of it is far. This is deliberately the
+  opposite of the painter key computed at the same site, which keeps the
+  furthest corner because draw ordering wants a primitive's back edge while
+  detail selection wants its front. The two are separate locals; the painter
+  key is unchanged.
+- **Measured context for the other half of the owner's report** (distant
+  textures gone but distant geometry still drawn): that is a different
+  mechanism and is *not* fixed here. `saturn_lod_can_suppress()` additionally
+  requires the baked far mask to approve the primitive, and only **94 of 867**
+  entries (10.8%) are approved -- 89.2% of BOB's terrain can never be dropped
+  at any distance -- while `saturn_lod_can_degrade_material()` requires no mask
+  at all. Widening the mask is a bake change with route-safety and pop-in
+  consequences, logged rather than taken.
+- **Expect fidelity, not frames.** Restoring near textures slightly *increases*
+  cost. Content reduction on this target is already measured to saturate:
+  halving draw distance bought 8.5%, quartering 10.2%. See
+  `project-saturn-fixed-frame-cost`.
+- **Not yet verified by eye** on build `3e7eb456e1674bdf`.
+
 - **Sound effects played audibly late because the audio policy ran at the
   rendered frame rate.** Every timing constant in `saturn_audio_policy.h` is
   denominated in ticks and tuned for the N64's 30 Hz `audio_game_loop_tick`:
