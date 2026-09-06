@@ -67,6 +67,35 @@ void sm64_saturn_source_runtime_begin_input(void);
 void sm64_saturn_source_runtime_read_controllers(OSContPad *pads,
                                                   uint32_t count);
 void sm64_saturn_source_runtime_audio_tick(void);
+
+/* Audio cadence, decoupled from the render rate (2026-09-04).
+ *
+ * Every timing constant in saturn_audio_policy.h is denominated in ticks
+ * and tuned for the N64's 30 Hz audio_game_loop_tick:
+ * DISCRETE_FRESHNESS is 10 ticks, CONTINUOUS_GRACE is 2, and publish_bank()
+ * deliberately promotes at most one sound per bank per tick, mirroring the
+ * original's per-bank arbitration. The Saturn game loop runs at the
+ * PRESENTED frame rate, measured at 5.8 Hz on build 3b57f03a29442a5c, so
+ * every one of those constants silently stretched about 5x: a discrete
+ * sound could wait 10 ticks = 1.72 s before publishing and still be
+ * considered fresh. Sounds arrived audibly late, which is what the owner
+ * reported once the SFX bake landed.
+ *
+ * Pacing moves the cadence onto the VBlank counter instead. Set a nonzero
+ * interval and the game-loop entry point stops driving the policy; the
+ * target calls ..._audio_tick_paced() from its frame loop instead, which
+ * services the policy once per `interval` VBlanks of REAL time.
+ *
+ * Deliberately at most one service per call, with the timestamp set to the
+ * observed VBlank rather than advanced by the interval: a stall must not
+ * bank credit and then fire a burst. Bursting would be worse than useless
+ * here, because every service in the burst observes identical state -- the
+ * playing sound has not finished and no new request has arrived -- so
+ * publish_bank() would make the same decision N times while the freshness
+ * clock advanced N ticks, aging sounds out early for no benefit. */
+#define SM64_SATURN_SOURCE_AUDIO_TICK_VBLANK_INTERVAL 2U
+void sm64_saturn_source_runtime_set_audio_tick_pacing(uint16_t vblank_interval);
+void sm64_saturn_source_runtime_audio_tick_paced(uint32_t vblank_count);
 void sm64_saturn_source_runtime_wait_vblank(void);
 
 /* Demo-path scheduler hook. Suppression skips only the source display-list

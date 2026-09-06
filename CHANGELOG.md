@@ -74,6 +74,39 @@
 
 ### Fixed
 
+- **Sound effects played audibly late because the audio policy ran at the
+  rendered frame rate.** Every timing constant in `saturn_audio_policy.h` is
+  denominated in ticks and tuned for the N64's 30 Hz `audio_game_loop_tick`:
+  `DISCRETE_FRESHNESS` is 10 ticks, `CONTINUOUS_GRACE` is 2, and
+  `publish_bank()` deliberately promotes at most one sound per bank per tick,
+  mirroring the original's per-bank arbitration. On Saturn the tick is driven
+  from `game_init.c`'s main loop beside `display_and_vsync()`, so it inherits
+  the presentation rate. **Measured** on build `3b57f03a29442a5c` by reading
+  `sState.audio_ticks` directly: a steady **29 ticks per 5 s = 5.8 Hz**,
+  exactly the frame rate, against ~13 accepted `play_sound` requests/s. Each
+  tick therefore stretched from 33 ms to **172 ms**, and a discrete sound was
+  allowed to wait its full 10 ticks -- **1.72 s** -- and still count as fresh.
+  A tick also runs `consume_driver_completions()`, so the policy additionally
+  took 5x too long to notice a sound had finished and start the next one.
+- **Fix:** the audio cadence moves onto the VBlank counter.
+  `sm64_saturn_source_runtime_set_audio_tick_pacing()` sets a VBlank interval
+  (2 = 30 Hz); with pacing active the game-loop entry point stops driving the
+  policy and sourceboot's frame loop calls
+  `sm64_saturn_source_runtime_audio_tick_paced()` instead. Same thread as the
+  source tick and `play_sound()`, so the policy cannot be re-entered.
+- **Deliberately at most one service per call**, timestamped to the observed
+  VBlank rather than advanced by the interval, so a stall produces one service
+  and never a burst. Bursting would be worse than useless: every service in a
+  burst observes identical state -- the playing sound has not finished, no new
+  request has arrived -- so `publish_bank()` would repeat one decision N times
+  while the freshness clock advanced N ticks, aging sounds out early for no
+  benefit. This is the whole reason the naive "call it N times to catch up"
+  version was not written.
+- Not a bake problem: the SFX resolve and reach the hardware (f51448e9). This
+  was purely that the tick got about five times longer than the design assumes.
+- **Not yet verified by ear** on build `23171c8a131a3d27`. Audio latency is a
+  perceptual property; counters cannot confirm it.
+
 - **SFX requests reached the 68K driver and were rejected as unresolvable:
   the runtime and the bake spell the same sound identity differently.**
   `SOUND_ARG_LOAD` in `include/sounds.h` ORs `SOUND_STATUS_WAITING` into

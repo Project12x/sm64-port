@@ -2118,6 +2118,11 @@ sourceboot_post_cart_init(void)
      * 2026-09-03). With SATURN_FEATURE_SEMANTIC_AUDIO=0 this resolves to
      * source_audio_stub.c's empty body, so the call is harmless there. */
     sm64_saturn_source_runtime_configure_audio_tick(audio_signal_game_loop_tick);
+    /* Drive the audio policy off the VBlank counter, not the game loop: the
+     * loop runs at the presented frame rate (measured 5.8 Hz) while every
+     * policy constant assumes 30 Hz. See the header note. */
+    sm64_saturn_source_runtime_set_audio_tick_pacing(
+        SM64_SATURN_SOURCE_AUDIO_TICK_VBLANK_INTERVAL);
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
     {
         uint16_t sample_count = 0U;
@@ -2443,5 +2448,9 @@ sourceboot_game_loop(void)
             sm64_saturn_frame_pipeline_action_generation(
                 &sourceboot_frame_pipeline);
         sourceboot_frame_pipeline_dispatch(action, generation);
+        /* Service audio between presented frames. Same thread as the source
+         * tick and as play_sound(), so this cannot re-enter the policy. */
+        sm64_saturn_source_runtime_audio_tick_paced(
+            sourceboot_vblank_out_count);
     }
 }

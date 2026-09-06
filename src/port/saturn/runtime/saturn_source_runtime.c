@@ -38,6 +38,9 @@ static void vdp2_tvmd_vblank_out_wait(void)
 static sm64_saturn_source_task_submit_fn sTaskSubmit;
 static void *sTaskSubmitContext;
 static sm64_saturn_source_audio_tick_fn sAudioTick;
+static uint16_t sAudioTickVblankInterval;
+static uint32_t sAudioTickVblank;
+static bool sAudioTickVblankValid;
 static sm64_saturn_source_runtime_state_t sState;
 static sm64_saturn_input_replay_t sInputReplay;
 static bool sDisplaySuppressed;
@@ -153,6 +156,36 @@ void sm64_saturn_source_runtime_audio_tick(void) {
      * forever while the 68K driver idled with empty rings. The hook keeps
      * game-loop and renderer ownership unchanged; the target decides what,
      * if anything, a tick means. */
+    if (sAudioTickVblankInterval != 0U) {
+        /* Paced onto the VBlank counter; the game loop, which runs at the
+         * presented frame rate, no longer sets the audio cadence. */
+        return;
+    }
+    sState.audio_ticks++;
+    if (sAudioTick != NULL) {
+        sAudioTick();
+    }
+}
+
+void sm64_saturn_source_runtime_set_audio_tick_pacing(
+        uint16_t vblank_interval) {
+    sAudioTickVblankInterval = vblank_interval;
+    sAudioTickVblankValid = false;
+}
+
+void sm64_saturn_source_runtime_audio_tick_paced(uint32_t vblank_count) {
+    if (sAudioTickVblankInterval == 0U) {
+        return;
+    }
+    if (sAudioTickVblankValid &&
+        (uint32_t)(vblank_count - sAudioTickVblank) <
+            (uint32_t)sAudioTickVblankInterval) {
+        return;
+    }
+    /* Set, never advance by the interval: see the header note on why a
+     * stall must produce one service rather than a burst. */
+    sAudioTickVblank = vblank_count;
+    sAudioTickVblankValid = true;
     sState.audio_ticks++;
     if (sAudioTick != NULL) {
         sAudioTick();
