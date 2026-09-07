@@ -2121,6 +2121,8 @@ sourceboot_post_cart_init(void)
     /* Drive the audio policy off the VBlank counter, not the game loop: the
      * loop runs at the presented frame rate (measured 5.8 Hz) while every
      * policy constant assumes 30 Hz. See the header note. */
+    sm64_saturn_source_runtime_configure_audio_paced_ticks(
+        audio_signal_sim_tick, audio_signal_cadence_tick);
     sm64_saturn_source_runtime_set_audio_tick_pacing(
         SM64_SATURN_SOURCE_AUDIO_TICK_VBLANK_INTERVAL);
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY

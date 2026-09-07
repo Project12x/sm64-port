@@ -18,4 +18,8 @@ bool sm64_saturn_source_audio_semantic_workspace_bind(void *workspace,
  * so this must run before the first bind attempt on the target. */
 void sm64_saturn_source_audio_semantics_reset(void);
 
+/* Paced-mode halves; see the definitions for why the tick is split. */
+void audio_signal_sim_tick(void);
+void audio_signal_cadence_tick(void);
+
 #endif

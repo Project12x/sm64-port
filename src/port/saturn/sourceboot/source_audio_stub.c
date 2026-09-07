@@ -17,6 +17,8 @@ u32 gAudioRandom;
 struct SPTask *create_next_audio_frame_task(void) { return NULL; }
 void play_sound(UNUSED s32 soundBits, UNUSED f32 *pos) {}
 void audio_signal_game_loop_tick(void) {}
+void audio_signal_sim_tick(void) {}
+void audio_signal_cadence_tick(void) {}
 void seq_player_fade_out(UNUSED u8 player, UNUSED u16 fadeDuration) {}
 void fade_volume_scale(UNUSED u8 player, UNUSED u8 targetScale, UNUSED u16 fadeDuration) {}
 void seq_player_lower_volume(UNUSED u8 player, UNUSED u16 fadeDuration, UNUSED u8 percentage) {}

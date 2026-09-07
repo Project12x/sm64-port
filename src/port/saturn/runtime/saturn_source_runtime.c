@@ -38,6 +38,8 @@ static void vdp2_tvmd_vblank_out_wait(void)
 static sm64_saturn_source_task_submit_fn sTaskSubmit;
 static void *sTaskSubmitContext;
 static sm64_saturn_source_audio_tick_fn sAudioTick;
+static sm64_saturn_source_audio_tick_fn sAudioSimTick;
+static sm64_saturn_source_audio_tick_fn sAudioCadenceTick;
 static uint16_t sAudioTickVblankInterval;
 static uint32_t sAudioTickVblank;
 static bool sAudioTickVblankValid;
@@ -157,14 +159,25 @@ void sm64_saturn_source_runtime_audio_tick(void) {
      * game-loop and renderer ownership unchanged; the target decides what,
      * if anything, a tick means. */
     if (sAudioTickVblankInterval != 0U) {
-        /* Paced onto the VBlank counter; the game loop, which runs at the
-         * presented frame rate, no longer sets the audio cadence. */
+        /* Paced: the game loop still owns the position half, which only
+         * changes when the simulation moves something. The cadence half runs
+         * on the VBlank pacer. */
+        if (sAudioSimTick != NULL) {
+            sAudioSimTick();
+        }
         return;
     }
     sState.audio_ticks++;
     if (sAudioTick != NULL) {
         sAudioTick();
     }
+}
+
+void sm64_saturn_source_runtime_configure_audio_paced_ticks(
+        sm64_saturn_source_audio_tick_fn sim,
+        sm64_saturn_source_audio_tick_fn cadence) {
+    sAudioSimTick = sim;
+    sAudioCadenceTick = cadence;
 }
 
 void sm64_saturn_source_runtime_set_audio_tick_pacing(
@@ -187,7 +200,9 @@ void sm64_saturn_source_runtime_audio_tick_paced(uint32_t vblank_count) {
     sAudioTickVblank = vblank_count;
     sAudioTickVblankValid = true;
     sState.audio_ticks++;
-    if (sAudioTick != NULL) {
+    if (sAudioCadenceTick != NULL) {
+        sAudioCadenceTick();
+    } else if (sAudioTick != NULL) {
         sAudioTick();
     }
 }

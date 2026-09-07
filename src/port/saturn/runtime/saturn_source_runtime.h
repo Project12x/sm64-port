@@ -95,6 +95,13 @@ void sm64_saturn_source_runtime_audio_tick(void);
  * clock advanced N ticks, aging sounds out early for no benefit. */
 #define SM64_SATURN_SOURCE_AUDIO_TICK_VBLANK_INTERVAL 2U
 void sm64_saturn_source_runtime_set_audio_tick_pacing(uint16_t vblank_interval);
+/* In paced mode the game loop drives `sim` (position work, which only
+ * changes when the simulation moves something) and the VBlank pacer drives
+ * `cadence` (arbitration and completion polling, which is what the latency
+ * fix needs). Driving both at 30 Hz cost 12.9% for no benefit. */
+void sm64_saturn_source_runtime_configure_audio_paced_ticks(
+    sm64_saturn_source_audio_tick_fn sim,
+    sm64_saturn_source_audio_tick_fn cadence);
 void sm64_saturn_source_runtime_audio_tick_paced(uint32_t vblank_count);
 void sm64_saturn_source_runtime_wait_vblank(void);
 

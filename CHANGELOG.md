@@ -74,6 +74,45 @@
 
 ### Fixed
 
+- **The 30 Hz audio tick cost 12.9% of the frame; splitting it by rate returns
+  part of that, and prices the rest.** Driving the whole tick at 30 Hz ran two
+  steps far faster than the state they read: `refresh_active_source_positions()`
+  quantises distance/pan/volume per active source (square roots included) and
+  `release_inactive_sources()` searches per entry, but both depend only on
+  positions the **simulation** moves, and the sim runs at the presented frame
+  rate (5.8 Hz). At 30 Hz they recomputed identical values five times over.
+  `audio_signal_game_loop_tick()` is now split: `audio_signal_sim_tick()` keeps
+  the position half on the game loop, `audio_signal_cadence_tick()` gives the
+  VBlank pacer only `sm64_saturn_audio_policy_tick()` and
+  `consume_driver_completions()` -- the two steps the latency fix actually
+  needed.
+- **Measured, four builds, same tool and flags:**
+
+  | build | FPS | VB/frame |
+  |---|---:|---:|
+  | g93 (before the SFX bake) | 6.0000 | 10.000 |
+  | 30 Hz whole tick | 5.2252 | 11.483 |
+  | + LOD near-corner fix | 5.2410 | 11.448 |
+  | rate-split tick (`13a78bfb`) | **5.3538** | 11.207 |
+  | rate-split, pacing OFF | 5.7049 | 10.517 |
+
+- **Attribution, from those:** the SFX bake costs **-4.92%** (sounds that
+  previously failed to resolve now start voices and stream PCM -- the price of
+  the feature, not a defect), and the 30 Hz cadence half costs a further
+  **-6.15%**. The rate split recovered **+2.15%** of the 12.9%.
+- **Two wrong attributions corrected here.** The LOD near-corner fix was blamed
+  first and costs **+0.30%** -- nothing; every span is identical. Then the
+  position refresh was predicted to be the bulk of the cost and is about a
+  fifth of it. Both were reasoned from plausible mechanism instead of measured,
+  when the measurement was one capture away.
+- **Open, with a lead:** 6.15% for ~140 ms of audio response is a real trade,
+  because on this target FPS is also gameplay speed. `publish_bank()` re-emits
+  an unchanged play state to the 68K mailbox on every tick for every bank
+  (`saturn_audio_policy.c:213`, where `best->source_token == refreshed_token`
+  holds for the already-playing sound), so the cadence cost is mailbox traffic
+  that 30 Hz multiplies. Making that emit only on change would likely buy 30 Hz
+  latency at a fraction of the cost. Not attempted yet.
+
 - **Near geometry lost its texture because LOD scored each primitive by its
   FURTHEST corner.** `saturn_demo_render.c` took the maximum view-space z
   across the four corners and fed that to `demo_lod_select()`. BOB's ground is

@@ -447,6 +447,38 @@ void audio_signal_game_loop_tick(void)
     release_inactive_sources();
 }
 
+/* Paced-mode split (2026-09-06). Driving the whole tick at 30 Hz cost 12.9%
+ * of the frame, because two of its four steps are position work that only
+ * changes when the SIMULATION moves something -- and the sim runs at the
+ * presented frame rate, measured 5.8 Hz. Recomputing spatial quantisation
+ * five times per sim tick reproduces identical values, and
+ * sm64_saturn_audio_spatial_quantize() is the expensive part of this file
+ * (distance, pan and volume, with the square roots that go with them);
+ * release_inactive_sources() likewise searches per active entry.
+ *
+ * So the halves run at the rate each actually needs. Cadence is what the
+ * latency fix required: arbitration plus completion polling, so the policy
+ * notices a finished sound and promotes the next one within ~33 ms instead
+ * of ~172 ms. Position refresh gains nothing from running faster than the
+ * state it reads. */
+void audio_signal_sim_tick(void)
+{
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
+    refresh_active_source_positions();
+    release_inactive_sources();
+}
+
+void audio_signal_cadence_tick(void)
+{
+    if (!source_audio_ensure_initialized()) {
+        return;
+    }
+    sm64_saturn_audio_policy_tick(&s_policy);
+    consume_driver_completions();
+}
+
 void seq_player_fade_out(u8 player, u16 fadeDuration)
 {
     if (!source_audio_ensure_initialized()) {
