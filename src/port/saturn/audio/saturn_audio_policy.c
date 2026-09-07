@@ -869,17 +869,50 @@ void sm64_saturn_audio_policy_tick(sm64_saturn_audio_policy_t *policy)
             clear_sfx(policy, state);
         }
     }
-    for (bank = 0U; bank < SM64_SATURN_AUDIO_BANK_COUNT; ++bank) {
-        uint16_t refresh_token = 0U;
-        for (i = 0U; i < SM64_SATURN_AUDIO_SFX_CAPACITY; ++i) {
-            const sm64_saturn_audio_sfx_state_t *state = &policy->sfx[i];
-            if (state->active && state->published &&
-                sound_bank(state->sound_bits) == bank) {
-                refresh_token = state->source_token;
-                break;
-            }
+    /* SM64_SATURN_AUDIO_SFX_CAPACITY is 380 (10 banks x 38), and this used to
+     * walk all 380 entries once PER BANK to find that bank's refresh token,
+     * then publish_bank() walked them again, then recompute_lowering_bank()
+     * walked them a third time -- about 11,400 iterations per tick, in full,
+     * whether or not a bank had any sound in it.
+     *
+     * That was affordable at the old 5.8 Hz tick. Pacing the cadence at 30 Hz
+     * (492c0fa8) made the policy the single largest consumer of master cycles:
+     * capture_idle_attribution.py on 4c7f749a put audio_policy_tick at 9%,
+     * publish_bank at 9% and recompute_lowering_bank at 8% -- 26% of the
+     * master, while the slave idled 50.76% and the master idled 0.00%.
+     *
+     * One pass builds the per-bank facts instead of ten, and banks with
+     * nothing in them are skipped entirely. Typically one or two banks are
+     * active, so the per-bank work drops by roughly the same factor.
+     *
+     * The skip is conditional on the lowering bit as well as on emptiness:
+     * recompute_lowering_bank() would clear a stale bit, so a bank is only
+     * skipped when there is nothing to publish AND no bit to clear. Token 0 is
+     * a safe "none" sentinel because play_sound() refuses source_token == 0. */
+    uint16_t active_bank_mask = 0U;
+    uint16_t refresh_token_by_bank[SM64_SATURN_AUDIO_BANK_COUNT] = {0};
+    for (i = 0U; i < SM64_SATURN_AUDIO_SFX_CAPACITY; ++i) {
+        const sm64_saturn_audio_sfx_state_t *state = &policy->sfx[i];
+        uint8_t state_bank;
+        if (!state->active) {
+            continue;
         }
-        (void)publish_bank(policy, bank, refresh_token);
+        state_bank = sound_bank(state->sound_bits);
+        if (state_bank >= SM64_SATURN_AUDIO_BANK_COUNT) {
+            continue;
+        }
+        active_bank_mask |= (uint16_t)(1U << state_bank);
+        if (state->published && refresh_token_by_bank[state_bank] == 0U) {
+            refresh_token_by_bank[state_bank] = state->source_token;
+        }
+    }
+    for (bank = 0U; bank < SM64_SATURN_AUDIO_BANK_COUNT; ++bank) {
+        const uint16_t bit = (uint16_t)(1U << bank);
+        if ((active_bank_mask & bit) == 0U &&
+            (policy->lowering_bank_mask & bit) == 0U) {
+            continue;
+        }
+        (void)publish_bank(policy, bank, refresh_token_by_bank[bank]);
     }
 }
 

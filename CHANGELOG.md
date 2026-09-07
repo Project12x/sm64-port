@@ -4,6 +4,39 @@
 
 ### Added
 
+- **The audio policy tick was scanning 11,400 slots per tick regardless of how
+  many sounds existed; skipping empty banks is worth +8.33%.**
+  `SM64_SATURN_AUDIO_SFX_CAPACITY` is 380 (10 banks x 38), and
+  `sm64_saturn_audio_policy_tick()` walked all 380 entries **once per bank** to
+  find that bank's refresh token, after which `publish_bank()` walked them
+  again and `recompute_lowering_bank()` a third time -- about **11,400
+  iterations every tick**, in full, whether or not a bank held a single sound.
+  Affordable at the old 5.8 Hz tick; ruinous once the cadence was paced at
+  30 Hz (492c0fa8).
+- **Found by measurement, not inference.** `capture_idle_attribution.py`
+  samples both CPUs at one emulated instant; on `4c7f749a` it ranked
+  `audio_policy_tick` 9%, `publish_bank` 9% and `recompute_lowering_bank` 8% --
+  **26% of master cycles** -- with master idle **0.00%** and slave idle 50.76%,
+  and `master_during_slave_idle` led by the same symbols. The four preceding
+  guesses in this area (LOD fix, position refresh, mailbox traffic, and the
+  assumption that admission was the master's bottleneck) were all wrong; the
+  joint trace settled it in one run.
+- **Fix:** one pass builds the per-bank active mask and refresh tokens instead
+  of ten scans, and banks with nothing in them are skipped. The skip is guarded
+  on the lowering bit as well as emptiness, since `recompute_lowering_bank()`
+  is what clears a stale bit -- a bank is skipped only when there is nothing to
+  publish *and* no bit to clear. Token 0 is a safe "none" sentinel because
+  `play_sound()` refuses `source_token == 0`.
+- **Measured: 5.3538 -> 5.8000 FPS (+8.33%)**, `master_finalize` 5.448 ->
+  4.862 VB. Comparable to the entire S1.12 slave offload (+8.2%) and larger
+  than any content lever ever measured on this target.
+- **The 30 Hz audio latency fix is now better than free.** The pacing-off
+  reference -- audio serviced at 5.8 Hz, the configuration that let sounds
+  arrive up to 1.7 s late -- was 5.7049 FPS. With the 30 Hz cadence and this
+  fix the build runs at **5.8000**. Against g93 the port is -3.33% while the
+  SFX bake alone costs -4.92%, so the optimisation has more than paid for
+  having sound effects at all.
+
 - **S1.13 step 1: stage terrain admission's outputs, so the pre-notification
   span can move to the idle CPU later.** No concurrency is introduced; the
   master still runs admission and folds its own staging block immediately, so
