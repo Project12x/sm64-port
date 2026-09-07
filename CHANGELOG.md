@@ -4,6 +4,34 @@
 
 ### Added
 
+- **S1.13 step 1: stage terrain admission's outputs, so the pre-notification
+  span can move to the idle CPU later.** No concurrency is introduced; the
+  master still runs admission and folds its own staging block immediately, so
+  frame behaviour is unchanged. What this removes are the two things that would
+  make a slave-side version silently wrong, both named in
+  `prenotify-breakdown-post-s1_11.md`: `s_render_work_order` is cached and
+  master-owned, so a slave writing it would leave dirty lines the master never
+  sees, and the five `demo_bob_*` counters are the shared-accumulator hazard
+  S1.11 already solved by folding an uncached per-phase block on the master.
+  The admission scratch also moves off `s_terrain_master_commands` -- that bank
+  is later filled with the master's own VDP1 commands, so admission scribbling
+  there from the other CPU would write back over them -- onto the slave bank,
+  which one CPU owns and reuses sequentially.
+- **Cost measured before adding concurrency, deliberately:** -0.31% FPS
+  (5.3704 -> 5.3538), pre-notification 2.345 -> 2.517 VB. That is the staging
+  write plus the copy, and the offload has to beat it.
+- **The offload itself is NOT yet justified, and step 1 does not assume it is.**
+  `saturn_demo_render.c:5167-5173` records that S1.11 already dispatches the
+  generic-actor phase *before* admission specifically so that admission
+  overlaps it -- "simply moving the phase onto the slave without moving the
+  dispatch buys nothing". So the slave may already be busy during this span,
+  and the 2026-08-23 decomposition's "pre-notification: master works, slave
+  idles" row cannot be taken at face value. `prenotify-breakdown-post-s1_11.md`
+  set exactly this gate: if the slave has become the limiter, adding admission
+  on top makes the frame worse. Next step is `capture_idle_attribution.py`,
+  whose joint (master PC, slave PC) sampling can answer slave occupancy *within
+  this window*, rather than another build.
+
 - **Mario's own 29 sound effects are now baked; resident accounting describes
   what actually ships.** Mario is not a scene-closure behaviour --
   `collect_scene_closure.py` derives `sfx_ids` from placed objects' behaviour

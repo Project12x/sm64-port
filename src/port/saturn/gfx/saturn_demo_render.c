@@ -899,10 +899,74 @@ static sm64_saturn_ztreme_frustum_result_t demo_spatial_admit_node(
     return state;
 }
 
+/* S1.13 step 1 -- publish admission's outputs through an uncached staging
+ * block, so that moving this span to the idle slave later is a scheduling
+ * change rather than a data-ownership change.
+ *
+ * No concurrency is introduced here: the master still runs admission and folds
+ * its own staging block immediately afterwards, so frame identity must be
+ * unchanged. What this removes are the two things that would otherwise make
+ * the slave version wrong, both named in prenotify-breakdown-post-s1_11.md:
+ * `s_render_work_order` is cached and master-owned, so a slave writing it
+ * would leave dirty lines the master never sees; and the profile counters are
+ * the shared-accumulator hazard S1.11 already solved once by folding an
+ * uncached per-phase block on the master.
+ *
+ * The scratch moves for the same reason. Admission borrows a terrain command
+ * bank, and the MASTER bank is later filled with the master's own VDP1
+ * commands -- a slave scribbling there would write back over them. The slave
+ * bank is safe because one CPU owns it and its own reuse is sequential. */
+#define DEMO_SPATIAL_ADMIT_CACHE_LINE_BYTES 16U
+
+typedef struct demo_spatial_admit_accum {
+    uint32_t primitives_spatial_admitted;
+    uint32_t primitives_spatial_dropped;
+    uint32_t nodes_visited;
+    uint32_t nodes_outside;
+    uint32_t nodes_inside;
+    uint16_t cluster_count;
+    uint8_t generic_path_ok;
+    uint8_t reserved;
+} demo_spatial_admit_accum_t;
+
+static demo_spatial_admit_accum_t s_spatial_admit_accum
+    __attribute__((aligned(DEMO_SPATIAL_ADMIT_CACHE_LINE_BYTES)));
+
+static uint16_t s_spatial_admit_staging[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    __attribute__((section(".lwram_bss")))
+    __attribute__((aligned(DEMO_SPATIAL_ADMIT_CACHE_LINE_BYTES)));
+
+static demo_spatial_admit_accum_t *demo_spatial_admit_accum_uncached(void)
+{
+#if defined(__sh__)
+    return (demo_spatial_admit_accum_t *)(CPU_CACHE_THROUGH |
+                                          (uintptr_t)&s_spatial_admit_accum);
+#else
+    return &s_spatial_admit_accum;
+#endif
+}
+
+static uint16_t *demo_spatial_admit_staging_uncached(void)
+{
+#if defined(__sh__)
+    return (uint16_t *)(CPU_CACHE_THROUGH | (uintptr_t)s_spatial_admit_staging);
+#else
+    return s_spatial_admit_staging;
+#endif
+}
+
 static void demo_spatial_admit(
     const sm64_saturn_camera_transform_t *camera,
     sm64_saturn_fast3d_profile_t *profile, uint32_t generation)
 {
+    demo_spatial_admit_accum_t *const accum = demo_spatial_admit_accum_uncached();
+    accum->primitives_spatial_admitted = 0U;
+    accum->primitives_spatial_dropped = 0U;
+    accum->nodes_visited = 0U;
+    accum->nodes_outside = 0U;
+    accum->nodes_inside = 0U;
+    accum->cluster_count = 0U;
+    accum->generic_path_ok = 0U;
     /* The generic package view is the production admission owner. BOB's
      * legacy recursive painter remains below as a fail-closed compatibility
      * fallback for a malformed generated header, but normal frames never
@@ -950,16 +1014,19 @@ static void demo_spatial_admit(
     scene.frustum.half_height = DEMO_CENTER_Y;
     scene.frustum.focal_length = DEMO_FOCAL_LENGTH;
     admission_output = (sm64_saturn_scene_admission_output_t){
-        .cluster_indices = s_render_work_order,
+        .cluster_indices = demo_spatial_admit_staging_uncached(),
         .cluster_capacity = SM64_SATURN_BOB_PRIMITIVE_COUNT,
         .portal_indices = portal_indices,
         .portal_capacity = 0U};
-    _Static_assert(sizeof(s_terrain_master_commands) >=
+    _Static_assert(sizeof(s_terrain_slave_commands) >=
                        sizeof(sm64_saturn_scene_admission_scratch_t),
                    "scene admission phase scratch must fit the reusable terrain bank");
+    /* Slave bank, not master: the master bank is later filled with the
+     * master's own VDP1 commands, so admission scribbling there from the
+     * other CPU would write back over them. */
     sm64_saturn_scene_admission_scratch_t *const admission_scratch =
         (sm64_saturn_scene_admission_scratch_t *)(void *)
-            &s_terrain_master_commands[0][0];
+            &s_terrain_slave_commands[0][0];
 #if SM64_SATURN_ADMIT_DIAG
     {
         uint32_t admit_setup_ticks = 0U;
@@ -972,15 +1039,14 @@ static void demo_spatial_admit(
     if (sm64_saturn_scene_admit_with_scratch(
             &scene, &render_view, &admission_output, &admission_stats,
             admission_scratch)) {
-        s_render_work_count = admission_output.cluster_count;
-        profile->demo_bob_primitives_spatial_admitted +=
-            admission_stats.clusters_admitted;
-        profile->demo_bob_primitives_spatial_dropped +=
-            admission_stats.output_exhausted;
-        profile->demo_bob_nodes_visited += admission_stats.nodes_tested;
-        profile->demo_bob_nodes_outside += admission_stats.nodes_tested -
+        accum->cluster_count = admission_output.cluster_count;
+        accum->primitives_spatial_admitted = admission_stats.clusters_admitted;
+        accum->primitives_spatial_dropped = admission_stats.output_exhausted;
+        accum->nodes_visited = admission_stats.nodes_tested;
+        accum->nodes_outside = admission_stats.nodes_tested -
             admission_stats.nodes_admitted;
-        profile->demo_bob_nodes_inside += admission_stats.nodes_admitted;
+        accum->nodes_inside = admission_stats.nodes_admitted;
+        accum->generic_path_ok = 1U;
         return;
     }
 #if SM64_SATURN_ADMIT_DIAG
@@ -1006,6 +1072,32 @@ static void demo_spatial_admit(
         0, SM64_SATURN_ZTREME_FRUSTUM_INTERSECTS, &frustum, profile);
 }
 #endif
+
+/* Master half of the S1.13 handoff. Copies admission's staged cluster list
+ * into the cached array the later hot loops read, and folds the staged
+ * counters into the frame profile. Totals are identical to the previous direct
+ * accumulation; the legacy recursive fallback writes both directly and sets
+ * generic_path_ok = 0, so this leaves its results alone. */
+static void demo_spatial_admit_join(sm64_saturn_fast3d_profile_t *profile)
+{
+    const demo_spatial_admit_accum_t *const accum =
+        demo_spatial_admit_accum_uncached();
+    if (accum->generic_path_ok == 0U) return;
+    const uint16_t *const staged = demo_spatial_admit_staging_uncached();
+    uint16_t count = accum->cluster_count;
+    if (count > SM64_SATURN_BOB_PRIMITIVE_COUNT)
+        count = SM64_SATURN_BOB_PRIMITIVE_COUNT;
+    for (uint16_t i = 0U; i < count; i++)
+        s_render_work_order[i] = staged[i];
+    s_render_work_count = count;
+    profile->demo_bob_primitives_spatial_admitted +=
+        accum->primitives_spatial_admitted;
+    profile->demo_bob_primitives_spatial_dropped +=
+        accum->primitives_spatial_dropped;
+    profile->demo_bob_nodes_visited += accum->nodes_visited;
+    profile->demo_bob_nodes_outside += accum->nodes_outside;
+    profile->demo_bob_nodes_inside += accum->nodes_inside;
+}
 
 static int32_t demo_q16_from_world(int32_t value)
 {
@@ -5096,6 +5188,7 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
     SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
         SM64_SATURN_PRENOTIFY_PROFILE_NODE_SPATIAL_ADMIT);
     demo_spatial_admit(&terrain_job.camera, profile, transform_generation);
+    demo_spatial_admit_join(profile);
     SM64_SATURN_PRENOTIFY_PROFILE_POP();
 #endif
     SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
