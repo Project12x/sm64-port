@@ -212,8 +212,33 @@ static bool publish_bank(sm64_saturn_audio_policy_t *policy, uint8_t bank,
     }
     if (best != NULL &&
         (best != current || best->source_token == refreshed_token)) {
+        /* The tick re-asserts the already-playing sound in every bank each
+         * cadence, which is how a moving source gets its level updated. The
+         * 68K treats a repeat PLAY_REFRESH for a held sample as exactly that
+         * -- pcm_voice.c:366-391 updates volume/pan and returns, deliberately
+         * NOT re-keying, and nothing times out on a missing refresh. So when
+         * the payload is byte-identical the emit is a no-op at the far end and
+         * only costs mailbox traffic.
+         *
+         * That was cheap while the tick ran at the presented frame rate
+         * (5.8 Hz). Pacing the cadence at 30 Hz multiplied it by five across
+         * all 10 banks and cost 6.15% of the frame (measured, bf2fd9ed). Emit
+         * only when something the driver would act on actually changed; a
+         * genuinely new publication (best != current) always emits. */
+        const bool newly_published = best != current;
+        const bool payload_changed =
+            !best->emitted_valid ||
+            best->emitted_volume != best->volume ||
+            best->emitted_pan != best->pan ||
+            best->emitted_pitch != best->pitch;
         best->published = true;
-        emitted = emit_play_state(policy, best) && emitted;
+        if (newly_published || payload_changed) {
+            emitted = emit_play_state(policy, best) && emitted;
+            best->emitted_valid = true;
+            best->emitted_volume = best->volume;
+            best->emitted_pan = best->pan;
+            best->emitted_pitch = best->pitch;
+        }
     }
     emitted = recompute_lowering_bank(policy, bank) && emitted;
     return emitted;

@@ -74,6 +74,28 @@
 
 ### Fixed
 
+- **Suppress the redundant PLAY_REFRESH re-emit — worth +0.31%, not the fix it
+  was predicted to be.** `publish_bank()` re-asserted the already-playing sound
+  in every one of the 10 banks on every tick, which is how a moving source gets
+  its level updated. The 68K treats a repeat refresh for a held sample as
+  exactly that (`pcm_voice.c:366-391` updates volume/pan and returns,
+  deliberately not re-keying, and nothing times out on a missing refresh), so
+  an unchanged payload was a no-op at the far end costing only mailbox traffic.
+  It now emits only when volume, pan or pitch changed, or on a genuinely new
+  publication; `clear_sfx()` memsets the tracking fields so a reused slot
+  always re-emits.
+- **Measured: the 30 Hz cadence cost falls from -6.15% to -5.86%.** The
+  redundant traffic was real and nearly free. **The cadence cost is therefore
+  still unexplained** and is not the mailbox. This was the third wrong
+  prediction in this area in one session -- after blaming the LOD fix (+0.30%,
+  i.e. free) and predicting the position refresh was the bulk (it was a fifth)
+  -- and the most confident, since it was read from the branch condition and
+  the driver's own semantics rather than inferred. Kept because it is correct
+  and measured non-negative, not because it helped.
+- Known consequence: the 68K's `sfx_refreshes` counter drops sharply, because
+  it counted exactly these redundant refreshes. Not comparable across this
+  commit; `probe_audio_timeseries.py` reports it.
+
 - **The 30 Hz audio tick cost 12.9% of the frame; splitting it by rate returns
   part of that, and prices the rest.** Driving the whole tick at 30 Hz ran two
   steps far faster than the state they read: `refresh_active_source_positions()`

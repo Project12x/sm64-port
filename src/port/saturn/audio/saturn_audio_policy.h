@@ -62,6 +62,13 @@ typedef struct sm64_saturn_audio_sfx_state {
     uint16_t pitch;
     bool active;
     bool published;
+    /* Last PLAY_REFRESH payload actually handed to the 68K, so an unchanged
+     * republish can be skipped. See publish_bank(). clear_sfx() memsets the
+     * whole struct, so a reused slot always re-emits. */
+    bool emitted_valid;
+    uint8_t emitted_volume;
+    uint8_t emitted_pan;
+    uint16_t emitted_pitch;
 } sm64_saturn_audio_sfx_state_t;
 
 typedef struct sm64_saturn_audio_pending_request {
