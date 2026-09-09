@@ -1,5 +1,5 @@
 {
-  "status": "CAUSE FIXED / SUBMISSION SUPPORTED BY TELEMETRY / VISUAL GATE STILL OPEN",
+  "status": "CAUSE FIXED / SUBMISSION SUGGESTED BY TELEMETRY / DRAWING UNVERIFIED AFTER TWO OBSERVATION ATTEMPTS -- STOPPED",
   "candidate": "fc2d2bbb622189f4",
   "generation": 98,
   "profile": "sourceboot-bob-manual",
@@ -73,7 +73,64 @@
       }
     },
     "interpretation": "Candidate emits more actor geometry in the same region by an amount matching one 12-primitive child in frustum (children move in opposition 290u apart, so one-at-a-time is expected). CONSISTENT WITH SUBMISSION; NOT PROOF OF DRAWING. Run-to-run variance could produce an offset of this size.",
-    "visual": "NOT verified. No capture frames the platform: route-final looks from the bridge away from the pit; pitch-sweep frames show ground tiles and channel walls. pitch-10240 children positions are identical between runs but the camera follows Mario, whose position differs, so it is not a like-for-like frame pair."
+    "visual": "NOT verified. No capture frames the platform: route-final looks from the bridge away from the pit; pitch-sweep frames show ground tiles and channel walls. pitch-10240 children positions are identical between runs but the camera follows Mario, whose position differs, so it is not a like-for-like frame pair.",
+    "sweep_capture_rows_same_yaw_and_pitch": {
+      "note": "Rows at each camera-settle capture. Yaw (0) and pitch targets are identical across runs, but the camera follows Mario, and Mario is 100-400 u apart between runs -- NOT a controlled comparison.",
+      "vdp1_commands_last_delta": {
+        "pitch-start": 4,
+        "pitch-2816": 29,
+        "pitch-5632": 21,
+        "pitch-8192": 31,
+        "pitch-10240": -14
+      },
+      "actor_prims_per_frame_delta": {
+        "pitch-start": 115.0,
+        "pitch-2816": 18.3,
+        "pitch-5632": 8.3,
+        "pitch-8192": -16.5,
+        "pitch-10240": -5.5
+      },
+      "mario_pos_base_vs_cand": {
+        "pitch-2816": [
+          [
+            1659,
+            264,
+            4660
+          ],
+          [
+            1608,
+            569,
+            4796
+          ]
+        ],
+        "pitch-10240": [
+          [
+            1659,
+            305,
+            4388
+          ],
+          [
+            1608,
+            183,
+            4685
+          ]
+        ]
+      },
+      "reading": "Mixed. Three of five VDP1 deltas sit in the one-to-two-children band (+21..+31); pitch-10240 is -14 and the primitive deltas swing both ways. Run-to-run Mario position variance is comparable to the signal. Suggestive of submission; not decisive."
+    },
+    "camera_direction": {
+      "finding": "The fixed camera already faces the pit at every elevator label: yaw 0, looking 180 deg, pit at 177-180 deg (offset 0-3 deg). At pitch-10240 the camera is at (1608,974,5151) focused on (1608,311,4704) -- inside the pit -- with Mario at (1608,183,4685) beside child 128 at (1612,144,4644). Direction was never the problem; final_yaw is not the lever. The framing problem is distance: a ~140 u platform 830 u below the camera is small in frame."
+    },
+    "pit_view_attempt": {
+      "run": "elevator-g98-pit-live.json (elevator-route-pit.json = 18 waypoints + [1612,180,4650])",
+      "outcome": "STUCK at waypoint 18: Mario remained on the rim at (1616,768,4963), floor 768; never descended. route-final is the same bridge view; camera->child distance 1,040-1,631 u at every label.",
+      "why": "The rim is fenced (visible in route-final) and the route walker only jumps for RISING targets, so a 588 u drop behind a railing is never attempted. In BOB the elevator is ridden UPWARD from the lower area.",
+      "conclusion": "Drawing remains UNVERIFIED after two observation attempts. Stopping per the handoff rule.",
+      "next_bounded_action": [
+        "Approach from BELOW: a route that reaches the elevator's base near the lower gate area, so Mario stands on/under a child at close range and route-final's trailing camera frames it",
+        "Or a replay-identical A/B: build 97 and 98 with route_replay_mode=1 so Mario/camera are frame-identical and a per-frame command-count or frame-hash delta at the elevator is unambiguous regardless of framing"
+      ]
+    }
   },
   "tests": [
     "test_actor_material_v2: admission map + elevator admission PASS (updated map: only family 20 unsupported)",
@@ -81,6 +138,7 @@
     "incremental generation-98 target build exit 0 at 13:41:11 EDT"
   ],
   "remaining": [
+    "Pit-view run (elevator-route-pit.json: route + waypoint [1612,180,4650]) so route-final's default trailing camera frames the platform under Mario at close range; see elevator-g98-pit-live.json when present",
     "Unobstructed elevator view: route/camera adjustment so a capture frames (1612, y, 4466..4756); until then drawing is unverified",
     "Generic actor lowering applies yaw only; the platform rotates pitch (bhvCheckerboardPlatformSub). If it draws, it may be rotated wrong",
     "Follow-up hardening: assert family-report support verdict agrees with what the bundle compiled, so a built bank can never be silently unregistered again",
