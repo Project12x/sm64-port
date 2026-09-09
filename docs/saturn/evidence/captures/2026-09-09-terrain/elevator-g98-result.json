@@ -1,0 +1,92 @@
+{
+  "status": "CAUSE FIXED / SUBMISSION SUPPORTED BY TELEMETRY / VISUAL GATE STILL OPEN",
+  "candidate": "fc2d2bbb622189f4",
+  "generation": 98,
+  "profile": "sourceboot-bob-manual",
+  "baseline": {
+    "candidate": "304954ef4ce27590",
+    "generation": 97
+  },
+  "identity": {
+    "cue_sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+    "iso_sha256": "018a8b906d697b17cb5afdff9a6d7a125821b764f5f96df9ef11f748a1d85cc3",
+    "elf_sha256": "ab3b7d404ff7f1ccb0840cce35bf2aa445a2cd0c6aaf75af4e97fccff54a0c5d",
+    "note": "CUE text hash repeats between builds; pair with directory, ISO and ELF."
+  },
+  "root_cause": {
+    "summary": "MODEL_CHECKERBOARD_PLATFORM (family 47 / 0xCA) was bundle-compiled at gen 97 but absent from the identity registry, so it was never submitted.",
+    "mechanism": "gen_actor_identity_registry.py:238 skips any family the FAMILY REPORT marks unsupported before consulting the compiled set (line 261). compile_actor_bank.py -> actor_source.py::SUPPORTED_GEO_NODES rejected the geo for GEO_CULLING_RADIUS, while actor_variant_bank.py:946-966 accepts that node as 'scene-admission-culls' and dl_rigid_groups.py:96 lists it as structural. Two producers, two support verdicts; the bundle selects by the BOB_DIRECT_TEXTURED_KEYS allowlist, so the disagreement only surfaced at the registry.",
+    "fix": "Add GEO_CULLING_RADIUS to SUPPORTED_GEO_NODES (tools/saturn/actor_source.py). No renderer or runtime change.",
+    "traced_statically": "bundle report -> actor-families.json supported flag -> generated actor_identity_registry.h; answered 'missing submission vs occlusion' without an emulator."
+  },
+  "static_evidence": {
+    "registry_entries": {
+      "gen97": 45,
+      "gen98": 47
+    },
+    "registry_rows_added": [
+      "bhvCheckerboardElevatorGroup/0x00CA",
+      "bhvCheckerboardPlatformSub/0x00CA"
+    ],
+    "families_supported": {
+      "before": 34,
+      "after": 46,
+      "remaining_unsupported": {
+        "20": "MODEL_RED_FLAME: GEO_BRANCH_AND_LINK"
+      }
+    },
+    "bundle": {
+      "banks": 28,
+      "unchanged": true,
+      "texture_bytes": 39424,
+      "clut_bytes": 7648,
+      "payload_delta_bytes": 80
+    },
+    "hwram": {
+      "end": "0x060fe00c",
+      "margin_bytes": 8180,
+      "floor_bytes": 7936,
+      "unchanged": true,
+      "registry_table_section": ".rodata.saturn_actor_identity_registry_table in CART at 0x2272303c, 0x8d0 (+96 B vs gen 97)"
+    }
+  },
+  "live_evidence": {
+    "run": "elevator-g98-candidate-live.json (sh2 cache ON, elevator-route.json, camera pitch sweep)",
+    "route": "PASS: manual-pad smoke; 29 captures; both checkerboard children observed live at every elevator label (slots 127/128, x=1612, Y/Z/action cycling)",
+    "spatial_match_within_1500u": {
+      "rows_base": 73,
+      "rows_cand": 71,
+      "actor_prims_per_frame_median": {
+        "base": 161.0,
+        "cand": 173.5,
+        "delta": 12.5
+      },
+      "actor_prims_per_frame_mean": {
+        "base": 192.4,
+        "cand": 203.9,
+        "delta": 11.5
+      },
+      "vdp1_commands_last_median": {
+        "base": 632,
+        "cand": 651,
+        "delta": 19
+      }
+    },
+    "interpretation": "Candidate emits more actor geometry in the same region by an amount matching one 12-primitive child in frustum (children move in opposition 290u apart, so one-at-a-time is expected). CONSISTENT WITH SUBMISSION; NOT PROOF OF DRAWING. Run-to-run variance could produce an offset of this size.",
+    "visual": "NOT verified. No capture frames the platform: route-final looks from the bridge away from the pit; pitch-sweep frames show ground tiles and channel walls. pitch-10240 children positions are identical between runs but the camera follows Mario, whose position differs, so it is not a like-for-like frame pair."
+  },
+  "tests": [
+    "test_actor_material_v2: admission map + elevator admission PASS (updated map: only family 20 unsupported)",
+    "test_bob_actor_capabilities build-mandated trio PASS against the recomputed effect oracle (2 hashes rebound, 8 GEO_CULLING_RADIUS records removed)",
+    "incremental generation-98 target build exit 0 at 13:41:11 EDT"
+  ],
+  "remaining": [
+    "Unobstructed elevator view: route/camera adjustment so a capture frames (1612, y, 4466..4756); until then drawing is unverified",
+    "Generic actor lowering applies yaw only; the platform rotates pitch (bhvCheckerboardPlatformSub). If it draws, it may be rotated wrong",
+    "Follow-up hardening: assert family-report support verdict agrees with what the bundle compiled, so a built bank can never be silently unregistered again",
+    "Owner acceptance, 12 FPS, two-level presentation gate"
+  ],
+  "commit": null,
+  "independent_review": "not run",
+  "note_on_families_flipped": "12 families became 'supported' by the family report but are NOT in BOB_DIRECT_TEXTURED_KEYS, so they are not compiled and not registered; no new actors were admitted (bank count 28 unchanged)."
+}

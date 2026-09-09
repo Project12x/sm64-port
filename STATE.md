@@ -1,3 +1,5 @@
+Resumed 2026-09-09 (registry fix): the elevator was bundle-compiled but never registered -- actor_source.py::SUPPORTED_GEO_NODES rejected GEO_CULLING_RADIUS while actor_variant_bank.py already accepts it, and gen_actor_identity_registry.py trusts the family-report flag before the compiled set. Fixed by accepting the node as structural. Candidate fc2d2bbb622189f4 generation 98 (97 preserved) builds exit 0; registry 45->47 rows (0x00CA x2); 46/47 families supported; 28 banks and HWRAM margin 8,180 B unchanged (registry table lives in CART). Live cache-ON elevator route passes; spatially matched telemetry near the elevator shows +12.5 actor prims/frame and +19 VDP1 commands/frame vs 3049 -- consistent with submission, NOT proof of drawing: no capture frames the pit. Elevator visibility gate remains OPEN; pitch-vs-yaw transform and 12 FPS remain open. No commit.
+
 # State
 
 **Authoritative goal:** [`docs/saturn/PRODUCT_GOAL.md`](docs/saturn/PRODUCT_GOAL.md)

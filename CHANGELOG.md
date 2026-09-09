@@ -135,6 +135,50 @@
 
 ### Fixed
 
+- **BOB checkerboard elevator was bundle-compiled and invisible because the
+  identity registry dropped it.** Family 47 / `MODEL_CHECKERBOARD_PLATFORM`
+  had a compiled bank at generation 97 (3,328 B texture, 12 draw records) but
+  no registry row, and an unregistered model is never submitted. Root cause is
+  two support verdicts for one fact: `actor_source.py::SUPPORTED_GEO_NODES`
+  rejected the geo for `GEO_CULLING_RADIUS`, while `actor_variant_bank.py`
+  explicitly accepts that node as `scene-admission-culls` and
+  `dl_rigid_groups.py` lists it as structural. `gen_actor_identity_registry.py`
+  consults the family report's flag *before* the compiled set, and the bundle
+  selects by the `BOB_DIRECT_TEXTURED_KEYS` allowlist rather than that flag --
+  so the disagreement was invisible until the registry joined them. Traced
+  statically (bundle report -> `actor-families.json` -> generated
+  `actor_identity_registry.h`), which settled "missing submission vs occlusion"
+  without an emulator.
+- **Fix:** `GEO_CULLING_RADIUS` added to `SUPPORTED_GEO_NODES`. It carries no
+  geometry and this port culls at cluster granularity. No renderer or runtime
+  change. Generation 97 stays immutable; this ships as generation 98
+  (`fc2d2bbb622189f4`, `sourceboot-bob-manual`).
+- **Static evidence on the real build:** registry 45 -> **47** rows (`0x00CA`
+  for both `bhvCheckerboardElevatorGroup` and `bhvCheckerboardPlatformSub`);
+  46/47 families supported (12 flipped; only RED_FLAME's
+  `GEO_BRANCH_AND_LINK` remains); **28 banks unchanged**, texture/CLUT
+  39,424/7,648 unchanged, bundle payload +80 B; HWRAM `___end` byte-identical,
+  margin **8,180 B** unchanged -- the registry table is CART rodata
+  (`0x2272303c`, +96 B), not HWRAM.
+- **Live evidence (cache ON, elevator route, pitch sweep):** route passes; both
+  children observed live at every label. Spatially matched rows with Mario
+  within 1,500 u of the elevator: actor primitives/frame median 161.0 -> 173.5
+  (+12.5), `vdp1_commands_last` median 632 -> 651 (+19). That matches one
+  12-primitive child in frustum (the pair moves in opposition 290 u apart).
+  **Consistent with submission; not proof of drawing.** No capture frames the
+  pit -- route-final looks from the bridge away from it. Visibility gate OPEN.
+- Frozen expectations that encoded the wrong verdict followed the fix:
+  `test_actor_material_v2.py`'s admission map (now only family 20) and
+  `fixtures/bob_actor_effect_oracle_v1.json` (recomputed from the regenerated
+  family report: two hashes rebound, eight `GEO_CULLING_RADIUS` records
+  dropped, written as a text edit to avoid array-reflow churn). Build-mandated
+  oracle trio and the elevator/admission tests PASS.
+- **Open:** an unobstructed view to confirm drawing; generic actor lowering is
+  yaw-only while the platform rotates pitch; and the hardening this defect
+  class needs -- assert the family report's verdict agrees with what the bundle
+  actually compiled, so a built bank can never be silently unregistered again.
+  Evidence: `docs/saturn/evidence/captures/2026-09-09-terrain/elevator-g98-*`.
+
 - **Suppress the redundant PLAY_REFRESH re-emit — worth +0.31%, not the fix it
   was predicted to be.** `publish_bank()` re-asserted the already-playing sound
   in every one of the 10 banks on every tick, which is how a moving source gets

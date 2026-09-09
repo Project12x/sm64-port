@@ -94,14 +94,12 @@ class ActorMaterialV2Test(unittest.TestCase):
 
     def test_all_47_families_retain_one_exact_admission_outcome(self) -> None:
         """Catches capability-family or MODEL_NONE drift outside drawable replay."""
+        # GEO_CULLING_RADIUS became a supported (structural) node on
+        # 2026-09-09; the twelve families it alone had excluded are now
+        # supported, which is what let the checkerboard elevator (47) reach the
+        # identity registry. Only RED_FLAME's GEO_BRANCH_AND_LINK remains.
         unsupported = {
-            1: "GEO_CULLING_RADIUS", 2: "GEO_CULLING_RADIUS",
-            10: "GEO_CULLING_RADIUS", 12: "GEO_CULLING_RADIUS",
-            15: "GEO_CULLING_RADIUS", 17: "GEO_CULLING_RADIUS",
-            20: "GEO_BRANCH_AND_LINK", 25: "GEO_CULLING_RADIUS",
-            31: "GEO_CULLING_RADIUS", 34: "GEO_CULLING_RADIUS",
-            37: "GEO_CULLING_RADIUS", 41: "GEO_CULLING_RADIUS",
-            47: "GEO_CULLING_RADIUS",
+            20: "GEO_BRANCH_AND_LINK",
         }
         self.assertEqual(len(self.family_docs), 47)
         self.assertEqual(

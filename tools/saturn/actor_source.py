@@ -19,6 +19,17 @@ from typing import Mapping
 SUPPORTED_GEO_NODES = frozenset({
     "GEO_ANIMATED_PART", "GEO_ASM", "GEO_BRANCH", "GEO_CLOSE_NODE",
     "GEO_BILLBOARD",
+    # A per-object frustum cull sphere. It carries no transform and hides no
+    # child; Saturn scene admission already culls at cluster granularity
+    # before an actor is submitted. Two downstream tools already accept it on
+    # exactly that basis -- actor_variant_bank.py records it as
+    # "scene-admission-culls", dl_rigid_groups.py lists it as structural --
+    # so rejecting it here only ever produced a family the bundle compiled and
+    # the identity registry then dropped (registry generator trusts this flag
+    # before it consults the compiled set). That was why the BOB checkerboard
+    # elevator (family 47 / MODEL_CHECKERBOARD_PLATFORM) was admitted, baked,
+    # and invisible (2026-09-09).
+    "GEO_CULLING_RADIUS",
     "GEO_DISPLAY_LIST", "GEO_END", "GEO_HELD_OBJECT", "GEO_NODE_START",
     "GEO_OPEN_NODE", "GEO_RENDER_RANGE", "GEO_RETURN", "GEO_ROTATION_NODE",
     "GEO_SCALE", "GEO_SHADOW", "GEO_SWITCH_CASE", "GEO_TRANSLATE_ROTATE",
