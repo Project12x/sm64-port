@@ -111,8 +111,9 @@ int main(void)
                           "sm64_saturn_render_job_queue_reset_retired") &&
         !function_contains(source, "demo_render_prepare_publish(",
                            "sm64_saturn_terrain_worker_run") &&
-        !function_contains(source, "demo_render_prepare_publish(",
-                           "demo_dispatch_mario_transform") &&
+        /* Stronger than the old "not called from prepare": the function
+         * is gone, so it cannot be revived by a stray call. */
+        strstr(source, "static void demo_dispatch_mario_transform") == NULL &&
         strstr(source, "sm64_saturn_demo_render_frame(") == NULL;
     free(source);
     if (!ok) {

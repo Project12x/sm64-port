@@ -40,7 +40,9 @@ class RenderJobLiveCutoverSourceTests(unittest.TestCase):
         self.assertIn("sm64_saturn_render_job_queue_all_terminal", finalize)
         self.assertIn("sm64_saturn_render_job_runtime_activate", source)
         self.assertNotIn("sm64_saturn_terrain_worker_run", accepted_lifecycle)
-        self.assertNotIn("demo_dispatch_mario_transform", accepted_lifecycle)
+        # Deleted 2026-09-10 -- assert absence from the whole file, not
+        # just the lifecycle, so it cannot be reintroduced anywhere.
+        self.assertNotIn("static void demo_dispatch_mario_transform", source)
         self.assertNotIn("sm64_saturn_demo_render_frame(", source)
 
     def test_master_only_terrain_merge_scratch_stays_out_of_hwram(self):

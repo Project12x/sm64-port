@@ -97,10 +97,12 @@ static int worker_context_has_no_live_game_pointers(void)
     const size_t read = fread(text, 1U, (size_t)bytes, source);
     fclose(source);
     text[read] = '\0';
+    /* demo_classify_mario_range and s_actor_ref_frame_bank were deleted
+     * 2026-09-10 along with the rest of the unreachable Mario route; the
+     * live classifier is demo_actor_queue_classify. */
     const int has_compact_worker_refs =
         strstr(text, "typedef struct demo_actor_primitive_ref") != NULL &&
-        strstr(text, "static void demo_classify_mario_range") != NULL &&
-        strstr(text, "s_actor_ref_frame_bank") != NULL &&
+        strstr(text, "static bool __attribute__((unused)) demo_actor_queue_classify") != NULL &&
         strstr(text, "demo_actor_ref_read") != NULL;
     const char *const context = strstr(text, "typedef struct demo_mario_transform_context");
     char *const end = context == NULL ? NULL :
@@ -160,9 +162,6 @@ static int renderer_uses_bounded_meshlet_order(void)
     char *const prepare = strstr(text, "static bool demo_prepare_mario");
     char *const reserve = prepare == NULL ? NULL :
         strstr(prepare, "static void demo_reserve_mario_gouraud");
-    char *const dispatch = strstr(text, "static void demo_dispatch_mario_transform");
-    char *const dispatch_end = dispatch == NULL ? NULL :
-        strstr(dispatch, "static bool demo_prepare_mario");
     char *const render_prepare =
         strstr(text, "static bool demo_render_prepare_publish");
     char *const render_finalize =
@@ -171,12 +170,10 @@ static int renderer_uses_bounded_meshlet_order(void)
         strstr(render_prepare, "demo_prepare_mario(");
     char *const queue_merge = render_finalize == NULL ? NULL :
         strstr(render_finalize, "demo_actor_queue_assemble_done(");
-    char *const dispatch_call = render_prepare == NULL ? NULL :
-        strstr(render_prepare, "demo_dispatch_mario_transform(");
-    const int valid = prepare != NULL && reserve != NULL && dispatch != NULL &&
-        dispatch_end != NULL &&
+    const int valid = prepare != NULL && reserve != NULL &&
         prepare_call != NULL && queue_merge != NULL &&
-        prepare_call < queue_merge && dispatch_call == NULL &&
+        prepare_call < queue_merge &&
+        strstr(text, "static void demo_dispatch_mario_transform") == NULL &&
         strstr(prepare, "sm64_saturn_actor_meshlets_prepare(") != NULL &&
         text_range_contains(prepare, reserve,
                             ".positions = s_actor_transform_refs") &&
@@ -184,10 +181,7 @@ static int renderer_uses_bounded_meshlet_order(void)
                             "s_actor_transform_ref_count = meshlet_output.position_count") &&
         !text_range_contains(prepare, reserve, "primitive[corner]") &&
         strstr(text, "s_actor_order") == NULL &&
-        strstr(text, "while (j > 0U)") == NULL &&
-        strstr(dispatch, "transform_ref_count") != NULL &&
-        !text_range_contains(dispatch, dispatch_end,
-                             "i < SM64_MARIO_VERTEX_COUNT");
+        strstr(text, "while (j > 0U)") == NULL;
     free(text);
     return valid;
 }

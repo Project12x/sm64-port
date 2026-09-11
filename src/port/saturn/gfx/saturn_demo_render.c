@@ -295,14 +295,6 @@ static sm64_saturn_visible_position_set_t s_visible_position_set;
 #define DEMO_ACTOR_WORK_CACHE
 static sm64_saturn_dual_frame_bank_t s_transform_frame_bank
     DEMO_CROSS_CPU_SHARED;
-/* Mario's bounded second phase uses the exact same release protocol as the
- * terrain transform bank.  The worker writes only its half-open vertex span;
- * the master reads the slave half through the cache-through alias after this
- * uncached record accepts its sequence. */
-static sm64_saturn_dual_frame_bank_t s_actor_frame_bank
-    DEMO_CROSS_CPU_SHARED;
-static sm64_saturn_dual_frame_bank_t s_actor_ref_frame_bank
-    DEMO_CROSS_CPU_SHARED;
 static volatile uint16_t s_transform_phase_failed
     DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_terrain_result_spans_t s_terrain_spans_shared
@@ -1502,126 +1494,6 @@ static bool demo_transform_mario_vertex(
     return true;
 }
 
-static void demo_transform_mario_range(void *opaque, uint16_t begin,
-                                       uint16_t end)
-{
-    demo_mario_transform_context_t *context = opaque;
-    const uint8_t lane = begin == 0U ? 0U : 1U;
-    if (context == NULL || !context->snapshot.valid ||
-        context->vertex_count != SM64_MARIO_VERTEX_COUNT ||
-        end > context->transform_ref_count) {
-        return;
-    }
-    /* Yaw convention verified, NOT a suspect (2026-09-03): this rotation is
-     * term-for-term identical to the generic-actor kernel, castleviewer and
-     * marioturntable; gSaturnSineTableQ16 matches true sin/cos to 1e-5;
-     * faceAngle agrees with the velocity heading to 1 deg and gfx.angle
-     * equals it exactly. Adding a half turn here was tried and rejected --
-     * see docs/saturn/evidence/reports/mario-facing-eliminations.md. Do not
-     * reintroduce a constant offset. */
-    const int32_t sine = sm64_saturn_sins_q16(context->snapshot.yaw);
-    const int32_t cosine = sm64_saturn_coss_q16(context->snapshot.yaw);
-    for (uint16_t i = begin; i < end; i++) {
-        if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
-            sm64_saturn_dual_worker_cancelled()) break;
-        const uint16_t vertex = context->vertex_refs[i];
-        if (vertex >= context->vertex_count) continue;
-        (void)demo_transform_mario_vertex(context, vertex, sine, cosine,
-                                          &s_actor_results[vertex]);
-    }
-    sm64_saturn_dual_frame_publish(&s_actor_frame_bank, lane,
-                                   context->sequence,
-                                   (uint16_t)(end - begin));
-}
-
-/* Classification is deliberately separate from transform publication: both
- * lanes first retire their disjoint vertex output, then this bounded phase
- * consumes it through cache-through peer reads and writes fixed compact refs.
- * No VDP, texture-slot, or Gouraud ownership crosses this boundary. */
-static void demo_classify_mario_range(void *opaque, uint16_t begin,
-                                      uint16_t end)
-{
-    demo_mario_transform_context_t *context = opaque;
-    const uint8_t lane = begin == 0U ? 0U : 1U;
-    if (context == NULL || end > SM64_MARIO_PRIMITIVE_COUNT)
-        return;
-    for (uint16_t primitive_id = begin; primitive_id < end; primitive_id++) {
-        if (((uint16_t)(primitive_id - begin) % DEMO_CANCEL_POLL_INTERVAL) ==
-                0U && sm64_saturn_dual_worker_cancelled())
-            break;
-        demo_actor_primitive_ref_t *const result =
-            &s_actor_refs[primitive_id];
-        const uint16_t *const primitive = sm64_mario_primitives[primitive_id];
-        result->primitive_id = DEMO_ACTOR_PRIMITIVE_REJECTED;
-        result->material_vertex = 0U;
-        if (sm64_mario_material_rgb[primitive[0]][0] > 31U) continue;
-        const demo_actor_vertex_result_t *const a =
-            demo_actor_result_read_lane_split(
-                lane, context->vertex_slave_begin, primitive[1]);
-        const demo_actor_vertex_result_t *const b =
-            demo_actor_result_read_lane_split(
-                lane, context->vertex_slave_begin, primitive[2]);
-        const demo_actor_vertex_result_t *const c =
-            demo_actor_result_read_lane_split(
-                lane, context->vertex_slave_begin, primitive[3]);
-        const demo_actor_vertex_result_t *const d =
-            demo_actor_result_read_lane_split(
-                lane, context->vertex_slave_begin, primitive[4]);
-        if (a->valid == 0U || b->valid == 0U || c->valid == 0U ||
-            d->valid == 0U)
-            continue;
-        const int32_t cross =
-            (int32_t)(b->projected.x - a->projected.x) *
-                (c->projected.y - a->projected.y) -
-            (int32_t)(b->projected.y - a->projected.y) *
-                (c->projected.x - a->projected.x);
-        /* Every generated Mario primitive in this target carries G_CULL_BACK;
-         * sourceboot's Y-down projection therefore rejects nonpositive area.
-         *
-         * OPEN QUESTION, do not "fix" by inspection (2026-09-03): the fast3d
-         * frontend culls with cross = (v0-v1) x (v2-v1) in Y-UP clip space and
-         * rejects G_CULL_BACK when cross >= 0 (saturn_fast3d_frontend.c
-         * ~L689-699). This site uses (v1-v0) x (v2-v0) in Y-DOWN space. The
-         * vertex-order flip and the Y flip each negate the area, so they
-         * cancel and the two expressions are arguably the same quantity under
-         * opposite predicates -- but that argument was tested by flipping this
-         * sign and it did NOT change the reported symptom, so at least one
-         * step in it is wrong. Settle it with the reject counter and a known
-         * primitive, not with the algebra.
-         *
-         * SETTLED 2026-09-10, by counting rather than by eye, which is what
-         * that note asked for and what nobody had done.
-         *
-         * The missing step was the space this site works in. It reads
-         * `projected`, and sm64_saturn_ir_project_view builds those as
-         * screen_y = center_y - project(view.y) (saturn_ir_transform.c:53) --
-         * Y-DOWN, verified, not assumed. So: the frontend computes
-         * (v0-v1)x(v2-v1) = -(a x b) in Y-UP; this site computes a x b in
-         * Y-DOWN, and the Y flip negates it once more. The two expressions
-         * are therefore the SAME quantity, not opposite ones, so they need
-         * the SAME predicate -- and the frontend rejects G_CULL_BACK at
-         * cross >= 0 (saturn_fast3d_frontend.c:698-699).
-         *
-         * Counted on the real bank (all 644 primitives carry G_CULL_BACK):
-         * across a yaw sweep the shipped `cross <= 0` keeps 39.2% of
-         * primitives and rejects 60.8%, so the cull is live and does split
-         * the body -- it was simply keeping the far half. 19.7% are
-         * zero-area at integer screen resolution and are dropped by either
-         * sign; that is a separate question.
-         *
-         * The 2026-09-03 flip "changed nothing" and a 2026-09-09 retry
-         * looked no better, but neither was a single-variable test: both
-         * carried other unproven changes in the same build. */
-        if (cross >= 0)
-            continue;
-        result->primitive_id = primitive_id;
-        result->material_vertex = primitive[0];
-    }
-    sm64_saturn_dual_frame_publish(&s_actor_ref_frame_bank, lane,
-                                   context->sequence,
-                                   (uint16_t)(end - begin));
-}
-
 /* This begins only after sm64_saturn_terrain_worker_run() has returned.  The
  * copied records let the slave transform/classify a disjoint vertex span with
  * no game-state or VDP1 dependency; the master remains the only actor command
@@ -1660,147 +1532,6 @@ static bool demo_snapshot_mario_transform_context(
         context->vertex_ref_slot[vertex] = ref;
     }
     return true;
-}
-
-static void demo_dispatch_mario_transform(
-    const sm64_saturn_ir_transform_job_t *job,
-    const sm64_saturn_mario_actor_snapshot_t *snapshot,
-    const sm64_saturn_mario_actor_pose_t *pose,
-    sm64_saturn_fast3d_profile_t *profile)
-{
-    if (!demo_snapshot_mario_transform_context(
-            &s_mario_transform_context, job, snapshot, pose)) {
-        profile->pipeline_faults++;
-        return;
-    }
-    s_actor_publish_sequence++;
-    if (s_actor_publish_sequence == 0U) s_actor_publish_sequence = 1U;
-    s_mario_transform_context.sequence = s_actor_publish_sequence;
-    sm64_saturn_dual_frame_reset(&s_actor_frame_bank);
-    memset(s_actor_results, 0, sizeof(s_actor_results));
-    memset(s_actor_vertex_owner, UINT8_MAX, sizeof(s_actor_vertex_owner));
-    s_actor_slave_begin =
-        (uint16_t)(s_mario_transform_context.transform_ref_count / 2U);
-    for (uint16_t ref = 0U;
-         ref < s_mario_transform_context.transform_ref_count; ref++) {
-        const uint16_t vertex = s_mario_transform_context.vertex_refs[ref];
-        s_actor_vertex_owner[vertex] = ref < s_actor_slave_begin ? 0U : 1U;
-    }
-    s_mario_transform_context.vertex_slave_begin = s_actor_slave_begin;
-    sm64_saturn_dual_worker_stats_t actor_stats = {0};
-    bool actor_complete = true;
-#if SATURN_SLAVE_RENDER
-    /* The terrain job is retired before this point.  Idle is an ownership
-     * assertion, not a timing threshold: a false result falls back only after
-     * the existing bounded worker has retired. */
-    if (sm64_saturn_dual_worker_is_idle()) {
-        profile->master_worker_started++;
-        profile->slave_worker_started++;
-        actor_complete = sm64_saturn_dual_worker_run(
-            demo_transform_mario_range,
-            (void *)sm64_saturn_dual_frame_cache_through(
-                &s_mario_transform_context),
-            s_mario_transform_context.transform_ref_count,
-            s_actor_slave_begin, &actor_stats);
-#if defined(__sh__)
-        uint16_t slave_count = 0U;
-        actor_complete = actor_complete &&
-            sm64_saturn_dual_frame_peer_ready(
-                &s_actor_frame_bank, 0U, s_actor_publish_sequence,
-                &slave_count) &&
-            slave_count == s_mario_transform_context.transform_ref_count -
-                s_actor_slave_begin;
-#endif
-    } else {
-        actor_complete = false;
-    }
-#else
-    profile->master_worker_started++;
-    s_actor_slave_begin = s_mario_transform_context.transform_ref_count;
-    memset(s_actor_vertex_owner, 0, sizeof(s_actor_vertex_owner));
-    demo_transform_mario_range(&s_mario_transform_context, 0U,
-                               s_mario_transform_context.transform_ref_count);
-#endif
-    if (!actor_complete) {
-        /* The generic worker does not return until a cancelled slave callback
-         * has retired, so this full-span recovery cannot overlap its writes. */
-        profile->pipeline_faults++;
-        s_actor_slave_begin = s_mario_transform_context.transform_ref_count;
-        memset(s_actor_vertex_owner, 0, sizeof(s_actor_vertex_owner));
-        /* Classification follows this recovery on the master.  Its copied
-         * ownership metadata must match the all-master result span so it does
-         * not read freshly rewritten vertices through a peer alias. */
-        s_mario_transform_context.vertex_slave_begin = s_actor_slave_begin;
-        sm64_saturn_dual_frame_reset(&s_actor_frame_bank);
-        demo_transform_mario_range(&s_mario_transform_context, 0U,
-                                   s_mario_transform_context.transform_ref_count);
-    }
-    s_actor_ref_publish_sequence++;
-    if (s_actor_ref_publish_sequence == 0U) s_actor_ref_publish_sequence = 1U;
-    s_mario_transform_context.sequence = s_actor_ref_publish_sequence;
-    sm64_saturn_dual_frame_reset(&s_actor_ref_frame_bank);
-    memset(s_actor_refs, 0xFF, sizeof(s_actor_refs));
-    s_actor_primitive_slave_begin =
-        (uint16_t)(SM64_MARIO_PRIMITIVE_COUNT / 2U);
-    for (uint16_t primitive = 0U;
-         primitive < SM64_MARIO_PRIMITIVE_COUNT; primitive++)
-        s_actor_ref_owner[primitive] =
-            primitive < s_actor_primitive_slave_begin ? 0U : 1U;
-    s_mario_transform_context.primitive_slave_begin =
-        s_actor_primitive_slave_begin;
-    sm64_saturn_dual_worker_stats_t actor_classify_stats = {0};
-    bool classify_complete = true;
-#if SATURN_SLAVE_RENDER
-    if (sm64_saturn_dual_worker_is_idle()) {
-        profile->master_worker_started++;
-        profile->slave_worker_started++;
-        classify_complete = sm64_saturn_dual_worker_run(
-            demo_classify_mario_range,
-            (void *)sm64_saturn_dual_frame_cache_through(
-                &s_mario_transform_context),
-            SM64_MARIO_PRIMITIVE_COUNT, s_actor_primitive_slave_begin,
-            &actor_classify_stats);
-#if defined(__sh__)
-        uint16_t slave_count = 0U;
-        classify_complete = classify_complete &&
-            sm64_saturn_dual_frame_peer_ready(
-                &s_actor_ref_frame_bank, 0U, s_actor_ref_publish_sequence,
-                &slave_count) &&
-            slave_count == SM64_MARIO_PRIMITIVE_COUNT -
-                s_actor_primitive_slave_begin;
-#endif
-    } else {
-        classify_complete = false;
-    }
-#else
-    profile->master_worker_started++;
-    s_actor_primitive_slave_begin = SM64_MARIO_PRIMITIVE_COUNT;
-    memset(s_actor_ref_owner, 0, sizeof(s_actor_ref_owner));
-    demo_classify_mario_range(&s_mario_transform_context, 0U,
-                              SM64_MARIO_PRIMITIVE_COUNT);
-#endif
-    if (!classify_complete) {
-        profile->pipeline_faults++;
-        s_actor_primitive_slave_begin = SM64_MARIO_PRIMITIVE_COUNT;
-        memset(s_actor_ref_owner, 0, sizeof(s_actor_ref_owner));
-        s_mario_transform_context.primitive_slave_begin =
-            s_actor_primitive_slave_begin;
-        sm64_saturn_dual_frame_reset(&s_actor_ref_frame_bank);
-        demo_classify_mario_range(&s_mario_transform_context, 0U,
-                                  SM64_MARIO_PRIMITIVE_COUNT);
-    }
-    profile->slave_jobs_completed += actor_stats.slave_jobs_completed;
-    profile->slave_busy_ticks += actor_stats.slave_busy_ticks;
-    profile->master_wait_ticks += actor_stats.master_wait_ticks;
-    profile->slave_timeouts += actor_stats.slave_timeouts;
-    /* Timeout counters are diagnostics.  They never choose or suppress a
-     * rendering path; the completed immutable result is the only input. */
-    profile->pipeline_faults += actor_stats.slave_timeouts;
-    profile->slave_jobs_completed += actor_classify_stats.slave_jobs_completed;
-    profile->slave_busy_ticks += actor_classify_stats.slave_busy_ticks;
-    profile->master_wait_ticks += actor_classify_stats.master_wait_ticks;
-    profile->slave_timeouts += actor_classify_stats.slave_timeouts;
-    profile->pipeline_faults += actor_classify_stats.slave_timeouts;
 }
 
 static void demo_resolve_terrain_command_templates(
@@ -2916,25 +2647,24 @@ static bool __attribute__((unused)) demo_actor_queue_classify(
                 (c->projected.y - a->projected.y) -
             (int32_t)(b->projected.y - a->projected.y) *
                 (c->projected.x - a->projected.x);
-        /* THIS is the live Mario back-face cull. The near-identical one in
-         * demo_classify_mario_range is dead code, and that inversion is why
-         * this defect survived six weeks of fixes.
+        /* The Mario back-face cull. There is exactly one, and keeping it
+         * that way is load-bearing -- see the history at the end of this
+         * comment.
          *
-         * Reachability, traced rather than assumed:
-         *   live : demo_actor_lower_compat_wrapper (:3923) calls this, and is
-         *          registered in demo_render_job_callbacks (:3937) as the
-         *          ACTOR_LOWER callback; demo_actor_queue_assemble_done
-         *          (:3030, called from demo_render_finalize :5540) then
-         *          overwrites s_actor_refs with these records, which
-         *          demo_finalize_mario_draws reads.
-         *   dead : demo_classify_mario_range (:1598) is called only by
-         *          demo_dispatch_mario_transform (:1722), and that function's
-         *          only occurrence in this file is its own definition.
-         * The __attribute__((unused)) markers sit on the LIVE functions here
-         * and not on the dead one, which is exactly backwards and is what
-         * made every previous attempt edit the wrong copy: the 2026-09-03
-         * sign flip and a 2026-09-09 retry both reported "changed nothing",
-         * because nothing they changed ran.
+         * Reachability: demo_actor_lower_compat_wrapper calls this, and
+         * is registered in demo_render_job_callbacks as the ACTOR_LOWER
+         * callback; demo_actor_queue_assemble_done (from
+         * demo_render_finalize) then overwrites s_actor_refs with these
+         * records, which demo_finalize_mario_draws reads. The
+         * __attribute__((unused)) marker above is load-bearing noise: this
+         * function is reached only through that callback table.
+         *
+         * Until 2026-09-10 a second, unreachable copy of this classifier
+         * existed (demo_classify_mario_range, reached only from
+         * demo_dispatch_mario_transform, which nothing called). Every sign
+         * flip from 2026-09-03 onward edited THAT copy and correctly
+         * reported "changed nothing". It has been deleted; do not
+         * reintroduce a second Mario cull.
          *
          * Sign: projected coordinates are Y-DOWN
          * (saturn_ir_transform.c:53, screen_y = center_y - project(view.y)).

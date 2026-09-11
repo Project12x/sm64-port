@@ -4,6 +4,31 @@
 
 ### Fixed
 
+- **Deleted the unreachable Mario render path, which had absorbed six weeks of
+  fixes that never ran.** `demo_dispatch_mario_transform` was never called --
+  its only occurrence was its own definition, and
+  `dual_actor_worker_test.c` actively asserted that call absent from
+  `demo_render_prepare_publish` -- so `demo_classify_mario_range` and
+  `demo_transform_mario_range`, reachable only from it, were dead with it.
+  Root cause of the wasted weeks is that the `__attribute__((unused))` markers
+  sat on the LIVE functions (`demo_actor_queue_classify`,
+  `demo_actor_queue_transform`, reached only through the render-job callback
+  table) and not on the dead ones. Reading that annotation as "dead" is what
+  made the 2026-09-03 and 2026-09-09 cull flips edit the wrong copy and
+  correctly report "changed nothing".
+- Removed with them: `s_actor_frame_bank` and `s_actor_ref_frame_bank`, the
+  only publishers into which were those functions.
+- **Costs nothing at runtime, which is the point.** Every section of the
+  resulting image is byte-identical: the linker was already garbage-collecting
+  these unreferenced statics. The dead code never cost a byte on the console,
+  only attention -- so this is a maintainability change, not a memory saving.
+  An earlier suggestion in this work that deleting it might free HWRAM for the
+  pending pitch/roll fix was wrong.
+- Four structural tests described the dead path and now assert its absence
+  instead, which is strictly stronger: a stray call cannot revive it. They
+  check for the DEFINITION (`static void demo_dispatch_mario_transform`) so
+  the historical note at the surviving cull may still name it in prose.
+
 - **Every generic actor was drawing its far shell: the back-face cull sign was
   inverted there too.** Same defect as Mario's, same derivation. The cull at
   `saturn_demo_render.c`'s generic actor emit reads `projected[corner]`

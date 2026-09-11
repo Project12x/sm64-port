@@ -61,12 +61,12 @@ int main(void)
                            "context->vertex_refs =") &&
         function_contains(source, "demo_snapshot_mario_transform_context(",
                           "context->snapshot = *snapshot") &&
-        function_contains(source, "demo_dispatch_mario_transform(",
-                          "demo_snapshot_mario_transform_context") &&
-        function_contains(source, "demo_transform_mario_range(",
-                          "sm64_saturn_sins_q16") &&
-        function_contains(source, "demo_transform_mario_range(",
-                          "sm64_saturn_coss_q16") &&
+        /* demo_dispatch_mario_transform and demo_transform_mario_range
+         * were deleted 2026-09-10: they were unreachable, and the duplicate
+         * cull inside that subtree absorbed six weeks of fixes that never
+         * ran. The queue route below is the only Mario route now. */
+        strstr(source, "static void demo_dispatch_mario_transform") == NULL &&
+        strstr(source, "static void demo_transform_mario_range") == NULL &&
         !function_contains(source, "demo_transform_mario_vertex(",
                            "sm64_saturn_sins_q16") &&
         function_contains(source, "demo_actor_queue_transform(",
