@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Camera-side BSP painter ranking and actor occluder publication, landed
+  from a pre-existing uncommitted working tree.** This work was authored
+  before the 2026-09-11 session and had never been committed; it is recorded
+  here as found, with behaviour described from the code rather than from a
+  design note, because its original rationale was not available.
+  - `demo_update_painter_ranks()` re-walks the BSP front-to-back from the
+    camera and assigns each primitive a rank, memoized on camera position so
+    the walk is skipped while the camera is still. The stated reason in the
+    code is that far edges can share a depth bin even when one surface is
+    wholly in front of another -- static leaf/source IDs cannot express that
+    ordering, so a bridge could sort behind the ground beneath it.
+  - `demo_actor_emit_context_t` gained an 8-entry occluder array, selected in
+    `demo_actor_emit_dispatch()` by keeping the largest-area terrain surfaces
+    and evicting the smallest. Terrain results are complete at that point, so
+    the slave consumes immutable planes.
+  - `demo_terrain_compact_transformed()` now reads `s_primitive_leaf_id`
+    through `sm64_saturn_dual_frame_read_range()` rather than directly, which
+    is the lane-correct accessor now that ranks are recomputed per frame.
+  - File-wide `#pragma GCC optimize ("O2")` on `saturn_demo_render.c`,
+    annotated in-tree as a deliberate code-space-for-speed trade.
+  - Not separately verified: this commit exists so that HEAD can reach the
+    tree that was actually built and run. It was never built in isolation.
+
 ### Fixed
 
 - **BOB's pivot bridge and chain chomp gate rendered nothing; both are now

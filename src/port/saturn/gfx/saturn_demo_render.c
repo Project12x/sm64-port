@@ -1,3 +1,7 @@
+/* Measured hot path: spend bounded code space on speed (12 FPS continuation). */
+#if defined(__sh__) && defined(__GNUC__)
+#pragma GCC optimize ("O2")
+#endif
 #include "saturn_demo_render.h"
 #include "../platform/saturn_cart_code.h"
 
@@ -66,6 +70,7 @@
 #include "saturn_actor_gouraud_reservation.h"
 #include "saturn_actor_meshlets.h"
 #include "saturn_actor_material.h"
+#include "saturn_actor_terrain_order.h"
 #include "saturn_actor_pose.h"
 #include "saturn_actor_runtime_handoff.h"
 #include "saturn_actor_texture_residency.h"
@@ -317,6 +322,11 @@ static uint16_t s_render_work_order[SM64_SATURN_BOB_PRIMITIVE_COUNT]
 static uint16_t s_render_work_count;
 static uint16_t s_primitive_leaf_id[SM64_SATURN_BOB_PRIMITIVE_COUNT]
     DEMO_CPU_WORK_CACHE;
+#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+/* Master-only memoization; rank payload remains in its existing shared path. */
+static sm64_saturn_vec3i_t s_painter_rank_position;
+static uint8_t s_painter_ranks_valid;
+#endif
 static uint16_t s_primitive_work_weight[SM64_SATURN_BOB_PRIMITIVE_COUNT]
     DEMO_CPU_WORK_CACHE;
 static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT]
@@ -1098,6 +1108,52 @@ static int32_t demo_q16_from_world(int32_t value)
     return value * 65536;
 }
 
+#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+static void demo_painter_rank_node(int16_t node,
+    const sm64_saturn_vec3i_t *position, uint16_t *rank)
+{
+    if (node < 0 || node >= SM64_SATURN_BOB_BSP_NODE_COUNT ||
+        s_spatial_node_seen[node] != 0U) return;
+    s_spatial_node_seen[node] = 1U;
+    const int64_t side =
+        (int64_t)sm64_saturn_bob_bsp_planes[node][0] * position->x +
+        (int64_t)sm64_saturn_bob_bsp_planes[node][1] * position->y +
+        (int64_t)sm64_saturn_bob_bsp_planes[node][2] * position->z +
+        sm64_saturn_bob_bsp_distances[node];
+    const uint8_t near_child = side >= 0 ? 0U : 1U;
+    demo_painter_rank_node(sm64_saturn_bob_bsp_children[node][1U - near_child],
+                          position, rank);
+    const uint16_t first = sm64_saturn_bob_node_first_ref[node];
+    const uint16_t count = sm64_saturn_bob_node_ref_count[node];
+    for (uint16_t offset = 0U; offset < count; offset++) {
+        const uint16_t primitive = sm64_saturn_bob_primitive_refs[first + offset];
+        if (primitive < SM64_SATURN_BOB_PRIMITIVE_COUNT &&
+            s_primitive_leaf_id[primitive] == UINT16_MAX)
+            s_primitive_leaf_id[primitive] = (*rank)++;
+    }
+    demo_painter_rank_node(sm64_saturn_bob_bsp_children[node][near_child],
+                          position, rank);
+}
+
+static void demo_update_painter_ranks(const sm64_saturn_vec3i_t *position)
+{
+    /* Far edges can share a depth bin even when a bridge is wholly in front
+     * of its underlying ground. Static leaf/source IDs cannot order that
+     * overlap. Preserve camera-side BSP order within each bin, including
+     * coplanar references owned by internal nodes, not just terminal leaves. */
+    if (s_painter_ranks_valid &&
+        position->x == s_painter_rank_position.x &&
+        position->y == s_painter_rank_position.y &&
+        position->z == s_painter_rank_position.z) return;
+    memset(s_primitive_leaf_id, 0xFF, sizeof(s_primitive_leaf_id));
+    memset(s_spatial_node_seen, 0, sizeof(s_spatial_node_seen));
+    uint16_t rank = 0U;
+    demo_painter_rank_node(0, position, &rank);
+    s_painter_rank_position = *position;
+    s_painter_ranks_valid = 1U;
+}
+#endif
+
 static void demo_prepare_render_work_order(
     const sm64_saturn_camera_transform_t *camera,
     sm64_saturn_fast3d_profile_t *profile, uint32_t transform_generation)
@@ -1105,7 +1161,8 @@ static void demo_prepare_render_work_order(
     demo_lod_storage_t *const lod_storage =
         demo_lod_storage_cache_through();
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
-    /* BSP traversal has already appended the bounded work list. */
+    /* Admission has already appended the bounded work list. */
+    demo_update_painter_ranks(&camera->position);
 #else
     s_render_work_count = 0U;
     for (uint16_t i = 0U; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++)
@@ -1374,9 +1431,9 @@ static union demo_actor_phase_workspace s_actor_phase_workspace
 #define s_mario_transform_context s_actor_phase_workspace.mario
 _Static_assert(sizeof(demo_mario_transform_context_t) <= UINT16_MAX,
                "Mario callback context must retain a bounded byte count");
-_Static_assert(sizeof(demo_mario_transform_context_t) >=
+_Static_assert(sizeof(union demo_actor_phase_workspace) >=
                    SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES,
-               "Mario phase storage must cover generic actor workspace");
+               "phase union must cover generic actor workspace");
 
 void *sm64_saturn_demo_render_actor_workspace(uint32_t *byte_count)
 {
@@ -1573,6 +1630,7 @@ SM64_SATURN_CART_COLD
 static bool demo_actor_phase_slave_task(void);
 #endif
 
+SM64_SATURN_CART_COLD
 void sm64_saturn_demo_render_init(void)
 {
     demo_lod_storage_t *const lod_storage =
@@ -1651,6 +1709,9 @@ void sm64_saturn_demo_render_init(void)
     vdp1_vram_partitions_t partitions;
     vdp1_vram_partitions_get(&partitions);
     demo_resolve_terrain_command_templates(&partitions);
+#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+    s_painter_ranks_valid = 0U;
+#endif
     demo_build_primitive_work_metadata();
     s_render_job_runtime_active =
         sm64_saturn_render_job_runtime_activate_graph(
@@ -2910,7 +2971,8 @@ static bool demo_terrain_compact_transformed(
             (void)sm64_saturn_terrain_result_write_with_shades(
                 arena, result, command,
                 (uint16_t)(first_command + fragment), primitive_index,
-                s_primitive_leaf_id[primitive_index],
+                *((const uint16_t *)sm64_saturn_dual_frame_read_range(
+                    lane, 0U, s_primitive_leaf_id) + primitive_index),
                 (uint32_t)s_primitive_depth[primitive_index], result_corners,
                 (s_primitive_clipped[primitive_index] != 0U
                     ? SM64_SATURN_TERRAIN_CLIP_CROSSES
@@ -3219,6 +3281,8 @@ typedef struct demo_actor_emit_context {
     uint16_t gouraud_capacity;
     uint16_t gouraud_count;
     uint16_t output_count;
+    uint16_t occluder_count;
+    sm64_saturn_actor_occluder_t occluders[8];
 } demo_actor_emit_context_t;
 
 /* Where emit puts the commands it builds.
@@ -4652,9 +4716,10 @@ static bool demo_generic_actor_emit(const demo_actor_emit_context_t *ctx,
                 sm64_saturn_actor_target_material_t material;
                 sm64_saturn_actor_material_color_t color;
                 sm64_saturn_projected_vertex_t projected[4];
+                int32_t world_corners[4][3];
                 int16_vec2_t vertices[4];
                 vdp1_cmdt_t command = {0};
-                const uint16_t painter_bin =
+                uint16_t painter_bin =
                     (uint16_t)(record->sort_key >> 16);
                 bool projected_visible = true;
                 valid = sm64_saturn_actor_bank_primitive(
@@ -4692,6 +4757,9 @@ static bool demo_generic_actor_emit(const demo_actor_emit_context_t *ctx,
                         break;
                     }
                     if (!valid) break;
+                    world_corners[corner][0] = world.x;
+                    world_corners[corner][1] = world.y;
+                    world_corners[corner][2] = world.z;
                     vertices[corner].x = projected[corner].x;
                     vertices[corner].y = projected[corner].y;
                 }
@@ -4700,6 +4768,13 @@ static bool demo_generic_actor_emit(const demo_actor_emit_context_t *ctx,
                     emit_counters->reject_near_far++;
                     emitted++;
                     continue;
+                }
+                for (uint16_t i = 0; i < ctx->occluder_count; i++) {
+                    const sm64_saturn_actor_occluder_t *surface = &ctx->occluders[i];
+                    if (painter_bin <= surface->bin &&
+                        sm64_saturn_actor_behind_terrain(surface, world_corners,
+                            (const int16_t (*)[2])vertices))
+                        painter_bin = surface->bin + 1U;
                 }
                 const int32_t cross =
                     (int32_t)(vertices[1].x - vertices[0].x) *
@@ -4886,6 +4961,36 @@ static bool demo_actor_emit_dispatch(demo_render_transaction_t *transaction,
     ctx->gouraud_capacity = gouraud_bank->capacity;
     ctx->gouraud_count = transaction->generic_actor_gouraud_count;
     ctx->output_count = transaction->generic_actor_output_count;
+    /* Terrain results are complete before this dispatch. Publish only eight
+     * large screen surfaces, then let the slave consume immutable P2 planes. */
+    const int32_t camera_position[3] = {ctx->actor_job.camera.position.x,
+        ctx->actor_job.camera.position.y, ctx->actor_job.camera.position.z};
+    for (uint16_t i = 0; i < s_terrain_emit_count; i++) {
+        const sm64_saturn_terrain_emit_ref_t *ref = &s_terrain_emit_refs[i];
+        if (ref->record->primitive_id >= SM64_SATURN_BOB_PRIMITIVE_COUNT) continue;
+        const uint8_t *command = demo_terrain_final_command(&s_terrain_spans_shared, ref);
+        if (command == NULL) continue;
+        const sm64_saturn_bob_primitive_t *primitive =
+            &s_bob_primitives_active[ref->record->primitive_id];
+        int32_t world[4][3];
+        for (unsigned corner = 0; corner < 4; corner++)
+            memcpy(world[corner], s_bob_positions_active[primitive->indices[corner]],
+                   sizeof(world[corner]));
+        int16_t xy[4][2];
+        memcpy(xy, command + 12U, sizeof(xy));
+        sm64_saturn_actor_occluder_t candidate;
+        if (!sm64_saturn_actor_occluder_init(&candidate, world, xy, camera_position,
+                sm64_saturn_terrain_depth_bin(ref->record->painter_key))) continue;
+        uint16_t slot = ctx->occluder_count;
+        if (slot == 8U) {
+            slot = 0U;
+            for (uint16_t j = 1U; j < 8U; j++)
+                if (ctx->occluders[j].area < ctx->occluders[slot].area) slot = j;
+            if (candidate.area <= ctx->occluders[slot].area) continue;
+        } else ctx->occluder_count++;
+        ctx->occluders[slot] = candidate;
+    }
+
     if (ctx->instance_count == 0U)
         transaction->generic_actor_gouraud_count = 0U;
 
