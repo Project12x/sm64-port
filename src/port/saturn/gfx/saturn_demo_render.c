@@ -1587,8 +1587,32 @@ static void demo_classify_mario_range(void *opaque, uint16_t begin,
          * opposite predicates -- but that argument was tested by flipping this
          * sign and it did NOT change the reported symptom, so at least one
          * step in it is wrong. Settle it with the reject counter and a known
-         * primitive, not with the algebra. */
-        if (cross <= 0)
+         * primitive, not with the algebra.
+         *
+         * SETTLED 2026-09-10, by counting rather than by eye, which is what
+         * that note asked for and what nobody had done.
+         *
+         * The missing step was the space this site works in. It reads
+         * `projected`, and sm64_saturn_ir_project_view builds those as
+         * screen_y = center_y - project(view.y) (saturn_ir_transform.c:53) --
+         * Y-DOWN, verified, not assumed. So: the frontend computes
+         * (v0-v1)x(v2-v1) = -(a x b) in Y-UP; this site computes a x b in
+         * Y-DOWN, and the Y flip negates it once more. The two expressions
+         * are therefore the SAME quantity, not opposite ones, so they need
+         * the SAME predicate -- and the frontend rejects G_CULL_BACK at
+         * cross >= 0 (saturn_fast3d_frontend.c:698-699).
+         *
+         * Counted on the real bank (all 644 primitives carry G_CULL_BACK):
+         * across a yaw sweep the shipped `cross <= 0` keeps 39.2% of
+         * primitives and rejects 60.8%, so the cull is live and does split
+         * the body -- it was simply keeping the far half. 19.7% are
+         * zero-area at integer screen resolution and are dropped by either
+         * sign; that is a separate question.
+         *
+         * The 2026-09-03 flip "changed nothing" and a 2026-09-09 retry
+         * looked no better, but neither was a single-variable test: both
+         * carried other unproven changes in the same build. */
+        if (cross >= 0)
             continue;
         result->primitive_id = primitive_id;
         result->material_vertex = primitive[0];
@@ -2892,8 +2916,46 @@ static bool __attribute__((unused)) demo_actor_queue_classify(
                 (c->projected.y - a->projected.y) -
             (int32_t)(b->projected.y - a->projected.y) *
                 (c->projected.x - a->projected.x);
-        /* See the matching direct Mario classifier above. */
-        if (cross <= 0)
+        /* THIS is the live Mario back-face cull. The near-identical one in
+         * demo_classify_mario_range is dead code, and that inversion is why
+         * this defect survived six weeks of fixes.
+         *
+         * Reachability, traced rather than assumed:
+         *   live : demo_actor_lower_compat_wrapper (:3923) calls this, and is
+         *          registered in demo_render_job_callbacks (:3937) as the
+         *          ACTOR_LOWER callback; demo_actor_queue_assemble_done
+         *          (:3030, called from demo_render_finalize :5540) then
+         *          overwrites s_actor_refs with these records, which
+         *          demo_finalize_mario_draws reads.
+         *   dead : demo_classify_mario_range (:1598) is called only by
+         *          demo_dispatch_mario_transform (:1722), and that function's
+         *          only occurrence in this file is its own definition.
+         * The __attribute__((unused)) markers sit on the LIVE functions here
+         * and not on the dead one, which is exactly backwards and is what
+         * made every previous attempt edit the wrong copy: the 2026-09-03
+         * sign flip and a 2026-09-09 retry both reported "changed nothing",
+         * because nothing they changed ran.
+         *
+         * Sign: projected coordinates are Y-DOWN
+         * (saturn_ir_transform.c:53, screen_y = center_y - project(view.y)).
+         * The fast3d frontend computes (v0-v1)x(v2-v1) = -(a x b) in Y-UP and
+         * rejects G_CULL_BACK at cross >= 0 (saturn_fast3d_frontend.c:698).
+         * This site computes a x b in Y-DOWN, and the Y flip negates it once
+         * more, so the two are the SAME quantity and need the SAME predicate.
+         * Counted on the real bank (all 644 primitives are G_CULL_BACK), the
+         * old `cross <= 0` kept 39.2% of primitives and rejected 60.8%, with
+         * 19.7% zero-area at integer screen resolution and dropped by either
+         * sign. That census establishes the cull is live and does split the
+         * body; it does NOT by itself label which half survives -- a keep
+         * rate carries no near/far tag. The near/far claim rests on the
+         * derivation above, not on the count.
+         *
+         * Why a kept far half looks like a facing error: VDP1 has no
+         * Z-buffer, and Mario's whole body falls inside one 128-unit actor
+         * painter bin (actor_depth_bin), so front and back faces of the same
+         * body part share a meshlet and emit in bake order. Culling is the
+         * only thing that can separate them. */
+        if (cross >= 0)
             continue;
         result->primitive_id = primitive_id;
         result->material_vertex = primitive[0];

@@ -135,6 +135,59 @@
 
 ### Fixed
 
+- **Mario rendered facing the wrong direction for six weeks because every fix
+  edited a dead copy of the back-face cull.** `demo_classify_mario_range`
+  (`saturn_demo_render.c:1598`) is unreachable: its only caller is
+  `demo_dispatch_mario_transform` (:1722), whose sole occurrence in the file
+  is its own definition -- and `tools/saturn/dual_actor_worker_test.c:179`
+  actively asserts that call is absent from `demo_render_prepare_publish`.
+  The live classifier is `demo_actor_queue_classify` (:2916), reached through
+  `demo_actor_lower_compat_wrapper` (:3923) registered in the render-job
+  callback table (:3937); `demo_actor_queue_assemble_done` (:3030, called
+  from `demo_render_finalize` :5540) then overwrites `s_actor_refs` with its
+  records. **The `__attribute__((unused))` markers sit on the LIVE functions**
+  -- they are only reached via function pointers -- **and not on the dead
+  one.** That inverted signpost is the whole story: the 2026-09-03 sign flip
+  and a 2026-09-09 retry both reported "changed nothing", correctly, because
+  nothing they changed ran.
+- **Fix:** the live cull now rejects `cross >= 0`, matching the port's own
+  N64 semantics. Derivation, with the step that was missing before: this site
+  reads `projected`, which `sm64_saturn_ir_project_view` builds Y-DOWN
+  (`saturn_ir_transform.c:53`, `screen_y = center_y - project(view.y)`). The
+  fast3d frontend computes `(v0-v1)x(v2-v1) = -(a x b)` in Y-UP and rejects
+  `G_CULL_BACK` at `cross >= 0` (`saturn_fast3d_frontend.c:698`); this site
+  computes `a x b` in Y-DOWN, and the Y flip negates once more, so the two
+  are the SAME quantity and need the SAME predicate. Owner-confirmed live:
+  Mario now faces the direction he moves in all four directions.
+- **Why culling and not ordering:** VDP1 has no Z-buffer and Mario's whole
+  body falls inside one 128-unit actor painter bin (`actor_depth_bin`), so
+  front and back faces of a body part share a meshlet and emit in bake order.
+  Depth ordering cannot separate them at any granularity the bins offer;
+  culling is the only mechanism that can. An intra-meshlet ordering change
+  was tried first and correctly failed.
+- **Evidence, all offline against the real `src/engine/math_util.c`:** the
+  Q16 sine table matches true sin/cos with 0 mismatches; the Mario object
+  transform reproduces `mtxf_rotate_zxy_and_translate` to 0.99 world units at
+  pitch=roll=0; the pose chain reproduces `geo_process_animated_part`
+  composition to 0.011 degrees; a cull census over a yaw sweep shows the
+  predicate is live and rejects 60.8% of 644 primitives (19.7% are zero-area
+  at integer screen resolution and are dropped by either sign). Those cleared
+  the geometry entirely and left culling as the only candidate. The census
+  does NOT label which half survives -- a keep rate carries no near/far tag;
+  that claim rests on the derivation.
+- **Known remaining:** Mario's facing is still wrong during the sudden-stop
+  animation. Cause identified, not yet fixed: `demo_transform_mario_vertex`
+  rotates by yaw only, while the original rotates by all three of `gfx.angle`
+  in ZXY order, and `mario_actions_moving.c:604` sets `gfx.angle[0]` from
+  `oMarioWalkingPitch` (`:707` sets `angle[2]` from floor slope). Measured
+  divergence from the original: exact at pitch=roll=0, up to 160 world units
+  -- Mario's full height -- at a quarter turn. A verified patch exists but
+  needs ~432 B of HWRAM that is not available (baseline margin 8,180 B
+  against a 7,936 B floor).
+- **Convention split left open:** generic actors (`saturn_demo_render.c:5011`)
+  still reject `cross <= 0` in the same Y-down space -- now the opposite
+  predicate from Mario's.
+
 - **BOB checkerboard elevator was bundle-compiled and invisible because the
   identity registry dropped it.** Family 47 / `MODEL_CHECKERBOARD_PLATFORM`
   had a compiled bank at generation 97 (3,328 B texture, 12 draw records) but

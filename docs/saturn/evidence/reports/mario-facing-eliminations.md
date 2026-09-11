@@ -114,3 +114,41 @@ cause anyway. The rule that saved it: decide the discriminating threshold
 before looking at the number. The claim corrected in this document was made in
 the opposite order - asserted from a reading of the emit path, without opening
 `actor_meshlet_core`, which refutes it in one screen.
+## RESOLVED 2026-09-10
+
+Owner-confirmed live on candidate `f6a0836b34ddd407`: Mario faces the
+direction he moves in all four directions.
+
+**The cause was not in the elimination space this document explores.** Every
+hypothesis here -- yaw convention, sine table, cull sign, painter order --
+was argued against `demo_classify_mario_range`. That function is dead code.
+Its only caller, `demo_dispatch_mario_transform`, is never invoked, and
+`tools/saturn/dual_actor_worker_test.c:179` asserts as much. The live
+classifier is `demo_actor_queue_classify`, reached through the render-job
+callback table, and it is marked `__attribute__((unused))` because it is only
+referenced via a function pointer. The dead function carries no such marker.
+
+So this document's line "flipping the Mario back-face cull changed nothing"
+was a true observation with a false implication: the flip was real, the
+recompile was real, and the changed code never executed. The same trap caught
+a 2026-09-09 retry.
+
+**The cull sign was the answer**, at the live site: reject `cross >= 0`. The
+derivation this document could not settle needed one fact it never stated --
+`projected` is Y-DOWN (`saturn_ir_transform.c:53`). With that, the frontend's
+Y-up `(v0-v1)x(v2-v1)` and this site's Y-down `a x b` are the same quantity
+and take the same predicate.
+
+**Method note, since this document is largely a record of method.** The two
+recommendations in "The test" above were both eventually carried out. The
+first -- finer intra-actor bins -- was implemented and correctly failed:
+front and back faces of a body part share a meshlet, so no bin granularity
+can separate them. The second -- "confirm whether any back-face rejection is
+happening at all, by counting rejects rather than by eye" -- was the right
+instinct and went undone for six weeks. When finally counted, the cull was
+live and rejecting 60.8%.
+
+What actually broke the deadlock was neither: it was asking whether the code
+being edited runs at all. Reachability was assumed by everyone, including a
+session that grepped for callers of the dead function, found three, and never
+asked whether those were themselves reachable.
