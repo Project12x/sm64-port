@@ -56,11 +56,30 @@
     instances -- the path menu, intro and load frames take -- so Mario was
     raised with no wake-up. An explicit notify now covers that case. Either
     defect alone prevented reaching gameplay.
-  - **Not yet measured.** The scheduling argument is sound but the slave now
-    runs the generic phase and Mario serially; if their sum exceeds the
-    master's overlap window the master waits at the join, which is no worse
-    than before rather than better. Verified only as rendering correctly and
-    reaching gameplay. The route-replay A/B is outstanding.
+  - **Measured +6.13% throughput** on the `sourceboot-bob-coins-v1`
+    route-replay profile: `guest_fps_mean` 6.282 -> 6.667, median 6.000 ->
+    6.667, 1% low 5.455 -> 6.000, 277 -> 261 vblanks over the same 29
+    intervals and the identical route span (0 -> 31, 32 simulation ticks).
+    Builds `dc20f501b4e7e0c6` (master) vs `a1f5e1e73a7189a8` (slave), which
+    differ only in `DEMO_MARIO_PHASE_SLAVE`.
+    - The phase block corroborates the mechanism rather than merely the
+      result: median `construction` fell 7 -> 6 vblank crossings while
+      `slave_work_overlap_window` rose 2 -> 3. The work moved where it was
+      supposed to move.
+    - The FPS histogram is the load-bearing evidence, because `guest_fps` is
+      quantised here (6.0 / 6.67 / 7.5) and a 29-interval mean can drift
+      without anything real changing. The whole distribution shifted:
+      `6.0:15 6.67:12` with one 5.455 outlier becomes `6.0:5 6.67:19`, and
+      the master arm's worst interval does not occur in the slave arm at all.
+    - Basis and limits: caches off (the accepted baseline basis), so this
+      measures throughput and says nothing about coherency -- correct
+      rendering through gameplay is the only evidence on that axis. One run
+      per arm on a short route; the sign and rough magnitude are solid, the
+      third digit is not.
+    - Throughput is read off `vblank_delta`. `attributed_vblank_crossings` is
+      not used for the headline: its phases overlap and double-count,
+      `unattributed` goes negative, and it has previously read as "no change"
+      across a real 4% difference.
 
 - **Camera-side BSP painter ranking and actor occluder publication, landed
   from a pre-existing uncommitted working tree.** This work was authored
