@@ -2,6 +2,189 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stale frozen expectation: actor workspace capacity.**
+  `test_inventory_actor_family_bundles.py` pinned `capacity_bytes: 3072` while
+  `BOB_MAXIMUM_SCRATCH_BYTES` had already moved 3,267 -> 5,891 for King
+  Bob-omb's two-lane pose, which rounds the derived capacity to 6,144. The
+  expectation was never updated, so the test has been failing in the working
+  tree. Consumer impact: none at runtime -- this is a bake-time model check --
+  but a red gate here masks real regressions in the same file, which is how it
+  went unnoticed. Verified against HEAD before attributing: the constant moved
+  in an earlier, still-uncommitted change, not in this work.
+
+- **Mario rendered facing the wrong direction for six weeks because every fix
+  edited a dead copy of the back-face cull.** `demo_classify_mario_range`
+  (`saturn_demo_render.c:1598`) is unreachable: its only caller is
+  `demo_dispatch_mario_transform` (:1722), whose sole occurrence in the file
+  is its own definition -- and `tools/saturn/dual_actor_worker_test.c:179`
+  actively asserts that call is absent from `demo_render_prepare_publish`.
+  The live classifier is `demo_actor_queue_classify` (:2916), reached through
+  `demo_actor_lower_compat_wrapper` (:3923) registered in the render-job
+  callback table (:3937); `demo_actor_queue_assemble_done` (:3030, called
+  from `demo_render_finalize` :5540) then overwrites `s_actor_refs` with its
+  records. **The `__attribute__((unused))` markers sit on the LIVE functions**
+  -- they are only reached via function pointers -- **and not on the dead
+  one.** That inverted signpost is the whole story: the 2026-09-03 sign flip
+  and a 2026-09-09 retry both reported "changed nothing", correctly, because
+  nothing they changed ran.
+- **Fix:** the live cull now rejects `cross >= 0`, matching the port's own
+  N64 semantics. Derivation, with the step that was missing before: this site
+  reads `projected`, which `sm64_saturn_ir_project_view` builds Y-DOWN
+  (`saturn_ir_transform.c:53`, `screen_y = center_y - project(view.y)`). The
+  fast3d frontend computes `(v0-v1)x(v2-v1) = -(a x b)` in Y-UP and rejects
+  `G_CULL_BACK` at `cross >= 0` (`saturn_fast3d_frontend.c:698`); this site
+  computes `a x b` in Y-DOWN, and the Y flip negates once more, so the two
+  are the SAME quantity and need the SAME predicate. Owner-confirmed live:
+  Mario now faces the direction he moves in all four directions.
+- **Why culling and not ordering:** VDP1 has no Z-buffer and Mario's whole
+  body falls inside one 128-unit actor painter bin (`actor_depth_bin`), so
+  front and back faces of a body part share a meshlet and emit in bake order.
+  Depth ordering cannot separate them at any granularity the bins offer;
+  culling is the only mechanism that can. An intra-meshlet ordering change
+  was tried first and correctly failed.
+- **Evidence, all offline against the real `src/engine/math_util.c`:** the
+  Q16 sine table matches true sin/cos with 0 mismatches; the Mario object
+  transform reproduces `mtxf_rotate_zxy_and_translate` to 0.99 world units at
+  pitch=roll=0; the pose chain reproduces `geo_process_animated_part`
+  composition to 0.011 degrees; a cull census over a yaw sweep shows the
+  predicate is live and rejects 60.8% of 644 primitives (19.7% are zero-area
+  at integer screen resolution and are dropped by either sign). Those cleared
+  the geometry entirely and left culling as the only candidate. The census
+  does NOT label which half survives -- a keep rate carries no near/far tag;
+  that claim rests on the derivation.
+- **Known remaining:** Mario's facing is still wrong during the sudden-stop
+  animation. Cause identified, not yet fixed: `demo_transform_mario_vertex`
+  rotates by yaw only, while the original rotates by all three of `gfx.angle`
+  in ZXY order, and `mario_actions_moving.c:604` sets `gfx.angle[0]` from
+  `oMarioWalkingPitch` (`:707` sets `angle[2]` from floor slope). Measured
+  divergence from the original: exact at pitch=roll=0, up to 160 world units
+  -- Mario's full height -- at a quarter turn. A verified patch exists but
+  needs ~432 B of HWRAM that is not available (baseline margin 8,180 B
+  against a 7,936 B floor).
+- **Convention split left open:** generic actors (`saturn_demo_render.c:5011`)
+  still reject `cross <= 0` in the same Y-down space -- now the opposite
+  predicate from Mario's.
+
+- **BOB checkerboard elevator was bundle-compiled and invisible because the
+  identity registry dropped it.** Family 47 / `MODEL_CHECKERBOARD_PLATFORM`
+  had a compiled bank at generation 97 (3,328 B texture, 12 draw records) but
+  no registry row, and an unregistered model is never submitted. Root cause is
+  two support verdicts for one fact: `actor_source.py::SUPPORTED_GEO_NODES`
+  rejected the geo for `GEO_CULLING_RADIUS`, while `actor_variant_bank.py`
+  explicitly accepts that node as `scene-admission-culls` and
+  `dl_rigid_groups.py` lists it as structural. `gen_actor_identity_registry.py`
+  consults the family report's flag *before* the compiled set, and the bundle
+  selects by the `BOB_DIRECT_TEXTURED_KEYS` allowlist rather than that flag --
+  so the disagreement was invisible until the registry joined them. Traced
+  statically (bundle report -> `actor-families.json` -> generated
+  `actor_identity_registry.h`), which settled "missing submission vs occlusion"
+  without an emulator.
+- **Fix:** `GEO_CULLING_RADIUS` added to `SUPPORTED_GEO_NODES`. It carries no
+  geometry and this port culls at cluster granularity. No renderer or runtime
+  change. Generation 97 stays immutable; this ships as generation 98
+  (`fc2d2bbb622189f4`, `sourceboot-bob-manual`).
+- **Static evidence on the real build:** registry 45 -> **47** rows (`0x00CA`
+  for both `bhvCheckerboardElevatorGroup` and `bhvCheckerboardPlatformSub`);
+  46/47 families supported (12 flipped; only RED_FLAME's
+  `GEO_BRANCH_AND_LINK` remains); **28 banks unchanged**, texture/CLUT
+  39,424/7,648 unchanged, bundle payload +80 B; HWRAM `___end` byte-identical,
+  margin **8,180 B** unchanged -- the registry table is CART rodata
+  (`0x2272303c`, +96 B), not HWRAM.
+- **Live evidence (cache ON, elevator route, pitch sweep):** route passes; both
+  children observed live at every label. Spatially matched rows with Mario
+  within 1,500 u of the elevator: actor primitives/frame median 161.0 -> 173.5
+  (+12.5), `vdp1_commands_last` median 632 -> 651 (+19). That matches one
+  12-primitive child in frustum (the pair moves in opposition 290 u apart).
+  **Consistent with submission; not proof of drawing.** No capture frames the
+  pit -- route-final looks from the bridge away from it. Visibility gate OPEN.
+- Frozen expectations that encoded the wrong verdict followed the fix:
+  `test_actor_material_v2.py`'s admission map (now only family 20) and
+  `fixtures/bob_actor_effect_oracle_v1.json` (recomputed from the regenerated
+  family report: two hashes rebound, eight `GEO_CULLING_RADIUS` records
+  dropped, written as a text edit to avoid array-reflow churn). Build-mandated
+  oracle trio and the elevator/admission tests PASS.
+- **Open:** an unobstructed view to confirm drawing; generic actor lowering is
+  yaw-only while the platform rotates pitch; and the hardening this defect
+  class needs -- assert the family report's verdict agrees with what the bundle
+  actually compiled, so a built bank can never be silently unregistered again.
+  Evidence: `docs/saturn/evidence/captures/2026-09-09-terrain/elevator-g98-*`.
+
+- Candidate: admit BOB's checkerboard elevator asset through the existing generic actor bundle. Its behavior and collision ran while a missing textured-model admission suppressed the platform drawing. Bind the original capture and account for 3,584 bytes of texture/CLUT within the unchanged VDP1 pool; no runtime buffers grow. Live visibility and rotating-platform orientation are pending verification.
+
+- Candidate: use bounded terrain-plane constraints when ordering actors against large terrain faces. A long bridge sorted at its far edge previously painted before nearby coins underneath; only polygons wholly behind a separating terrain plane move earlier. Keep partial visibility and source coin behavior. Reuse the existing slave emission context; move renderer, pose-pool and door initialization into the authorized cold CART section to fund the bounded records. Live bridge/underpass comparisons confirm covered coins are hidden and exposed coins still render. Opening cadence costs roughly6-7% (6.67FPS cache off,6.08FPS on); the12FPS goal remains open.
+
+
+- Candidate: reuse terrain BSP tie ranks while integer camera position is unchanged, and invalidate on renderer reset. This avoids re-traversing static terrain at rest without retaining stale ranks after movement. Live entrance view preserves the continuous deck. Opening cadence recovers from6.80 to7.16FPS with cache emulation off, and from6.17 to6.49FPS with it on; moving-camera savings and actor occlusion remain unproven.
+
+- Candidate: preserve camera-dependent BSP order when terrain shares a depth bin. Static leaf/source-ID ties painted the rock wall and ground over the spawn bridge deck, making it appear see-through. Reuse existing rank storage and draw commands; no added terrain geometry. Manual captures can now select SH-2 cache emulation explicitly and turn the camera after reaching a checkpoint.
+
+- Candidate: bake paired terrain tiles using all four compiled UV corners. The old triangle-only bake was bound to a reordered quad, stretching the wrong texture region across the bridge and other paired surfaces. Reuses the existing quad sampler without increasing texture/CLUT residency or runtime command count; live comparison preserves sampled Mario/camera states and 7.16 FPS; fence mapping improves, while coarse bridge texture and missing terrain remain open. The standalone BOB tile CLI now requires --mesh so its bake matches the renderer.
+
+- Terrain clipping removes repeated ring positions before choosing draw count: stored triangles could otherwise become false pentagons and emit two full-texture draws. Focused regression and live comparison pass; sampled commands decrease and false splits disappear, while opening FPS remains 7.16 and broader warping/occlusion remain open.
+
+- Candidate: admit King Bob-omb through the existing actor bundle. Keep his held-Mario callback in the source graph while baking its geometry-neutral node, and normalize only the terminal root close whose depth is restored by GEO_END. Increase the existing LWRAM phase union to 6,144 bytes for his measured two-lane workspace; no new package format or actor-specific renderer. Live boss interaction remains unproven.
+
+- Correct sky bitmap red/blue bit order to Saturn RGB1555. Enabling the previously hidden VDP2 layer exposed an orange sky; the packer used reversed hardware channels, and its old test helper repeated that mistake. Literal primary-color tests now cover both direct and CLUT sky output.
+
+- Assign the existing VDP2 sky layer visible priority 1. Priority 0 suppressed its pixels instead of placing it behind the scene; sprite/HUD priorities and VRAM allocation remain unchanged. Live comparison preserves input and cadence; sky vertical alignment remains open.
+
+- Allow manual input without route replay and add `sourceboot-bob-manual-v1.json` with no autoplay. Direct BOB startup never needed replay; the old Make guard unnecessarily forced manual builds through a 600-tick automated route. Existing replay profile remains available for comparisons.
+
+- Candidate: defer animated-part source matrices until a callback or native child needs them, retaining exact existing composition and animation advancement to avoid work used only by suppressed display lists. Focused Q16 oracle passes; target/live validation pending.
+
+- Replace byte comparisons of unused texture mappings with equivalent unsigned field checks; repeated publication validation was expensive on SH-2. Live candidate b55ea35e169327c0 reaches 7.10/6.96 FPS with matching replay evidence.
+
+### Changed
+- Candidate texture-publication checks OR the five padding-free scalar fields
+  of unused records instead of rebuilding zero objects and calling memcmp.
+  All byte-zero, generation, commit and lookup checks remain intact. A focused
+  publication mode tests 512 bit corruptions; the fixture now uses the shared
+  Yaul host type to avoid a duplicate declaration. The full historical bundle
+  census is still incompatible with current content; live performance is pending.
+- Candidate native geometry skips N64 wire-matrix allocations/copies and
+  master-list batching while display submission is already suppressed. Source
+  callbacks and Q16 observations remain active, and the unsuppressed interpreter
+  path retains its original allocations. Saturn LOD now states its existing
+  zero-distance policy before reading a discarded wire slot. Live comparison
+  reaches 6.8235 FPS opening / 6.6667 later, with identical images and
+  199 matching reported gameplay ticks.
+- Candidate native geometry now defers intermediate float-matrix copies until
+  a callback or held-shadow consumer needs them. Camera, object and held-object
+  publications remain eager; clean slots preserve callback edits. This targets
+  measured conversion cost without changing traversal or display-list output.
+  Host cache/consumer checks pass. The candidate reaches 6.7969 FPS opening /
+  6.6412 later with identical screenshots and 199 matching reported replay ticks.
+- Begin the owner-authorized cold-code placement pass: an explicit section
+  list moves infrequently executed camera/actor routines into the existing
+  SOURCE.DAT cartridge image to recover HWRAM for faster compilation.
+  The linker enforces the approved 160 KiB ceiling and existing heap floors;
+  the fragment is included in build identity. Placement moved 70,272 bytes,
+  retained the prior 6.2366 FPS route result and passed memory/address checks.
+- Use broader sourceboot O2 with vanilla camera.c kept at Os. The native
+  fixed-camera role bypasses most vanilla camera work on the current profile;
+  this exception saves roughly 13 KiB HWRAM compared with global O2, making
+  the wider speed policy viable without relaxing the heap reserve. The live
+  candidate reaches 6.6923 FPS opening / 6.5909 later, with 199 replay ticks
+  matching reported gameplay state and 11,764 HWRAM bytes remaining.
+- Candidate matrix multiply checks a proven whole-matrix bound before using
+  plain 64-bit accumulation, reducing per-product overflow branches while
+  retaining the original saturating fallback, narrowing flags and aliasing.
+  The comparable route improved from 5.9386 to 6.0 FPS, with unchanged
+  narrowing results in the focused oracle; the 12 FPS goal remains open.
+- Evaluate target-only `-O2` in four measured hot renderer/geo/pose/culling
+  files. Global O2 exceeded physical HWRAM by 81,968 bytes and was reverted;
+  the smaller transplant retains existing memory floors and feature switches.
+  The narrow candidate measured 6.2366 FPS and enabled the later placement pass.
+
+- Feed the integer square-root kernel's radicand through constant shifts.
+  Its two counter-driven loops compiled to 24 SH-2 variable-shift helper calls
+  per square root at `-Os`, despite the old comment claiming constant shifts.
+  The same restoring algorithm and rounding remain; this removes helper-call
+  overhead without reducing gameplay precision. The comparable Ymir route
+  measured 5.8586 to 5.9386 mean FPS; this is still below the 12 FPS target.
+
 ### Added
 
 - **The audio policy tick was scanning 11,400 slots per tick regardless of how
@@ -134,103 +317,6 @@
   fixed; no behaviour change in this commit.
 
 ### Fixed
-
-- **Mario rendered facing the wrong direction for six weeks because every fix
-  edited a dead copy of the back-face cull.** `demo_classify_mario_range`
-  (`saturn_demo_render.c:1598`) is unreachable: its only caller is
-  `demo_dispatch_mario_transform` (:1722), whose sole occurrence in the file
-  is its own definition -- and `tools/saturn/dual_actor_worker_test.c:179`
-  actively asserts that call is absent from `demo_render_prepare_publish`.
-  The live classifier is `demo_actor_queue_classify` (:2916), reached through
-  `demo_actor_lower_compat_wrapper` (:3923) registered in the render-job
-  callback table (:3937); `demo_actor_queue_assemble_done` (:3030, called
-  from `demo_render_finalize` :5540) then overwrites `s_actor_refs` with its
-  records. **The `__attribute__((unused))` markers sit on the LIVE functions**
-  -- they are only reached via function pointers -- **and not on the dead
-  one.** That inverted signpost is the whole story: the 2026-09-03 sign flip
-  and a 2026-09-09 retry both reported "changed nothing", correctly, because
-  nothing they changed ran.
-- **Fix:** the live cull now rejects `cross >= 0`, matching the port's own
-  N64 semantics. Derivation, with the step that was missing before: this site
-  reads `projected`, which `sm64_saturn_ir_project_view` builds Y-DOWN
-  (`saturn_ir_transform.c:53`, `screen_y = center_y - project(view.y)`). The
-  fast3d frontend computes `(v0-v1)x(v2-v1) = -(a x b)` in Y-UP and rejects
-  `G_CULL_BACK` at `cross >= 0` (`saturn_fast3d_frontend.c:698`); this site
-  computes `a x b` in Y-DOWN, and the Y flip negates once more, so the two
-  are the SAME quantity and need the SAME predicate. Owner-confirmed live:
-  Mario now faces the direction he moves in all four directions.
-- **Why culling and not ordering:** VDP1 has no Z-buffer and Mario's whole
-  body falls inside one 128-unit actor painter bin (`actor_depth_bin`), so
-  front and back faces of a body part share a meshlet and emit in bake order.
-  Depth ordering cannot separate them at any granularity the bins offer;
-  culling is the only mechanism that can. An intra-meshlet ordering change
-  was tried first and correctly failed.
-- **Evidence, all offline against the real `src/engine/math_util.c`:** the
-  Q16 sine table matches true sin/cos with 0 mismatches; the Mario object
-  transform reproduces `mtxf_rotate_zxy_and_translate` to 0.99 world units at
-  pitch=roll=0; the pose chain reproduces `geo_process_animated_part`
-  composition to 0.011 degrees; a cull census over a yaw sweep shows the
-  predicate is live and rejects 60.8% of 644 primitives (19.7% are zero-area
-  at integer screen resolution and are dropped by either sign). Those cleared
-  the geometry entirely and left culling as the only candidate. The census
-  does NOT label which half survives -- a keep rate carries no near/far tag;
-  that claim rests on the derivation.
-- **Known remaining:** Mario's facing is still wrong during the sudden-stop
-  animation. Cause identified, not yet fixed: `demo_transform_mario_vertex`
-  rotates by yaw only, while the original rotates by all three of `gfx.angle`
-  in ZXY order, and `mario_actions_moving.c:604` sets `gfx.angle[0]` from
-  `oMarioWalkingPitch` (`:707` sets `angle[2]` from floor slope). Measured
-  divergence from the original: exact at pitch=roll=0, up to 160 world units
-  -- Mario's full height -- at a quarter turn. A verified patch exists but
-  needs ~432 B of HWRAM that is not available (baseline margin 8,180 B
-  against a 7,936 B floor).
-- **Convention split left open:** generic actors (`saturn_demo_render.c:5011`)
-  still reject `cross <= 0` in the same Y-down space -- now the opposite
-  predicate from Mario's.
-
-- **BOB checkerboard elevator was bundle-compiled and invisible because the
-  identity registry dropped it.** Family 47 / `MODEL_CHECKERBOARD_PLATFORM`
-  had a compiled bank at generation 97 (3,328 B texture, 12 draw records) but
-  no registry row, and an unregistered model is never submitted. Root cause is
-  two support verdicts for one fact: `actor_source.py::SUPPORTED_GEO_NODES`
-  rejected the geo for `GEO_CULLING_RADIUS`, while `actor_variant_bank.py`
-  explicitly accepts that node as `scene-admission-culls` and
-  `dl_rigid_groups.py` lists it as structural. `gen_actor_identity_registry.py`
-  consults the family report's flag *before* the compiled set, and the bundle
-  selects by the `BOB_DIRECT_TEXTURED_KEYS` allowlist rather than that flag --
-  so the disagreement was invisible until the registry joined them. Traced
-  statically (bundle report -> `actor-families.json` -> generated
-  `actor_identity_registry.h`), which settled "missing submission vs occlusion"
-  without an emulator.
-- **Fix:** `GEO_CULLING_RADIUS` added to `SUPPORTED_GEO_NODES`. It carries no
-  geometry and this port culls at cluster granularity. No renderer or runtime
-  change. Generation 97 stays immutable; this ships as generation 98
-  (`fc2d2bbb622189f4`, `sourceboot-bob-manual`).
-- **Static evidence on the real build:** registry 45 -> **47** rows (`0x00CA`
-  for both `bhvCheckerboardElevatorGroup` and `bhvCheckerboardPlatformSub`);
-  46/47 families supported (12 flipped; only RED_FLAME's
-  `GEO_BRANCH_AND_LINK` remains); **28 banks unchanged**, texture/CLUT
-  39,424/7,648 unchanged, bundle payload +80 B; HWRAM `___end` byte-identical,
-  margin **8,180 B** unchanged -- the registry table is CART rodata
-  (`0x2272303c`, +96 B), not HWRAM.
-- **Live evidence (cache ON, elevator route, pitch sweep):** route passes; both
-  children observed live at every label. Spatially matched rows with Mario
-  within 1,500 u of the elevator: actor primitives/frame median 161.0 -> 173.5
-  (+12.5), `vdp1_commands_last` median 632 -> 651 (+19). That matches one
-  12-primitive child in frustum (the pair moves in opposition 290 u apart).
-  **Consistent with submission; not proof of drawing.** No capture frames the
-  pit -- route-final looks from the bridge away from it. Visibility gate OPEN.
-- Frozen expectations that encoded the wrong verdict followed the fix:
-  `test_actor_material_v2.py`'s admission map (now only family 20) and
-  `fixtures/bob_actor_effect_oracle_v1.json` (recomputed from the regenerated
-  family report: two hashes rebound, eight `GEO_CULLING_RADIUS` records
-  dropped, written as a text edit to avoid array-reflow churn). Build-mandated
-  oracle trio and the elevator/admission tests PASS.
-- **Open:** an unobstructed view to confirm drawing; generic actor lowering is
-  yaw-only while the platform rotates pitch; and the hardening this defect
-  class needs -- assert the family report's verdict agrees with what the bundle
-  actually compiled, so a built bank can never be silently unregistered again.
-  Evidence: `docs/saturn/evidence/captures/2026-09-09-terrain/elevator-g98-*`.
 
 - **Suppress the redundant PLAY_REFRESH re-emit — worth +0.31%, not the fix it
   was predicted to be.** `publish_bank()` re-asserted the already-playing sound

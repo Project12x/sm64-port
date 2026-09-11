@@ -83,10 +83,16 @@ class InventoryActorFamilyBundlesTest(unittest.TestCase):
             "future_repartition_bytes": 24864,
             "future_repartition_margin_bytes": 27808,
         })
+        # Pre-existing failure, not related to the VDP1 correction above:
+        # BOB_MAXIMUM_SCRATCH_BYTES went 3,267 -> 5,891 for King Bob-omb's
+        # two-lane pose in an earlier, still-uncommitted change, which rounds
+        # workspace_capacity_bytes to 6,144. This expectation was left on the
+        # old 3,072 and has been red in the working tree since. used_bytes is
+        # this test's own synthetic input and is unchanged.
         self.assertEqual(report["workspace"], {
             "used_bytes": 2915,
-            "capacity_bytes": 3072,
-            "margin_bytes": 157,
+            "capacity_bytes": 6144,
+            "margin_bytes": 3229,
         })
 
     def test_zero_cost_floor_is_explicit_and_all_one_unit_overflows_are_named(self) -> None:
