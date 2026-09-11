@@ -64,6 +64,27 @@ _KNOWN = {
     "gsDPSetTextureImage", "gsDPLoadSync", "gsDPLoadBlock", "gsDPSetTile",
     "gsDPTileSync", "gsDPSetTileSize", "gsDPLoadTextureBlock",
     "gsDPSetEnvColor", "gsDPSetAlphaCompare",
+    # RDP pipeline state carried by LEVEL-embedded models (levels/bob/...),
+    # which actors/ models do not emit. Added 2026-09-10 to admit BOB's
+    # seesaw platform; the chain chomp gate needs the same set.
+    #
+    # This walker exists to decide rigid GROUPING -- its own comment above
+    # says an unmodelled command is poisoned because it "may have moved the
+    # matrix". None of these five can: they touch neither the matrix stack,
+    # the vertex buffer, nor triangle emission. They are listed individually
+    # rather than as a blanket gsDP* rule so that a genuinely unmodelled
+    # command still poisons.
+    #
+    #   gsDPSetCycleType   RDP 1-cycle/2-cycle pipeline mode; VDP1 has no
+    #                      equivalent pipeline concept.
+    #   gsDPSetRenderMode  RDP blender/AA/Z mode. This port selects materials
+    #                      by COMBINE mode (actor_material_v2.py), and VDP1
+    #                      has neither a Z-buffer nor this blender.
+    #   gsDPSetDepthSource Chooses the Z source; there is no Z-buffer.
+    #   gsDPSetFogColor    Fog colour, and
+    #   gsSPFogPosition    fog near/far. The port implements no fog.
+    "gsDPSetCycleType", "gsDPSetRenderMode", "gsDPSetDepthSource",
+    "gsDPSetFogColor", "gsSPFogPosition",
 }
 
 # Geo-layout nodes that introduce a transform: each one starts a new rigid

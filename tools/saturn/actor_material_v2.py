@@ -32,6 +32,24 @@ from bake_castle_uv import pack_clut16, quantize_clut16, sample_triangle
 # shape: adding or removing a closure family renumbers it and every key here
 # must be re-derived together with the capture digests below.
 BOB_DIRECT_TEXTURED_KEYS = (
+    # BOB seesaw platform -- the pivoting plank bridge on the route to the
+    # mountain, reported missing 2026-09-10. Like the elevator below it was
+    # never a capability gap: family 1 is `supported: true` in the family
+    # report, its combine mode G_CC_MODULATERGB is already accepted, and its
+    # GEO_CULLING_RADIUS became a supported node on 2026-09-09. It simply had
+    # no key here, so gen_actor_identity_registry.py emitted no row and
+    # saturn_source_observe_object_begin() refused the model outright -- the
+    # object pivoted and collided while drawing nothing.
+    (1, 0x0037),
+    # BOB chain chomp gate -- the wooden barrier the chomp smashes, reported
+    # missing alongside the seesaw. Second level-embedded model admitted, so
+    # it inherits the RDP-state and G_FOG acceptances added for the seesaw.
+    # Unlike the seesaw it carries ALPHA and EFFECT capabilities
+    # (bhvWhitePuffExplosion), so its layer resolves through the cutout path
+    # rather than the opaque one.
+    (12, 0x0036),
+    (47, 0x00CA),  # BOB checkerboard elevator, existing rigid textured source.
+    (42, 0x0056),  # King Bob-omb; source-owned attachment callback is retained.
     (4, 0x00CD), (5, 0x00D7), (6, 0x00DB), (7, 0x00BC), (8, 0x008F),
     (9, 0x0076), (13, 0x00A3),
     (18, 0x00A4), (19, 0x00C9), (21, 0x00A8), (24, 0x007F),
@@ -158,6 +176,27 @@ _CATEGORY_LABELS = {
 # SHA-256 over canonical category JSON, so a source/state change cannot gain
 # admission merely by remaining syntactically valid.
 _EXPECTED_CAPTURE_HASHES: dict[tuple[int, int], str] = {
+    # BOB seesaw platform (the pivoting plank bridge), approved 2026-09-10.
+    # Measured by the bake on first admission. What it covers, so a future
+    # reader knows what was signed off rather than just that a hash matched:
+    # combine G_CC_MODULATERGB / G_CC_PASS2 then G_CC_SHADE, one diffuse light
+    # plus ambient, LAYER_OPAQUE, a single 32x32 generic_09006000 tile, and
+    # the level-model RDP state (G_FOG set/cleared, cycle type, render mode,
+    # depth source, fog colour/position) that is accepted-and-ignored -- see
+    # _geometry_modes and _material_command. Fog is the one visible
+    # degradation: the plank bakes unfogged, matching the surrounding BOB
+    # terrain, which is already unfogged.
+    (1, 0x0037): "fabfd1867bbb421c1480046191520aba5eeeb81dfdb4897148c3326cd7b25de9",
+    # BOB chain chomp gate, approved 2026-09-10. Same level-model RDP state as
+    # the seesaw above (G_FOG, cycle type, render mode, depth source, fog
+    # colour/position -- all accepted-and-ignored), but this source is
+    # LAYER_ALPHA with G_CC_DECALRGBA, so it resolves to the cutout layer and
+    # keeps binary transparency rather than the opaque recipe. Its
+    # bhvWhitePuffExplosion effect is owned by the existing effect path and is
+    # not part of this material.
+    (12, 0x0036): "1f2f30c1397e6b8eef54145a4283c71a1f067a73e81f013dfc89cd9e57653758",
+    (47, 0x00CA): "c5de7c417a3aa277e2c3aabd4918813ad9ff6150b025682644c8f07d5b59f57e",
+    (42, 0x0056): "8ae345f5bda7b41b1907d0fee6d01659bc09c0a06c028079620008b73ca4cf65",
     (4, 0x00CD): "5effdad14956faaf30891aa37c1a749334b2eec6c86561a3521bc789456636de",
     # The three BOB coin variants.  Same actors/coin/geo.inc.c GEO_SWITCH_CASE
     # over four flat display lists; the per-frame state is one integer, so no
@@ -381,6 +420,22 @@ def _target_material(signature: MaterialSignatureV2) -> TargetMaterialV2:
         )
     layer, alpha = _target_layer(signature)
     combiner = signature.combine_mode
+    # G_CC_PASS2 as the SECOND cycle is the standard two-cycle idiom: cycle 1
+    # does the work, cycle 2 passes its result through unchanged. Normalise it
+    # to the doubled form the table below is written in, so (X, G_CC_PASS2)
+    # and (X, X) resolve to one recipe instead of needing paired entries.
+    #
+    # Level-embedded models (levels/bob/...) write the PASS2 form; actors/
+    # models write the doubled form, which is why no admitted actor needed
+    # this before the seesaw and the chain chomp gate on 2026-09-10. Doing it
+    # here rather than per-pair means the next level model does not add a
+    # third variant of every row.
+    #
+    # Only the second cycle is collapsed: G_CC_PASS2 appearing as cycle ONE
+    # would mean something quite different and still falls through to the
+    # unapproved error below.
+    if len(combiner) == 2 and combiner[1] == "G_CC_PASS2":
+        combiner = (combiner[0], combiner[0])
     # Actors bake FLAT. Owner decision 2026-09-01: "character models don't have
     # to be lit -- we just do flat with no lighting."
     #

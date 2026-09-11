@@ -45,12 +45,11 @@ enum {
      * screen with no fault reported by either CPU. A build error is a much
      * cheaper way to learn that.
      *
-     * 3072 -> 3328 (2026-09-03) to admit that roster for real. The ceiling is
-     * sizeof(sm64_saturn_scene_package_view_t) == LIFETIME_BYTES below, which
-     * the union in source_scene_bundle.c overlays this on, so everything up to
-     * 3,348 B is free; past that the boot view must grow first. */
-    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES = 3328U,
-    SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES = 3348U,
+     * King Bob-omb needs 5,891 B, rounded to 6,144. The LWRAM phase union
+     * holds the larger of this workspace, the boot view and Mario context;
+     * their sequential ownership is unchanged. No boot-view fields grow. */
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_WORKSPACE_BYTES = 6144U,
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_LIFETIME_BYTES = 6144U,
     /* Boot staging for ONE actor bank's texture or CLUT payload, borrowed
      * from the idle command bank (53,248 B, so this is free space, not a
      * budget). preflight_span() in saturn_actor_texture_residency.c rejects
@@ -63,8 +62,17 @@ enum {
      * MODEL_GOOMBA's texture bank at 3,584 B, over the old value. This is a
      * PER-BANK limit, not a total -- growing the roster with small actors
      * never trips it, and one large actor trips it alone.
-     * compile_actor_family_bundle.py enforces the relationship at bake time. */
-    SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES = 4096U,
+     * compile_actor_family_bundle.py enforces the relationship at bake time.
+     *
+     * 4096 -> 6144 (2026-09-10): MODEL_BOB_SEESAW_PLATFORM's texture bank is
+     * 4,608 B. Rounded up to 6,144 to match the workspace above rather than
+     * tracking each actor by 512 B; the space is still borrowed from the idle
+     * command bank, so the only cost is that a bank between 4,608 and 6,144 B
+     * no longer fails the bake. That enforcement is what makes this safe to
+     * round: the 2026-09-03 note above was written after two of these limits
+     * silently black-screened the console, and the bake now names the exact
+     * constant and byte count instead. */
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_UPLOAD_STAGE_BYTES = 6144U,
 };
 
 bool sm64_saturn_source_scene_bundle_bind_workspace(void *workspace,

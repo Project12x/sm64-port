@@ -22,7 +22,9 @@ UINT32_MAX = (1 << 32) - 1
 # what black-screened MODEL_GOOMBA -- see the note in source_scene_bundle.h.
 # The runtime constant is now 3,328 and compile_actor_family_bundle.py proves
 # the relationship at bake time instead of leaving it to be rediscovered.
-BOB_MAXIMUM_SCRATCH_BYTES = 3267
+# King Bob-omb's measured two-lane requirement; the LWRAM phase union grows
+# to the rounded capacity, retaining the existing sequential lifetime owners.
+BOB_MAXIMUM_SCRATCH_BYTES = 5891
 ACTOR_WORKSPACE_GRANULE_BYTES = 256
 BOB_WORKSPACE_CAPACITY_BYTES = (
     BOB_MAXIMUM_SCRATCH_BYTES + ACTOR_WORKSPACE_GRANULE_BYTES - 1
@@ -76,13 +78,55 @@ class ResourceLimits:
     # They were stopped by two hand-maintained RUNTIME capacities that nothing
     # compared against the bake: the 3,072 B workspace and the 2,560 B boot
     # upload stage. Both are now raised and both are bake-enforced.
-    actor_texture_bytes: int = 32256
-    actor_clut_bytes: int = 6528
-    shared_post_command_gouraud_bytes: int = 446432
+    # King Bob-omb adds measured 3,840 texture + 864 CLUT bytes within the
+    # same total VDP1 allowance; 9,184 bytes remain after admission.
+    # Checkerboard elevator: +3,328 texture / 256 CLUT bytes, leaving
+    # 5,600 bytes in the unchanged pool. No runtime arena grows.
+    # 39424 -> 44032 (2026-09-10): MODEL_BOB_SEESAW_PLATFORM adds a 4,608 B
+    # texture bank. As the note above says, this number is set EQUAL to current
+    # residency, so it is not "full" -- every new actor overflows it by
+    # construction and the raise is bookkeeping, not a hardware finding. The
+    # real VDP1 arena is 64,960 B (see the note above), so 44,032 still leaves
+    # ~20,900 B unclaimed and this pool remains the conservative model it has
+    # always been rather than the binding constraint.
+    # 44032 -> 45056 (2026-09-10): the chain chomp gate's +1,024 B.
+    actor_texture_bytes: int = 45056
+    # 7648 -> 8032 -> 8096 (2026-09-10): the seesaw platform's +384 B and the
+    # chain chomp gate's +64 B of CLUT, both measured by the bake.
+    actor_clut_bytes: int = 8096
+    # 446432 -> 458720 (2026-09-10), which moves the derived actor pool below
+    # from 52,672 to 64,960 B and is what finally admitted the chain chomp gate.
+    #
+    # This field is "VDP1 bytes after the command table AND the Gouraud tables",
+    # and 446,432 double-subtracted the Gouraud allocation: the real partition
+    # is 524,256 - 53,248 (cmdt) - 12,288 (gouraud) = 458,720, and 446,432 is
+    # exactly 458,720 - 12,288. Two independent in-repo statements already said
+    # so -- the 2026-09-03 note above ("the real partition has 64,960 B
+    # remaining, not the 52,672 B modelled here") and the same arithmetic in the
+    # project's VDP1 notes. Correcting it makes the derived remainder match
+    # both: 458,720 - 393,760 = 64,960.
+    #
+    # Why this is safe to correct rather than merely conservative to leave: this
+    # model is BAKE-TIME bookkeeping. The runtime does not allocate from it --
+    # source_scene_bundle.c copies the REAL partitions->texture_size /
+    # clut_size, and saturn_actor_material.c bounds-checks every mapping against
+    # them. If this number were ever too generous the failure would be a loud
+    # runtime rejection at bundle publication, not silent VRAM corruption.
+    #
+    # 446,432 also appears as a bare constant in bake_bob_tiles.py and
+    # bake_bob_bsp_fragments.py with no derivation. Those govern TERRAIN
+    # residency and are deliberately left alone here; if they share this
+    # off-by-one-allocation they are separately conservative, which is the safe
+    # direction, and changing them would re-bake terrain for no current need.
+    shared_post_command_gouraud_bytes: int = 458720
     terrain_texture_bytes: int = 333696
     mario_texture_bytes: int = 25600
     terrain_clut_bytes: int = 34464
-    existing_vdp1_remaining_bytes: int = 52672
+    # Derived: shared_post_command_gouraud_bytes - (terrain texture + mario
+    # texture + terrain CLUT) = 458,720 - 393,760. The reservation equation in
+    # prove_resource_inventory asserts exactly that, so these two move together
+    # or the bake fails. 52,672 -> 64,960 (2026-09-10); see the note above.
+    existing_vdp1_remaining_bytes: int = 64960
     # Generic-bundle design: the emitted scene maximum is rounded up to 256 B.
     workspace_capacity_bytes: int = BOB_WORKSPACE_CAPACITY_BYTES
     cart_bytes: int = 4 * 1024 * 1024
@@ -135,10 +179,21 @@ def prove_resource_inventory(
         ("bundle bytes", bundle_bytes), ("workspace bytes", workspace_bytes),
     ):
         _u32(value, label)
+    # Name the measured value and the constant to raise. These budgets are set
+    # equal to current residency, so admitting ANY actor trips them by
+    # construction -- a bare "budget exceeded" makes a routine, expected step
+    # look like a hardware limit and costs a round trip to measure. The upload
+    # stage check in compile_actor_family_bundle.py already reports its bytes
+    # this way; these two were the last that did not.
     if texture_bytes > limits.actor_texture_bytes:
-        raise ValueError("texture budget exceeded")
+        raise ValueError(
+            f"texture budget exceeded: bundle needs {texture_bytes} B but "
+            f"ResourceLimits.actor_texture_bytes is "
+            f"{limits.actor_texture_bytes} B")
     if clut_bytes > limits.actor_clut_bytes:
-        raise ValueError("CLUT budget exceeded")
+        raise ValueError(
+            f"CLUT budget exceeded: bundle needs {clut_bytes} B but "
+            f"ResourceLimits.actor_clut_bytes is {limits.actor_clut_bytes} B")
     if workspace_bytes > limits.workspace_capacity_bytes:
         raise ValueError("workspace budget exceeded")
 
@@ -297,3 +352,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

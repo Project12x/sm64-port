@@ -220,7 +220,25 @@ def _geometry_modes(value: str, label: str) -> tuple[str, ...]:
     #
     # The mode still participates in the material signature, so a source whose
     # texgen usage changes cannot silently inherit an approved capture digest.
-    allowed = {"G_LIGHTING", "G_SHADING_SMOOTH", "G_CULL_BACK", "G_TEXTURE_GEN"}
+    # G_FOG gets the same accepted-and-ignored treatment, for the same reason
+    # and with the same safeguard (2026-09-10, BOB seesaw platform).
+    #
+    # Level-embedded models under levels/bob/ set and clear G_FOG around their
+    # geometry; actors/ models never do, which is why no previously admitted
+    # actor reached this line with it. The port draws no fog at all -- there is
+    # no fog colour, density or per-vertex blend anywhere in src/port/saturn --
+    # so accepting the mode cannot change what is drawn. As with G_TEXTURE_GEN
+    # above, only G_LIGHTING and G_CULL_BACK are ever read out of
+    # `geometry_mode`, and the mode still participates in the material
+    # signature, so a source whose fog usage changes cannot silently inherit an
+    # approved capture digest.
+    #
+    # The visible degradation is that fogged level geometry bakes unfogged:
+    # distance haze is missing. That is the existing behaviour for all BOB
+    # terrain already, so the seesaw matches its surroundings rather than
+    # standing out.
+    allowed = {"G_LIGHTING", "G_SHADING_SMOOTH", "G_CULL_BACK",
+               "G_TEXTURE_GEN", "G_FOG"}
     if not fields or any(item not in allowed for item in fields) or len(set(fields)) != len(fields):
         raise UnsupportedActorSourceError(f"unapproved geometry mode state in {label}")
     return fields
@@ -788,6 +806,49 @@ _REPRESENTABLE_LAYERS = {
 SATURN_REDUCTIONS_ENABLED = True
 
 
+def _saturn_geometry_layouts(layouts, entry):
+    """Project source-owned effects into geometry without changing node ordinals.
+
+    The runtime still traverses the original layouts. The attachment callback
+    updates a held object's position and always returns NULL; it contributes no
+    display list. Unknown callbacks remain unsupported. See the original
+    geo_update_held_mario_pos and geo_layout_cmd_end, which restores root depth.
+    """
+    result = {name: list(tokens) for name, tokens in layouts.items()}
+    reductions = []
+    if not SATURN_REDUCTIONS_ENABLED:
+        return result, reductions
+    for name, tokens in result.items():
+        for ordinal, (macro, args) in enumerate(tokens):
+            if (macro == "GEO_ASM" and
+                    _arguments(args) == ["0", "geo_update_held_mario_pos"]):
+                tokens[ordinal] = ("GEO_NODE_START", "")
+                reductions.append({"node": macro, "layout": name,
+                                   "ordinal": ordinal,
+                                   "callback": "geo_update_held_mario_pos",
+                                   "mode": "source-owned-attachment"})
+    tokens = result[entry]
+    # A root-only final close before END cannot affect a subsequent node: END
+    # restores the saved depth. Branches can change depth, so do not infer it
+    # for layouts containing them, or for a called layout ending in RETURN.
+    if not any(macro in ("GEO_BRANCH", "GEO_BRANCH_AND_LINK") for macro, _ in tokens):
+        depth = 0
+        for ordinal, (macro, args) in enumerate(tokens):
+            if macro == "GEO_OPEN_NODE":
+                depth += 1
+            elif macro == "GEO_CLOSE_NODE":
+                depth -= 1
+                if depth < 0:
+                    if (not args.strip() and ordinal == len(tokens) - 2 and
+                            tokens[-1] == ("GEO_END", "")):
+                        tokens[ordinal] = ("GEO_NODE_START", "")
+                        reductions.append({"node": macro, "layout": entry,
+                                           "ordinal": ordinal,
+                                           "mode": "terminal-root-depth-restored"})
+                    break
+    return result, reductions
+
+
 class _GeoCompiler:
     _LAYERS = _REPRESENTABLE_LAYERS
     _UNSUPPORTED = {
@@ -1316,6 +1377,29 @@ class _Fast3DCompiler:
         if macro in ("gsDPLoadSync", "gsDPTileSync"):
             if args.strip():
                 raise MalformedActorSourceError(f"malformed {macro} in {name}")
+        elif macro in ("gsDPSetCycleType", "gsDPSetRenderMode",
+                       "gsDPSetDepthSource", "gsDPSetFogColor",
+                       "gsSPFogPosition"):
+            # RDP pipeline state emitted by LEVEL-embedded models
+            # (levels/bob/...) but never by actors/ models, which is why no
+            # previously admitted actor reached this branch. Accepted and
+            # ignored, the same treatment G_TEXTURE_GEN already gets: none of
+            # these has a VDP1 equivalent, and none contributes to the
+            # material identity this bank is built from.
+            #
+            #   gsDPSetCycleType   RDP 1-/2-cycle pipeline mode.
+            #   gsDPSetRenderMode  RDP blender/AA/Z mode; material selection
+            #                      here keys on COMBINE mode, and VDP1 has no
+            #                      Z-buffer or comparable blender.
+            #   gsDPSetDepthSource Z source; there is no Z-buffer.
+            #   gsDPSetFogColor    fog colour, and
+            #   gsSPFogPosition    fog near/far -- the port draws no fog.
+            #
+            # Mirrored in dl_rigid_groups.py's _KNOWN set; the two parsers
+            # have independent vocabularies and BOTH must accept a macro or
+            # the family is dropped (the elevator's 2026-09-09 failure was
+            # exactly this disagreement, one layer up).
+            pass
         elif macro == "gsDPSetTextureImage":
             self._set_texture_image(fields, name)
         elif macro == "gsDPSetCombineMode":
@@ -1543,6 +1627,16 @@ class _Fast3DCompiler:
                     raise MalformedActorSourceError(f"malformed gsSPEndDisplayList in {name}")
             elif macro == "gsSPNumLights":
                 _require_single_light(args, name)
+            elif macro in ("gsDPSetCycleType", "gsDPSetRenderMode",
+                           "gsDPSetDepthSource", "gsDPSetFogColor",
+                           "gsSPFogPosition"):
+                # See the matching arm in _material_command: inert RDP
+                # pipeline state emitted only by level-embedded models.
+                # This walker needs its own arm because it dispatches macros
+                # before _material_command ever sees them -- the two are
+                # separate vocabularies over the same display list, which is
+                # why admitting one macro means editing more than one place.
+                pass
             else:
                 raise UnsupportedActorSourceError(f"unknown Fast3D material/list state: {macro}")
             if macro == "gsSPEndDisplayList":
@@ -1642,6 +1736,7 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
     # made a generic degradation look like a Bob-omb special case and blocked
     # every prop behind it.  The policy is now generic; see
     # SATURN_REDUCTIONS_ENABLED.
+    layouts, source_effect_reductions = _saturn_geometry_layouts(layouts, entry)
     geo = _GeoCompiler(
         layouts, entry,
         allow_saturn_reductions=SATURN_REDUCTIONS_ENABLED)
@@ -1767,7 +1862,7 @@ def _compile_geometry(index: _SourceIndex, geo_path: str, geo_root: str,
         "root_anim_scale_q16": geo.root_anim_scale_q16,
         "switch_case_by_part": {str(part): list(pair)
                                 for part, pair in sorted(geo.switch_case_by_part.items())},
-        "saturn_reductions": geo.reductions,
+        "saturn_reductions": source_effect_reductions + geo.reductions,
         "layers": [{"part_ordinal": int(item["branch_ordinal"]),
                     "layer": str(item["layer"]), "opacity": str(item["opacity"])}
                    for item in source_parts if item["layer"] != "LAYER_OPAQUE"],

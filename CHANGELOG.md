@@ -4,6 +4,56 @@
 
 ### Fixed
 
+- **BOB's pivot bridge and chain chomp gate rendered nothing; both are now
+  admitted (generation 100, registry 47 -> 49).** `MODEL_BOB_SEESAW_PLATFORM`
+  (family 1 / 0x0037) and `MODEL_BOB_CHAIN_CHOMP_GATE` (family 12 / 0x0036)
+  spawned, pivoted and collided while drawing nothing, because without a
+  `BOB_DIRECT_TEXTURED_KEYS` key they never reach the identity registry and
+  `saturn_source_observe_object_begin()` refuses an unresolved model outright.
+  Same failure as the checkerboard elevator.
+- **These are the first LEVEL-EMBEDDED models admitted**, and that, not the
+  allowlist, is why it took eight gates. Everything previously admitted came
+  from `actors/`, which emits a narrow Fast3D vocabulary; models under
+  `levels/bob/` additionally carry fog and RDP pipeline state. Accepted and
+  ignored, each justified as having no VDP1 equivalent and no effect on rigid
+  grouping or material identity: `gsDPSetCycleType`, `gsDPSetRenderMode`,
+  `gsDPSetDepthSource`, `gsDPSetFogColor`, `gsSPFogPosition`, and the `G_FOG`
+  geometry mode. Visible degradation: these models bake unfogged, matching the
+  surrounding BOB terrain, which is already unfogged.
+- **Three independent macro vocabularies** had to accept those five macros --
+  `dl_rigid_groups._KNOWN`, `actor_variant_bank._material_command`, and its
+  `walk()` -- each rejecting with the same message from a different table.
+  That is the elevator's "two producers, two verdicts" defect one layer down,
+  and it cost three round trips.
+- `G_CC_PASS2` as the second combine cycle is now normalised once rather than
+  approved pair by pair. It is the standard two-cycle idiom where cycle 2
+  passes cycle 1 through unchanged, so `(X, G_CC_PASS2)` resolves to the same
+  recipe as the already-approved `(X, X)`. Only the second cycle collapses;
+  `PASS2` as cycle one still errors.
+- Runtime capacity: `..._UPLOAD_STAGE_BYTES` 4,096 -> 6,144 for the seesaw's
+  4,608 B texture bank. Still borrowed from the idle command bank, so free.
+- **Corrected the VDP1 actor pool, which was wrong by exactly one Gouraud
+  allocation.** `shared_post_command_gouraud_bytes` means "VDP1 bytes after
+  the command table AND the Gouraud tables" but held 446,432, which is
+  458,720 - 12,288 -- it subtracted Gouraud twice. The derived actor pool was
+  therefore 52,672 B instead of the real 64,960 B, a figure this file's own
+  2026-09-03 note already stated in prose. Safe to correct because the model
+  allocates nothing: `source_scene_bundle.c` copies the real
+  `partitions->texture_size`/`clut_size` and `saturn_actor_material.c`
+  bounds-checks every mapping against them, so an over-generous number fails
+  loudly at publication rather than corrupting VRAM. The matching bare
+  `446432` constants in the two terrain bake tools are deliberately untouched:
+  being conservative there is the safe direction.
+- Actor credits, both measured by the bake rather than estimated: texture
+  39,424 -> 45,056, CLUT 7,648 -> 8,096.
+- The `texture budget exceeded` / `CLUT budget exceeded` errors now name the
+  measured bytes and the constant to raise. These budgets are set EQUAL to
+  current residency, so admitting any actor trips them by construction; a bare
+  message made a routine step look like a hardware limit and cost a round trip
+  each time. The upload-stage check already reported its bytes this way.
+- Owner-confirmed live on candidate `bee126f87ff9d97e`: both structures render,
+  and no previously working actor's textures were disturbed by the pool change.
+
 - **Deleted the unreachable Mario render path, which had absorbed six weeks of
   fixes that never ran.** `demo_dispatch_mario_transform` was never called --
   its only occurrence was its own definition, and

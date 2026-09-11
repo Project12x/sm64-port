@@ -69,19 +69,27 @@ class InventoryActorFamilyBundlesTest(unittest.TestCase):
         self.assertEqual(report["guaranteed_any_mix_count"], 15)
         self.assertTrue(all(all(value > 0 for value in row["margins"].values())
                             for row in report["individual_bank_margins"]))
+        # 2026-09-10: the three limits-derived figures moved when
+        # shared_post_command_gouraud_bytes was corrected from 446,432 to
+        # 458,720 -- it means "VDP1 bytes after the command table AND the
+        # Gouraud tables" and had double-subtracted the 12,288 B Gouraud
+        # allocation. The derived remainder is now 458,720 - 393,760 = 64,960,
+        # which matches the real partition this model had always described in
+        # prose but not in its numbers. The actor/workspace figures below are
+        # this test's own synthetic inputs and are deliberately unchanged.
         self.assertEqual(report["vdp1_residency"], {
-            "shared_post_command_gouraud_bytes": 446432,
+            "shared_post_command_gouraud_bytes": 458720,
             "existing_reservations": {
                 "terrain_texture_bytes": 333696,
                 "mario_texture_bytes": 25600,
                 "terrain_clut_bytes": 34464,
             },
             "current_binders_own_remaining": False,
-            "existing_yaul_remaining_bytes": 52672,
+            "existing_yaul_remaining_bytes": 64960,
             "actor_texture_bytes": 21120,
             "actor_clut_bytes": 3744,
             "future_repartition_bytes": 24864,
-            "future_repartition_margin_bytes": 27808,
+            "future_repartition_margin_bytes": 40096,
         })
         # Pre-existing failure, not related to the VDP1 correction above:
         # BOB_MAXIMUM_SCRATCH_BYTES went 3,267 -> 5,891 for King Bob-omb's
