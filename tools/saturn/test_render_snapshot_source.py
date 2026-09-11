@@ -181,15 +181,32 @@ def test_mario_textured_path_uses_fixed_gouraud_tables() -> None:
 
 
 def test_sourceboot_draws_reject_backfacing_mario_and_generic_actor_quads() -> None:
-    """VDP1 has no depth buffer: sourceboot must not emit hidden back faces."""
+    """VDP1 has no depth buffer: sourceboot must not emit hidden back faces.
+
+    This test used to assert `cross <= 0` for Mario, which is the predicate
+    that KEEPS back faces, and it did so for a live classifier and a dead
+    one. It therefore locked in the very defect it is named for: any correct
+    fix failed the suite. Corrected 2026-09-10.
+
+    The right predicate, derived from the port's own N64 semantics: these
+    sites read `projected`, which sm64_saturn_ir_project_view builds Y-DOWN
+    (saturn_ir_transform.c, screen_y = center_y - project(view.y)). The
+    fast3d frontend computes (v0-v1)x(v2-v1) = -(a x b) in Y-UP and rejects
+    G_CULL_BACK at cross >= 0; these sites compute a x b in Y-DOWN, and the
+    Y flip negates once more, so they are the same quantity and take the
+    same predicate.
+    """
     text = DEMO_RENDER.read_text(encoding="utf-8")
-    mario_classify = function_body(text, "demo_classify_mario_range")
     mario_queue_lower = function_body(text, "demo_actor_queue_classify")
     generic_start = text.rindex("static bool demo_generic_actor_emit(")
     generic_emit = text[generic_start:text.index("#endif", generic_start)]
-    for body in (mario_classify, mario_queue_lower):
-        assert "if (cross <= 0)" in body
-    assert "if (cross <= 0)" in generic_emit
+    # Mario and the generic actors share the space, the vertex ordering and
+    # therefore the predicate. Both were inverted; both were corrected on
+    # 2026-09-10. If either of these ever needs to differ from the other,
+    # that is a sign the two paths have drifted apart again rather than a
+    # reason to relax the assertion.
+    assert "if (cross >= 0)" in mario_queue_lower
+    assert "if (cross >= 0)" in generic_emit
 
 
 def test_non_diagnostic_bob_build_omits_optional_job_telemetry() -> None:

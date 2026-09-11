@@ -4,6 +4,28 @@
 
 ### Fixed
 
+- **Every generic actor was drawing its far shell: the back-face cull sign was
+  inverted there too.** Same defect as Mario's, same derivation. The cull at
+  `saturn_demo_render.c`'s generic actor emit reads `projected[corner]`
+  coordinates straight from `sm64_saturn_ir_transform_one`, which are Y-DOWN
+  (`saturn_ir_transform.c`, `screen_y = center_y - project(view.y)`), and uses
+  the same `a x b` vertex ordering as the Mario site. The fast3d frontend
+  computes `(v0-v1)x(v2-v1) = -(a x b)` in Y-UP and rejects `G_CULL_BACK` at
+  `cross >= 0`; the Y flip negates once more, so the two are the same quantity
+  and take the same predicate. Rejecting `cross <= 0` kept the far half.
+- **Why nobody noticed while Mario's identical bug was hunted for six weeks:**
+  the actors most often on screen are near-symmetric. A goomba's far shell
+  looks much like its near shell. King Bob-omb and the checkerboard elevator
+  are the asymmetric cases where it shows.
+- **The gate that should have caught this was asserting the defect.**
+  `test_render_snapshot_source.py`'s
+  `test_sourceboot_draws_reject_backfacing_mario_and_generic_actor_quads` --
+  named for rejecting back faces, documented "VDP1 has no depth buffer" --
+  asserted `if (cross <= 0)` for the Mario classifier *and* the generic emit.
+  Any correct fix failed the suite. It now asserts the correct predicate for
+  both, with the derivation recorded so the next reader can check it rather
+  than trust it.
+
 - **Stale frozen expectation: actor workspace capacity.**
   `test_inventory_actor_family_bundles.py` pinned `capacity_bytes: 3072` while
   `BOB_MAXIMUM_SCRATCH_BYTES` had already moved 3,267 -> 5,891 for King

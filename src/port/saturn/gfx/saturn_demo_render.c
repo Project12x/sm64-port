@@ -4976,7 +4976,27 @@ static bool demo_generic_actor_emit(const demo_actor_emit_context_t *ctx,
                         (vertices[2].y - vertices[0].y) -
                     (int32_t)(vertices[1].y - vertices[0].y) *
                         (vertices[2].x - vertices[0].x);
-                if (cross <= 0) {
+                /* Same predicate as the Mario cull, for the same reason, and
+                 * corrected with it on 2026-09-10.
+                 *
+                 * These coordinates come from projected[corner] just above,
+                 * i.e. sm64_saturn_ir_transform_one's output, which is
+                 * Y-DOWN (saturn_ir_transform.c, screen_y = center_y -
+                 * project(view.y)); and the cross below is the same
+                 * a x b ordering the Mario site uses. Same space plus same
+                 * ordering means the same predicate, and the fast3d frontend
+                 * rejects G_CULL_BACK at cross >= 0
+                 * (saturn_fast3d_frontend.c). The old `cross <= 0` kept each
+                 * actor's FAR shell, which on a near-symmetric body like a
+                 * goomba reads as merely "fine" -- the reason this sat
+                 * unnoticed while Mario's identical bug was hunted.
+                 *
+                 * Note the two counters below are incremented together for
+                 * one condition, so they cannot distinguish a back face from
+                 * a zero-area primitive. Zero-area is rejected under either
+                 * sign, so the totals stay usable; separating them is left
+                 * alone here to keep this change to one predicate. */
+                if (cross >= 0) {
                     emit_counters->reject_degenerate++;
                     emit_counters->reject_backface++;
                     emitted++;
