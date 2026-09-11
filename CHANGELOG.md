@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Terrain Gouraud shading removed (`SATURN_DEMO_TERRAIN_GOURAUD` 0).** Owner
+  decision. Terrain lowers flat; actors keep their shading. Verified visually
+  on the manual profile (build `13462b1724b2a03a`): terrain looks correct.
+  - **Landed as a simplification, NOT as a performance change.** Terrain
+    Gouraud was already all but unused: `baseline-arrays.json` (2026-09-09,
+    309 samples) records `gouraud_primitives` 278 against
+    `triangles_vdp1_emitted` 68,660 -- **0.40% of emitted primitives**. Expect
+    no measurable FPS effect, and do not build a capture to look for one.
+  - Two claims made while proposing this were wrong and are retracted. (1) It
+    is not "a saving in its own right" -- see the 0.40% above; the magnitude
+    was asserted without reading a counter that was already in the repo.
+    (2) It does not free Gouraud capacity for actors and cannot affect the
+    invisible bob-omb body: Mario and the generic actors *reserve* at
+    `saturn_demo_render.c` ~5556-5573, **before** the terrain loop at ~5597,
+    so terrain only ever consumed leftovers and could never starve them. Two
+    independent reviews caught this separately.
+  - What the removal does buy: it deletes a shared bump allocator from the
+    terrain emit path, which was the stated blocker for ever splitting that
+    loop across both CPUs.
+  - Implemented as one switch because three sites must agree or the result is
+    garbage rather than flat. `demo_resolve_terrain_command_templates()` bakes
+    the VDP1 draw mode into each template variant at load time; a template
+    baked `CC_GOURAUD` carries `PATCH_GOURAUD` and expects a per-frame GRDA
+    patch. Forcing only the runtime path would have left those commands in
+    Gouraud mode against an unpatched base address. The recovery variant needs
+    explicit routing to flat as well, since it reached the untextured material
+    via `force_gouraud` and would otherwise attempt a texture bind for a
+    record whose bind already failed.
+  - `sm64_saturn_terrain_lower_gouraud()` allocates only for `SHADE_GOURAUD`
+    and is a clean no-op otherwise, so removing the path removes the
+    allocation with no change to the flat and textured branches.
+
 ### Added
 
 - **Mario's meshlet walk now runs on the slave SH-2.** The single largest block

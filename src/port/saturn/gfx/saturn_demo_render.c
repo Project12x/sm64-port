@@ -9,6 +9,28 @@
 #define SATURN_DEMO_BSP_FRAGMENT_FLAT 0
 #endif
 
+/* Terrain Gouraud shading. Owner decision 2026-09-11: removed. Terrain lowers
+ * flat; actors keep their shading.
+ *
+ * Three sites have to agree or the result is garbage rather than flat, which
+ * is why this is one switch and not an edit at the emit site:
+ *   1. demo_resolve_terrain_command_templates() bakes the VDP1 draw mode into
+ *      each per-primitive template variant at load time. A template baked with
+ *      CC_GOURAUD carries SM64_SATURN_TERRAIN_PATCH_GOURAUD and expects a
+ *      per-frame GRDA patch.
+ *   2. demo_emit_terrain_result() picks the runtime shade path. If it says
+ *      flat while the template was baked Gouraud, the GRDA patch never runs
+ *      and the command draws CC_GOURAUD against an unpatched base address.
+ *   3. The legacy per-entry fallback in the same function.
+ * sm64_saturn_terrain_lower_gouraud() allocates only for SHADE_GOURAUD and is
+ * a clean no-op otherwise, so removing the path removes the allocation.
+ *
+ * Kept as a switch rather than deleted so the change is bisectable and the
+ * shading can be compared without reconstructing it. */
+#ifndef SATURN_DEMO_TERRAIN_GOURAUD
+#define SATURN_DEMO_TERRAIN_GOURAUD 0
+#endif
+
 /* The generic actor-instance queue is infrastructure-only until the
  * production actor cutover has a source-derived family/meshlet package. Keep
  * the feature switch visible at this boundary so feature-off builds prove
@@ -4020,12 +4042,22 @@ static void demo_resolve_terrain_command_templates(
         }
         for (uint8_t variant = DEMO_TERRAIN_TEMPLATE_BASE;
              variant < DEMO_TERRAIN_TEMPLATE_VARIANT_COUNT; variant++) {
-            const bool force_gouraud =
+            const bool force_gouraud = SATURN_DEMO_TERRAIN_GOURAUD &&
                 variant == DEMO_TERRAIN_TEMPLATE_RECOVERY;
-            const sm64_saturn_shade_path_t variant_shade_path =
+            sm64_saturn_shade_path_t variant_shade_path =
                 variant == DEMO_TERRAIN_TEMPLATE_TEXTURE_SUPPRESSED
                     ? SM64_SATURN_SHADE_FLAT_REPLACE
                     : (sm64_saturn_shade_path_t)metadata.shade_path;
+#if !SATURN_DEMO_TERRAIN_GOURAUD
+            /* The recovery variant exists to share the static UNTEXTURED
+             * material for clipped quads, and reached it via force_gouraud
+             * above. With Gouraud gone it must be sent to the flat branch
+             * explicitly -- leaving it on metadata.shade_path would try to
+             * bind a texture for a record whose texture bind already failed. */
+            if (variant == DEMO_TERRAIN_TEMPLATE_RECOVERY ||
+                variant_shade_path == SM64_SATURN_SHADE_GOURAUD)
+                variant_shade_path = SM64_SATURN_SHADE_FLAT_REPLACE;
+#endif
             bool valid = true;
             vdp1_cmdt_t command;
             memset(&command, 0, sizeof(command));
@@ -4117,13 +4149,22 @@ static void demo_emit_terrain_result(
         ((uint16_t)primitive->rgb[0] << 10) |
         ((uint16_t)primitive->rgb[1] << 5) | primitive->rgb[2]);
     uint16_t gouraud_colors[4] = {shade, shade, shade, shade};
+#if SATURN_DEMO_TERRAIN_GOURAUD
     if (sm64_saturn_terrain_result_has_post_light_shades(result))
         memcpy(gouraud_colors, command, sizeof(gouraud_colors));
+#endif
     /* The worker made this decision while it still owned classification.
      * The master reads only the compact tag: it remains the sole owner of
      * the finite Gouraud bank, command list, and final draw order. */
-    const sm64_saturn_shade_path_t shade_path =
+    sm64_saturn_shade_path_t shade_path =
         sm64_saturn_terrain_shade_path_from_compact_flags(result->clip_class);
+#if !SATURN_DEMO_TERRAIN_GOURAUD
+    /* Must match how demo_resolve_terrain_command_templates() baked this
+     * primitive's template, or the GRDA patch is skipped on a command that
+     * still carries CC_GOURAUD. Both are driven by the same switch. */
+    if (shade_path == SM64_SATURN_SHADE_GOURAUD)
+        shade_path = SM64_SATURN_SHADE_FLAT_REPLACE;
+#endif
     const bool textured = shade_path == SM64_SATURN_SHADE_TEXTURED_REPLACE;
     const sm64_saturn_terrain_resolved_command_t *const resolved =
         demo_terrain_resolved_template(result->primitive_id, recovery,
