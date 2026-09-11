@@ -4,6 +4,64 @@
 
 ### Added
 
+- **Mario's meshlet walk now runs on the slave SH-2.** The single largest block
+  of master-only work in the frame -- pose evaluate, live depth bounds, meshlet
+  core and position refs, measured at ~400k cycles/frame -- ran on a saturated
+  master while the slave was measured 100% idle in exactly that window.
+  `demo_prepare_mario` is replaced by a publish / run / join triple matching
+  the S1.11 generic-actor phase, with `demo_mario_phase_run` dispatched to the
+  slave.
+  - **The raise had to move, not just the work.** It is issued immediately
+    after the actor job is built and joined only after the generic-actor join,
+    so the master's spatial-admit -> work-order -> position-set window now
+    overlaps both phases instead of one. Moving a phase without moving its
+    raise buys nothing; the master simply waits where the work used to run,
+    which is the lesson S1.11 already recorded for the generic phase.
+  - **Both phases are claimed from a single wake-up.** `cpu_dual_slave_notify()`
+    issued while the slave is already inside `demo_actor_phase_slave_task` is
+    not guaranteed to be observed, so two dispatches would be a lost-wakeup
+    bug. The task now claims the generic phase and then Mario in one
+    invocation, in the master's join order.
+  - **Coherency.** The slave purges its own lines over `pose->vertices` and
+    `pose->light_intensity` before reading (the master rewrites the pose at the
+    same address on alternating frames); the master purges the four LWRAM
+    output buffers after the join. No publication step is needed in either
+    direction: the SH7604 cache is write-through with no write-back mode and no
+    dirty bit, so cached stores are in memory when they retire and
+    `cpu_cache_area_purge` invalidates without ever writing back. Roughly half
+    this codebase's cache comments state the opposite mechanism; the ones added
+    here do not.
+  - **`s_mario_depth_carry` is no longer master-owned.** Its comment claimed
+    "master-only" as a safety argument. That argument was about single
+    ownership, not about CPU identity, and it still holds -- but the stale
+    wording would have made the offload look unsafe to the next reader.
+  - `sm64_saturn_actor_meshlets_prepare_stats()` added as the slave entry
+    point, accumulating into a caller-owned counter block rather than the
+    master's frame profile, mirroring `prepare_bank_stats`. The existing
+    `prepare()` is now a thin wrapper over it plus the profile fold.
+  - `complete_actor_hot_arena` moved HWRAM -> LWRAM, because `pose->vertices`
+    points into it and the slave cannot safely read master-dirty cached HWRAM.
+    This costs pose-read bandwidth on the 16-bit LWRAM bus and frees 6,016 B of
+    HWRAM, which unblocks the parked pitch/roll object-matrix fix.
+  - `DEMO_MARIO_PHASE_SLAVE` is a file-local `#define`, deliberately not a
+    sealed build flag: a sealed flag shifts every build identity, and this
+    switch exists so a regression can be bisected to exactly this change.
+  - **Two defects found in the first build, both in sequencing the raise, not
+    in the walk.** (1) `demo_generic_actor_publish` calls
+    `demo_actor_phase_accum_reset()`, which zeroed the Mario handshake fields;
+    the raise was issued before that call and was therefore erased every frame,
+    leaving the master to spin out the full 4.2M-iteration wait limit before
+    failing closed. Those fields no longer belong to that reset. (2) The same
+    publish returns success *without dispatching* when the scene has zero actor
+    instances -- the path menu, intro and load frames take -- so Mario was
+    raised with no wake-up. An explicit notify now covers that case. Either
+    defect alone prevented reaching gameplay.
+  - **Not yet measured.** The scheduling argument is sound but the slave now
+    runs the generic phase and Mario serially; if their sum exceeds the
+    master's overlap window the master waits at the join, which is no worse
+    than before rather than better. Verified only as rendering correctly and
+    reaching gameplay. The route-replay A/B is outstanding.
+
 - **Camera-side BSP painter ranking and actor occluder publication, landed
   from a pre-existing uncommitted working tree.** This work was authored
   before the 2026-09-11 session and had never been committed; it is recorded

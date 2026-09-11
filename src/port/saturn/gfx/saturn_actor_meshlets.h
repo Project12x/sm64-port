@@ -141,6 +141,16 @@ bool sm64_saturn_actor_meshlets_prepare_bank_stats(
     sm64_saturn_actor_meshlet_bank_output_t *output,
     sm64_saturn_actor_meshlet_stats_t *stats);
 
+/* prepare, but accumulating into a caller-owned counter block instead of a
+ * frame profile -- the entry point Mario's walk uses when it runs on the
+ * slave, matching prepare_bank_stats above. */
+bool sm64_saturn_actor_meshlets_prepare_stats(
+    const sm64_saturn_render_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
+    sm64_saturn_actor_meshlet_stats_t *stats);
+
 /* Compatibility entry point. It shares the bank-neutral admission core while
  * retaining the exact Mario snapshot/pose/capacity contract. */
 bool sm64_saturn_actor_meshlets_prepare(

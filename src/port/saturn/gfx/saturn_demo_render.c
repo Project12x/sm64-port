@@ -3227,6 +3227,20 @@ static inline void demo_render_fence(void)
  * not merely slow. */
 #define DEMO_ACTOR_PHASE_WAIT_LIMIT UINT32_C(0x00400000)
 
+/* Mario's meshlet walk is split into publish / run / join (see
+ * demo_mario_phase_publish) so that the run half can execute on the slave.
+ *
+ * DEMO_MARIO_PHASE_SLAVE is deliberately a file-local switch and not a sealed
+ * build flag: a sealed flag shifts every build identity, and the point of this
+ * switch is to let a regression be bisected to exactly this change. Set it to
+ * 0 and the walk runs inline on the master, which is the pre-split behaviour
+ * with the work moved earlier in the frame. */
+#if SATURN_FEATURE_ACTOR_PHASE_SLAVE && defined(__sh__)
+#define DEMO_MARIO_PHASE_SLAVE 1
+#else
+#define DEMO_MARIO_PHASE_SLAVE 0
+#endif
+
 /* S1.11: everything the generic-actor phase accumulates while it walks the
  * instance queue. This block is written by whichever CPU runs the phase and
  * read by the master when it folds the totals in, so it must not be cached:
@@ -3325,6 +3339,29 @@ typedef struct demo_actor_phase_accum {
     volatile uint32_t emit_pending;
     volatile uint32_t emit_done;
     volatile uint32_t emit_ok;
+    /* --- Mario's meshlet walk, dispatched separately (2026-09-11) ---
+     *
+     * The single largest block of master-only work in the frame: pose
+     * evaluate + live depth bounds + meshlet core + position ref measured at
+     * ~400k cycles/frame, during which the slave is measured 100% idle. It is
+     * a separate phase from the generic-actor one above because the master
+     * must join it at a different point -- before
+     * demo_snapshot_mario_transform_context needs the position refs.
+     *
+     * Inputs are copied by value rather than referenced: the master may move
+     * on to terrain work while the slave walks, so nothing here may alias
+     * master frame state that is still changing. `pose` is the exception and
+     * carries pointers, which is why the run purges those lines before
+     * reading -- see demo_mario_phase_run. */
+    sm64_saturn_render_snapshot_t mario_snapshot;
+    sm64_saturn_mario_actor_pose_t mario_pose;
+    sm64_saturn_render_view_t mario_view;
+    sm64_saturn_actor_meshlet_stats_t mario_walk;
+    uint16_t mario_draw_count;
+    uint16_t mario_transform_ref_count;
+    volatile uint32_t mario_pending;
+    volatile uint32_t mario_done;
+    volatile uint32_t mario_ok;
 } demo_actor_phase_accum_t;
 
 /* Slave-built commands land here, then the master splices them into the arena.
@@ -3375,7 +3412,15 @@ static void demo_actor_phase_accum_reset(void)
     accum->emit_done = 0U;
     accum->emit_ok = 0U;
     memset((void *)&accum->emit_sink, 0, sizeof(accum->emit_sink));
+    /* Deliberately NOT resetting the mario_* fields here. This function is
+     * called from demo_generic_actor_publish, which runs AFTER Mario's phase
+     * has already been raised -- resetting them here would silently clear the
+     * raise every frame, leaving the slave with nothing to claim and the
+     * master spinning out the full wait limit at the join. Mario's own
+     * publish owns that reset; see demo_mario_phase_publish. */
 }
+
+static bool demo_mario_phase_run(demo_actor_phase_accum_t *accum);
 
 /* The slave's half of the handshake. Registered once with the render job
  * runtime; offered every slave wake-up and claims only the ones raised for an
@@ -3384,9 +3429,9 @@ static bool demo_actor_phase_slave_task(void)
 {
     demo_actor_phase_accum_t *const accum = demo_actor_phase_accum_uncached();
     /* S1.12 step 3: the emit dispatch is a separate wake-up raised later in
-     * the frame, after the Gouraud reservation. Check it first -- the two are
-     * never outstanding at the same time, because the master joins each before
-     * raising the next. */
+     * the frame, after the Gouraud reservation. Check it first -- it is never
+     * outstanding at the same time as the two below, because the master joins
+     * them before raising it. */
     if (accum->emit_pending != 0U) {
         accum->emit_pending = 0U;
         demo_render_fence();
@@ -3398,16 +3443,34 @@ static bool demo_actor_phase_slave_task(void)
         demo_render_fence();
         return true;
     }
-    if (accum->pending == 0U) return false;
-    accum->pending = 0U;
-    demo_render_fence();
-    accum->ok = demo_generic_actor_run(accum, true) ? 1U : 0U;
-    demo_render_fence();
-    /* `done` is the release marker: publish every other field before it, so a
-     * master that observes done == 1 sees a complete phase. */
-    accum->done = 1U;
-    demo_render_fence();
-    return true;
+    bool claimed = false;
+    /* The generic-actor phase and Mario's walk are both raised before a single
+     * wake-up, so one invocation must be able to claim both. A second
+     * cpu_dual_slave_notify() issued while the slave is already inside this
+     * function is not guaranteed to be observed, which is why the master does
+     * not dispatch them separately. They run in the master's join order: the
+     * generic phase is joined first, so it runs first. */
+    if (accum->pending != 0U) {
+        accum->pending = 0U;
+        demo_render_fence();
+        accum->ok = demo_generic_actor_run(accum, true) ? 1U : 0U;
+        demo_render_fence();
+        /* `done` is the release marker: publish every other field before it,
+         * so a master that observes done == 1 sees a complete phase. */
+        accum->done = 1U;
+        demo_render_fence();
+        claimed = true;
+    }
+    if (accum->mario_pending != 0U) {
+        accum->mario_pending = 0U;
+        demo_render_fence();
+        accum->mario_ok = demo_mario_phase_run(accum) ? 1U : 0U;
+        demo_render_fence();
+        accum->mario_done = 1U;
+        demo_render_fence();
+        claimed = true;
+    }
+    return claimed;
 }
 
 /* Master's half. With the offload off this simply runs the phase inline,
@@ -4392,81 +4455,179 @@ static void demo_upload_vdp1_dual(sm64_saturn_vdp1_backend_t *backend,
 }
 #endif
 
-static bool demo_prepare_mario(
-    const sm64_saturn_mario_actor_snapshot_t *snapshot,
-    const sm64_saturn_mario_actor_pose_t *pose,
-    const sm64_saturn_ir_transform_job_t *job,
-    sm64_saturn_fast3d_profile_t *profile,
-    uint16_t *vertex_count_out)
+/* Drop this CPU's own stale lines over a range the other CPU wrote.
+ *
+ * The SH7604 data cache is write-through with no write-back mode and no dirty
+ * bit, so the producer's ordinary cached stores are already in memory the
+ * moment they retire; nothing needs flushing, and no flush primitive exists.
+ * The only cross-CPU hazard is the consumer still holding lines it cached in
+ * an earlier frame at these same addresses. cpu_cache_area_purge invalidates
+ * and never writes back, so it is always safe here -- including on the
+ * partial lines at either end, which can only be re-read from memory. */
+static void demo_mario_phase_purge(const void *base, uint32_t bytes)
 {
-    s_actor_draw_count = 0U;
-    s_actor_transform_ref_count = 0U;
-    s_actor_texture_count = 0U;
-    s_actor_command_count = 0U;
-    if (vertex_count_out == NULL)
-        return false;
-    *vertex_count_out = 0U;
-    if (snapshot == NULL || pose == NULL || job == NULL || profile == NULL ||
-        !snapshot->valid || pose->vertices == NULL ||
-        pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
-        return false;
+#if DEMO_MARIO_PHASE_SLAVE
+    if (base == NULL || bytes == 0U) return;
+    const uintptr_t start =
+        (uintptr_t)base & ~(uintptr_t)(CPU_CACHE_LINE_SIZE - 1U);
+    const uint32_t span = (uint32_t)(((uintptr_t)base + bytes) - start);
+    cpu_cache_area_purge(
+        (void *)start,
+        (span + (CPU_CACHE_LINE_SIZE - 1U)) &
+            ~(uint32_t)(CPU_CACHE_LINE_SIZE - 1U));
+#else
+    (void)base;
+    (void)bytes;
+#endif
+}
 
-    /* T2.5 sub-stage boundaries inside the largest measured block in the
-     * port.  Every push/pop pair below brackets a straight-line region with
-     * no return between them, so the stack cannot be left unbalanced on the
-     * healthy path; the one exception is flagged at its site. */
-    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
-        SM64_SATURN_PRENOTIFY_PROFILE_NODE_MARIO_SETUP);
-    const uint32_t meshlet_generation = s_actor_publish_sequence == UINT32_MAX
-        ? 1U : s_actor_publish_sequence + 1U;
-    sm64_saturn_render_snapshot_t meshlet_snapshot = {0};
-    meshlet_snapshot.generation = meshlet_generation;
-    meshlet_snapshot.actor_generation = meshlet_generation;
-    meshlet_snapshot.mario = *snapshot;
-    sm64_saturn_render_view_t meshlet_view = {0};
-    meshlet_view.camera_position_q16[0] =
-        (int32_t)((int64_t)job->camera.position.x * (1 << 16));
-    meshlet_view.camera_position_q16[1] =
-        (int32_t)((int64_t)job->camera.position.y * (1 << 16));
-    meshlet_view.camera_position_q16[2] =
-        (int32_t)((int64_t)job->camera.position.z * (1 << 16));
-    meshlet_view.view_forward_q16[0] = job->camera.forward.x;
-    meshlet_view.view_forward_q16[1] = job->camera.forward.y;
-    meshlet_view.view_forward_q16[2] = job->camera.forward.z;
-    meshlet_view.generation = meshlet_generation;
-    sm64_saturn_actor_meshlet_output_t meshlet_output = {
+/* The phase body. Runs on whichever CPU claimed the dispatch. Every input it
+ * reads is either a by-value copy inside the uncached block or a range purged
+ * immediately before the read; every output it writes is an LWRAM buffer the
+ * master purges at the join. */
+static bool demo_mario_phase_run(demo_actor_phase_accum_t *accum)
+{
+    if (accum == NULL) return false;
+    const sm64_saturn_mario_actor_pose_t *const pose = &accum->mario_pose;
+    /* The master re-evaluates the pose into the hot arena every frame, and an
+     * alternating-buffer arena puts it at the same address every other frame,
+     * so this CPU can be holding stale lines over exactly these bytes. */
+    demo_mario_phase_purge(pose->vertices,
+                           (uint32_t)pose->vertex_count * 3U *
+                               (uint32_t)sizeof(int16_t));
+    demo_mario_phase_purge(pose->light_intensity,
+                           (uint32_t)pose->vertex_count);
+    sm64_saturn_actor_meshlet_output_t output = {
         .opaque = s_actor_opaque_refs,
         .translucent = s_actor_translucent_refs,
         .positions = s_actor_transform_refs,
         .position_capacity = SM64_MARIO_VERTEX_COUNT,
     };
-    SM64_SATURN_PRENOTIFY_PROFILE_POP();
-    if (!sm64_saturn_actor_meshlets_prepare(
-            &meshlet_snapshot, pose, &meshlet_view, &meshlet_output,
-            SM64_MARIO_PRIMITIVE_COUNT, profile)) {
-        profile->pipeline_faults++;
+    if (!sm64_saturn_actor_meshlets_prepare_stats(
+            &accum->mario_snapshot, pose, &accum->mario_view, &output,
+            SM64_MARIO_PRIMITIVE_COUNT, &accum->mario_walk))
         return false;
-    }
-    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
-        SM64_SATURN_PRENOTIFY_PROFILE_NODE_MARIO_DRAW_ORDER);
+    uint16_t draw_count = 0U;
     for (uint8_t pass = 0U; pass < 2U; pass++) {
-        const sm64_saturn_actor_draw_ref_t *refs = pass == 0U
-            ? meshlet_output.opaque : meshlet_output.translucent;
-        const uint16_t count = pass == 0U ? meshlet_output.opaque_count
-                                            : meshlet_output.translucent_count;
+        const sm64_saturn_actor_draw_ref_t *const refs =
+            pass == 0U ? output.opaque : output.translucent;
+        const uint16_t count = pass == 0U ? output.opaque_count
+                                          : output.translucent_count;
         for (uint16_t i = 0U; i < count; i++) {
-            const uint16_t primitive_id = refs[i].primitive_id;
-            if (primitive_id >= SM64_MARIO_PRIMITIVE_COUNT) {
-                SM64_SATURN_PRENOTIFY_PROFILE_POP();
+            if (refs[i].primitive_id >= SM64_MARIO_PRIMITIVE_COUNT)
                 return false;
-            }
-            s_actor_draw_order[s_actor_draw_count++] =
+            s_actor_draw_order[draw_count++] =
                 (uint16_t)(i | (pass == 0U ? 0U :
                                   DEMO_ACTOR_DRAW_REF_TRANSLUCENT));
         }
     }
+    /* Counts are published only on success, so a failed walk cannot leave the
+     * master reading a half-filled draw order. */
+    accum->mario_draw_count = draw_count;
+    accum->mario_transform_ref_count = output.position_count;
+    return true;
+}
+
+/* Master half: copy every input into the uncached block and raise the phase.
+ * Nothing here may alias master frame state that keeps changing while the
+ * slave walks, which is why the snapshot, pose and view are copied by value.
+ * `pose` still carries pointers; demo_mario_phase_run owns that hazard. */
+static bool demo_mario_phase_publish(
+    demo_actor_phase_accum_t *accum,
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_ir_transform_job_t *job)
+{
+    if (accum == NULL) return false;
+    accum->mario_pending = 0U;
+    accum->mario_done = 0U;
+    accum->mario_ok = 0U;
+    accum->mario_draw_count = 0U;
+    accum->mario_transform_ref_count = 0U;
+    s_actor_draw_count = 0U;
+    s_actor_transform_ref_count = 0U;
+    s_actor_texture_count = 0U;
+    s_actor_command_count = 0U;
+    if (snapshot == NULL || pose == NULL || job == NULL || !snapshot->valid ||
+        pose->vertices == NULL ||
+        pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
+        return false;
+
+    /* T2.5 sub-stage boundary: the setup half of the largest measured block in
+     * the port. The walk itself is no longer bracketed here because it no
+     * longer runs on this CPU. */
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_MARIO_SETUP);
+    memset((void *)&accum->mario_walk, 0, sizeof(accum->mario_walk));
+    const uint32_t meshlet_generation = s_actor_publish_sequence == UINT32_MAX
+        ? 1U : s_actor_publish_sequence + 1U;
+    memset((void *)&accum->mario_snapshot, 0, sizeof(accum->mario_snapshot));
+    accum->mario_snapshot.generation = meshlet_generation;
+    accum->mario_snapshot.actor_generation = meshlet_generation;
+    accum->mario_snapshot.mario = *snapshot;
+    accum->mario_pose = *pose;
+    memset((void *)&accum->mario_view, 0, sizeof(accum->mario_view));
+    accum->mario_view.camera_position_q16[0] =
+        (int32_t)((int64_t)job->camera.position.x * (1 << 16));
+    accum->mario_view.camera_position_q16[1] =
+        (int32_t)((int64_t)job->camera.position.y * (1 << 16));
+    accum->mario_view.camera_position_q16[2] =
+        (int32_t)((int64_t)job->camera.position.z * (1 << 16));
+    accum->mario_view.view_forward_q16[0] = job->camera.forward.x;
+    accum->mario_view.view_forward_q16[1] = job->camera.forward.y;
+    accum->mario_view.view_forward_q16[2] = job->camera.forward.z;
+    accum->mario_view.generation = meshlet_generation;
     SM64_SATURN_PRENOTIFY_PROFILE_POP();
-    s_actor_transform_ref_count = meshlet_output.position_count;
+#if DEMO_MARIO_PHASE_SLAVE
+    /* Raised, not dispatched. The generic-actor publish that follows owns the
+     * single wake-up, and the slave task claims both phases from it -- see
+     * demo_actor_phase_slave_task. A second notify while the slave is still
+     * inside the first is not guaranteed to be observed. */
+    demo_render_fence();
+    accum->mario_pending = 1U;
+    demo_render_fence();
+#else
+    accum->mario_ok = demo_mario_phase_run(accum) ? 1U : 0U;
+    demo_render_fence();
+    accum->mario_done = 1U;
+#endif
+    return true;
+}
+
+/* Master half of the join. Called after the master has finished the work it
+ * overlapped the phase with. */
+static bool demo_mario_phase_join(demo_actor_phase_accum_t *accum,
+                                  sm64_saturn_fast3d_profile_t *profile,
+                                  uint16_t *vertex_count_out)
+{
+    if (vertex_count_out == NULL || profile == NULL || accum == NULL)
+        return false;
+    *vertex_count_out = 0U;
+#if DEMO_MARIO_PHASE_SLAVE
+    {
+        uint32_t spins = 0U;
+        while (accum->mario_done == 0U) {
+            if (++spins > DEMO_ACTOR_PHASE_WAIT_LIMIT) return false;
+        }
+        demo_render_fence();
+    }
+    /* The slave wrote these four LWRAM buffers through its own cache, which
+     * put the bytes in memory. What the master must drop is its own lines,
+     * cached when it read the same buffers on the previous frame. */
+    demo_mario_phase_purge(s_actor_draw_order, sizeof(s_actor_draw_order));
+    demo_mario_phase_purge(s_actor_transform_refs,
+                           sizeof(s_actor_transform_refs));
+    demo_mario_phase_purge(s_actor_opaque_refs, sizeof(s_actor_opaque_refs));
+    demo_mario_phase_purge(s_actor_translucent_refs,
+                           sizeof(s_actor_translucent_refs));
+#endif
+    if (accum->mario_done == 0U || accum->mario_ok == 0U) {
+        profile->pipeline_faults++;
+        return false;
+    }
+    sm64_saturn_actor_meshlet_stats_fold(profile, &accum->mario_walk);
+    s_actor_draw_count = accum->mario_draw_count;
+    s_actor_transform_ref_count = accum->mario_transform_ref_count;
     *vertex_count_out = s_actor_transform_ref_count;
     return true;
 }
@@ -5081,6 +5242,16 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
         .clip_near = false
     };
     transaction->actor_job = actor_job;
+    /* Mario's walk is raised here, as early as the actor job allows, and is
+     * joined only after the generic-actor join below. Both phases are raised
+     * before the single wake-up the generic publish issues; the slave claims
+     * both from it. Raising the phase without moving the raise this early
+     * would buy nothing -- the master would simply wait where the walk used to
+     * run, which is the lesson S1.11 recorded for the generic phase. */
+    demo_actor_phase_accum_t *const mario_accum =
+        demo_actor_phase_accum_uncached();
+    const bool mario_publish_ok =
+        demo_mario_phase_publish(mario_accum, snapshot, pose, &actor_job);
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
     /* S1.11: dispatch the generic-actor phase as early as the snapshot allows.
      * Everything between here and the join below -- spatial admission, work
@@ -5094,6 +5265,19 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
         demo_generic_actor_publish(transaction, generation);
     SM64_SATURN_PRENOTIFY_PROFILE_POP();
     if (!actor_publish_ok) return false;
+#if DEMO_MARIO_PHASE_SLAVE
+    /* The generic publish issues the wake-up that carries BOTH phases, but it
+     * has one success path that issues none: a scene with zero actor instances
+     * returns early with generic_actor_prepared set, having dispatched
+     * nothing. Menu, intro and load frames take exactly that path. Mario is
+     * already raised by then, so without this his join would spin out the full
+     * wait limit on every one of those frames. */
+    if (mario_publish_ok && transaction->generic_actor_prepared != 0U)
+        sm64_saturn_render_job_runtime_dispatch_slave_task();
+#endif
+#elif DEMO_MARIO_PHASE_SLAVE
+    /* No generic-actor phase in this build, so Mario's raise owns the wake-up. */
+    if (mario_publish_ok) sm64_saturn_render_job_runtime_dispatch_slave_task();
 #endif
     /* Mario keeps the selected build tier while terrain cluster admission
      * below derives each tier from the immutable camera view and its own
@@ -5147,16 +5331,10 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
     s_terrain_publish_sequence =
         sm64_saturn_render_generation_next(s_terrain_publish_sequence);
     uint16_t actor_vertex_count = 0U;
-    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
-        SM64_SATURN_PRENOTIFY_PROFILE_NODE_PREPARE_MARIO);
-    const bool actor_prepare_ok =
-        demo_prepare_mario(snapshot, pose, &actor_job, profile,
-                           &actor_vertex_count);
-    SM64_SATURN_PRENOTIFY_PROFILE_POP();
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
-    /* S1.11: the phase was dispatched before Mario preparation began, so by
-     * the time control reaches here the slave has been working on it for the
-     * whole of that window. Joining is where the overlap is cashed in. */
+    /* S1.11: the phase was raised before spatial admission began, so by the
+     * time control reaches here the slave has been working on it for the whole
+     * of that window. Joining is where the overlap is cashed in. */
     SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
         SM64_SATURN_PRENOTIFY_PROFILE_NODE_ACTOR_CLOSURE);
     if (!demo_generic_actor_join(transaction, generation)) {
@@ -5165,6 +5343,11 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
     }
     SM64_SATURN_PRENOTIFY_PROFILE_POP();
 #endif
+    SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
+        SM64_SATURN_PRENOTIFY_PROFILE_NODE_PREPARE_MARIO);
+    const bool actor_prepare_ok = mario_publish_ok &&
+        demo_mario_phase_join(mario_accum, profile, &actor_vertex_count);
+    SM64_SATURN_PRENOTIFY_PROFILE_POP();
     if (actor_prepare_ok)
         s_actor_publish_sequence =
             sm64_saturn_render_generation_next(s_actor_publish_sequence);

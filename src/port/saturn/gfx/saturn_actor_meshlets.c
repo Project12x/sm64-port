@@ -83,13 +83,19 @@ typedef struct actor_meshlet_depth_carry {
     actor_meshlet_depth_bounds_t bounds[ACTOR_MESHLET_DEPTH_CARRY_CAPACITY];
 } actor_meshlet_depth_carry_t;
 
-/* Master-only.  Bound solely by the Mario prepare entry point, which
- * runs on the master SH-2 inside the pre-notification window alongside the
- * rest of saturn_demo_render.c's file-scope frame state.  The bank entry point
- * is dispatched on either CPU (saturn_demo_render.c:3129 picks a workspace
- * lane from the claim), so it passes NULL and keeps recomputing -- a shared
- * static would be a cross-CPU race, and the bank path is not on the measured
- * hot path. */
+/* Owned by whichever CPU runs Mario's walk, and by exactly one at a time.
+ *
+ * Was master-only until 2026-09-11; the walk is now dispatched to the slave
+ * (see the Mario phase in saturn_demo_render.c), so this static is written by
+ * the slave and never concurrently by both. That remains safe for the same
+ * reason it was before -- there is one Mario walk per frame and the master
+ * joins it before reading any of its output -- but the ownership is no longer
+ * "master", so do not reason from CPU identity here. The bank entry point
+ * still passes NULL and keeps recomputing, because bank instances ARE walked
+ * concurrently and a shared carry between them would be a genuine race.
+ *
+ * No cache hazard either way: the SH7604 cache is write-through, so a
+ * single-owner static needs no publication step. */
 static actor_meshlet_depth_carry_t s_mario_depth_carry;
 
 _Static_assert(SM64_MARIO_MESHLET_COUNT <= ACTOR_MESHLET_DEPTH_CARRY_CAPACITY,
@@ -927,6 +933,22 @@ static bool actor_mario_prepare_with_carry(
     return admitted;
 }
 
+/* The slave entry point for Mario's walk, mirroring
+ * sm64_saturn_actor_meshlets_prepare_bank_stats for the generic-actor phase:
+ * accumulate into a caller-owned counter block rather than touching the
+ * master's frame profile, which the slave must not write. */
+bool sm64_saturn_actor_meshlets_prepare_stats(
+    const sm64_saturn_render_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_actor_meshlet_output_t *output, uint16_t capacity,
+    sm64_saturn_actor_meshlet_stats_t *stats)
+{
+    return actor_mario_prepare_with_carry(snapshot, pose, view, output,
+                                          capacity, stats,
+                                          &s_mario_depth_carry);
+}
+
 bool sm64_saturn_actor_meshlets_prepare(
     const sm64_saturn_render_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose,
@@ -935,9 +957,9 @@ bool sm64_saturn_actor_meshlets_prepare(
     sm64_saturn_fast3d_profile_t *stats)
 {
     sm64_saturn_actor_meshlet_stats_t walk = {0U, 0U, 0U, 0U};
-    const bool admitted = actor_mario_prepare_with_carry(
+    const bool admitted = sm64_saturn_actor_meshlets_prepare_stats(
         snapshot, pose, view, output, capacity,
-        stats != NULL ? &walk : NULL, &s_mario_depth_carry);
+        stats != NULL ? &walk : NULL);
     sm64_saturn_actor_meshlet_stats_fold(stats, &walk);
     return admitted;
 }

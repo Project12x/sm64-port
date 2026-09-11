@@ -101,9 +101,32 @@ static uint8_t complete_actor_bank_ready;
 #define COMPLETE_ACTOR_COLD_LARGE_BYTES 640U
 
 static int32_t complete_actor_joint_workspace[COMPLETE_ACTOR_JOINT_CAPACITY * 16U];
+/* HWRAM -> LWRAM, 2026-09-11, step 1 of moving Mario's meshlet walk onto the
+ * idle slave SH-2. Deliberately landed and measured ALONE, before any
+ * concurrency, because it trades against the design note above.
+ *
+ * Why it has to move at all: the slave cannot safely read master-dirty cached
+ * HWRAM (no inter-CPU coherency), and pose->vertices points straight into this
+ * arena (see the two assignment sites below). LWRAM is the shared medium both
+ * CPUs can publish through, so the pose has to live here before the walk can
+ * be offloaded.
+ *
+ * What it costs: this arena is 2,968 B of pose per slot and the meshlet walk
+ * reads those vertices heavily, so on the 16-bit LWRAM bus every pose read
+ * gets slower. That is the opposite of the residency argument above, which put
+ * Mario in HWRAM precisely because he is the hot path. The bet is that the
+ * walk will shortly run on a CPU that is measured 100% idle during this exact
+ * window, where slower-but-parallel still wins -- but the bet is not proven
+ * until the offload lands, so this step is measured on its own first. If it
+ * costs more than the offload can repay, revert this one attribute.
+ *
+ * What it buys immediately, independent of the offload: 6,000 B of HWRAM,
+ * against a margin of 8,180 B over libyaul's 7,936 B TLSF floor. That is
+ * enough to unblock the pitch/roll object-matrix fix, which needs ~432 B and
+ * has been parked for want of them. */
 static uint8_t complete_actor_hot_arena[
     COMPLETE_ACTOR_POSE_SLOT_COUNT * sizeof(complete_actor_pose_slot_t)]
-    __attribute__((aligned(4)));
+    __attribute__((section(".lwram_bss"), aligned(4)));
 static sm64_saturn_pose_handle_t complete_actor_mario_handle[
     COMPLETE_ACTOR_POSE_SLOT_COUNT];
 static uint8_t complete_actor_pools_ready;
