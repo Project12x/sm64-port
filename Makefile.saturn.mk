@@ -2432,9 +2432,21 @@ SATURN_TERRAIN_SUBDIVIDE_THRESHOLD ?= 0
 # Faces above this UV repeat cannot be baked into a tile at all
 # (bake_bob_tiles.py::triangle_k, which refuses above 16 and emits nothing --
 # the large white surfaces). Refining them is not an optimisation, it is what
-# makes the bake total. Independent of the world-space threshold, and ON by
-# default because a white quad is never correct.
-SATURN_TERRAIN_UV_REPEAT_LIMIT ?= 16
+# makes the bake total, and the mechanism (see subdivide_terrain_ir.py) is
+# implemented and proven: at 16, BOB's gouraud class goes 24 -> 0.
+#
+# Default is 0 (OFF), NOT because refinement is wrong -- because BOB's tile
+# bank is already at exactly 100% of MAX_TILE_BYTES (333,696 of 333,696) and
+# texturing those 24 previously-free faces needs 345,472 bytes, a real
+# 11,776-byte overflow with zero slack to absorb it. That cap is not
+# arbitrary: MAX_TILE_BYTES == SATURN_MARIO_TEXTURE_BASE_OFFSET (333696U,
+# src/port/saturn/sourceboot/Makefile) -- the terrain tile bank ends exactly
+# where Mario's VDP1 textures begin, so the cap must not be raised until the
+# terrain/Mario texture boundary is relocated (a separate task). Set this to
+# 16 only once that lands; until then it stays 0 so compile-bob-tiles and
+# everything depending on it (compile-bob-scene, verify-bob-bsp-header,
+# verify-all) stay green by default.
+SATURN_TERRAIN_UV_REPEAT_LIMIT ?= 0
 # Controller correction: this path selection must key off EITHER knob, not
 # SATURN_TERRAIN_SUBDIVIDE_THRESHOLD alone. A UV-repeat-only run (threshold
 # left at its 0 default) still produces a genuinely subdivided IR/intake pair
