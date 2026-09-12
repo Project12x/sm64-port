@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Terrain texture warping reduced: screen-coordinate clamping now preserves
+  the view ray instead of clamping each axis independently.** Partial fix,
+  owner-confirmed improved but not eliminated; see the remainder below.
+  - Root cause: VDP1 coordinates are 11-bit signed, so
+    `sm64_saturn_ir_project_view()` must bring an out-of-range vertex back
+    inside the box. It clamped x and y *independently*, so a vertex projecting
+    to (5000, 3000) became (1023, 1023) -- a completely different direction
+    from screen centre. The vertex is off-screen either way; the visible defect
+    is the EDGE joining it to an on-screen vertex, which then runs at the wrong
+    angle and drags the texture with it. Worst near the bottom of the screen,
+    where the ground plane projects furthest out of range.
+  - Fix: scale both axes by one common Q16 factor so the vertex stays on its
+    own ray from centre. Costs two comparisons per vertex on the in-range path;
+    the divide happens only for out-of-range vertices and is kept to 32-bit
+    (the coordinate box bounds `limit << 16` inside int32), which matters on a
+    CPU with no fast divide.
+  - **Remaining defect, now precisely characterised.** Preserving the ray is
+    not the same as clipping: the correct position is where the EDGE crosses
+    the box, not where the centre-ray crosses it, so the vertex still moves
+    relative to its neighbours. The exact fix is side-plane clipping. Note the
+    dominant ground case clips to exactly 4 vertices -- a quad with two
+    ADJACENT corners outside one half-plane stays a quad -- so it is emittable
+    with no extra VDP1 commands; only the 1-outside (5 vertices) and 3-outside
+    cases change the count and would fall back to this scaling.
+  - **Why the castle demo's fix could not be ported.** Castle avoids this at
+    bake time with `--subdivision 1 --subdivision-threshold 1024`, splitting
+    large quads so they never reach the clamp. That multiplies tiles, and BOB's
+    texture bank is at **exactly 100%** (`texture_bytes` 333,696 of
+    `max_texture_bytes` 333,696). This fix costs no texture bytes at all.
+  - Applies to every projection path, terrain and actors alike, since all of
+    them route through `sm64_saturn_ir_project_view()`.
+  - `verify-ir-transform` and `verify-terrain-clip` pass unchanged.
+
 ### Changed
 
 - **Terrain Gouraud shading removed (`SATURN_DEMO_TERRAIN_GOURAUD` 0).** Owner

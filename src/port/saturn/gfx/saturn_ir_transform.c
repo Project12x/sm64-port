@@ -52,10 +52,57 @@ bool sm64_saturn_ir_project_view(
         project_q16(reciprocal, view.x);
     const int32_t screen_y = job->center_y -
         project_q16(reciprocal, view.y);
-    projected->x = (int16_t)clamp_coordinate(screen_x, job->coord_min,
-                                             job->coord_max);
-    projected->y = (int16_t)clamp_coordinate(screen_y, job->coord_min,
-                                             job->coord_max);
+    /* VDP1 coordinates are 11-bit signed, so a vertex projecting outside the
+     * box cannot be represented and must be brought back inside. Clamping each
+     * axis INDEPENDENTLY -- what this did before -- moves the vertex off its
+     * own view ray: (5000, 3000) becomes (1023, 1023), a completely different
+     * direction from centre. The vertex was off-screen either way, so the
+     * visible defect is not the vertex, it is the EDGE joining it to an
+     * on-screen vertex, which now runs at the wrong angle. That wrong slope is
+     * the long-standing terrain texture warp, worst near the bottom of the
+     * screen where the ground plane projects furthest out of range.
+     *
+     * Scaling both axes by one common factor keeps the vertex on the same ray
+     * from centre, so every edge through the visible region keeps its true
+     * direction. This is not a substitute for real side-plane clipping -- the
+     * exact fix inserts the boundary intersection and can add vertices, which
+     * VDP1's 4-corner commands cannot carry without splitting -- but it costs
+     * no extra commands, no texture bytes, and two comparisons per vertex on
+     * the common in-range path. The castle demo avoids the whole problem by
+     * subdividing at bake time; BOB cannot, because its texture bank is at
+     * exactly 100% (333,696 of 333,696 bytes). */
+    int32_t offset_x = screen_x - job->center_x;
+    int32_t offset_y = screen_y - job->center_y;
+    const int32_t limit_x = offset_x >= 0
+        ? (int32_t)job->coord_max - job->center_x
+        : job->center_x - (int32_t)job->coord_min;
+    const int32_t limit_y = offset_y >= 0
+        ? (int32_t)job->coord_max - job->center_y
+        : job->center_y - (int32_t)job->coord_min;
+    const int32_t extent_x = offset_x >= 0 ? offset_x : -offset_x;
+    const int32_t extent_y = offset_y >= 0 ? offset_y : -offset_y;
+    if ((extent_x > limit_x && limit_x >= 0) ||
+        (extent_y > limit_y && limit_y >= 0)) {
+        /* Q16 ratio; limit is bounded by the coordinate box so limit << 16
+         * stays inside int32 and this is a 32-bit divide, not a 64-bit one. */
+        int32_t scale_q16 = 1 << 16;
+        if (extent_x > limit_x && extent_x > 0) {
+            const int32_t candidate = (limit_x << 16) / extent_x;
+            if (candidate < scale_q16) scale_q16 = candidate;
+        }
+        if (extent_y > limit_y && extent_y > 0) {
+            const int32_t candidate = (limit_y << 16) / extent_y;
+            if (candidate < scale_q16) scale_q16 = candidate;
+        }
+        if (scale_q16 < 0) scale_q16 = 0;
+        offset_x = (int32_t)(((int64_t)offset_x * scale_q16) >> 16);
+        offset_y = (int32_t)(((int64_t)offset_y * scale_q16) >> 16);
+    }
+    /* Retained as a rounding backstop; the scale above already fits the box. */
+    projected->x = (int16_t)clamp_coordinate(job->center_x + offset_x,
+                                             job->coord_min, job->coord_max);
+    projected->y = (int16_t)clamp_coordinate(job->center_y + offset_y,
+                                             job->coord_min, job->coord_max);
     projected->z = view.z;
     return true;
 }
