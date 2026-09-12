@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Terrain lowering is published as `DEMO_TERRAIN_LOWER_JOBS` (4) descriptors
+  instead of one, so both SH-2s can work the terrain pass.** Terrain was
+  enqueued as a single `WORLD_ADMIT` and a single `WORLD_LOWER`, each with
+  `.input_count = s_render_work_count` — the entire visible set. One lane
+  claimed each job and did 100% of it; the other did 0%. This, not an Amdahl
+  ceiling and not a tuning problem, is the cause of the repeatedly-measured
+  38–44% slave idle in `___slave_polling_entry` alongside 71.7% master-only
+  frame time, and it is why offloading whole phases (Mario's meshlet walk,
+  +6.13%) was the only lever that ever moved: that walk was the renderer's
+  only genuine concurrency.
+  - **Nothing new was built.** The two-lane machinery was already present and
+    already proven — per-lane result/command banks, descriptor-keyed release
+    records, lane-aware claiming, per-lane counters. `WORLD_LOWER` has always
+    honoured `input_offset`/`input_count` (it range-validates them, then hands
+    them to `demo_terrain_compact_transformed`); the payload banks index by
+    `output_offset` on **both** write and read
+    (`saturn_render_payload_bank.c`), so descriptors writing disjoint slices
+    cannot collide; `collect_done_world_lower` already gathers N jobs and
+    `sm64_saturn_terrain_depth_bins_build_command_streams` already merges N
+    streams. The **only** thing that said "one" was the enqueue.
+  - **`WORLD_ADMIT` deliberately stays a single coarse descriptor.** It
+    publishes the transformed *position* cache, and positions are shared
+    between primitives, so splitting it would transform shared vertices more
+    than once. Only the per-primitive classification stage divides.
+  - **No balance controller, by design.** Both runtime claim loops are
+    `while (claim_...())`, so descriptors are consumed greedily and whichever
+    CPU is free takes the next one — the split self-balances. SlaveDriver
+    Engine's spin-tuned `slaveSize` (`WALLS.C:2281-2284`) is deliberately
+    **not** ported: it exists because that engine splits its list exactly
+    once, up front, which a claim queue does not do. The reference's insight
+    (a fixed split is wrong) is kept; its mechanism is not needed here.
+  - **Ranges are tiled proportionally, not by a fixed stride**, so the
+    remainder is spread across descriptors and each output slice retains the
+    same results-per-primitive headroom the whole-set descriptor had — clip
+    splitting cannot overflow a slice that the single descriptor would have
+    survived.
+  - **Prerequisite for raising the count:** 4 was chosen because
+    `SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY` is 8 and the frame also publishes
+    one terrain admit plus the two actor jobs (7 of 8 used, one spare). Going
+    higher requires raising that capacity, and note `dependency_mask` is a
+    `uint8_t`: any job that is *depended upon* must stay below index 8. Two
+    `_Static_assert`s enforce both constraints.
+
 ### Fixed
 
 - **Relocated the terrain/Mario VDP1 texture boundary and turned Task 1's

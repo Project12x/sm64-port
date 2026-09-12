@@ -306,6 +306,30 @@ _Static_assert(sizeof(sm64_saturn_mario_gouraud_color) /
     (SM64_SATURN_BOB_PRIMITIVE_COUNT > DEMO_TERRAIN_RESULT_BASELINE_PRIMITIVES \
          ? (SM64_SATURN_BOB_PRIMITIVE_COUNT * 7U) / 4U \
          : SM64_SATURN_BOB_PRIMITIVE_COUNT * 2U)
+/* How many WORLD_LOWER descriptors the terrain pass publishes.
+ *
+ * Terrain used to be ONE lower job covering the whole visible set, so a single
+ * SH-2 claimed it and did 100% of the pass while the other did none -- the
+ * cause of the measured slave idle, not an Amdahl ceiling. Both runtime loops
+ * claim in a while(), so publishing several descriptors lets whichever CPU is
+ * free take the next one. That self-balances without a controller, which is
+ * why SlaveDriver's spin-tuned slaveSize is deliberately NOT ported: it exists
+ * because that engine splits its list exactly once, up front.
+ *
+ * Four fits the 8-slot queue beside one admit and the two actor jobs with a
+ * slot spare, and bounds the worst-case imbalance at one descriptor. Raising
+ * it requires raising SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, and note that
+ * dependency_mask is a uint8_t -- any job that is depended upon must stay
+ * below index 8. */
+#define DEMO_TERRAIN_LOWER_JOBS 4U
+_Static_assert(DEMO_TERRAIN_LOWER_JOBS >= 1U &&
+                   DEMO_TERRAIN_LOWER_JOBS + 3U <=
+                       SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY,
+               "terrain lower descriptors plus WORLD_ADMIT and the actor "
+               "admit/lower chain must fit the render job queue");
+_Static_assert(DEMO_TERRAIN_LOWER_JOBS + 1U < 8U,
+               "the actor admit descriptor must stay below index 8 so the "
+               "uint8_t dependency mask can name it");
 #ifndef SATURN_DEMO_VIEW_RADIUS
 #define SATURN_DEMO_VIEW_RADIUS 6000
 #endif
@@ -5722,37 +5746,74 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
      * terrain chain contiguous so that generation can publish without
      * manufacturing a zero-length actor descriptor (which the queue rejects
      * by contract). Visible actors append their own admit/lower chain. */
-    const sm64_saturn_render_job_t frame_jobs[] = {
-        {
-            .type = SM64_SATURN_RENDER_JOB_WORLD_ADMIT,
-            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT,
-            .snapshot_generation = transform_generation,
-            .input_count = s_render_work_count,
-            .output_capacity = DEMO_TERRAIN_RESULT_CAPACITY,
-        }, {
+    sm64_saturn_render_job_t frame_jobs[DEMO_TERRAIN_LOWER_JOBS + 3U];
+    uint8_t frame_dependencies[DEMO_TERRAIN_LOWER_JOBS + 3U];
+    /* WORLD_ADMIT stays one coarse descriptor on purpose: it publishes the
+     * transformed POSITION cache, and positions are shared between primitives,
+     * so splitting it would transform shared vertices more than once.
+     * WORLD_LOWER is the splittable stage -- per-primitive classification and
+     * command building -- and it has always honoured input_offset/input_count
+     * (it validates the range, then passes it to
+     * demo_terrain_compact_transformed). The output payload banks likewise
+     * index by output_offset on both write and read, so descriptors writing
+     * disjoint slices cannot collide. */
+    uint16_t lower_jobs = DEMO_TERRAIN_LOWER_JOBS;
+    if (s_render_work_count < lower_jobs)
+        lower_jobs = s_render_work_count != 0U ? s_render_work_count : 1U;
+    frame_jobs[0] = (sm64_saturn_render_job_t){
+        .type = SM64_SATURN_RENDER_JOB_WORLD_ADMIT,
+        .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT,
+        .snapshot_generation = transform_generation,
+        .input_count = s_render_work_count,
+        .output_capacity = DEMO_TERRAIN_RESULT_CAPACITY,
+    };
+    frame_dependencies[0] = 0U;
+    for (uint16_t lower = 0U; lower < lower_jobs; lower++) {
+        /* Tile both ranges proportionally rather than by a fixed stride: the
+         * remainder is spread across descriptors, and the output slice keeps
+         * the same results-per-primitive headroom the single descriptor had,
+         * so clip splitting cannot overflow a slice that a whole-set
+         * descriptor would have survived. */
+        const uint16_t input_begin =
+            (uint16_t)(((uint32_t)s_render_work_count * lower) / lower_jobs);
+        const uint16_t input_end = (uint16_t)(
+            ((uint32_t)s_render_work_count * (lower + 1U)) / lower_jobs);
+        const uint16_t output_begin = (uint16_t)(
+            ((uint32_t)DEMO_TERRAIN_RESULT_CAPACITY * lower) / lower_jobs);
+        const uint16_t output_end = (uint16_t)(
+            ((uint32_t)DEMO_TERRAIN_RESULT_CAPACITY * (lower + 1U)) /
+            lower_jobs);
+        frame_jobs[1U + lower] = (sm64_saturn_render_job_t){
             .type = SM64_SATURN_RENDER_JOB_WORLD_LOWER,
             .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER,
             .snapshot_generation = transform_generation,
-            .input_count = s_render_work_count,
-            .output_capacity = DEMO_TERRAIN_RESULT_CAPACITY,
-        }, {
-            .type = SM64_SATURN_RENDER_JOB_ACTOR_ADMIT,
-            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT,
-            .snapshot_generation = transform_generation,
-            .input_count = actor_vertex_count,
-            .output_capacity = actor_vertex_count,
-        }, {
-            .type = SM64_SATURN_RENDER_JOB_ACTOR_LOWER,
-            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER,
-            .snapshot_generation = transform_generation,
-            .input_count = SM64_MARIO_PRIMITIVE_COUNT,
-            .output_capacity = SM64_MARIO_PRIMITIVE_COUNT,
-        },
+            .input_offset = input_begin,
+            .input_count = (uint16_t)(input_end - input_begin),
+            .output_offset = output_begin,
+            .output_capacity = (uint16_t)(output_end - output_begin),
+        };
+        frame_dependencies[1U + lower] = (uint8_t)(1U << 0U);
+    }
+    const uint16_t actor_admit_index = (uint16_t)(1U + lower_jobs);
+    frame_jobs[actor_admit_index] = (sm64_saturn_render_job_t){
+        .type = SM64_SATURN_RENDER_JOB_ACTOR_ADMIT,
+        .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT,
+        .snapshot_generation = transform_generation,
+        .input_count = actor_vertex_count,
+        .output_capacity = actor_vertex_count,
     };
-    const uint8_t frame_dependencies[] = {
-        0U, (uint8_t)(1U << 0U), 0U, (uint8_t)(1U << 2U),
+    frame_dependencies[actor_admit_index] = 0U;
+    frame_jobs[actor_admit_index + 1U] = (sm64_saturn_render_job_t){
+        .type = SM64_SATURN_RENDER_JOB_ACTOR_LOWER,
+        .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER,
+        .snapshot_generation = transform_generation,
+        .input_count = SM64_MARIO_PRIMITIVE_COUNT,
+        .output_capacity = SM64_MARIO_PRIMITIVE_COUNT,
     };
-    const uint16_t frame_job_count = actor_vertex_count != 0U ? 4U : 2U;
+    frame_dependencies[actor_admit_index + 1U] =
+        (uint8_t)(1U << actor_admit_index);
+    const uint16_t frame_job_count = actor_vertex_count != 0U
+        ? (uint16_t)(actor_admit_index + 2U) : actor_admit_index;
     transaction->actor_vertex_count = actor_vertex_count;
     transaction->frame_job_count = frame_job_count;
     SM64_SATURN_PRENOTIFY_PROFILE_PUSH(
