@@ -53,27 +53,33 @@
     `coverage: {'16x16': 667, '32x32': 508, 'gouraud': 0}` and
     `texture_bytes: 345472` (exactly at the new cap, `resident_bytes: 383072`
     against `max_resident_bytes: 446432`).
-  - **Is the white-surface defect fixed? The bake-side half is fixed and
-    verified; the runtime half is not confirmed, and there is a specific,
-    concrete reason to doubt it.** While validating this change, a SECOND,
-    independent hardcoded copy of the same 333,696/261,248 boundary was found
-    in `src/port/saturn/sourceboot/main.c` (`SOURCEBOOT_BOB_TEXTURE_BYTES`,
-    non-fragment arm `333696U`), used at boot to (1) size the
-    `vdp1_vram_partitions_set` texture partition, (2) bound how many bytes of
-    `sm64_saturn_bob_texture_bank` actually get DMA'd to VDP1 VRAM, and (3)
-    choose the VRAM offset Mario's own texture is uploaded to -- independent
-    of, and no longer equal to, the `SATURN_MARIO_TEXTURE_BASE_OFFSET` this
-    commit just moved to 345,472 (which only the per-frame renderer's texture
-    *bind* address in `saturn_demo_render.c` reads). This task's file scope
-    explicitly excluded `.c`/`.h` changes, so `SOURCEBOOT_BOB_TEXTURE_BYTES`
-    was left at `333696U`. Left as-is, the boot upload will truncate the last
-    11,776 bytes of the newly-baked tile bank (exactly the new geometry this
-    task exists to texture) and place Mario's texture 11,776 bytes earlier
-    than where the renderer now looks for it -- the same class of corruption
-    this whole task was designed to prevent, just moved from bake-time to
-    boot-time. **Do not treat the white surfaces as fixed until
-    `SOURCEBOOT_BOB_TEXTURE_BYTES`'s non-fragment arm is also raised to
-    `345472U`** (see `.superpowers/sdd/2026-09-12-bob-terrain-bake-final/task-1b-report.md`
+  - **Is the white-surface defect fixed? The upload path was the missing
+    piece, and it is now fixed too -- the white surfaces are expected to be
+    gone, pending the owner's visual confirmation.** While validating this
+    change, a THIRD independent hardcoded copy of the same 333,696/261,248
+    boundary was found in `src/port/saturn/sourceboot/main.c`
+    (`SOURCEBOOT_BOB_TEXTURE_BYTES`, non-fragment arm), used at boot to (1)
+    size the `vdp1_vram_partitions_set` texture partition, (2) bound how many
+    bytes of `sm64_saturn_bob_texture_bank` actually get DMA'd to VDP1 VRAM,
+    and (3) choose the VRAM offset Mario's own texture is uploaded to --
+    independent of, and until this fix round no longer equal to, the
+    `SATURN_MARIO_TEXTURE_BASE_OFFSET` this commit moved to 345,472 (which
+    only the per-frame renderer's texture *bind* address in
+    `saturn_demo_render.c` reads). Left unfixed, the boot upload would have
+    truncated the last 11,776 bytes of the newly-baked tile bank (exactly the
+    new geometry this task exists to texture) and placed Mario's texture
+    11,776 bytes earlier than where the renderer looks for it -- the same
+    class of corruption this whole task was designed to prevent, just moved
+    from bake-time to boot-time. Controller-verified independently and granted
+    a scope exception to fix this one line: `main.c`'s non-fragment
+    `SOURCEBOOT_BOB_TEXTURE_BYTES` is now also `345472U` (fragment arm
+    `261248U` unchanged, same reasoning as the other two arms). Re-verified
+    after the fix: `SOURCEBOOT_BOB_TEXTURE_BYTES + SOURCEBOOT_MARIO_TEXTURE_BYTES`
+    = 345,472 + 25,600 = 371,072, against 458,720 B available -- 87,648 B of
+    headroom, no overflow. This boundary now exists as a hardcoded literal in
+    three separate files with no single source of truth; that is a durable
+    defect tracked separately for the whole-branch review, not fixed here.
+    (see `.superpowers/sdd/2026-09-12-bob-terrain-bake-final/task-1b-report.md`
     for the full trace).
 
 ### Changed
