@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`test_no_t_junctions_across_a_shared_edge` now also asserts vertices are
+  shared BY INDEX, not just by coordinate.** The existing coordinate-only
+  check could not detect a regression that inserts a duplicate vertex for
+  the same split edge (e.g. `Mesh.midpoint`'s edge-key memoisation broken) --
+  two indices with equal coordinates look identical to a coordinate set.
+  That is the exact defect class this renderer has already shipped once: a
+  runtime side-plane clip produced visible floor cracks, owner-reported and
+  reverted in `dbd6da17`. Added a second, independent assertion -- a map
+  from coordinate to the set of indices that reference it across every
+  triangle, required to have exactly one member per coordinate -- with a
+  failure message naming the offending coordinate and the competing indices.
+  The original hanging-node/coordinate check is kept; the two assertions
+  verify different properties, and the plan wants both. No implementation
+  file changed in this commit: `subdivide_terrain_ir.py`'s existing
+  `_edge_key` / `Mesh.midpoint` already satisfy the strengthened test.
+
 ### Added
 
 - **UV-repeat terrain refinement: implemented and proven, but OFF by default

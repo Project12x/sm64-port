@@ -83,6 +83,26 @@ def test_no_t_junctions_across_a_shared_edge():
                 f"hanging node at {mid}: an edge of triangle "
                 f"{tri['indices']} passes through another face's corner")
 
+    # The check above only proves coordinates line up. A regression that
+    # inserted a SEPARATE vertex for the same split edge -- e.g. Mesh.midpoint
+    # keying broken so each side computes its own midpoint independently --
+    # would produce two indices whose coordinates happen to be equal, which a
+    # coordinate set cannot distinguish from one shared index. The whole point
+    # of keying midpoints by sorted endpoint pair (_edge_key) is that both
+    # triangles owning an edge get the IDENTICAL index, not merely equal
+    # coordinates, so assert that directly: every coordinate touched by any
+    # triangle must be reached through exactly one index.
+    coordinate_indices: dict[tuple, set] = {}
+    for tri in document["triangles"]:
+        for index in tri["indices"]:
+            coordinate_indices.setdefault(tuple(pos[index]), set()).add(index)
+    for coordinate, indices in coordinate_indices.items():
+        assert len(indices) == 1, (
+            f"vertex at {coordinate} is reached through {len(indices)} "
+            f"different indices {sorted(indices)}: shared by coordinate but "
+            f"not by index -- two separate vertices at the same position, "
+            f"which is the T-junction regression this test exists to catch")
+
 
 def test_untouched_triangle_is_byte_identical():
     """A face already under both limits must pass through unchanged,
