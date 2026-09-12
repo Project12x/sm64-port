@@ -2,6 +2,59 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Terrain subdivision (`subdivide_terrain_ir.py`,
+  `SATURN_TERRAIN_SUBDIVIDE_THRESHOLD`, default 0 = inert).** The actual fix
+  for VDP1's affine texture warp: smaller faces, less affine error each. This
+  is what SlaveDriver does (`WALLS.C:1145` bakes one command per tile-sized
+  `level_face`) and what this project's castle demo already does
+  (`--subdivision 1 --subdivision-threshold 1024`). BOB never had it because
+  its geometry and its tiles come from different tools.
+  - Placed exactly where `decimate_terrain_ir.py` sits -- after extraction,
+    before `saturn_mesh_ir.py` -- so pairing, clustering, BSP, admission and
+    emission all see the refined mesh. The two compose.
+  - Red-green refinement with midpoints keyed by sorted endpoint-index pair,
+    so adjacent triangles receive the SAME vertex index, and a triangle left
+    holding a neighbour's hanging node is split to use it. **No T-junctions by
+    construction** -- the crack defect a runtime side clip produced earlier the
+    same day, prevented rather than discovered on screen.
+  - **Texture-neutral, which was thought impossible.** The long-standing
+    blocker was that BOB's tile bank is exactly 100% full and subdivision
+    "multiplies tiles". It only did so because the baker sizes a tile from UV
+    span alone, giving a child covering a QUARTER of the parent's area its
+    parent's full 32x32 tile -- 4x the texture for the same surface. Sizing by
+    subdivision depth instead (`tile_size >> depth`, floor 16) keeps texel
+    density identical: four 16x16 children occupy exactly the 1024 bytes their
+    32x32 parent did. At threshold 4500 the bank measures **333,056 of 333,696
+    bytes -- 640 bytes LESS than before subdivision**, for 1,101 -> 1,277
+    triangles.
+  - Six pipeline contracts had to be satisfied, each caught by the pipeline
+    rejecting the build rather than by inspection: `source` ids must be unique;
+    they must index `intake["triangles"]`; they carry runtime meaning (the LOD
+    mandatory-route prefix reads `primitive->source0`) so originals cannot be
+    renumbered; the tile baker reads UVs from the INTAKE, not the mesh IR, so
+    children baked from an inherited row would sample the parent's whole
+    texture span and defeat the entire exercise; the step must be idempotent
+    (make can run a recipe twice, and rewriting the extractor's output in place
+    breaks the second pass -- the same trap decimation documents avoiding); and
+    a changed scene needs a republished actor family bundle generation.
+  - `bake_bob_tiles.py` gained `--allow-tile-class-drift`. Its pinned
+    composition check is an exact snapshot, so any deliberate mesh change trips
+    it; the guard still protects every build not intentionally reshaping the
+    mesh.
+  - **BLOCKED AT LINK: `lwram` overflows by 10,384 bytes** at threshold 4500.
+    Terrain arrays are sized by `SM64_SATURN_BOB_PRIMITIVE_COUNT` (867 -> 996)
+    and `..._POSITION_COUNT` (1,625 -> 1,732), about 80 bytes per added
+    primitive. Not yet resolved, and a higher threshold alone does not close
+    it. Candidate reclaims, none safe without care: the dormant A5.8 queue
+    storage is four LWRAM arrays at `DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY` (1,068
+    = Mario vertices + primitives) whose shared capacity is deliberate because
+    descriptor output offsets are global; or returning
+    `complete_actor_hot_arena` to HWRAM, which needs 6,016 B against 3,956 B
+    free. **The visual effect is therefore still unverified** -- the mechanism
+    and the references agree, but nobody has seen it run.
+
 ### Fixed
 
 - **REGRESSION BACKED OUT: `82d401ab` added an unguarded terrain CULL to the

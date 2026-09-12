@@ -2420,6 +2420,27 @@ else
 BOB_MESH_IR_BAKED := $(BOB_MESH_GENERATED)/bob_area1_mesh_ir_v2_decimated.json
 endif
 
+# Terrain subdivision. 0 disables and leaves the pipeline byte-identical.
+# Splits any triangle whose longest edge exceeds the threshold in world units,
+# which is the ONLY fix for VDP1's affine texture warp on large surfaces --
+# SlaveDriver emits one command per tile-sized face (WALLS.C:1145) and this
+# project's castle demo passes --subdivision to bake_castle_uv.py for the same
+# reason. Runs after decimation so the two compose, and before
+# saturn_mesh_ir.py so pairing, clustering, BSP, admission and emission all see
+# the refined mesh.
+SATURN_TERRAIN_SUBDIVIDE_THRESHOLD ?= 0
+ifneq ($(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD),0)
+BOB_MESH_IR_SUBDIVIDED := $(BOB_MESH_GENERATED)/bob_area1_mesh_ir_v2_subdivided.json
+# The tile baker indexes the intake by source id, so refinement grows it too.
+# Written to its own file for the same reason decimation is: rewriting the
+# extractor's output in place makes the step non-idempotent, and make can run
+# a recipe more than once per build.
+BOB_INTAKE_BAKED := $(BOB_MESH_GENERATED)/bob_area1_intake_subdivided.json
+else
+BOB_MESH_IR_SUBDIVIDED := $(BOB_MESH_IR_BAKED)
+BOB_INTAKE_BAKED := $(BOB_MESH_GENERATED)/bob_area1_intake.json
+endif
+
 compile-bob-area: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/extract_bob_area.py" \
 	  --area "$(BOB_AREA_DIR)" \
@@ -2440,8 +2461,17 @@ ifneq ($(SATURN_TERRAIN_DECIMATE_RATIO),1.0)
 	  --report "$(BOB_MESH_GENERATED)/bob_area1_decimation.json" \
 	  --work "$(BOB_MESH_GENERATED)/decimation"
 endif
-	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/saturn_mesh_ir.py" \
+ifneq ($(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD),0)
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/subdivide_terrain_ir.py" \
 	  --input "$(BOB_MESH_IR_BAKED)" \
+	  --output "$(BOB_MESH_IR_SUBDIVIDED)" \
+	  --threshold "$(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD)" \
+	  --intake "$(BOB_MESH_GENERATED)/bob_area1_intake.json" \
+	  --intake-output "$(BOB_INTAKE_BAKED)" \
+	  --report "$(BOB_MESH_GENERATED)/bob_area1_subdivision.json"
+endif
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/saturn_mesh_ir.py" \
+	  --input "$(BOB_MESH_IR_SUBDIVIDED)" \
 	  --output "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
 	  --report "$(BOB_MESH_GENERATED)/bob_area1_report.json"
 
@@ -2469,12 +2499,13 @@ compile-bob-bsp-fragments: compile-bob-area
 
 compile-bob-tiles: compile-bob-area
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_bob_tiles.py" \
-	  --intake "$(BOB_TILES_GENERATED)/bob_area1_intake.json" \
+	  --intake "$(BOB_INTAKE_BAKED)" \
 	  --mesh "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
 	  --asset-root "$(BOB_ASSET_ROOT)" \
 	  --bank "$(BOB_TILES_GENERATED)/bob_tiles_clut16.bin" \
 	  --clut "$(BOB_TILES_GENERATED)/bob_tiles_clut16.pal" \
-	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json"
+	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json" \
+	  $(if $(filter-out 0,$(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD)),--allow-tile-class-drift,)
 
 compile-bob-scene: compile-bob-tiles compile-bob-bsp
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/emit_bob_scene.py" \

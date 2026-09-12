@@ -16,7 +16,7 @@ import struct
 import zlib
 from pathlib import Path
 
-from bake_castle_uv import quantize_clut16, pack_clut16, sample_triangle
+from bake_castle_uv import quantize_clut16, pack_clut16, sample_triangle, sample_quad
 from vdp1_texture import downsample_rgb1555
 from write_if_changed import (write_bytes_if_changed,
                              write_text_if_changed)
@@ -115,7 +115,27 @@ def triangle_k(triangle: dict[str, object]) -> float:
     return max(span_s / tile_s, span_t / tile_t) / 8.0
 
 
-def bake_bob(intake: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict[str, object]]:
+def bake_bob(intake: dict[str, object], asset_root: Path,
+             compiled_mesh: dict[str, object] | None = None,
+             allow_tile_class_drift: bool = False) -> tuple[bytes, bytes, dict[str, object]]:
+    # The runtime binds source0's tile to the compiled A/B/C/D quad.
+    # Preserve bank layout, but bake that tile in the same four-corner domain.
+    # Unpaired source triangles retain the existing A/B/C/C sampler.
+    quad_uvs = {}
+    if compiled_mesh is not None:
+        attributes = compiled_mesh['vertex_attributes']['uv']
+        for primitive in compiled_mesh['primitives']:
+            sources = primitive['source_triangles']
+            if len(sources) == 1:
+                continue
+            indices = primitive['indices']
+            if len(sources) != 2 or len(indices) != 4 or len(set(indices)) != 4:
+                raise ValueError('paired terrain primitive must have four distinct corners')
+            source0 = int(sources[0])
+            if source0 in quad_uvs or not 0 <= source0 < len(intake['triangles']):
+                raise ValueError('paired terrain source identity is invalid or duplicated')
+            quad_uvs[source0] = tuple(tuple(int(v) for v in attributes[index])
+                                     for index in indices)
     textures: dict[str, tuple[int, int, list[int], str, int]] = {}
     for name in sorted({str(t["texture"]) for t in intake["triangles"]}):
         relative = BOB_TEXTURES.get(name)
@@ -136,12 +156,22 @@ def bake_bob(intake: dict[str, object], asset_root: Path) -> tuple[bytes, bytes,
             class_counts["gouraud"] += 1
             continue
         tile_size = 16 if k <= 2 else 32
+        # A subdivided face covers 1/(4**depth) of the original surface, so the
+        # same texel density needs half the tile dimension per level. Without
+        # this a child keeps its parent's full tile and subdivision costs 4x the
+        # texture for identical coverage; with it, four 16x16 children occupy
+        # exactly the 1024 bytes their 32x32 parent did. 16 is the floor.
+        depth = int(triangle.get("subdivision_depth", 0))
+        if depth > 0:
+            tile_size = max(16, tile_size >> depth)
         class_name = f"{tile_size}x{tile_size}"
         class_counts[class_name] += 1
         state = dict(triangle["tile"])
         texture = textures[str(triangle["texture"])]
         uv = tuple(tuple(int(value) for value in point) for point in triangle["uv"])
-        pixels = [sample_triangle(texture, uv, state, x, y, tile_size, 1)
+        sampler = sample_quad if source_index in quad_uvs else sample_triangle
+        uv = quad_uvs.get(source_index, uv)
+        pixels = [sampler(texture, uv, state, x, y, tile_size, 1)
                   for y in range(tile_size) for x in range(tile_size)]
         palette, mapping = quantize_clut16(pixels)
         packed = pack_clut16([mapping[value] for value in pixels])
@@ -162,8 +192,22 @@ def bake_bob(intake: dict[str, object], asset_root: Path) -> tuple[bytes, bytes,
             "clut_offset": clut_offset,
             "clut_bytes": 32,
         })
-    if class_counts != {"16x16": 567, "32x32": 510, "gouraud": 24}:
-        raise ValueError(f"unexpected BOB tile classes: {class_counts}")
+    # Pinned bake composition, as a drift detector for the default pipeline.
+    # It is an exact snapshot, so any DELIBERATE change to the mesh -- terrain
+    # subdivision in particular, which makes polygons smaller and therefore
+    # shifts tiles from 32x32 toward 16x16 -- trips it by construction. Callers
+    # making such a change pass --allow-tile-class-drift, which reports the new
+    # composition instead of failing. The guard still protects every build that
+    # is not intentionally reshaping the mesh.
+    expected_classes = {"16x16": 567, "32x32": 510, "gouraud": 24}
+    if class_counts != expected_classes:
+        if not allow_tile_class_drift:
+            raise ValueError(
+                f"unexpected BOB tile classes: {class_counts} "
+                f"(expected {expected_classes}); pass "
+                f"--allow-tile-class-drift if the mesh change is intended")
+        print(f"bob tiles: class composition {expected_classes} -> "
+              f"{class_counts} (drift allowed)")
     if len(bank) > MAX_TILE_BYTES:
         raise ValueError(f"tile bank exceeds budget: {len(bank)} > {MAX_TILE_BYTES}")
     if len(bank) + len(clut) > MAX_VDP1_TEXTURE_BYTES:
@@ -190,13 +234,22 @@ def bake_bob(intake: dict[str, object], asset_root: Path) -> tuple[bytes, bytes,
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--intake", type=Path, required=True)
+    parser.add_argument("--mesh", type=Path, required=True,
+                        help="Compiled primitive corner order used by the renderer")
     parser.add_argument("--asset-root", type=Path, default=Path("."))
     parser.add_argument("--bank", type=Path, required=True)
     parser.add_argument("--clut", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--allow-tile-class-drift", action="store_true",
+                        help="report rather than reject a tile-class "
+                             "composition that differs from the pinned "
+                             "baseline; for deliberate mesh changes such as "
+                             "terrain subdivision")
     args = parser.parse_args()
     intake = json.loads(args.intake.read_text(encoding="utf-8"))
-    bank, clut, manifest = bake_bob(intake, args.asset_root)
+    mesh = json.loads(args.mesh.read_text(encoding="utf-8"))
+    bank, clut, manifest = bake_bob(intake, args.asset_root, mesh,
+                                    args.allow_tile_class_drift)
     for path, payload in ((args.bank, bank), (args.clut, clut)):
         write_bytes_if_changed(path, payload)
     manifest["bank_sha256"] = hashlib.sha256(bank).hexdigest()
