@@ -21,7 +21,14 @@ from vdp1_texture import downsample_rgb1555
 from write_if_changed import (write_bytes_if_changed,
                              write_text_if_changed)
 
-MAX_TILE_BYTES = 333_696
+# VDP1 layout invariant: this value IS the Mario texture base
+# (SATURN_MARIO_TEXTURE_BASE_OFFSET, src/port/saturn/sourceboot/Makefile:761).
+# The terrain tile bank ends exactly where Mario's textures begin, so these two
+# numbers move together or the bank overwrites Mario. Raised from 333,696 to
+# make room for faces that Task 1's UV-repeat refinement made bakeable -- faces
+# that previously consumed zero texture because the baker gave up on them and
+# the runtime drew a white quad instead.
+MAX_TILE_BYTES = 345_472
 MAX_VDP1_TEXTURE_BYTES = 446_432
 BOB_TEXTURES = {
     **{f"generic_0900{offset:04X}": f"textures/generic/bob_textures.{offset:05X}.rgba16.png"

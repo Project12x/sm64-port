@@ -77,19 +77,28 @@ class InventoryActorFamilyBundlesTest(unittest.TestCase):
         # which matches the real partition this model had always described in
         # prose but not in its numbers. The actor/workspace figures below are
         # this test's own synthetic inputs and are deliberately unchanged.
+        # 2026-09-12 (Task 1b): terrain_texture_bytes and
+        # existing_yaul_remaining_bytes moved again, 333,696 -> 345,472 and
+        # 64,960 -> 53,184, when MAX_TILE_BYTES and
+        # SATURN_MARIO_TEXTURE_BASE_OFFSET both raised by the same 11,776 B to
+        # fund Task 1's UV-repeat terrain refinement (see
+        # ResourceLimits.terrain_texture_bytes for the full derivation).
+        # future_repartition_margin_bytes falls by the same 11,776, to 28,320;
+        # this test's synthetic actor_texture_bytes/actor_clut_bytes inputs
+        # (21120/3744) are still comfortably inside it and are unchanged.
         self.assertEqual(report["vdp1_residency"], {
             "shared_post_command_gouraud_bytes": 458720,
             "existing_reservations": {
-                "terrain_texture_bytes": 333696,
+                "terrain_texture_bytes": 345472,
                 "mario_texture_bytes": 25600,
                 "terrain_clut_bytes": 34464,
             },
             "current_binders_own_remaining": False,
-            "existing_yaul_remaining_bytes": 64960,
+            "existing_yaul_remaining_bytes": 53184,
             "actor_texture_bytes": 21120,
             "actor_clut_bytes": 3744,
             "future_repartition_bytes": 24864,
-            "future_repartition_margin_bytes": 40096,
+            "future_repartition_margin_bytes": 28320,
         })
         # Pre-existing failure, not related to the VDP1 correction above:
         # BOB_MAXIMUM_SCRATCH_BYTES went 3,267 -> 5,891 for King Bob-omb's

@@ -2435,18 +2435,23 @@ SATURN_TERRAIN_SUBDIVIDE_THRESHOLD ?= 0
 # makes the bake total, and the mechanism (see subdivide_terrain_ir.py) is
 # implemented and proven: at 16, BOB's gouraud class goes 24 -> 0.
 #
-# Default is 0 (OFF), NOT because refinement is wrong -- because BOB's tile
-# bank is already at exactly 100% of MAX_TILE_BYTES (333,696 of 333,696) and
-# texturing those 24 previously-free faces needs 345,472 bytes, a real
-# 11,776-byte overflow with zero slack to absorb it. That cap is not
-# arbitrary: MAX_TILE_BYTES == SATURN_MARIO_TEXTURE_BASE_OFFSET (333696U,
-# src/port/saturn/sourceboot/Makefile) -- the terrain tile bank ends exactly
-# where Mario's VDP1 textures begin, so the cap must not be raised until the
-# terrain/Mario texture boundary is relocated (a separate task). Set this to
-# 16 only once that lands; until then it stays 0 so compile-bob-tiles and
-# everything depending on it (compile-bob-scene, verify-bob-bsp-header,
-# verify-all) stay green by default.
-SATURN_TERRAIN_UV_REPEAT_LIMIT ?= 0
+# Default was 0 (OFF) through Task 1b, NOT because refinement was wrong --
+# because BOB's tile bank was already at exactly 100% of MAX_TILE_BYTES
+# (333,696 of 333,696) and texturing those 24 previously-free faces needs
+# 345,472 bytes, a real 11,776-byte overflow with zero slack to absorb it.
+# That cap was not arbitrary: MAX_TILE_BYTES == SATURN_MARIO_TEXTURE_BASE_OFFSET
+# (src/port/saturn/sourceboot/Makefile) -- the terrain tile bank ends exactly
+# where Mario's VDP1 textures begin, so the cap could not be raised until the
+# terrain/Mario texture boundary was relocated.
+#
+# 0 -> 16 (2026-09-12, Task 1b): the boundary moved. Both MAX_TILE_BYTES and
+# SATURN_MARIO_TEXTURE_BASE_OFFSET are now 345,472, verified against a real
+# inventory-actor-family-bundles measurement (11,808 B unallocated in the VDP1
+# partition, 32 B of margin left after this shift) rather than assumed. This
+# is now default-ON: compile-bob-tiles and everything depending on it
+# (compile-bob-scene, verify-bob-bsp-header, verify-all) bake with every
+# terrain face textured by default.
+SATURN_TERRAIN_UV_REPEAT_LIMIT ?= 16
 # Controller correction: this path selection must key off EITHER knob, not
 # SATURN_TERRAIN_SUBDIVIDE_THRESHOLD alone. A UV-repeat-only run (threshold
 # left at its 0 default) still produces a genuinely subdivided IR/intake pair

@@ -119,14 +119,29 @@ class ResourceLimits:
     # off-by-one-allocation they are separately conservative, which is the safe
     # direction, and changing them would re-bake terrain for no current need.
     shared_post_command_gouraud_bytes: int = 458720
-    terrain_texture_bytes: int = 333696
+    # 333696 -> 345472 (2026-09-12, Task 1b): MAX_TILE_BYTES in
+    # bake_bob_tiles.py and SATURN_MARIO_TEXTURE_BASE_OFFSET (non-fragment arm)
+    # in src/port/saturn/sourceboot/Makefile both moved by the same +11,776 B
+    # so the terrain tile bank can hold every face Task 1's UV-repeat
+    # refinement makes bakeable (gouraud 24 -> 0) without overwriting Mario's
+    # textures, which sit immediately after this field's byte count in VDP1.
+    # This field must track that move exactly, or prove_resource_inventory's
+    # reservation equation below stops matching the real bake.
+    terrain_texture_bytes: int = 345472
     mario_texture_bytes: int = 25600
     terrain_clut_bytes: int = 34464
     # Derived: shared_post_command_gouraud_bytes - (terrain texture + mario
-    # texture + terrain CLUT) = 458,720 - 393,760. The reservation equation in
+    # texture + terrain CLUT) = 458,720 - 405,536. The reservation equation in
     # prove_resource_inventory asserts exactly that, so these two move together
     # or the bake fails. 52,672 -> 64,960 (2026-09-10); see the note above.
-    existing_vdp1_remaining_bytes: int = 64960
+    # 64960 -> 53184 (2026-09-12, Task 1b): terrain_texture_bytes above just
+    # took 11,776 B of this margin to fund Task 1's refinement. A real
+    # `inventory-actor-family-bundles` run against the current BOB bundle
+    # (2026-09-12) measured actor_texture_bytes=45,056 + actor_clut_bytes=8,096
+    # = 53,152 B of real residency, so this leaves 32 B of margin
+    # (future_repartition_margin_bytes) -- thin, but nonnegative, and it is
+    # what Step 1 of Task 1b's brief verified before this number moved.
+    existing_vdp1_remaining_bytes: int = 53184
     # Generic-bundle design: the emitted scene maximum is rounded up to 256 B.
     workspace_capacity_bytes: int = BOB_WORKSPACE_CAPACITY_BYTES
     cart_bytes: int = 4 * 1024 * 1024

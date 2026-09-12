@@ -2,6 +2,80 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Relocated the terrain/Mario VDP1 texture boundary and turned Task 1's
+  UV-repeat refinement ON by default
+  (`SATURN_TERRAIN_UV_REPEAT_LIMIT`, `0` -> `16`).** Task 1 made the bake
+  incapable of emitting an untextured (`gouraud`) terrain face, but the
+  refined tile bank needs 345,472 bytes against a 333,696-byte cap -- and that
+  cap was not arbitrary, it was exactly `SATURN_MARIO_TEXTURE_BASE_OFFSET`
+  (`src/port/saturn/sourceboot/Makefile:761`): the terrain tile bank ends
+  precisely where Mario's VDP1 textures begin, so it shipped default-OFF
+  rather than risk overwriting Mario. This task moves both numbers together,
+  by the same +11,776 bytes, to 345,472.
+  - **Measured, not assumed, before moving anything.** The prior estimate
+    that 11,808 B were unallocated in the VDP1 partition was a subtraction
+    across `ResourceLimits` dataclass constants in
+    `inventory_actor_family_bundles.py`, not a measurement, and left only 32 B
+    of slack against the 11,776 needed. A real `inventory-actor-family-bundles`
+    run -- compiling the current BOB actor bundle fresh and reading its actual
+    `actor_texture_bytes`/`actor_clut_bytes` residency, not just the budget
+    ceiling -- confirmed the real residency (45,056 + 8,096 = 53,152 B) sits
+    exactly at that ceiling, so the 11,808 B figure held. Re-running the bake
+    at `SATURN_TERRAIN_UV_REPEAT_LIMIT=16` independently reconfirmed the
+    345,472-byte requirement (third confirmation counting Task 1's own two).
+  - `tools/saturn/bake_bob_tiles.py::MAX_TILE_BYTES`: `333_696` -> `345_472`.
+  - `src/port/saturn/sourceboot/Makefile:761`
+    (`SATURN_MARIO_TEXTURE_BASE_OFFSET`), non-fragment arm: `333696U` ->
+    `345472U`. **The `SATURN_DEMO_BSP_FRAGMENTS=1` fragment arm (`261248U`) is
+    deliberately left unchanged.** It sizes the independent BSP-fragments
+    demo bank (`tools/saturn/bake_bob_bsp_fragments.py`, its own
+    `MAX_RESIDENT_BYTES=446,432` ceiling, no reference to `MAX_TILE_BYTES`),
+    which `main.c` swaps in for `sm64_saturn_bob_texture_bank` entirely when
+    that flag is set. `Makefile.saturn.mk` has zero references to
+    `SATURN_DEMO_BSP_FRAGMENTS`; the flat bank this change resizes is linked
+    in unconditionally either way. The two arms bound two different,
+    independently-budgeted banks -- moving the fragment arm by the same
+    11,776 would have been an unmeasured change against a budget this task
+    never touched.
+  - `tools/saturn/inventory_actor_family_bundles.py`: `ResourceLimits`'s
+    `terrain_texture_bytes` (`333696` -> `345472`) and
+    `existing_vdp1_remaining_bytes` (`64960` -> `53184`) now track the moved
+    boundary, so `prove_resource_inventory`'s reservation equation keeps
+    matching the real bake instead of silently drifting stale.
+    `test_inventory_actor_family_bundles.py`'s golden `vdp1_residency`
+    expectation was updated to match (`future_repartition_margin_bytes`
+    `40096` -> `28320` for that test's synthetic inputs).
+  - Post-move: `inventory-actor-family-bundles` passes with exactly 32 B of
+    margin left (`future_repartition_margin_bytes`) -- thin, but confirmed
+    nonnegative rather than assumed. The bake now reports
+    `coverage: {'16x16': 667, '32x32': 508, 'gouraud': 0}` and
+    `texture_bytes: 345472` (exactly at the new cap, `resident_bytes: 383072`
+    against `max_resident_bytes: 446432`).
+  - **Is the white-surface defect fixed? The bake-side half is fixed and
+    verified; the runtime half is not confirmed, and there is a specific,
+    concrete reason to doubt it.** While validating this change, a SECOND,
+    independent hardcoded copy of the same 333,696/261,248 boundary was found
+    in `src/port/saturn/sourceboot/main.c` (`SOURCEBOOT_BOB_TEXTURE_BYTES`,
+    non-fragment arm `333696U`), used at boot to (1) size the
+    `vdp1_vram_partitions_set` texture partition, (2) bound how many bytes of
+    `sm64_saturn_bob_texture_bank` actually get DMA'd to VDP1 VRAM, and (3)
+    choose the VRAM offset Mario's own texture is uploaded to -- independent
+    of, and no longer equal to, the `SATURN_MARIO_TEXTURE_BASE_OFFSET` this
+    commit just moved to 345,472 (which only the per-frame renderer's texture
+    *bind* address in `saturn_demo_render.c` reads). This task's file scope
+    explicitly excluded `.c`/`.h` changes, so `SOURCEBOOT_BOB_TEXTURE_BYTES`
+    was left at `333696U`. Left as-is, the boot upload will truncate the last
+    11,776 bytes of the newly-baked tile bank (exactly the new geometry this
+    task exists to texture) and place Mario's texture 11,776 bytes earlier
+    than where the renderer now looks for it -- the same class of corruption
+    this whole task was designed to prevent, just moved from bake-time to
+    boot-time. **Do not treat the white surfaces as fixed until
+    `SOURCEBOOT_BOB_TEXTURE_BYTES`'s non-fragment arm is also raised to
+    `345472U`** (see `.superpowers/sdd/2026-09-12-bob-terrain-bake-final/task-1b-report.md`
+    for the full trace).
+
 ### Changed
 
 - **`test_no_t_junctions_across_a_shared_edge` now also asserts vertices are

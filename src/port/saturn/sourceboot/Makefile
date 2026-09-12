@@ -728,6 +728,30 @@ ifneq ($(strip $(SATURN_OBJECT_POOL_CAPACITY)),)
 SH_CFLAGS += -DSATURN_OBJECT_POOL_CAPACITY_OVERRIDE=$(SATURN_OBJECT_POOL_CAPACITY_EFFECTIVE)
 endif
 
+# VDP1 layout invariant: SATURN_MARIO_TEXTURE_BASE_OFFSET (non-fragment arm,
+# below) IS MAX_TILE_BYTES in tools/saturn/bake_bob_tiles.py -- the terrain
+# tile bank ends exactly where Mario's textures begin, so the two move
+# together or the bank overwrites Mario. Raised 333,696 -> 345,472
+# (2026-09-12, Task 1b) to fund Task 1's UV-repeat refinement, which makes
+# every terrain face bakeable and needs 11,776 more bytes than the old cap
+# allowed. Verified against a real `inventory-actor-family-bundles`
+# measurement, not merely derived from ResourceLimits constants: 11,808 B were
+# unallocated in the existing VDP1 partition (fresh compile of the current BOB
+# actor bundle, 2026-09-12), 32 B more than the shift needs.
+#
+# The fragment arm (261248U) is intentionally UNCHANGED, not merely left
+# alone by omission. It sizes SOURCEBOOT_BOB_TEXTURE_BYTES for the
+# SATURN_DEMO_BSP_FRAGMENTS build (see main.c), which #defines
+# sm64_saturn_bob_texture_bank to alias sm64_saturn_bob_fragment_texture_bank
+# -- the fragment-specific bank baked by tools/saturn/bake_bob_bsp_fragments.py
+# under its own independent MAX_RESIDENT_BYTES=446,432 ceiling, which never
+# imports or references MAX_TILE_BYTES. Makefile.saturn.mk has zero references
+# to SATURN_DEMO_BSP_FRAGMENTS, and the flat bank this change resizes
+# (SOURCEBOOT_BOB_TEXTURE_ASM) is linked in unconditionally either way -- the
+# two arms bound two different, independently-budgeted texture banks, so
+# raising one has no bearing on the other and moving the fragment arm by the
+# same 11,776 would be an unmeasured, ungrounded change against a budget this
+# task never touched.
 SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSION_JP_US=1 \
   -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
   -DTARGET_SATURN=1 -DSATURN_SOURCEBOOT=1 -DNO_SEGMENTED_MEMORY=1 \
@@ -760,7 +784,7 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -DSATURN_DEMO_BSP_FRAGMENTS=$(SATURN_DEMO_BSP_FRAGMENTS) \
   -DSATURN_DEMO_BSP_FRAGMENT_FLAT=$(SATURN_DEMO_BSP_FRAGMENT_FLAT) \
   -DSATURN_DEMO_PATH=$(SATURN_DEMO_PATH) \
-  -DSATURN_MARIO_TEXTURE_BASE_OFFSET=$(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENTS)),261248U,333696U) \
+  -DSATURN_MARIO_TEXTURE_BASE_OFFSET=$(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENTS)),261248U,345472U) \
   -DSM64_SATURN_VDP1_LWRAM_STAGING=1 -DSATURN_MTX_IS_Q16=1 \
   -fno-lto -ffunction-sections -fdata-sections \
   -I$(CURDIR) -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src \
