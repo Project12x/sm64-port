@@ -31,6 +31,61 @@
 #define SATURN_DEMO_TERRAIN_GOURAUD 0
 #endif
 
+/* Diagnostic only; see the comment at its use site in the terrain transform
+ * job. 0 is a strict no-op and is the only shippable value. */
+#ifndef DEMO_FILL_PROBE_SHIFT
+#define DEMO_FILL_PROBE_SHIFT 0
+#endif
+
+/* DEMO_TERRAIN_BYPASS -- DIAGNOSTIC, default 0 (no-op).
+ *
+ * Prices the back half of the terrain plumbing by replacing it with the direct
+ * path this port used before the job graph existed: transform-and-emit, one
+ * VDP1 command per visible primitive, via demo_emit_primitive().
+ *
+ * REMOVED when on: demo_terrain_queue_assemble_merge_spans(), the
+ * s_terrain_emit_refs walk, demo_terrain_final_command() resolution, the
+ * resolved-template patch, and demo_emit_terrain_result() itself.
+ * KEPT when on: the render job graph, WORLD_ADMIT (which fills the projected
+ * position cache that demo_primitive_screen_vertices reads), WORLD_LOWER's
+ * classification, and the whole queue/lifecycle protocol -- short-circuiting
+ * WORLD_LOWER would leave the queue non-terminal and fail the frame closed,
+ * so the front half of the plumbing needs a separate probe.
+ *
+ * Known probe artifacts, acceptable because this measures CPU cost and VDP1
+ * fill was measured not to be the limiter (+1.95% for a 16x fill cut):
+ *   - cmd_link is left at 0, so every command lands in one depth bin and
+ *     draws in arena order rather than sorted painter order. Ordering may
+ *     look wrong on screen.
+ *   - demo_emit_primitive() predates the terrain result record, so recovery
+ *     and texture-suppressed variants are not reproduced.
+ * Do not ship non-zero. */
+#ifndef DEMO_TERRAIN_BYPASS
+#define DEMO_TERRAIN_BYPASS 0
+#endif
+
+/* DEMO_TERRAIN_BYPASS_FRONT -- DIAGNOSTIC, default 0 (no-op).
+ *
+ * Prices the FRONT half of the terrain plumbing, which DEMO_TERRAIN_BYPASS
+ * deliberately leaves running. WORLD_LOWER still satisfies its whole job
+ * protocol -- context_open, bind_output, claim_index, world_lower_admit_done,
+ * publish_result -- so the queue still reaches terminal and the frame does not
+ * fail closed. What is skipped is the WORK: demo_prepare_position_owners(),
+ * the terrain result arena, and demo_terrain_compact_transformed(), i.e. the
+ * whole classification pass. It publishes zero records, which is safe only
+ * because the back-half bypass emits terrain directly from the projected
+ * position cache and nothing downstream consumes those records.
+ *
+ * Requires the back-half bypass: without direct emission, skipping
+ * classification would simply delete terrain and measure nothing.
+ * Do not ship non-zero. */
+#ifndef DEMO_TERRAIN_BYPASS_FRONT
+#define DEMO_TERRAIN_BYPASS_FRONT 0
+#endif
+#if DEMO_TERRAIN_BYPASS_FRONT && !DEMO_TERRAIN_BYPASS
+#error "DEMO_TERRAIN_BYPASS_FRONT requires DEMO_TERRAIN_BYPASS"
+#endif
+
 /* The generic actor-instance queue is infrastructure-only until the
  * production actor cutover has a source-derived family/meshlet package. Keep
  * the feature switch visible at this boundary so feature-off builds prove
@@ -2075,6 +2130,53 @@ static void demo_classify_exact(demo_classify_context_t *context,
             if (projected_count == 3U)
                 s_clipped_projected[i][3] = s_clipped_projected[i][2];
         }
+        /* Side-plane clip, for primitives the near clip did not already
+         * rewrite. This is the terrain warp fix: a quad wholly in front of the
+         * near plane can still run far off the side or bottom of the screen,
+         * and its outside corners then cannot be represented in VDP1's 11-bit
+         * coordinates. Clamping them -- even along the view ray -- moves those
+         * corners relative to the ones that stayed, which shears the texture.
+         * Cutting the ring at the boundary puts the new corner exactly where
+         * the edge crosses, so no surviving corner moves at all.
+         *
+         * Only a 3- or 4-corner result is taken. Anything larger would need
+         * more than one VDP1 command, so it falls through to the existing
+         * ray-preserving clamp rather than being truncated -- truncating would
+         * punch a hole in the ground, which is far worse than a sheared edge. */
+        if (s_primitive_clipped[i] == 0U) {
+            sm64_saturn_terrain_clip_output_t side;
+            const int side_count = sm64_saturn_terrain_clip_side_planes(
+                clip_input, 4U, context->job->focal_length,
+                context->job->center_x, context->job->center_y,
+                context->job->coord_min, context->job->coord_max, &side);
+            if (side_count == 0 &&
+                side.classification == SM64_SATURN_TERRAIN_CLIP_AWAY) {
+                /* Every corner beyond one plane: a convex ring cannot be
+                 * visible, so this is a cull, not a rejection. */
+                context->clip_away[lane]++;
+                s_primitive_visible[i] = 0U;
+                continue;
+            }
+            if ((side_count == 3 || side_count == 4) &&
+                side.classification == SM64_SATURN_TERRAIN_CLIP_CROSSES) {
+                bool side_projection_valid = true;
+                for (uint8_t corner = 0U; corner < (uint8_t)side_count;
+                     corner++) {
+                    if (!sm64_saturn_ir_project_view(
+                            context->job, side.vertices[corner].view,
+                            &s_clipped_projected[i][corner])) {
+                        side_projection_valid = false;
+                        break;
+                    }
+                }
+                if (side_projection_valid) {
+                    s_primitive_clipped[i] = 1U;
+                    s_primitive_corner_count[i] = (uint8_t)side_count;
+                    if (side_count == 3)
+                        s_clipped_projected[i][3] = s_clipped_projected[i][2];
+                }
+            }
+        }
         /* Match the castleviewer/SlaveDriver painter contract: a primitive's
          * farthest projected corner owns its painter key.  Using the nearest
          * corner made large BOB quads jump in front of neighboring surfaces as
@@ -3135,6 +3237,12 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
             admit_metadata->writer_lane, &handoff) ||
         handoff.peer_transform_required != 0U)
         return false;
+#if DEMO_TERRAIN_BYPASS_FRONT
+    /* Front-half probe: the protocol above has run and the job will retire
+     * terminal; everything below is the classification work being priced. */
+    return demo_terrain_queue_publish_result(
+        job, claimed_state, output.writer_lane, 0U, context->sequence);
+#else
     /* Rebuild the owner bytes in this lower claimant's local cache from the
      * exact DONE admit claimant before selecting P1/P2 position payloads.
      * This makes slave-admit -> master-lower safe across frame generations. */
@@ -3152,6 +3260,7 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
         return false;
     return demo_terrain_queue_publish_result(
         job, claimed_state, output.writer_lane, arena.count, compact.sequence);
+#endif
 }
 
 #if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
@@ -4018,6 +4127,83 @@ static void __attribute__((unused)) demo_emit_primitive(
     profile->triangles_vdp1_emitted++;
     profile->triangles_emitted++;
 }
+
+#if DEMO_TERRAIN_BYPASS
+/* Direct terrain lowering: projected cache -> VDP1 command, with none of the
+ * result-record / merge-span / resolved-template machinery in between.
+ *
+ * Every piece of per-primitive state this needs is already maintained by
+ * demo_classify_exact() as a plain array, so nothing extra is computed:
+ *   - s_primitive_visible      caller's gate; LOD suppression already clears it
+ *   - s_primitive_clipped      honoured inside demo_primitive_screen_vertices
+ *   - s_primitive_recovery     a failed texture bind must not be retried
+ *   - s_primitive_lod_texture_downgraded  material LOD: draw flat, not textured
+ * Terrain Gouraud is gone (SATURN_DEMO_TERRAIN_GOURAUD 0), so the untextured
+ * case is a plain CC_REPLACE and no bank allocation happens here at all --
+ * which is also what makes this path safe to split across CPUs later.
+ *
+ * cmd_link carries the depth bin exactly as demo_emit_terrain_result() does:
+ * painter_key is unsigned view-space depth and projected->z IS view z. Pass 1
+ * of sm64_saturn_vdp1_backend_link_depth_bins() rejects the whole list on the
+ * first tag >= bin_count, so this field is not optional. */
+static void demo_emit_terrain_direct(
+    uint16_t primitive_index, sm64_saturn_vdp1_backend_t *backend,
+    sm64_saturn_fast3d_profile_t *profile,
+    const vdp1_vram_partitions_t *partitions)
+{
+    const sm64_saturn_bob_primitive_t *const primitive =
+        &s_bob_primitives_active[primitive_index];
+    int16_vec2_t vertices[4];
+    demo_primitive_screen_vertices(primitive, vertices);
+    const int16_vec2_t shape_vertices[4] = {
+        vertices[0], vertices[1], vertices[2],
+        /* Triangles keep the repeated-C convention; true quads keep corner 3. */
+        primitive->source1 == 0xFFFFU ? vertices[2] : vertices[3]};
+    const int32_t cross = (int32_t)(vertices[1].x - vertices[0].x) *
+                              (vertices[2].y - vertices[0].y) -
+                          (int32_t)(vertices[1].y - vertices[0].y) *
+                              (vertices[2].x - vertices[0].x);
+    if (cross == 0) {
+        profile->reject_degenerate++;
+        return;
+    }
+    vdp1_cmdt_t *const cmdt = sm64_saturn_vdp1_backend_reserve(backend, 1U);
+    if (cmdt == NULL) {
+        profile->reject_vdp1_arena_capacity++;
+        profile->pipeline_faults++;
+        return;
+    }
+    const sm64_saturn_projected_vertex_t *const corner0 =
+        demo_projected_read(0U, primitive->indices[0]);
+    const uint16_t painter_bin = sm64_saturn_terrain_depth_bin(
+        corner0 != NULL && corner0->z > 0 ? (uint32_t)corner0->z : 0U);
+    vdp1_cmdt_polygon_set(cmdt);
+    vdp1_cmdt_vtx_set(cmdt, shape_vertices);
+    if (primitive->textured != 0U && !SATURN_DEMO_BSP_FRAGMENT_FLAT &&
+        s_primitive_recovery[primitive_index] == 0U &&
+        s_primitive_lod_texture_downgraded[primitive_index] == 0U &&
+        sm64_saturn_ir_texture_bind_clut16(
+            cmdt, partitions, primitive->tile_offset, primitive->tile_size,
+            primitive->tile_size,
+            (uint16_t)(primitive->clut_offset / sizeof(vdp1_clut_t)),
+            VDP1_CMDT_CC_REPLACE, shape_vertices)) {
+        cmdt->cmd_link = painter_bin;
+        profile->texture_commands++;
+        profile->triangles_vdp1_emitted++;
+        profile->triangles_emitted++;
+        return;
+    }
+    vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+        .color_mode = VDP1_CMDT_CM_RGB_32768,
+        .cc_mode = VDP1_CMDT_CC_REPLACE});
+    vdp1_cmdt_color_set(cmdt, RGB1555(1, primitive->rgb[0], primitive->rgb[1],
+                                      primitive->rgb[2]));
+    cmdt->cmd_link = painter_bin;
+    profile->flat_primitives++;
+    profile->triangles_vdp1_emitted++;
+    profile->triangles_emitted++;
+}
+#endif
 
 static void demo_resolve_terrain_command_templates(
     const vdp1_vram_partitions_t *partitions)
@@ -5264,7 +5450,25 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
         return false;
     const sm64_saturn_ir_transform_job_t terrain_job = {
         .camera = demo_camera(snapshot),
-        .focal_length = DEMO_FOCAL_LENGTH,
+        /* DEMO_FILL_PROBE_SHIFT is a DIAGNOSTIC, default 0 (no-op).
+         *
+         * It scales the PROJECTION focal length only. Scene admission keeps
+         * DEMO_FOCAL_LENGTH (saturn_demo_render.c ~1039, ~1094), so exactly
+         * the same primitives are admitted, transformed, classified and
+         * lowered, and the VDP1 command count is unchanged -- but every quad
+         * projects smaller, so VDP1 fills roughly 1/(1<<(2*shift)) the pixels.
+         *
+         * This isolates VDP1 fill time from CPU time. Content-reduction
+         * experiments in this project (decimation, LOD, portals, draw
+         * distance) all reduce primitive COUNT and all saturated near +10%;
+         * none of them reduce fill AREA, because they remove far geometry,
+         * which is small on screen, while fill is dominated by near geometry.
+         * If FPS moves sharply with this probe on, the frame is fill-bound and
+         * that whole line of experiments was measuring the wrong axis.
+         *
+         * Do not ship non-zero. Shrinking projection without shrinking the
+         * admission frustum is deliberately wrong rendering. */
+        .focal_length = DEMO_FOCAL_LENGTH >> DEMO_FILL_PROBE_SHIFT,
         .near_depth = SATURN_DEMO_NEAR_DEPTH,
         .center_x = DEMO_CENTER_X,
         .center_y = DEMO_CENTER_Y,
@@ -5545,13 +5749,21 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
     const bool terminal = sm64_saturn_render_job_queue_all_terminal(
         &s_render_job_queue, transform_generation);
     bool queue_ok = terminal &&
+#if !DEMO_TERRAIN_BYPASS
         demo_terrain_queue_assemble_merge_spans(
             SM64_SATURN_RENDER_OUTPUT_LANE_MASTER,
             &s_terrain_queue_merge_spans) &&
+#endif
         (actor_vertex_count == 0U ||
          demo_actor_queue_assemble_done(
              SM64_SATURN_RENDER_OUTPUT_LANE_MASTER,
              &s_mario_transform_context));
+#if DEMO_TERRAIN_BYPASS
+    /* merge_spans is what normally republishes these each frame. With it
+     * skipped they would still hold the previous frame's refs, and the
+     * occluder scan in demo_actor_emit_dispatch() walks exactly this count. */
+    s_terrain_emit_count = 0U;
+#endif
     uint32_t terrain_results_by_lane[2] = {0U, 0U};
     if (queue_ok) {
         for (uint16_t job_index = 0U;
@@ -5633,6 +5845,18 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
      * This is the earliest the dispatch can be raised: gouraud_first is an
      * input and is only fixed by the reservation just above. */
     if (!demo_actor_emit_dispatch(transaction, gouraud_bank)) return false;
+#if DEMO_TERRAIN_BYPASS
+    /* Probe: the pre-job-graph direct path. Same inputs (the projected
+     * position cache WORLD_ADMIT filled, the same visible set), same one
+     * command per primitive, none of the record/span/template machinery. */
+    for (uint16_t ordinal = 0U; ordinal < s_render_work_count; ordinal++) {
+        const uint16_t primitive_index = s_render_work_order[ordinal];
+        if (primitive_index >= SM64_SATURN_BOB_PRIMITIVE_COUNT) continue;
+        if (s_primitive_visible[primitive_index] == 0U) continue;
+        demo_emit_terrain_direct(primitive_index, backend, profile,
+                                 partitions);
+    }
+#else
     /* The master owns terrain and Mario lowering. Compact terrain results are
      * merged above, then consumed in the stable baked painter order here. */
     for (uint16_t ordinal = terrain_first;
@@ -5646,6 +5870,7 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
             &s_bob_primitives_active[result->primitive_id], backend,
             gouraud_bank, profile, partitions);
     }
+#endif
     /* Mario remains master-owned and consumes the live bridge pose, textured
      * material bindings, and per-vertex Gouraud data after terrain compaction.
      * The 68000 stays out of this path; as in Z-Treme and SlaveDriver it is

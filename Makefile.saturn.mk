@@ -721,6 +721,12 @@ verify-terrain-clip:
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/slavedriver_terrain_clip.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/terrain-clip-smoke$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/terrain-clip-smoke$(HOST_EXEEXT)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/terrain_clip_side_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/slavedriver_terrain_clip.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/terrain-clip-side$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/terrain-clip-side$(HOST_EXEEXT)"
 
 verify-ztreme-frustum:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
@@ -2464,6 +2470,7 @@ compile-bob-bsp-fragments: compile-bob-area
 compile-bob-tiles: compile-bob-area
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_bob_tiles.py" \
 	  --intake "$(BOB_TILES_GENERATED)/bob_area1_intake.json" \
+	  --mesh "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
 	  --asset-root "$(BOB_ASSET_ROOT)" \
 	  --bank "$(BOB_TILES_GENERATED)/bob_tiles_clut16.bin" \
 	  --clut "$(BOB_TILES_GENERATED)/bob_tiles_clut16.pal" \

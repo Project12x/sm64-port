@@ -4,6 +4,48 @@
 
 ### Fixed
 
+- **Terrain side-plane clipping (`sm64_saturn_terrain_clip_side_planes`).**
+  Terrain quads are now cut at the screen-edge planes instead of having
+  out-of-range corners dragged back to the coordinate box. Corners that were
+  already inside do not move at all, which is the difference between clipping
+  and any form of clamping, and is asserted directly by the new host test.
+  - Four planes, all through the camera origin, so each is an exact integer
+    test in view space: bottom is `-F*y - z*(MAX - CY) <= 0`, and the others
+    follow the same form. int64 is required -- `z * (coord - centre)` overflows
+    int32 for distant geometry.
+  - Applied only to primitives the NEAR clip did not already rewrite, leaving
+    that delicate path untouched. Only 3- and 4-corner results are taken;
+    anything larger needs more than one VDP1 command and falls back to the
+    ray-preserving clamp rather than being truncated, because truncating would
+    punch holes in the ground. An all-outside ring becomes a cull, which is
+    sound for a convex ring.
+  - New `terrain_clip_side_test.c`, wired into `verify-terrain-clip`. It
+    asserts geometry, not return codes: an on-screen quad passes through
+    byte-identical and classified FRONT (so there is no per-frame cost on
+    primitives that need no clipping), and the ground-off-bottom case yields
+    exactly 4 corners with the two inside corners unmoved.
+
+- **ROOT CAUSE CORRECTION: the residual terrain warp is VDP1 affine texture
+  mapping, NOT coordinate clamping.** This repo previously recorded the cause
+  as "±1024 screen-coordinate clamping ... not affine-over-large-quads". That
+  is wrong, and the two fixes above are the evidence:
+  - Making the clamp preserve the view ray **improved** the warp -- badly
+    placed vertices worsen affine error.
+  - Correct side-plane clipping, with corners provably unmoved, **did not
+    finish the job** -- because the residual was never about vertex position.
+  - VDP1 draws distorted sprites: the texture is interpolated linearly along
+    quad edges with no per-pixel perspective divide. A large quad at a grazing
+    angle warps regardless of vertex correctness. This is the PlayStation 1
+    defect, and it is inherent to the hardware.
+  - It also re-explains the castle demo: `--subdivision 1
+    --subdivision-threshold 1024` was never a clamp workaround. Subdivision is
+    the standard fix for affine warping -- smaller quads, less error each.
+  - Only two real fixes exist. Subdivision is blocked on BOB: the texture bank
+    is at exactly 100% (`texture_bytes` 333,696 of 333,696). The other is
+    moving the ground to a VDP2 rotation plane, which removes the affine error
+    entirely and also deletes those quads from admission, transform, emit and
+    DMA.
+
 - **Terrain texture warping reduced: screen-coordinate clamping now preserves
   the view ray instead of clamping each axis independently.** Partial fix,
   owner-confirmed improved but not eliminated; see the remainder below.

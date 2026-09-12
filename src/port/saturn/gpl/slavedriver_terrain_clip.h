@@ -44,4 +44,15 @@ int sm64_saturn_terrain_clip_near_quad(
     int32_t near_depth,
     sm64_saturn_terrain_clip_output_t *output);
 
+/* Clip a convex view-space ring against the four screen-edge planes, so that
+ * every surviving corner projects inside the 11-bit VDP1 coordinate box
+ * without any vertex being moved. Run AFTER the near clip: the derivation
+ * requires z > 0. Reports CLIP_OVERFLOW rather than truncating, so a caller
+ * limited to four-corner commands can fall back. */
+int sm64_saturn_terrain_clip_side_planes(
+    const sm64_saturn_terrain_clip_vertex_t *input, uint8_t input_count,
+    int32_t focal_length, int16_t center_x, int16_t center_y,
+    int16_t coord_min, int16_t coord_max,
+    sm64_saturn_terrain_clip_output_t *output);
+
 #endif
