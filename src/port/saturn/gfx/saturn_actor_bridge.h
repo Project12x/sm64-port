@@ -11,6 +11,15 @@ typedef struct sm64_saturn_mario_actor_snapshot {
     int32_t camera_position[3];
     int32_t camera_focus[3];
     int16_t yaw;
+    /* gfx.angle[0] and [2]. The original builds an object's matrix with
+     * mtxf_rotate_zxy_and_translate over all THREE angles
+     * (rendering_graph_node.c:1769); carrying only yaw silently flattens every
+     * tilted pose. Measured against the real mtxf_rotate_zxy_and_translate on
+     * host: exact at pitch = roll = 0, and wrong by up to 160 world units --
+     * Mario's whole height -- at a quarter turn. That is the sudden-stop and
+     * turn-around facing defect. */
+    int16_t pitch;
+    int16_t roll;
     uint32_t action;
     int16_t animation_id;
     int16_t animation_frame;

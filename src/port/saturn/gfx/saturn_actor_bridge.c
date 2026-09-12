@@ -953,6 +953,12 @@ uint8_t sm64_saturn_mario_actor_snapshot(
     snapshot->camera_yaw = gLakituState.yaw;
     snapshot->camera_pitch = gLakituState.oldPitch;
     snapshot->yaw = gMarioState->faceAngle[1];
+    /* The renderer needs the GRAPH OBJECT's angle, which is what the original
+     * draws with; faceAngle supplies yaw when no graph object exists yet. */
+    snapshot->pitch = gMarioObject != NULL
+        ? (int16_t)gMarioObject->header.gfx.angle[0] : 0;
+    snapshot->roll = gMarioObject != NULL
+        ? (int16_t)gMarioObject->header.gfx.angle[2] : 0;
     snapshot->action = gMarioState->action;
     /* Mario-orientation probe (2026-09-03). He is reported as facing the wrong
      * way moving forward/back but not left/right. Four candidate causes have

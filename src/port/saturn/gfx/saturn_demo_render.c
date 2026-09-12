@@ -3,6 +3,10 @@
 #pragma GCC optimize ("O2")
 #endif
 #include "saturn_demo_render.h"
+/* sm64_saturn_mtxq_rotate_zxy_and_translate for Mario's tilted object matrix.
+ * It is a per-TU static inline marked noinline, so this adds exactly one copy
+ * to HWRAM -- see the header's own note about the TLSF floor. */
+#include "saturn_matrix_ctors.h"
 #include "../platform/saturn_cart_code.h"
 
 #ifndef SATURN_DEMO_BSP_FRAGMENT_FLAT
@@ -81,6 +85,13 @@
  * Do not ship non-zero. */
 #ifndef DEMO_TERRAIN_BYPASS_FRONT
 #define DEMO_TERRAIN_BYPASS_FRONT 0
+#endif
+
+/* Side-plane clipping of terrain. OFF: it is correct and host-tested but
+ * causes T-junction cracks along shared edges, and it does not reduce the
+ * warp (that is VDP1 affine mapping). See the call site. */
+#ifndef DEMO_TERRAIN_SIDE_CLIP
+#define DEMO_TERRAIN_SIDE_CLIP 0
 #endif
 #if DEMO_TERRAIN_BYPASS_FRONT && !DEMO_TERRAIN_BYPASS
 #error "DEMO_TERRAIN_BYPASS_FRONT requires DEMO_TERRAIN_BYPASS"
@@ -1605,23 +1616,83 @@ static uint8_t demo_lod_select(uint32_t generation, uint16_t primitive_index,
     return next;
 }
 
+/* Mario's object matrix, built once per transform range.
+ *
+ * Deliberately noinline, and deliberately NOT SM64_SATURN_CART_COLD -- this is
+ * frame-time code and that annotation's contract forbids it. Out of line
+ * because sm64_saturn_mtxq_rotate_zxy_and_translate is a header inline, and
+ * letting it expand at more than one site puts HWRAM under libyaul's TLSF
+ * control-block floor at link time.
+ *
+ * Returns true when the pose is tilted and the matrix must be used. */
+static __attribute__((noinline)) bool demo_build_mario_object_matrix(
+    const demo_mario_transform_context_t *context, sm64_saturn_mtx_t *out)
+{
+    if (context->snapshot.pitch == 0 && context->snapshot.roll == 0)
+        return false;
+    const int32_t translation[3] = {
+        (int32_t)context->snapshot.position[0],
+        (int32_t)context->snapshot.position[1],
+        (int32_t)context->snapshot.position[2]};
+    sm64_saturn_mtxq_rotate_zxy_and_translate(
+        out, translation, context->snapshot.pitch, context->snapshot.yaw,
+        context->snapshot.roll);
+    return true;
+}
+
+/* The tilted arm, emitted once. Q16.16 rotation narrowed back to raw units,
+ * then the raw translation row -- the same application order
+ * saturn_actor_pose.c uses. Mario is untilted for most of normal play, so this
+ * is off the common path and kept out of line. */
+static __attribute__((noinline)) void demo_transform_mario_vertex_tilted(
+    const sm64_saturn_mtx_t *object, const int16_t *source,
+    sm64_saturn_vec3i_t *world)
+{
+    world->x = (int32_t)(((int64_t)source[0] * object->m[0][0] +
+                          (int64_t)source[1] * object->m[1][0] +
+                          (int64_t)source[2] * object->m[2][0]) >> 16) +
+               object->m[3][0];
+    world->y = (int32_t)(((int64_t)source[0] * object->m[0][1] +
+                          (int64_t)source[1] * object->m[1][1] +
+                          (int64_t)source[2] * object->m[2][1]) >> 16) +
+               object->m[3][1];
+    world->z = (int32_t)(((int64_t)source[0] * object->m[0][2] +
+                          (int64_t)source[1] * object->m[1][2] +
+                          (int64_t)source[2] * object->m[2][2]) >> 16) +
+               object->m[3][2];
+}
+
+/* Object-space vertex to world, matching the original's object matrix.
+ *
+ * `object` is NULL on the yaw-only fast path and non-NULL when Mario is
+ * tilted. Both arms are the same transform: a host differential against the
+ * real mtxf_rotate_zxy_and_translate (the function
+ * rendering_graph_node.c:1769 calls) measures them identical to 0.99 world
+ * units -- pure Q16 truncation -- whenever pitch and roll are zero, which is
+ * what licenses keeping the cheaper arm at all. Off that slice the yaw-only
+ * form is wrong by up to 160 units, so the matrix arm is not optional. */
 static bool demo_transform_mario_vertex(
     const demo_mario_transform_context_t *context, uint16_t vertex,
-    int32_t sine, int32_t cosine, demo_actor_vertex_result_t *result)
+    int32_t sine, int32_t cosine, const sm64_saturn_mtx_t *object,
+    demo_actor_vertex_result_t *result)
 {
     if (context == NULL || result == NULL || vertex >= context->vertex_count)
         return false;
     const int16_t *source = context->vertices[vertex];
-    const int32_t sx = (int32_t)source[0] << 16;
-    const int32_t sz = (int32_t)source[2] << 16;
-    const sm64_saturn_vec3i_t world = {
-        (int32_t)context->snapshot.position[0] +
+    sm64_saturn_vec3i_t world;
+    if (object != NULL) {
+        demo_transform_mario_vertex_tilted(object, source, &world);
+    } else {
+        const int32_t sx = (int32_t)source[0] << 16;
+        const int32_t sz = (int32_t)source[2] << 16;
+        world.x = (int32_t)context->snapshot.position[0] +
             ((sm64_saturn_q16_mul(sx, cosine) +
-              sm64_saturn_q16_mul(sz, sine)) >> 16),
-        (int32_t)context->snapshot.position[1] + source[1],
-        (int32_t)context->snapshot.position[2] +
+              sm64_saturn_q16_mul(sz, sine)) >> 16);
+        world.y = (int32_t)context->snapshot.position[1] + source[1];
+        world.z = (int32_t)context->snapshot.position[2] +
             ((-sm64_saturn_q16_mul(sx, sine) +
-              sm64_saturn_q16_mul(sz, cosine)) >> 16)};
+              sm64_saturn_q16_mul(sz, cosine)) >> 16);
+    }
     sm64_saturn_vec3i_t view;
     result->valid = sm64_saturn_ir_transform_one(
         &context->job, world, &view, &result->projected) ? 1U : 0U;
@@ -2143,6 +2214,17 @@ static void demo_classify_exact(demo_classify_context_t *context,
          * more than one VDP1 command, so it falls through to the existing
          * ray-preserving clamp rather than being truncated -- truncating would
          * punch a hole in the ground, which is far worse than a sheared edge. */
+        /* DISABLED 2026-09-11, same day it landed. It is correct and
+         * host-tested, and it did NOT reduce the warp -- the residual is VDP1
+         * affine texture mapping, not vertex placement. What it DID introduce
+         * is T-junction cracks in the floor: when two adjacent quads share an
+         * edge and only one is clipped, the clipped one's new boundary vertex
+         * does not land exactly on the neighbour's unclipped edge, leaving a
+         * hairline gap along the seam. Owner-observed as "breaks in the floor
+         * texture". Re-enabling needs a shared-edge pass so neighbours are cut
+         * at the same point, and there is no reason to pay for that until
+         * something actually needs side clipping. */
+#if DEMO_TERRAIN_SIDE_CLIP
         if (s_primitive_clipped[i] == 0U) {
             sm64_saturn_terrain_clip_output_t side;
             const int side_count = sm64_saturn_terrain_clip_side_planes(
@@ -2177,6 +2259,7 @@ static void demo_classify_exact(demo_classify_context_t *context,
                 }
             }
         }
+#endif
         /* Match the castleviewer/SlaveDriver painter contract: a primitive's
          * farthest projected corner owns its painter key.  Using the nearest
          * corner made large BOB quads jump in front of neighboring surfaces as
@@ -2742,12 +2825,18 @@ static bool __attribute__((unused)) demo_actor_queue_transform(
     demo_actor_queue_vertex_result_t *const records = output.records;
     const int32_t sine = sm64_saturn_sins_q16(context->snapshot.yaw);
     const int32_t cosine = sm64_saturn_coss_q16(context->snapshot.yaw);
+    /* Built once per range, not per vertex: the rotation is constant across
+     * the pose. NULL keeps every untilted frame on the cheap yaw-only arm. */
+    sm64_saturn_mtx_t object_matrix;
+    const sm64_saturn_mtx_t *const object =
+        demo_build_mario_object_matrix(context, &object_matrix)
+            ? &object_matrix : NULL;
     for (uint16_t local = 0U; local < job->input_count; local++) {
         const uint16_t ref = (uint16_t)(job->input_offset + local);
         const uint16_t vertex = context->vertex_refs[ref];
         if (vertex >= context->vertex_count ||
             !demo_transform_mario_vertex(context, vertex, sine, cosine,
-                                          &records[local].result))
+                                          object, &records[local].result))
             return false;
         records[local].vertex_id = vertex;
     }

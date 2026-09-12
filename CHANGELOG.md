@@ -4,6 +4,34 @@
 
 ### Fixed
 
+- **REGRESSION BACKED OUT: `82d401ab` added an unguarded terrain CULL to the
+  shipping classify path, and it holed the ground.** Terrain behaviour is
+  returned to `012fda87`, the last state confirmed good on screen.
+  - The defect: the side-plane clip was wired into `demo_classify_exact` with
+    no feature guard, including `s_primitive_visible[i] = 0U; continue;` for
+    any ring the new plane math reported entirely outside. A sign or focal
+    derivation error there deletes ground outright, and the plane code was an
+    hour old with only host tests behind it.
+  - Owner identified the regression point precisely from observation. The
+    author repeatedly re-checked `DEMO_TERRAIN_BYPASS` -- which the binaries
+    confirmed inert -- instead of reading what the commit did to the live path.
+    The lesson is to diff the commit, not the switch it mentions.
+  - Also switched off in the same pass: the ray-preserving clamp from
+    `049587f0`. Its common scale factor is taken from whichever axis is most
+    out of range and applied to BOTH, so a vertex far to the side but only
+    slightly below the screen is pulled UP onto it -- with centre (160, 112),
+    `(10000, 300)` lands at y = 128, inside a 224-line screen. A corner that
+    sat safely out of view moves into it and the quad shrinks away from the
+    bottom edge. Per-axis clamping is wrong about edge direction but never
+    moves a vertex from off-screen to on-screen, so it fails smaller.
+  - Both experiments are retained behind `DEMO_TERRAIN_SIDE_CLIP` and
+    `SM64_SATURN_IR_RAY_PRESERVING_CLAMP`, default 0, with their analysis in
+    place so neither is re-derived. Re-enabling the clip needs a shared-edge
+    pass (it also causes T-junction cracks) and evidence that its cull is
+    sound.
+  - **Neither experiment could have fixed the warp anyway** -- that is VDP1
+    affine texture mapping. See the root-cause correction below.
+
 - **Terrain side-plane clipping (`sm64_saturn_terrain_clip_side_planes`).**
   Terrain quads are now cut at the screen-edge planes instead of having
   out-of-range corners dragged back to the coordinate box. Corners that were

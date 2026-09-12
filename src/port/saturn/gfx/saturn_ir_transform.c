@@ -4,6 +4,13 @@
 #include <yaul.h>
 #endif
 
+/* See the long note at the clamp site: ray-preserving scaling pulls
+ * off-screen vertices onto the screen and holes the ground. Kept switchable
+ * rather than deleted so the experiment is not re-derived from scratch. */
+#ifndef SM64_SATURN_IR_RAY_PRESERVING_CLAMP
+#define SM64_SATURN_IR_RAY_PRESERVING_CLAMP 0
+#endif
+
 static int32_t clamp_coordinate(int32_t value, int16_t minimum, int16_t maximum)
 {
     if (value < minimum) return minimum;
@@ -71,6 +78,24 @@ bool sm64_saturn_ir_project_view(
      * the common in-range path. The castle demo avoids the whole problem by
      * subdividing at bake time; BOB cannot, because its texture bank is at
      * exactly 100% (333,696 of 333,696 bytes). */
+    /* RAY-PRESERVING SCALING IS OFF. It fixed edge direction but introduced a
+     * worse defect, owner-observed as a band of background showing through the
+     * lower screen.
+     *
+     * The common scale factor is taken from whichever axis is most out of
+     * range, and it is then applied to BOTH axes. A vertex far to the side but
+     * only slightly below the screen therefore gets pulled UP onto it: with
+     * centre (160, 112), a vertex at (10000, 300) has extent_x 9840 against
+     * limit_x 863 -- scale 0.0877 -- while its y needed no correction at all.
+     * y becomes 112 + 188 * 0.0877 = 128, so a corner that sat safely below the
+     * 224-pixel screen lands in the middle of it, the quad shrinks upward, and
+     * the ground develops a hole.
+     *
+     * Per-axis clamping is wrong about edge direction but never moves a vertex
+     * from off-screen to on-screen, so it fails visibly smaller. The two goals
+     * -- preserve the ray, and keep out-of-range vertices out of view -- cannot
+     * both be met by moving a vertex; that is what subdivision is for. */
+#if SM64_SATURN_IR_RAY_PRESERVING_CLAMP
     int32_t offset_x = screen_x - job->center_x;
     int32_t offset_y = screen_y - job->center_y;
     const int32_t limit_x = offset_x >= 0
@@ -98,11 +123,16 @@ bool sm64_saturn_ir_project_view(
         offset_x = (int32_t)(((int64_t)offset_x * scale_q16) >> 16);
         offset_y = (int32_t)(((int64_t)offset_y * scale_q16) >> 16);
     }
-    /* Retained as a rounding backstop; the scale above already fits the box. */
     projected->x = (int16_t)clamp_coordinate(job->center_x + offset_x,
                                              job->coord_min, job->coord_max);
     projected->y = (int16_t)clamp_coordinate(job->center_y + offset_y,
                                              job->coord_min, job->coord_max);
+#else
+    projected->x = (int16_t)clamp_coordinate(screen_x, job->coord_min,
+                                             job->coord_max);
+    projected->y = (int16_t)clamp_coordinate(screen_y, job->coord_min,
+                                             job->coord_max);
+#endif
     projected->z = view.z;
     return true;
 }
