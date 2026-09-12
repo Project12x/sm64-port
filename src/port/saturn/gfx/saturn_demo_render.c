@@ -283,8 +283,29 @@ _Static_assert(sizeof(sm64_saturn_mario_gouraud_color) /
 #endif
 #define DEMO_BUCKETS SATURN_DEMO_BUCKETS
 #define DEMO_CANCEL_POLL_INTERVAL 16U
+/* Headroom for clip splitting: a near-clipped quad can lower to two commands,
+ * so an unsubdivided scene reserves 2x its primitive count. This capacity
+ * drives roughly 194 KB of LWRAM across seven arrays (terrain results and
+ * commands per lane, emit refs, emit scratch, admitted cluster results), so
+ * the factor is the single largest memory lever in the renderer.
+ *
+ * A subdivided scene uses 7/4 instead. The doubling it protects against comes
+ * from primitives STRADDLING the near plane, and subdivision makes every
+ * primitive smaller -- the per-primitive probability of straddling falls as
+ * the count rises, so the worst-case ratio genuinely shrinks. Without this,
+ * subdivision overflows `lwram` (measured: 10,384 bytes at threshold 4500,
+ * primitive count 867 -> 996); with it the same scene reserves 1,743 results
+ * instead of 1,992 and fits.
+ *
+ * The unsubdivided build is deliberately untouched, keeping its full 2x. The
+ * threshold keys off the scene's own primitive count rather than a build flag
+ * so no new sealed identity bit is required. Watch `reject_span` and
+ * `reject_vdp1_arena_capacity` if the clip rate ever rises. */
+#define DEMO_TERRAIN_RESULT_BASELINE_PRIMITIVES 900U
 #define DEMO_TERRAIN_RESULT_CAPACITY \
-    (SM64_SATURN_BOB_PRIMITIVE_COUNT * 2U)
+    (SM64_SATURN_BOB_PRIMITIVE_COUNT > DEMO_TERRAIN_RESULT_BASELINE_PRIMITIVES \
+         ? (SM64_SATURN_BOB_PRIMITIVE_COUNT * 7U) / 4U \
+         : SM64_SATURN_BOB_PRIMITIVE_COUNT * 2U)
 #ifndef SATURN_DEMO_VIEW_RADIUS
 #define SATURN_DEMO_VIEW_RADIUS 6000
 #endif

@@ -43,7 +43,28 @@
     composition check is an exact snapshot, so any deliberate mesh change trips
     it; the guard still protects every build not intentionally reshaping the
     mesh.
-  - **BLOCKED AT LINK: `lwram` overflows by 10,384 bytes** at threshold 4500.
+  - **BLOCKED AT LINK, IN BOTH MEMORY REGIONS.** This is the remaining work.
+    - `DEMO_TERRAIN_RESULT_CAPACITY` now uses 7/4 rather than 2x for scenes
+      above the unsubdivided baseline, freeing about 27 KB of LWRAM. The 2x
+      exists because a near-clipped quad lowers to two commands; subdivision
+      makes each primitive smaller, so the probability of straddling the near
+      plane -- and therefore the worst-case ratio -- genuinely falls as the
+      count rises. Keyed off the scene's own primitive count so no new sealed
+      build flag is needed, and **inert for the default build** (867 is below
+      the 900 threshold, so it keeps the full 2x, byte-identical).
+    - That was not enough. At threshold 4500 the link now reports HWRAM below
+      libyaul's TLSF floor AND LWRAM short of its final margin, because
+      `SM64_SATURN_BOB_PRIMITIVE_COUNT` (867 -> 996) sizes arrays in BOTH
+      regions -- per-primitive visibility, LOD and work-order arrays sit in
+      HWRAM, which had only 3,956 B free after the pitch/roll fix.
+    - Next candidates, none attempted: `s_bob_terrain_resolved_templates`
+      (88,434 B, the largest renderer array and per-primitive);
+      `DEMO_ACTOR_EMIT_STAGING_CAPACITY` 512 against a measured ~312 actor
+      commands per frame, with an explicit inline-emit fallback, so trimming
+      it fails gracefully; and the actor queue payload banks (17,088 B x2)
+      whose 1,068 capacity is deliberate because descriptor output offsets are
+      global -- shrinking those needs per-bank offsets first.
+  - Superseded note: the earlier measurement of a 10,384-byte LWRAM overflow.
     Terrain arrays are sized by `SM64_SATURN_BOB_PRIMITIVE_COUNT` (867 -> 996)
     and `..._POSITION_COUNT` (1,625 -> 1,732), about 80 bytes per added
     primitive. Not yet resolved, and a higher threshold alone does not close
