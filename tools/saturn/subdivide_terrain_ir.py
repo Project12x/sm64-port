@@ -52,6 +52,28 @@ def _edge_key(a: int, b: int) -> tuple[int, int]:
     return (a, b) if a < b else (b, a)
 
 
+def triangle_uv_repeat(tri: dict, uvs: list) -> float:
+    """UV repeat factor, identical in form to bake_bob_tiles.triangle_k.
+
+    The baker refuses to build a tile above 16 and emits nothing, and the
+    runtime then draws a flat quad -- the large white surfaces. Refinement
+    has to measure the SAME quantity the baker measures, or it will split
+    the wrong faces and leave the white ones behind.
+
+    Fast3D UVs are s10.5; the tile extents are in quarter-texel units, and
+    eight extent-ratios make one source-tile period.
+    """
+    state = tri["texture_tile"]["state"]
+    corners = [uvs[i] for i in tri["indices"]]
+    span_s = max(c[0] for c in corners) - min(c[0] for c in corners)
+    span_t = max(c[1] for c in corners) - min(c[1] for c in corners)
+    tile_s = int(state["lrs"]) - int(state["uls"]) + 4
+    tile_t = int(state["lrt"]) - int(state["ult"]) + 4
+    if tile_s <= 0 or tile_t <= 0:
+        return 0.0
+    return max(span_s / tile_s, span_t / tile_t) / 8.0
+
+
 class Mesh:
     """Positions plus parallel UVs, with memoised shared edge midpoints."""
 
@@ -129,7 +151,8 @@ def _split_green(mesh: Mesh, indices: list, hanging: dict) -> list:
     return [list(indices)]
 
 
-def subdivide(document: dict, threshold: float, max_passes: int) -> dict:
+def subdivide(document: dict, threshold: float, max_passes: int,
+              uv_repeat_limit: float = 0.0):
     positions = document["positions"]
     uvs = document["vertex_attributes"]["uv"]
     if len(uvs) != len(positions):
@@ -177,9 +200,18 @@ def subdivide(document: dict, threshold: float, max_passes: int) -> dict:
         # Pass 1: mark every triangle over threshold for a red split, creating
         # its midpoints. Creating them here is what lets neighbours discover
         # the hanging nodes in pass 2.
+        # Two independent reasons to split. World-space size mitigates VDP1
+        # affine warp; UV repeat decides whether the baker can build a tile
+        # at all. The second is not optional: a face left above the limit
+        # becomes a white quad at runtime.
         red: list[int] = []
         for index, tri in enumerate(triangles):
-            if mesh.longest_edge(tri["indices"]) > threshold:
+            too_large = (threshold > 0.0 and
+                         mesh.longest_edge(tri["indices"]) > threshold)
+            unbakeable = (uv_repeat_limit > 0.0 and
+                          triangle_uv_repeat(tri, mesh.uvs) >
+                          uv_repeat_limit)
+            if too_large or unbakeable:
                 red.append(index)
         if not red:
             break
@@ -286,6 +318,9 @@ def main() -> int:
     parser.add_argument("--threshold", type=float, required=True,
                         help="split any triangle whose longest edge exceeds "
                              "this many world units")
+    parser.add_argument("--uv-repeat-limit", type=float, default=0.0,
+                        help="split any face whose UV repeat exceeds this; "
+                             "16 matches the baker's own limit")
     parser.add_argument("--max-passes", type=int, default=4,
                         help="refinement passes; each can quadruple a "
                              "triangle, so this bounds the blow-up")
@@ -305,11 +340,18 @@ def main() -> int:
     before_tris = len(document["triangles"])
     before_pos = len(document["positions"])
     provenance: dict[int, int] = {}
-    if args.threshold <= 0.0:
+    # Two independent knobs (world-space threshold, UV-repeat limit) can each
+    # trigger refinement on their own. The controller-corrected gate: skip
+    # subdivide() entirely -- and stay byte-identical -- only when BOTH are
+    # inactive. Gating on --threshold alone previously made
+    # SATURN_TERRAIN_UV_REPEAT_LIMIT=16 with the threshold left at its 0
+    # default silently do nothing, which is exactly the acceptance
+    # configuration for the UV-repeat fix.
+    if args.threshold <= 0.0 and args.uv_repeat_limit <= 0.0:
         result = document
     else:
         result, provenance = subdivide(
-            document, args.threshold, args.max_passes)
+            document, args.threshold, args.max_passes, args.uv_repeat_limit)
         if provenance:
             if args.intake is None or args.intake_output is None:
                 raise SystemExit(

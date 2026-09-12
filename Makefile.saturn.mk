@@ -172,7 +172,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-saturn-object-pool-probe-contract verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-audio-sequences compile-saturn-audio verify-pcm-transport verify-source-audio-live verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-admission-hierarchy verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-painter-chain verify-vdp1-frame-bank verify-vdp1-user-clip verify-vdp1-user-clip-mutation verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-bank-v2 verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-family-bundle verify-actor-family-bundle-build verify-actor-identity-registry verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-pose-pool verify-actor-pose-pool-mutation verify-actor-rigid-pose verify-actor-rigid-pose-mutation compile-enemy-actor-bank verify-actor-pose-owner verify-actor-pose-owner-mutation verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-shadow-trig verify-shadow-trig-mutation verify-sqrtf-fixed verify-sqrtf-fixed-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema verify-saturn-sha256 classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-actor-family-bundle inventory-actor-family-bundles compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-actor-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-saturn-object-pool-probe-contract verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-audio-sequences compile-saturn-audio verify-pcm-transport verify-source-audio-live verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-admission-hierarchy verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-painter-chain verify-vdp1-frame-bank verify-vdp1-user-clip verify-vdp1-user-clip-mutation verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-bank-v2 verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-family-bundle verify-actor-family-bundle-build verify-actor-identity-registry verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-pose-pool verify-actor-pose-pool-mutation verify-actor-rigid-pose verify-actor-rigid-pose-mutation compile-enemy-actor-bank verify-actor-pose-owner verify-actor-pose-owner-mutation verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-shadow-trig verify-shadow-trig-mutation verify-sqrtf-fixed verify-sqrtf-fixed-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema verify-saturn-sha256 classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-actor-family-bundle inventory-actor-family-bundles compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-actor-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-terrain-subdivision verify-all clean
 
 .PHONY: verify-actor-variant-bank
 
@@ -2429,7 +2429,18 @@ endif
 # saturn_mesh_ir.py so pairing, clustering, BSP, admission and emission all see
 # the refined mesh.
 SATURN_TERRAIN_SUBDIVIDE_THRESHOLD ?= 0
-ifneq ($(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD),0)
+# Faces above this UV repeat cannot be baked into a tile at all
+# (bake_bob_tiles.py::triangle_k, which refuses above 16 and emits nothing --
+# the large white surfaces). Refining them is not an optimisation, it is what
+# makes the bake total. Independent of the world-space threshold, and ON by
+# default because a white quad is never correct.
+SATURN_TERRAIN_UV_REPEAT_LIMIT ?= 16
+# Controller correction: this path selection must key off EITHER knob, not
+# SATURN_TERRAIN_SUBDIVIDE_THRESHOLD alone. A UV-repeat-only run (threshold
+# left at its 0 default) still produces a genuinely subdivided IR/intake pair
+# below; keying only off the threshold would point this selection past them
+# at the unsubdivided originals and silently discard the refined output.
+ifneq ($(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD)$(SATURN_TERRAIN_UV_REPEAT_LIMIT),00)
 BOB_MESH_IR_SUBDIVIDED := $(BOB_MESH_GENERATED)/bob_area1_mesh_ir_v2_subdivided.json
 # The tile baker indexes the intake by source id, so refinement grows it too.
 # Written to its own file for the same reason decimation is: rewriting the
@@ -2461,11 +2472,12 @@ ifneq ($(SATURN_TERRAIN_DECIMATE_RATIO),1.0)
 	  --report "$(BOB_MESH_GENERATED)/bob_area1_decimation.json" \
 	  --work "$(BOB_MESH_GENERATED)/decimation"
 endif
-ifneq ($(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD),0)
+ifneq ($(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD)$(SATURN_TERRAIN_UV_REPEAT_LIMIT),00)
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/subdivide_terrain_ir.py" \
 	  --input "$(BOB_MESH_IR_BAKED)" \
 	  --output "$(BOB_MESH_IR_SUBDIVIDED)" \
 	  --threshold "$(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD)" \
+	  --uv-repeat-limit "$(SATURN_TERRAIN_UV_REPEAT_LIMIT)" \
 	  --intake "$(BOB_MESH_GENERATED)/bob_area1_intake.json" \
 	  --intake-output "$(BOB_INTAKE_BAKED)" \
 	  --report "$(BOB_MESH_GENERATED)/bob_area1_subdivision.json"
@@ -2505,7 +2517,7 @@ compile-bob-tiles: compile-bob-area
 	  --bank "$(BOB_TILES_GENERATED)/bob_tiles_clut16.bin" \
 	  --clut "$(BOB_TILES_GENERATED)/bob_tiles_clut16.pal" \
 	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json" \
-	  $(if $(filter-out 0,$(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD)),--allow-tile-class-drift,)
+	  $(if $(filter-out 00,$(SATURN_TERRAIN_SUBDIVIDE_THRESHOLD)$(SATURN_TERRAIN_UV_REPEAT_LIMIT)),--allow-tile-class-drift,)
 
 compile-bob-scene: compile-bob-tiles compile-bob-bsp
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/emit_bob_scene.py" \
@@ -2513,6 +2525,15 @@ compile-bob-scene: compile-bob-tiles compile-bob-bsp
 	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json" \
 	  --bsp "$(BOB_MESH_GENERATED)/bob_area1_bsp_report.json" \
 	  --output "$(BOB_MESH_GENERATED)/bob_scene.h"
+
+# Host-test invariants for tools/saturn/subdivide_terrain_ir.py: the UV-repeat
+# bound holds after refinement, no edge passes through another face's corner
+# (T-junctions crack the floor), an already-conforming face passes through
+# byte-identical, and the step is idempotent. Plain-script form, not
+# `-m pytest`: the SATURN_TOOLS_PYTHON venv does not have pytest installed,
+# and every other host test in this Makefile is already invoked this way.
+verify-terrain-subdivision:
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_subdivide_terrain_ir.py"
 
 compile-bob-sky: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_bob_sky.py" \
@@ -2580,7 +2601,7 @@ compile-castle-collision: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_collision.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-collision-bank-2026-07-19.json"
 
-verify-all: verify-actor-gouraud-reservation verify-tools verify-shadow-trig verify-shadow-trig-mutation verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-frame-pipeline verify-vdp1-frame-bank verify-vdp1-user-clip verify-vdp1-user-clip-mutation verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-sqrtf-fixed verify-sqrtf-fixed-mutation verify-hot-promotion verify-saturn-object-pool-probe-contract classify-source verify-hello verify-hwtest
+verify-all: verify-actor-gouraud-reservation verify-tools verify-shadow-trig verify-shadow-trig-mutation verify-runtime-contracts verify-terrain-clip verify-terrain-subdivision verify-ztreme-frustum verify-bob-bsp-header verify-frame-pipeline verify-vdp1-frame-bank verify-vdp1-user-clip verify-vdp1-user-clip-mutation verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-sqrtf-fixed verify-sqrtf-fixed-mutation verify-hot-promotion verify-saturn-object-pool-probe-contract classify-source verify-hello verify-hwtest
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean

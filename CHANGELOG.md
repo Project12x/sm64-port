@@ -2,7 +2,79 @@
 
 ## [Unreleased]
 
-### Added
+### Fixed
+
+- **Bake can no longer produce an untextured terrain face (`subdivide_terrain_ir.py`,
+  `SATURN_TERRAIN_UV_REPEAT_LIMIT`, default 16).** Root cause of the large
+  white surfaces and the white fence the owner has been reporting for weeks:
+  `bake_bob_tiles.py::triangle_k()` computes a UV-repeat ratio per face and
+  `continue`s -- emits no tile at all -- once it exceeds 16. The runtime then
+  has nothing to draw but a flat/gouraud quad. This was a give-up path, not a
+  clamp: a child face has exactly half its parent's UV span, so splitting
+  until `k <= 16` removes the give-up path by construction instead of papering
+  over it at runtime.
+  - Added `triangle_uv_repeat(tri, uvs)` to `subdivide_terrain_ir.py`, deliberately
+    kept identical in form to `bake_bob_tiles.triangle_k` (same tile-extent and
+    s10.5 UV normalization) -- if the two ever disagree about what is bakeable,
+    refinement splits the wrong faces and leaves the white ones behind.
+  - `subdivide()` gained a fourth parameter, `uv_repeat_limit`, and the
+    red-marking pass now splits on EITHER `longest_edge > threshold` (existing,
+    mitigates VDP1 affine warp) OR `triangle_uv_repeat > uv_repeat_limit` (new,
+    mitigates the give-up path). Each criterion is independently gated on its
+    own knob being positive, so a 0 threshold no longer marks every triangle by
+    accident once a UV-repeat-only run started calling `subdivide()` at all
+    (see the gate fix below).
+  - Verified against real BOB data: bake tile-class composition goes from
+    `{'16x16': 567, '32x32': 510, 'gouraud': 24}` to
+    `{'16x16': 667, '32x32': 508, 'gouraud': 0}` -- **0 untextured faces**,
+    for 1,101 -> 1,175 triangles.
+  - **Two gate bugs fixed, both would have made the fix silently inert or
+    crash outright:**
+    1. `subdivide_terrain_ir.py::main()` early-out (`if args.threshold <=
+       0.0: result = document`) skipped refinement whenever the world-space
+       threshold was 0 -- the exact configuration this fix runs at
+       (`SATURN_TERRAIN_SUBDIVIDE_THRESHOLD=0 SATURN_TERRAIN_UV_REPEAT_LIMIT=16`).
+       The gate now short-circuits to a byte-identical document only when
+       BOTH knobs are inactive.
+    2. `Makefile.saturn.mk`'s `BOB_MESH_IR_SUBDIVIDED` / `BOB_INTAKE_BAKED`
+       path selection, and the `--allow-tile-class-drift` flag passed to
+       `bake_bob_tiles.py`, both keyed off `SATURN_TERRAIN_SUBDIVIDE_THRESHOLD`
+       alone. Left alone, a UV-repeat-only run would have produced a genuinely
+       subdivided IR/intake pair and then silently compiled the UNSUBDIVIDED
+       originals instead (path selection), and separately would have crashed
+       `bake_bob_tiles.py`'s pinned tile-class-composition guard with an
+       unhandled `ValueError` instead of succeeding (drift flag), because a
+       changed composition wasn't permitted without the flag. Both now key off
+       either knob being active.
+  - New host tests (`tools/saturn/test_subdivide_terrain_ir.py`): the UV bound
+    holds after refinement, no triangle edge passes through another face's
+    corner (T-junctions crack the floor), an already-conforming face passes
+    through byte-identical, and the step is idempotent (make can run a recipe
+    twice). Run as a plain script (`python
+    tools/saturn/test_subdivide_terrain_ir.py`, bare asserts, no pytest
+    dependency) because the project's `.venv-saturn-tools` interpreter does
+    not have pytest installed; wired into the Makefile as
+    `verify-terrain-subdivision` (added to `verify-all`) the same way.
+  - **Known concern, not resolved by this change: the tile bank overflows its
+    existing cap once this default is active.** `SATURN_TERRAIN_UV_REPEAT_LIMIT`
+    defaults to 16 (on unconditionally, independent of the world-space
+    threshold, because a white quad is never correct) -- but BOB's tile bank
+    was already at exactly 100% of `MAX_TILE_BYTES` (333,696 of 333,696) before
+    this fix. Texturing the 24 previously-free (`gouraud`, 0-byte) faces for
+    the first time necessarily costs real bytes with no existing slack to
+    absorb them: the bank measures **345,472 bytes against the 333,696 cap**
+    (+11,776). This is NOT a depth-aware-sizing defect -- every one of the 100
+    new child tiles was independently confirmed sized to the correct 16x16
+    floor -- it is that the fixed budget has zero headroom for newly-bakeable
+    geometry. The combined VDP1 texture-residency check
+    (`MAX_VDP1_TEXTURE_BYTES` 446,432) still clears with about 63 KB to spare,
+    so raising `MAX_TILE_BYTES` is physically possible, but doing so is a
+    budget-reallocation decision (it takes headroom other VDP1 texture
+    consumers may need) outside this task's authority. Per the task brief, the
+    cap was deliberately NOT raised; `compile-bob-tiles` at the new default
+    will fail until this is decided. See
+    `.superpowers/sdd/2026-09-12-bob-terrain-bake-final/task-1-report.md` for
+    the full evidence.
 
 - **Terrain subdivision (`subdivide_terrain_ir.py`,
   `SATURN_TERRAIN_SUBDIVIDE_THRESHOLD`, default 0 = inert).** The actual fix
