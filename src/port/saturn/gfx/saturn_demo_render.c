@@ -68,6 +68,32 @@
 #define DEMO_TERRAIN_BYPASS 0
 #endif
 
+/* SATURN_DEMO_TERRAIN_NATIVE_EMIT -- the intended shipping path, default 1.
+ *
+ * Unlike DEMO_TERRAIN_BYPASS above, this is NOT a probe and NOT a diagnostic.
+ * It emits terrain the Saturn-shaped way: patch the baked, resolved VDP1
+ * command image with this frame's four screen corners and depth bin. It does
+ * not reconstruct material state (which the bypass probe still did, via
+ * polygon_set/texture_bind/draw_mode_set), and it does not read the result
+ * records or the merged refs.
+ *
+ * DEFAULT 0: OWNER-OBSERVED BROKEN GEOMETRY (build id-e5d31a68a1d7c36a,
+ * 2026-09-26). Root cause: near-plane clipping is fragmenting work, and this
+ * path ignores it. demo_terrain_compact_transformed() lowers a clipped
+ * primitive by its clipped corner count (s_primitive_corner_count): a 5-corner
+ * clip result becomes TWO commands, and a triangle clipped to 4 corners is a
+ * true quad. demo_emit_terrain_native() emits exactly one 4-corner command per
+ * primitive and forces triangles to repeat corner C, so every near-plane-
+ * clipped primitive loses a corner and draws the wrong shape, concentrated
+ * near the camera. Clipping depends on the camera, so it cannot be baked; the
+ * fix is to emit per clip fragment exactly as the compact path does, reusing
+ * its corner mapping, while keeping the baked command image for material.
+ * Until that is done and re-observed, the record path below remains the
+ * shipping path. */
+#ifndef SATURN_DEMO_TERRAIN_NATIVE_EMIT
+#define SATURN_DEMO_TERRAIN_NATIVE_EMIT 0
+#endif
+
 /* DEMO_TERRAIN_BYPASS_FRONT -- DIAGNOSTIC, default 0 (no-op).
  *
  * Prices the FRONT half of the terrain plumbing, which DEMO_TERRAIN_BYPASS
@@ -4280,6 +4306,87 @@ static void __attribute__((unused)) demo_emit_primitive(
  * painter_key is unsigned view-space depth and projected->z IS view z. Pass 1
  * of sm64_saturn_vdp1_backend_link_depth_bins() rejects the whole list on the
  * first tag >= bin_count, so this field is not optional. */
+#endif /* DEMO_TERRAIN_BYPASS: the probe's commentary ends here. The native
+        * emit below is unconditional shipping code, not a diagnostic, so it
+        * must not sit inside the probe's guard. */
+
+/* Saturn-native terrain emit: a terrain command is a BUILD-TIME fact.
+ *
+ * s_bob_terrain_resolved_templates already holds the finished 32-byte VDP1
+ * command image for this primitive -- draw mode, colour, CLUT, texture source,
+ * size, the lot. The only things that vary per frame are the four screen
+ * corners and the painter bin. So the honest per-frame cost of a terrain
+ * primitive is: copy 32 bytes, patch eight int16s and the link word. That is
+ * what this function does, and nothing else.
+ *
+ * Everything the queue path ran between classification and the screen existed
+ * only to carry those same eight int16s across a CPU boundary and was then
+ * thrown away: demo_emit_terrain_result() read the vertices back OUT of the
+ * worker's command blob (memcpy from command + 12) and re-patched them into a
+ * command rebuilt from this very template. The result records, the per-lane
+ * command blobs, the descriptor publish/claim protocol and the merge spans
+ * were all packaging for a 20-byte payload the master already had.
+ *
+ * It is also what makes terrain splittable. Each call writes one caller-owned
+ * slot and touches no shared mutable state; cmd_link carries the depth bin and
+ * sm64_saturn_vdp1_backend_link_depth_bins() sorts by bin, so arena position
+ * never encodes draw order and two CPUs need no merge to agree. The old path
+ * could not be split precisely because the packaging was shared.
+ *
+ * Gouraud is deliberately not handled here: SATURN_DEMO_TERRAIN_GOURAUD is 0
+ * for terrain and the bake now emits zero untextured faces, so the finite
+ * master-owned Gouraud bank -- the one resource that forced terrain emission
+ * to be master-serial -- is not in this path at all. */
+static void __attribute__((unused)) demo_emit_terrain_native(
+    uint16_t primitive_index, uint8_t lane, vdp1_cmdt_t *slot,
+    sm64_saturn_fast3d_profile_t *profile)
+{
+    const sm64_saturn_bob_primitive_t *const primitive =
+        &s_bob_primitives_active[primitive_index];
+    int16_vec2_t corners[4];
+    demo_primitive_screen_vertices(primitive, corners);
+    int16_t vertices[4][2];
+    for (uint8_t corner = 0U; corner < 3U; corner++) {
+        vertices[corner][0] = corners[corner].x;
+        vertices[corner][1] = corners[corner].y;
+    }
+    /* Triangles keep the repeated-C convention the templates were baked with. */
+    const uint8_t last = primitive->source1 == 0xFFFFU ? 2U : 3U;
+    vertices[3][0] = corners[last].x;
+    vertices[3][1] = corners[last].y;
+    const int32_t cross = (int32_t)(corners[1].x - corners[0].x) *
+                              (corners[2].y - corners[0].y) -
+                          (int32_t)(corners[1].y - corners[0].y) *
+                              (corners[2].x - corners[0].x);
+    if (cross == 0) {
+        profile->reject_degenerate++;
+        return;
+    }
+    const bool recovery = s_primitive_recovery[primitive_index] != 0U;
+    const bool texture_suppressed =
+        s_primitive_lod_texture_downgraded[primitive_index] != 0U;
+    const sm64_saturn_terrain_resolved_command_t *const resolved =
+        demo_terrain_resolved_template(primitive_index, recovery,
+                                       texture_suppressed);
+    if (resolved == NULL ||
+        !sm64_saturn_terrain_template_patch_resolved_record_ex(
+            slot, resolved, vertices, 0U, false, false, 0U, false, 0U)) {
+        profile->pipeline_faults++;
+        return;
+    }
+    const sm64_saturn_projected_vertex_t *const corner0 =
+        demo_projected_read(lane, primitive->indices[0]);
+    slot->cmd_link = sm64_saturn_terrain_depth_bin(
+        corner0 != NULL && corner0->z > 0 ? (uint32_t)corner0->z : 0U);
+    if (primitive->textured != 0U && !recovery && !texture_suppressed)
+        profile->texture_commands++;
+    else
+        profile->flat_primitives++;
+    profile->triangles_vdp1_emitted++;
+    profile->triangles_emitted++;
+}
+
+#if DEMO_TERRAIN_BYPASS
 static void demo_emit_terrain_direct(
     uint16_t primitive_index, sm64_saturn_vdp1_backend_t *backend,
     sm64_saturn_fast3d_profile_t *profile,
@@ -6026,6 +6133,27 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
         if (s_primitive_visible[primitive_index] == 0U) continue;
         demo_emit_terrain_direct(primitive_index, backend, profile,
                                  partitions);
+    }
+#elif SATURN_DEMO_TERRAIN_NATIVE_EMIT
+    /* Emit straight from the classified visible set into the baked command
+     * images. The merge above still runs and still produces s_terrain_emit_refs;
+     * this loop deliberately ignores them, which is the measurement that says
+     * whether the record/merge layer buys anything at all. Draw order is
+     * unchanged: cmd_link carries the same depth bin the result path set, and
+     * link_depth_bins sorts by bin, so walking the work order instead of the
+     * merged ref order cannot reorder the frame. */
+    for (uint16_t ordinal = 0U; ordinal < s_render_work_count; ordinal++) {
+        const uint16_t primitive_index = s_render_work_order[ordinal];
+        if (primitive_index >= SM64_SATURN_BOB_PRIMITIVE_COUNT) continue;
+        if (s_primitive_visible[primitive_index] == 0U) continue;
+        vdp1_cmdt_t *const slot =
+            sm64_saturn_vdp1_backend_reserve(backend, 1U);
+        if (slot == NULL) {
+            profile->reject_vdp1_arena_capacity++;
+            profile->pipeline_faults++;
+            break;
+        }
+        demo_emit_terrain_native(primitive_index, 0U, slot, profile);
     }
 #else
     /* The master owns terrain and Mario lowering. Compact terrain results are

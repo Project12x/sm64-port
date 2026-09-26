@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in Saturn-native terrain emit (`SATURN_DEMO_TERRAIN_NATIVE_EMIT`,
+  default `0`) — owner-observed broken, kept off.** `demo_emit_terrain_native()`
+  copies each primitive's baked 32-byte resolved VDP1 command image and patches
+  only the screen corners and the depth-bin link: no material reconstruction,
+  no result records, no merge consumption. The motivation stands: the record
+  path's `demo_emit_terrain_result()` reads the screen vertices back *out of*
+  the worker's command (`command + 12`) and re-patches them into a command
+  rebuilt from the same template, so the record/merge layer carries a ~20-byte
+  payload through descriptor publish/claim and merge for nothing.
+  - **Why it is off:** build `id-e5d31a68a1d7c36a` (ELF `9ad65db8…04be0b9`,
+    ISO `886c48be…d720d246de`) was observed by the owner on 2026-09-26 with
+    broken geometry. Root cause: near-plane clipping fragments work, and this
+    path ignored it. `demo_terrain_compact_transformed()` lowers a clipped
+    primitive by its clipped corner count (`s_primitive_corner_count`): a
+    5-corner clip result is emitted as **two** commands, and a triangle
+    clipped to 4 corners is a true quad. The native path emitted one 4-corner
+    command per primitive and forced triangles to repeat corner C, so every
+    near-plane-clipped primitive lost a corner and drew the wrong shape.
+  - **Lesson:** clipping depends on the camera and cannot be baked. The next
+    attempt must emit per clip fragment using the compact path's corner
+    mapping, while still taking material from the baked command image. With
+    the switch at 0 the terrain loop compiles the same record path the owner
+    approved on build `id-c77b57d9c8f31e4b`; the native function is static and
+    unreferenced. Not separately rebuilt or re-observed at this commit.
+
 ### Changed
 
 - **Terrain lowering is published as `DEMO_TERRAIN_LOWER_JOBS` (4) descriptors
