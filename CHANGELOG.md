@@ -29,6 +29,27 @@
     approved on build `id-c77b57d9c8f31e4b`; the native function is static and
     unreferenced. Not separately rebuilt or re-observed at this commit.
 
+### Fixed
+
+- **Terrain lowering runs as ONE descriptor again (`DEMO_TERRAIN_LOWER_JOBS`
+  4 -> 1): the 4-way split below raced.** Every `WORLD_LOWER` job begins with
+  `demo_prepare_position_owners()`, which memsets the *shared*
+  `s_position_owner` table (LWRAM) to `UINT8_MAX` and rebuilds it, and ORs
+  into the shared `s_position_use_mask`. With one lower job exactly one SH-2
+  did that once per frame; with N > 1 both SH-2s lower concurrently, so one
+  can blank the owner table while the other is mid-lowering and choosing which
+  lane's projected-position payload to read -- vertices then come from the
+  wrong buffer or read as unowned. `1` reproduces the pre-split job layout
+  exactly. **Honest scope:** a WF build with this change (`id-611ab1c5db40190b`)
+  was still owner-reported broken, so this race is real but is *not* the
+  visible breakage (that is the per-face texture squeeze -- see the texture
+  pipeline work). Re-enabling N > 1 needs the owner table built once per frame
+  (e.g. by the single `WORLD_ADMIT`) and only read by lowers, with the reading
+  SH-2 dropping its stale cache lines first.
+  - **Process error recorded:** native emit was switched off in `2aeb411b`
+    without rebuilding and observing the off state, and WF work was then
+    stacked on that unverified base.
+
 ### Changed
 
 - **Terrain lowering is published as `DEMO_TERRAIN_LOWER_JOBS` (4) descriptors

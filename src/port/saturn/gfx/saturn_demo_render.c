@@ -342,12 +342,23 @@ _Static_assert(sizeof(sm64_saturn_mario_gouraud_color) /
  * why SlaveDriver's spin-tuned slaveSize is deliberately NOT ported: it exists
  * because that engine splits its list exactly once, up front.
  *
- * Four fits the 8-slot queue beside one admit and the two actor jobs with a
- * slot spare, and bounds the worst-case imbalance at one descriptor. Raising
- * it requires raising SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, and note that
- * dependency_mask is a uint8_t -- any job that is depended upon must stay
- * below index 8. */
-#define DEMO_TERRAIN_LOWER_JOBS 4U
+ * SET TO 1 (2026-09-26): N > 1 RACES. Every WORLD_LOWER job begins with
+ * demo_prepare_position_owners(), which memsets the SHARED s_position_owner
+ * table to UINT8_MAX and rebuilds it (and ORs into the shared
+ * s_position_use_mask). With one lower job exactly one SH-2 did that once per
+ * frame. With N > 1 both SH-2s lower concurrently, so one can blank the owner
+ * table while the other is mid-lowering and selecting which lane's projected
+ * position payload to read -- vertices then come from the wrong buffer or
+ * read as unowned. Owner-reported broken geometry on BOB (e5d31a68) and WF
+ * (8c2f6078) followed the split in 8774ee25. 1 reproduces the pre-split job
+ * layout exactly. Before raising it again the owner table must be built ONCE
+ * per frame (e.g. by WORLD_ADMIT, which stays single) and only read by the
+ * lower jobs, with the reading SH-2 dropping its stale cache lines first.
+ *
+ * Capacity notes for when it is raised: the 8-slot queue holds one admit,
+ * the two actor jobs and up to five lowers; dependency_mask is a uint8_t, so
+ * any job that is depended upon must stay below index 8. */
+#define DEMO_TERRAIN_LOWER_JOBS 1U
 _Static_assert(DEMO_TERRAIN_LOWER_JOBS >= 1U &&
                    DEMO_TERRAIN_LOWER_JOBS + 3U <=
                        SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY,
