@@ -14,7 +14,23 @@
 #include "game/level_update.h"
 #include "game/save_file.h"
 
+/* The boot level is the build's SATURN_SOURCEBOOT_LEVEL_ID -- the same make
+ * variable the sealed target profile's release_config.level_id is checked
+ * against. It is numeric (not the LEVEL_* enum) so the preprocessor can
+ * select the level's own header and entry script; add a branch per level the
+ * cart can boot. */
+#ifndef SATURN_SOURCEBOOT_LEVEL_ID
+#define SATURN_SOURCEBOOT_LEVEL_ID 9 /* LEVEL_BOB */
+#endif
+#if SATURN_SOURCEBOOT_LEVEL_ID == 9
 #include "levels/bob/header.h"
+#define SOURCEBOOT_LEVEL_ENTRY level_bob_entry
+#elif SATURN_SOURCEBOOT_LEVEL_ID == 24
+#include "levels/wf/header.h"
+#define SOURCEBOOT_LEVEL_ENTRY level_wf_entry
+#else
+#error "SATURN_SOURCEBOOT_LEVEL_ID has no entry script mapping"
+#endif
 
 /* Model geo/DL symbols for the registration block below. Retail declares
  * these in levels/scripts.c, which this target never executes -- see the
@@ -270,7 +286,10 @@ static const LevelScript sSourcebootLevelLoop[] = {
      * (gCurrLevelArea read 0x11 live instead of BOB's 0x91), which
      * disabled every gCurrLevelArea-keyed camera behavior including
      * camera_course_processing's real AREA_BOB case (camera.c:6630). */
-    SET_REG(/* value */ LEVEL_BOB),
+    /* SATURN_SOURCEBOOT_LEVEL_ID (see the top of this file). The ordering
+     * constraint above applies unchanged to any level: it concerns which call
+     * consumes the register, not which level is in it. */
+    SET_REG(/* value */ SATURN_SOURCEBOOT_LEVEL_ID),
     /* Before lvl_init_from_save_file so its gNeverEnteredCastle read
      * (!save_file_exists) already sees the marked file -- see the adapter's
      * comment above for the full intro-skip rationale. */
@@ -278,7 +297,7 @@ static const LevelScript sSourcebootLevelLoop[] = {
     CALL(/* arg */ 0, /* func */ lvl_init_from_save_file),
     CALL(/* arg */ 0, /* func */ lvl_set_current_level),
     EXECUTE(/* seg */ 0x0E, /* script */ NULL, /* scriptEnd */ NULL,
-            /* entry */ level_bob_entry),
+            /* entry */ SOURCEBOOT_LEVEL_ENTRY),
     /* Balances this pass's own INIT_LEVEL() above -- see this array's
      * top-of-block comment for the full push/pop nesting trace. */
     CLEAR_LEVEL(),

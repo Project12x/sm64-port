@@ -442,6 +442,30 @@ class SceneClosureTest(unittest.TestCase):
         with self.assertRaisesRegex(ClosureError, "unrecognized dynamic native spawn form"):
             _native_spawn_edges("spawn_object(o, model_from_table, behavior_from_table);")
 
+    def test_first_proof_fail_open_skips_instead_of_rejecting(self) -> None:
+        """The opt-in mode used for WF's first proof reports and skips what the
+        strict collector rejects: an unresolvable spawn yields no edge, and a
+        spawn cycle no longer aborts the level. Default mode is untouched --
+        the two strict tests above still expect rejection."""
+        import collect_scene_closure as closure
+        closure._ALLOW_UNRESOLVED_SPAWNS = True
+        try:
+            self.assertEqual(
+                _native_spawn_edges("spawn_object(o, model_from_table, behavior_from_table);"),
+                set())
+            try:
+                self.collect(self.fixture(with_cycle=True))
+            except ClosureError as error:
+                # This fixture's collection currently fails LATER for a
+                # pre-existing, unrelated reason (the animation-table parser:
+                # 20 tests in this file fail the same way at HEAD 2aeb411b).
+                # What this pins is that the cycle itself no longer aborts it;
+                # strict mode would raise "behavior spawn cycle" here.
+                self.assertNotIn("behavior spawn cycle", str(error))
+        finally:
+            closure._ALLOW_UNRESOLVED_SPAWNS = False
+            closure._UNRESOLVED_REPORTED.clear()
+
     def test_cross_file_helper_creation_is_discovered_hashed_and_unknown_rejected(self) -> None:
         root = self.native_rule_fixture()
         write(root / "src/game/behaviors/parent.inc.c", "void bhv_parent_loop(void) { create_child(); }\n")

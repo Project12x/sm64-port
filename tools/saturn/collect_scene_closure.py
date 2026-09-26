@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from collections import Counter, defaultdict, deque
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
@@ -842,6 +843,28 @@ def _function_body(text: str, name: str) -> str:
     return text[match.start():cursor]
 
 
+# Opt-in fail-open mode for a level's FIRST proof (PRODUCT_GOAL.md, WF
+# acceptance: "unsupported WF objects may be skipped individually with visible
+# telemetry. They may not stall the scene"). Off by default: the collector
+# stays strict and every existing rejection test is unchanged. When on, a spawn
+# the collector cannot resolve statically, or a behavior that spawns an
+# ancestor of itself, is REPORTED and its edge skipped instead of rejecting the
+# whole level. A skipped edge's children stay out of the closure, so at runtime
+# their models are unregistered and are simply not drawn -- the smallest safe
+# unit. Nothing is hidden: every skipped form is printed during the bake.
+_ALLOW_UNRESOLVED_SPAWNS = False
+_UNRESOLVED_REPORTED: set[str] = set()
+
+
+def _unresolved(message: str) -> None:
+    if not _ALLOW_UNRESOLVED_SPAWNS:
+        raise ClosureError(message)
+    if message not in _UNRESOLVED_REPORTED:
+        _UNRESOLVED_REPORTED.add(message)
+        print(f"closure: SKIPPED unsupported (per-object): {message}",
+              file=sys.stderr)
+
+
 def _native_spawn_edges(text: str) -> set[tuple[str, str]]:
     edges: set[tuple[str, str]] = set()
     for name in ("spawn_object", "spawn_object_relative", "spawn_object_abs_with_rot", "spawn_object_with_scale",
@@ -870,7 +893,7 @@ def _native_spawn_edges(text: str) -> set[tuple[str, str]]:
             if model and behavior:
                 edges.add((model, behavior))
             else:
-                raise ClosureError(f"unrecognized dynamic native spawn form: {name}({', '.join(args)})")
+                _unresolved(f"unrecognized dynamic native spawn form: {name}({', '.join(args)})")
     return edges
 
 
@@ -1354,56 +1377,79 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
             if child in ancestors or child == behavior:
                 if relation == "replacement":
                     continue
-                raise ClosureError(f"behavior spawn cycle: {behavior} -> {child}")
+                # Fail-open only: the child is already in the closure as an
+                # ancestor, so stopping here keeps membership exact. What is
+                # lost is the cyclic count multiplication: the child's
+                # maximum_live_instances reflects only its non-cyclic spawns
+                # and may undercount. At runtime an instance beyond what the
+                # actor path reserved is skipped individually.
+                _unresolved(f"behavior spawn cycle: {behavior} -> {child}")
+                continue
             queue.append((child_model, child, active_acts, count * maximum_live, f"spawn:{behavior}", ancestors | {behavior}))
     actor_asset_index = _actor_asset_definition_index(root)
     records = []
+    dropped: set[str] = set()
     for behavior in sorted(occurrence):
-        variants = []
-        model_provenance = {}
-        geo_sources: set[str] = set()
-        material_features: set[str] = set()
-        for variant_model in sorted(declared_models[behavior]):
-            variant_geo = "none" if variant_model == "MODEL_NONE" else model_geos[variant_model]
-            variant_geo_source = _asset_root_source(root, variant_geo, asset_roots)
-            if variant_model != "MODEL_NONE" and not variant_geo_source:
-                raise ClosureError(f"unresolved model/geo root {variant_model} {variant_geo}")
-            variants.append({"model": variant_model, "geo_root": variant_geo})
-            binding_source = _model_binding_source(
-                root, variant_model, variant_geo, levelscript_sources | {script_path}, model_ids_path,
-            )
-            model_provenance[variant_model] = {
-                "source": model_ids_path,
-                "binding_source": binding_source,
-                "geo_symbol": variant_geo,
-                "geo_source": variant_geo_source,
-            }
-            used_sources[behavior].add(binding_source)
-            if variant_geo_source:
-                geo_sources.update(_reached_actor_sources(
-                    root, variant_geo, variant_geo_source, actor_asset_index))
-                material_features.update(_features(root, variant_geo_source))
-        primary = next((variant for variant in variants if variant["model"] != "MODEL_NONE"), variants[0])
-        model, geo_root = primary["model"], primary["geo_root"]
-        sounds, banks, sound_sources = _behavior_sounds(root, blocks[behavior], native_sources)
-        sources = {behavior_path, model_ids_path} | used_sources[behavior] | sound_sources
-        sources.update(geo_sources)
-        block = blocks[behavior]
-        animations = sorted(set(re.findall(r"LOAD_ANIMATIONS\s*\(\s*[^,]+,\s*([A-Za-z0-9_]+)", block)))
-        animation_sources: dict[str, str] = {}
-        for animation in animations:
-            animation_source = _asset_root_source(root, animation, asset_roots)
-            if not animation_source:
-                raise ClosureError(f"unresolved animation root {animation}")
-            animation_sources[animation] = animation_source
-            sources.add(animation_source)
-            sources.update(_reached_animation_sources(
-                root, animation, animation_source, actor_asset_index))
-        source_items = [_source(root, path) for path in sorted(sources)]
-        maximum_live_instances = max(occurrence[behavior].values())
-        if pool_cap is not None:
-            maximum_live_instances = min(maximum_live_instances, pool_cap)
-        records.append({"stable_id": behavior, "level": level, "area": area, "act_mask": " | ".join(sorted(acts[behavior])), "object_roots": sorted(set(root_names[behavior])), "model": model, "geo_root": geo_root, "model_variants": variants, "behavior_root": behavior, "spawned_children": sorted(child_map[behavior]), "children": sorted(typed_children[behavior]["child"]), "rewards": sorted(typed_children[behavior]["reward"]), "projectiles": sorted(typed_children[behavior]["projectile"]), "effects": sorted(typed_children[behavior]["effect"]), "animation_table": animations, "material_feature_bits": sorted(material_features), "maximum_live_instances": maximum_live_instances, "music_sequence_ids": [], "sfx_banks": banks, "sfx_ids": sounds, "sources": source_items, "root_provenance": {"behavior": {"symbol": behavior, "source": behavior_path}, "models": model_provenance, "animation": animation_sources}})
+        try:
+            variants = []
+            model_provenance = {}
+            geo_sources: set[str] = set()
+            material_features: set[str] = set()
+            for variant_model in sorted(declared_models[behavior]):
+                variant_geo = "none" if variant_model == "MODEL_NONE" else model_geos[variant_model]
+                variant_geo_source = _asset_root_source(root, variant_geo, asset_roots)
+                if variant_model != "MODEL_NONE" and not variant_geo_source:
+                    raise ClosureError(f"unresolved model/geo root {variant_model} {variant_geo}")
+                variants.append({"model": variant_model, "geo_root": variant_geo})
+                binding_source = _model_binding_source(
+                    root, variant_model, variant_geo, levelscript_sources | {script_path}, model_ids_path,
+                )
+                model_provenance[variant_model] = {
+                    "source": model_ids_path,
+                    "binding_source": binding_source,
+                    "geo_symbol": variant_geo,
+                    "geo_source": variant_geo_source,
+                }
+                used_sources[behavior].add(binding_source)
+                if variant_geo_source:
+                    geo_sources.update(_reached_actor_sources(
+                        root, variant_geo, variant_geo_source, actor_asset_index))
+                    material_features.update(_features(root, variant_geo_source))
+            primary = next((variant for variant in variants if variant["model"] != "MODEL_NONE"), variants[0])
+            model, geo_root = primary["model"], primary["geo_root"]
+            sounds, banks, sound_sources = _behavior_sounds(root, blocks[behavior], native_sources)
+            sources = {behavior_path, model_ids_path} | used_sources[behavior] | sound_sources
+            sources.update(geo_sources)
+            block = blocks[behavior]
+            animations = sorted(set(re.findall(r"LOAD_ANIMATIONS\s*\(\s*[^,]+,\s*([A-Za-z0-9_]+)", block)))
+            animation_sources: dict[str, str] = {}
+            for animation in animations:
+                animation_source = _asset_root_source(root, animation, asset_roots)
+                if not animation_source:
+                    raise ClosureError(f"unresolved animation root {animation}")
+                animation_sources[animation] = animation_source
+                sources.add(animation_source)
+                sources.update(_reached_animation_sources(
+                    root, animation, animation_source, actor_asset_index))
+            source_items = [_source(root, path) for path in sorted(sources)]
+            maximum_live_instances = max(occurrence[behavior].values())
+            if pool_cap is not None:
+                maximum_live_instances = min(maximum_live_instances, pool_cap)
+            records.append({"stable_id": behavior, "level": level, "area": area, "act_mask": " | ".join(sorted(acts[behavior])), "object_roots": sorted(set(root_names[behavior])), "model": model, "geo_root": geo_root, "model_variants": variants, "behavior_root": behavior, "spawned_children": sorted(child_map[behavior]), "children": sorted(typed_children[behavior]["child"]), "rewards": sorted(typed_children[behavior]["reward"]), "projectiles": sorted(typed_children[behavior]["projectile"]), "effects": sorted(typed_children[behavior]["effect"]), "animation_table": animations, "material_feature_bits": sorted(material_features), "maximum_live_instances": maximum_live_instances, "music_sequence_ids": [], "sfx_banks": banks, "sfx_ids": sounds, "sources": source_items, "root_provenance": {"behavior": {"symbol": behavior, "source": behavior_path}, "models": model_provenance, "animation": animation_sources}})
+        except ClosureError as error:
+            # First-proof fail-open only: one object whose record cannot be
+            # sealed is dropped and reported; the rest of the level proceeds.
+            # Strict mode re-raises the original error unchanged.
+            if not _ALLOW_UNRESOLVED_SPAWNS:
+                raise
+            _unresolved(f"record {behavior}: {error}")
+            dropped.add(behavior)
+    if dropped:
+        # A dropped behavior must not survive as a child reference, or the
+        # schema rejects the closure (unknown child / typed lists incomplete).
+        for record in records:
+            for field in ("spawned_children", "children", "rewards", "projectiles", "effects"):
+                record[field] = [child for child in record[field] if child not in dropped]
     area_music = sorted(set(re.findall(r"\bSEQ_[A-Z0-9_]+\b", area_text)))
     for record in records:
         record["music_sequence_ids"] = area_music
@@ -1418,7 +1464,7 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
     document = {"schema": SCHEMA, "source_root": str(root), "level": level, "area": area, "records": records, "scene_sources": sorted(source_paths - {source["path"] for record in records for source in record["sources"]}), "source_hashes": {path: hashlib.sha256((root / path).read_bytes()).hexdigest() for path in sorted(source_paths)}, "music_sequence_ids": area_music, "sfx_banks": sorted({bank for record in records for bank in record["sfx_banks"]}), "sfx_ids": sorted({sfx for record in records for sfx in record["sfx_ids"]})}
     unruled = find_unruled_native_spawn_sites(root, document, rules_path)
     if unruled:
-        raise ClosureError("unruled reachable native spawn sites: " + ", ".join(unruled))
+        _unresolved("unruled reachable native spawn sites: " + ", ".join(unruled))
     validate_scene_closure(document)
     return document
 
@@ -1440,7 +1486,13 @@ def main() -> None:
     parser.add_argument("--area", required=True, type=int)
     parser.add_argument("--rules", type=Path, default=Path(__file__).with_name("behavior_spawn_rules.json"))
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--allow-unresolved-spawns", action="store_true",
+                        help="first-proof fail-open: report and skip spawns the "
+                             "collector cannot resolve (and self/ancestor spawn "
+                             "cycles) instead of rejecting the level")
     args = parser.parse_args()
+    global _ALLOW_UNRESOLVED_SPAWNS
+    _ALLOW_UNRESOLVED_SPAWNS = args.allow_unresolved_spawns
     write_closure(args.output, collect_scene_closure(args.root, args.level, args.area, args.rules))
 
 

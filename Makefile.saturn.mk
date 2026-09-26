@@ -1332,7 +1332,8 @@ $(ACTOR_FAMILY_BUNDLE_REPORT): $(ACTOR_FAMILY_BUNDLE_INPUTS) | check-host-tools
 	  --family-report "$(ACTOR_FAMILY_BANK_REPORT)" \
 	  --model-ids "$(SATURN_REPO_ROOT)/include/model_ids.h" \
 	  --package-generation "$(SCENE_PACKAGE_GENERATION)" \
-	  --output-dir "$(ACTOR_FAMILY_BUNDLE_DIR)"
+	  --output-dir "$(ACTOR_FAMILY_BUNDLE_DIR)" \
+	  $(if $(filter 1,$(SCENE_FIRST_PROOF)),--first-proof)
 
 compile-actor-family-bundle: $(ACTOR_FAMILY_BUNDLE_REPORT)
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_actor_family_bundle.py" \
@@ -1340,7 +1341,8 @@ compile-actor-family-bundle: $(ACTOR_FAMILY_BUNDLE_REPORT)
 	  --family-report "$(ACTOR_FAMILY_BANK_REPORT)" \
 	  --model-ids "$(SATURN_REPO_ROOT)/include/model_ids.h" \
 	  --package-generation "$(SCENE_PACKAGE_GENERATION)" \
-	  --output-dir "$(ACTOR_FAMILY_BUNDLE_DIR)" --verify-publication
+	  --output-dir "$(ACTOR_FAMILY_BUNDLE_DIR)" --verify-publication \
+	  $(if $(filter 1,$(SCENE_FIRST_PROOF)),--first-proof)
 
 inventory-actor-family-bundles: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/inventory_actor_family_bundles.py" \
@@ -1992,10 +1994,20 @@ verify-sqrtf-fixed-mutation:
 # first few thousand inputs.
 SQRTF_MUTATION_STRIDE ?= 8191u
 
+# 1 = FIRST PROOF of a level other than BOB (PRODUCT_GOAL.md WF acceptance:
+# "unsupported WF objects may be skipped individually with visible telemetry.
+# They may not stall the scene"). The closure reports and skips what it cannot
+# seal instead of rejecting the level, and the actor bundle admits no family,
+# so the level boots with terrain and Mario and every object is skipped
+# individually. Default 0 keeps both tools strict and the BOB bundle
+# byte-identical.
+SCENE_FIRST_PROOF ?= 0
+
 compile-scene-closure: check-host-tools
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/collect_scene_closure.py" \
 	  --root "$(SATURN_REPO_ROOT)" --level "$(SCENE_LEVEL)" --area "$(SCENE_AREA)" \
 	  --rules "$(SATURN_REPO_ROOT)/tools/saturn/behavior_spawn_rules.json" \
+	  $(if $(filter 1,$(SCENE_FIRST_PROOF)),--allow-unresolved-spawns) \
 	  --output "$(SCENE_CLOSURE_OUTPUT)"
 
 verify-scene-package-schema: check-host-tools
@@ -2069,6 +2081,7 @@ compile-actor-scene-package: verify-scene-package-schema
 	  --model-ids "$(SATURN_REPO_ROOT)/include/model_ids.h" \
 	  --package-generation "$(SCENE_PACKAGE_GENERATION)" \
 	  --output-dir "$(ACTOR_FAMILY_BUNDLE_DIR)" --verify-publication \
+	  $(if $(filter 1,$(SCENE_FIRST_PROOF)),--first-proof) \
 	  >/dev/null 2>&1; then \
 	  $(MAKE) -f "$(SATURN_REPO_ROOT)/Makefile.saturn.mk" compile-actor-banks && \
 	  $(MAKE) -f "$(SATURN_REPO_ROOT)/Makefile.saturn.mk" compile-actor-family-bundle; \

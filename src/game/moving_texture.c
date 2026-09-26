@@ -128,10 +128,20 @@ extern u8 ttc_yellow_triangle[];
  * An array for converting a movtex texture id to a pointer that can
  * be passed to gDPSetTextureImage.
  */
+#ifdef SATURN_SOURCEBOOT
+/* The sourceboot cart links one level's data (sourceboot/Makefile
+ * SOURCEBOOT_LEVEL_SRCS), so SSL's two textures do not exist in it. Their
+ * slots stay, keeping every index identical; only SSL's own movtex use them. */
+u8 *gMovtexIdToTexture[] = { texture_waterbox_water,     texture_waterbox_mist,
+                             texture_waterbox_jrb_water, texture_waterbox_unknown_water,
+                             texture_waterbox_lava,      NULL,
+                             NULL,                       ttc_yellow_triangle };
+#else
 u8 *gMovtexIdToTexture[] = { texture_waterbox_water,     texture_waterbox_mist,
                              texture_waterbox_jrb_water, texture_waterbox_unknown_water,
                              texture_waterbox_lava,      ssl_quicksand,
                              ssl_pyramid_sand,           ttc_yellow_triangle };
+#endif
 
 extern Gfx castle_grounds_dl_waterfall[];
 extern s16 castle_grounds_movtex_tris_waterfall[];
@@ -539,6 +549,19 @@ extern u8 ttm_movtex_puddle[];
  * Find the quadCollection for a given quad collection id.
  */
 void *get_quad_collection_from_id(u32 id) {
+#ifdef SATURN_SOURCEBOOT
+    /* The sourceboot cart links one level's data, so the other levels' quad
+     * collections named below do not exist in it (BOB never reached this
+     * function; WF's area geo draws water regions, so it does). NULL is the
+     * existing "no water region to draw" answer that
+     * geo_movtex_draw_water_regions handles. The linked level's own
+     * collection is deliberately not returned yet: moving-texture drawing has
+     * never run on the Saturn renderer, so WF's water SURFACE is not drawn in
+     * its first proof. Water physics is unaffected -- it comes from
+     * gEnvironmentRegions, not from these quads. */
+    (void) id;
+    return NULL;
+#else
     switch (id) {
         case BBH_MOVTEX_MERRY_GO_ROUND_WATER_ENTRANCE:
             return bbh_movtex_merry_go_round_water_entrance;
@@ -591,6 +614,7 @@ void *get_quad_collection_from_id(u32 id) {
         default:
             return NULL;
     }
+#endif
 }
 
 /**

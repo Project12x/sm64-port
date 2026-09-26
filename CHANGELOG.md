@@ -4,6 +4,52 @@
 
 ### Added
 
+- **The cart's boot level is selectable, and Whomp's Fortress boots
+  (first proof).** Owner direction 2026-09-26: retarget from BOB -- among the
+  hardest levels for VDP1 (509 collision faces wider than 1024 units, third in
+  the game) -- to the easiest main course. Measured from the decomp: WF's
+  static terrain is 249 triangles (BOB 1,101), 188 wide faces, 46 objects.
+  WF is also the second level of `PRODUCT_GOAL.md`'s presentation gate.
+  - *Level selection*: `SATURN_SOURCEBOOT_LEVEL_NAME` / `_LEVEL_ID` drive the
+    level sources, terrain-bake area, scene-package directory, collision-
+    catalog exclusion and sky PNG in the sourceboot Makefile; the boot script
+    (`source_entry.c`) and scene bundle (`source_scene_bundle.h`) take the id
+    from the build. A level stamp forces the terrain/sky bake and the
+    collision catalog to regenerate on a level switch -- make compares
+    timestamps, and a newly selected level's sources are older than the old
+    level's outputs, so it silently kept the previous level's terrain.
+    Defaults remain BOB.
+  - *First-proof mode* (`SCENE_FIRST_PROOF=1`, default 0): per
+    `PRODUCT_GOAL.md` ("unsupported WF objects may be skipped individually
+    with visible telemetry. They may not stall the scene"), the scene closure
+    reports and skips what it cannot seal -- dynamic spawns, spawn cycles, and
+    any single object whose record fails -- instead of rejecting the level,
+    and the actor bundle admits only families whose model BOB already
+    supports (derived from `model_ids.h`: a BOB-supported ID defined by
+    exactly one model name), skipping every other object individually. Both
+    tools stay strict by default. WF: 4 closure skips reported; 4 families
+    admitted (signpost, explosion, red coin, number); coins, stars and 1-ups
+    are not yet, because the textured compile path is keyed to BOB's
+    positional family keys.
+  - *Water*: under `SATURN_SOURCEBOOT` the moving-texture tables stop naming
+    levels the cart does not link; WF's water SURFACE is not drawn yet
+    (moving-texture drawing has never run on the Saturn renderer). Water
+    physics is unaffected.
+  - Audio stays on BOB's proven SFX set (`SATURN_SOURCEBOOT_AUDIO_LEVEL_NAME`)
+    because the packager rejects WF's `SOUND_GENERAL2_SWITCH_TICK_FAST`; WF
+    and BOB share their music (`SEQ_LEVEL_GRASS`).
+  - Profile `sourceboot-wf-manual-v1.json`.
+  - **Status: boots, renders WRONG.** Build `id-611ab1c5db40190b` reaches WF
+    gameplay (HWRAM margin 54,036 B against ~4 KB on BOB), but owner-reported
+    broken: the per-face texture bake crushes WF's repeating textures into one
+    16/32 px tile per face -- no face renders at native texel density, 106 of
+    235 are squeezed more than 4x, 47 more than 8x. That is the next piece of
+    work (Saturn-native shared textures). An actor-texture strip is also
+    drawn where it should not be.
+  - **Still WF-shaped, to be generalised:** `source_entry.c` maps level id to
+    entry script with an `#if` per level; the build takes about eight
+    variables per level instead of one.
+
 - **Opt-in Saturn-native terrain emit (`SATURN_DEMO_TERRAIN_NATIVE_EMIT`,
   default `0`) — owner-observed broken, kept off.** `demo_emit_terrain_native()`
   copies each primitive's baked 32-byte resolved VDP1 command image and patches

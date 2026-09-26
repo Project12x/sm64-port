@@ -29,9 +29,18 @@ typedef struct sm64_saturn_source_scene_bundle_probe {
     uint16_t variant_count;
 } sm64_saturn_source_scene_bundle_probe_t;
 
+/* The level the cart boots, from the build's SATURN_SOURCEBOOT_LEVEL_ID (the
+ * same make variable the sealed target profile's release_config.level_id is
+ * checked against). The default keeps host tools and any build that does not
+ * pass it on BOB. The _BOB_ enum names below are historical: they now carry
+ * whatever level the build selects. */
+#ifndef SATURN_SOURCEBOOT_LEVEL_ID
+#define SATURN_SOURCEBOOT_LEVEL_ID 9
+#endif
+
 enum {
     SM64_SATURN_SOURCE_SCENE_BUNDLE_PROBE_MAGIC = 0x5342554EU,
-    SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_LEVEL_ID = 9U,
+    SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_LEVEL_ID = SATURN_SOURCEBOOT_LEVEL_ID,
     SM64_SATURN_SOURCE_SCENE_BUNDLE_BOB_AREA_ID = 1U,
     /* MUST be >= the bake's SM64_SATURN_ACTOR_BUNDLE_WORKSPACE_BYTES in the
      * generated actor_bundle_capacity.h. That header is not on this include

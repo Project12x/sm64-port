@@ -108,7 +108,22 @@ SOURCEBOOT_PC_BUILD := $(ROOT)/build/us_pc
 SOURCEBOOT_TEXT_STRINGS := build/us_pc/include/text_strings.h
 SOURCEBOOT_COLLISION_CATALOG := $(SOURCEBOOT_GENERATED)/sourceboot_collision_catalog.inc
 SOURCEBOOT_COLLISION_INPUTS := $(shell find "$(ROOT)/levels" \( -name collision.inc.c -o -name trajectory.inc.c \) -print)
-SOURCEBOOT_COLLISION_EXCLUDE_LEVELS := bob castle_grounds ttc
+# The level this cart boots, by source directory name. Every path that used to
+# hardcode levels/bob or packages/bob follows it. SATURN_SOURCEBOOT_LEVEL_ID
+# (below) must name the same level: the sealed profile checks the id, and
+# source_entry.c maps the id to the level's entry script. Defined here, ahead
+# of the first := that reads it.
+SATURN_SOURCEBOOT_LEVEL_NAME ?= bob
+# Must match the SCENE_FIRST_PROOF the level's actor bundle was published
+# with (Makefile.saturn.mk): the verify step recompiles and compares bytes.
+SCENE_FIRST_PROOF ?= 0
+# Sky bitmap source under textures/skyboxes/. BOB's geo draws
+# BACKGROUND_OCEAN_SKY (water.png); WF's draws BACKGROUND_BELOW_CLOUDS
+# (cloud_floor.png).
+SATURN_SOURCEBOOT_SKY_PNG ?= water.png
+# The level compiled through leveldata.c defines its own collision, so it is
+# excluded from the catalog alongside the two other leveldata.c levels below.
+SOURCEBOOT_COLLISION_EXCLUDE_LEVELS := $(SATURN_SOURCEBOOT_LEVEL_NAME) castle_grounds ttc
 SOURCEBOOT_WATER_SKYBOX := $(SOURCEBOOT_PC_BUILD)/bin/water_skybox.c
 SOURCEBOOT_CART_IMAGE = $(SH_BUILD_DIR)/SOURCE.DAT
 SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
@@ -145,6 +160,9 @@ SOURCEBOOT_M68K_BINDIR := $(SOURCEBOOT_PONESOUND_ROOT)/m68k-elf
 SATURN_SOURCEBOOT_ROUTE_REPLAY ?= 0
 SATURN_SOURCEBOOT_LEVEL_ID ?= 9
 SATURN_SOURCEBOOT_AREA_ID ?= 1
+# Defined up here, not beside its rule: make expands a rule's prerequisites
+# when it reads the rule, and the collision catalog's rule comes first.
+SOURCEBOOT_LEVEL_STAMP := $(SOURCEBOOT_GENERATED)/level-$(SATURN_SOURCEBOOT_LEVEL_NAME)-area$(SATURN_SOURCEBOOT_AREA_ID).stamp
 SATURN_SOURCEBOOT_ROUTE_ID ?= 0
 SATURN_FEATURE_COMPLETE_MARIO_ANIMATION ?= 0
 SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE ?= 0
@@ -383,13 +401,22 @@ SOURCEBOOT_HUD_GLYPH_HEADER := $(SOURCEBOOT_GENERATED)/saturn_hud_glyphs_generat
 SOURCEBOOT_HUD_GLYPH_MANIFEST := $(SOURCEBOOT_GENERATED)/saturn_hud_glyphs_manifest.json
 SOURCEBOOT_SKY_GRADIENT_HEADER := $(SOURCEBOOT_GENERATED)/saturn_sky_gradient_generated.h
 SOURCEBOOT_ACTOR_IDENTITY_REGISTRY_HEADER := $(SOURCEBOOT_GENERATED)/actor_identity_registry.h
-SOURCEBOOT_ACTOR_FAMILY_REPORT := $(ROOT)/build/saturn/packages/bob/1/actors/actor-families.json
-SOURCEBOOT_ACTOR_CLOSURE := $(ROOT)/build/saturn/packages/bob/1/closure.json
+SOURCEBOOT_LEVEL_PACKAGE_DIR := $(ROOT)/build/saturn/packages/$(SATURN_SOURCEBOOT_LEVEL_NAME)/$(SATURN_SOURCEBOOT_AREA_ID)
+SOURCEBOOT_ACTOR_FAMILY_REPORT := $(SOURCEBOOT_LEVEL_PACKAGE_DIR)/actors/actor-families.json
+SOURCEBOOT_ACTOR_CLOSURE := $(SOURCEBOOT_LEVEL_PACKAGE_DIR)/closure.json
+# The closure whose sound effects the audio bake packages. It follows the boot
+# level unless SATURN_SOURCEBOOT_AUDIO_LEVEL_NAME overrides it: the first proof
+# of another level keeps BOB's proven audio set while that level's own SFX are
+# not yet packageable (WF's closure trips the packager on
+# SOUND_GENERAL2_SWITCH_TICK_FAST). BOB and WF share their music,
+# SEQ_LEVEL_GRASS, so only the new level's object sounds are missing.
+SATURN_SOURCEBOOT_AUDIO_LEVEL_NAME ?= $(SATURN_SOURCEBOOT_LEVEL_NAME)
+SOURCEBOOT_AUDIO_CLOSURE := $(ROOT)/build/saturn/packages/$(SATURN_SOURCEBOOT_AUDIO_LEVEL_NAME)/$(SATURN_SOURCEBOOT_AREA_ID)/closure.json
 SOURCEBOOT_SCENE_PACKAGE_GENERATION ?= 16
-SOURCEBOOT_ACTOR_BUNDLE_DIR := $(ROOT)/build/saturn/packages/bob/1/actors-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
+SOURCEBOOT_ACTOR_BUNDLE_DIR := $(SOURCEBOOT_LEVEL_PACKAGE_DIR)/actors-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
 SOURCEBOOT_ACTOR_BUNDLE := $(SOURCEBOOT_ACTOR_BUNDLE_DIR)/bob-area1-actors-v3.s64f
 SOURCEBOOT_ACTOR_BUNDLE_REPORT := $(SOURCEBOOT_ACTOR_BUNDLE_DIR)/actor-family-bundle.json
-SOURCEBOOT_SCENE_PACKAGE_DIR := $(ROOT)/build/saturn/packages/bob/1/scene-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
+SOURCEBOOT_SCENE_PACKAGE_DIR := $(SOURCEBOOT_LEVEL_PACKAGE_DIR)/scene-v3-g$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)
 SOURCEBOOT_SCENE_PACKAGE_ROOT := $(SOURCEBOOT_SCENE_PACKAGE_DIR)/scene.s64p
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
@@ -422,9 +449,10 @@ SOURCEBOOT_ACTOR_PACKAGE_TOOLS := \
   $(ROOT)/tools/saturn/scene_package_schema.py \
   $(ROOT)/tools/saturn/validate_scene_package.py \
   $(ROOT)/tools/saturn/emit_scene_package_header.py
+SOURCEBOOT_LEVEL_AREA_DIR := levels/$(SATURN_SOURCEBOOT_LEVEL_NAME)/areas/$(SATURN_SOURCEBOOT_AREA_ID)
 SOURCEBOOT_BOB_SOURCES := \
-  $(ROOT)/levels/bob/areas/1/geo.inc.c \
-  $(wildcard $(ROOT)/levels/bob/areas/1/*/model.inc.c)
+  $(ROOT)/$(SOURCEBOOT_LEVEL_AREA_DIR)/geo.inc.c \
+  $(wildcard $(ROOT)/$(SOURCEBOOT_LEVEL_AREA_DIR)/*/model.inc.c)
 SOURCEBOOT_BIN_SRCS := $(wildcard $(ROOT)/bin/*.c)
 SOURCEBOOT_ACTOR_SRCS := $(wildcard $(ROOT)/actors/*.c)
 # E2 intentionally links one original level, not the full game archive.  The
@@ -432,8 +460,9 @@ SOURCEBOOT_ACTOR_SRCS := $(wildcard $(ROOT)/actors/*.c)
 # levels/scripts.c; the linker then retains their actual actor sections.
 # Future level banks belong in the cart-backed asset package, not in the
 # fixed Yaul executable image.
-SOURCEBOOT_LEVEL_SRCS := $(ROOT)/levels/bob/script.c \
-  $(ROOT)/levels/bob/geo.c $(ROOT)/levels/bob/leveldata.c \
+SOURCEBOOT_LEVEL_SRCS := $(ROOT)/levels/$(SATURN_SOURCEBOOT_LEVEL_NAME)/script.c \
+  $(ROOT)/levels/$(SATURN_SOURCEBOOT_LEVEL_NAME)/geo.c \
+  $(ROOT)/levels/$(SATURN_SOURCEBOOT_LEVEL_NAME)/leveldata.c \
   $(ROOT)/levels/menu/leveldata.c \
   $(ROOT)/levels/castle_grounds/leveldata.c \
   $(ROOT)/levels/ttc/leveldata.c
@@ -756,6 +785,7 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
   -DTARGET_SATURN=1 -DSATURN_SOURCEBOOT=1 -DNO_SEGMENTED_MEMORY=1 \
   -DSATURN_SOURCEBOOT_ROUTE_REPLAY=$(SATURN_SOURCEBOOT_ROUTE_REPLAY) \
+  -DSATURN_SOURCEBOOT_LEVEL_ID=$(SATURN_SOURCEBOOT_LEVEL_ID) \
   -DSATURN_EXPERIMENTAL_SKIP_GEO_WALK=$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK) \
   -DSATURN_SOURCEBOOT_LIVE_INPUT=$(SATURN_SOURCEBOOT_LIVE_INPUT) \
   -DSATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS=$(SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS) \
@@ -997,7 +1027,11 @@ source-quad-map: $(SOURCEBOOT_QUAD_MAP_C)
 .PHONY: source-data-catalog
 source-data-catalog: $(SOURCEBOOT_COLLISION_CATALOG)
 
-$(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py $(SOURCEBOOT_COLLISION_INPUTS)
+# The level stamp is a prerequisite because the catalog's contents depend on
+# SOURCEBOOT_COLLISION_EXCLUDE_LEVELS, which follows the boot level: without
+# it a level switch kept the previous level's catalog (every input file is
+# older than it), dropping the old level's collision and trajectories.
+$(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py $(SOURCEBOOT_COLLISION_INPUTS) $(SOURCEBOOT_LEVEL_STAMP)
 	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py" \
 	  --root "$(ROOT)" --output "$@" \
 	  $(foreach level,$(SOURCEBOOT_COLLISION_EXCLUDE_LEVELS),--exclude-level $(level))
@@ -1059,12 +1093,24 @@ identity-assets: source-assets source-geo-depth $(SOURCEBOOT_GENERATED)/mario_an
 print-identity-tag:
 	@printf '%s\n' '$(SOURCEBOOT_IDENTITY_DIRECTORY_TAG)'
 
+# Switching SATURN_SOURCEBOOT_LEVEL_NAME must re-bake terrain and sky. Make
+# compares timestamps, and a newly selected level's sources are usually OLDER
+# than the previous level's generated outputs, so without this the build would
+# silently keep the old level's terrain. The stamp's name carries the level:
+# selecting a different level names a stamp that does not exist yet, which is
+# created fresh and forces every rule depending on it to re-run. (Variable
+# defined beside SATURN_SOURCEBOOT_AREA_ID.)
+$(SOURCEBOOT_LEVEL_STAMP):
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@rm -f "$(SOURCEBOOT_GENERATED)"/level-*.stamp
+	@touch "$@"
+
 $(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_REPORT) &: \
-    $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_SOURCES)
+    $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_SOURCES) $(SOURCEBOOT_LEVEL_STAMP)
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@$(MAKE) --no-print-directory -f "$(ROOT)/Makefile.saturn.mk" \
 	  compile-bob-area BOB_MESH_GENERATED="$(SOURCEBOOT_GENERATED)" \
-	  BOB_AREA_DIR="levels/bob/areas/1" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
+	  BOB_AREA_DIR="$(SOURCEBOOT_LEVEL_AREA_DIR)" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
 
 .PHONY: source-bob-mesh
 source-bob-mesh: $(SOURCEBOOT_BOB_COMPILED)
@@ -1093,11 +1139,11 @@ $(SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER): $(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE) $(SO
 
 $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) $(SOURCEBOOT_BOB_TILE_MANIFEST) &: \
 	$(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_TILE_TOOLS) \
-	$(SOURCEBOOT_GENERATED)/bob_area1_intake.json | source-extracted-assets
+	$(SOURCEBOOT_GENERATED)/bob_area1_intake.json $(SOURCEBOOT_LEVEL_STAMP) | source-extracted-assets
 	@$(MAKE) -f "$(ROOT)/Makefile.saturn.mk" OS=Windows_NT \
 	  compile-bob-tiles BOB_TILES_GENERATED="$(SOURCEBOOT_GENERATED)" \
 	  BOB_MESH_GENERATED="$(SOURCEBOOT_GENERATED)" \
-	  BOB_AREA_DIR="levels/bob/areas/1" BOB_ASSET_ROOT="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)" \
+	  BOB_AREA_DIR="$(SOURCEBOOT_LEVEL_AREA_DIR)" BOB_ASSET_ROOT="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)" \
 	  SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
 
 .PHONY: source-bob-tiles
@@ -1112,10 +1158,10 @@ $(SOURCEBOOT_BOB_SCENE): $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_TILE_MANIFE
 .PHONY: source-bob-scene
 source-bob-scene: $(SOURCEBOOT_BOB_SCENE)
 
-$(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_BOB_SKY_MANIFEST) &: $(ROOT)/tools/saturn/bake_bob_sky.py | source-extracted-assets
+$(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_BOB_SKY_MANIFEST) &: $(ROOT)/tools/saturn/bake_bob_sky.py $(SOURCEBOOT_LEVEL_STAMP) | source-extracted-assets
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@$(MAKE) --no-print-directory -f "$(ROOT)/Makefile.saturn.mk" OS=Windows_NT \
-	  compile-bob-sky BOB_SKY_SOURCE="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)/textures/skyboxes/water.png" \
+	  compile-bob-sky BOB_SKY_SOURCE="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)/textures/skyboxes/$(SATURN_SOURCEBOOT_SKY_PNG)" \
 	  BOB_SKY_OUTPUT="$(SOURCEBOOT_BOB_SKY)" \
 	  BOB_SKY_MANIFEST="$(SOURCEBOOT_BOB_SKY_MANIFEST)" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
 
@@ -1180,7 +1226,8 @@ source-actor-family-bundle: source-actor-families
 	  --family-report "$(SOURCEBOOT_ACTOR_FAMILY_REPORT)" \
 	  --model-ids "$(ROOT)/include/model_ids.h" \
 	  --package-generation "$(SOURCEBOOT_SCENE_PACKAGE_GENERATION)" \
-	  --output-dir "$(SOURCEBOOT_ACTOR_BUNDLE_DIR)" --verify-publication
+	  --output-dir "$(SOURCEBOOT_ACTOR_BUNDLE_DIR)" --verify-publication \
+	  $(if $(filter 1,$(SCENE_FIRST_PROOF)),--first-proof)
 
 .PHONY: source-actor-identity-registry-force
 source-actor-identity-registry-force:
@@ -1279,7 +1326,7 @@ sourceboot-audio-sfx-inputs:
 	@test -d "$(SOURCEBOOT_M68K_BINDIR)" || { printf '%s\n' 'sourceboot: pinned MC68000 toolchain is unavailable' >&2; exit 1; }
 	@$(MAKE) -C "$(ROOT)" -f Makefile.saturn.mk -j1 \
 	  M68K_BINDIR="$(SOURCEBOOT_M68K_BINDIR)" \
-	  SATURN_AUDIO_SCENE_CLOSURE="$(SOURCEBOOT_ACTOR_CLOSURE)" \
+	  SATURN_AUDIO_SCENE_CLOSURE="$(SOURCEBOOT_AUDIO_CLOSURE)" \
 	  pcm68k-image compile-saturn-audio
 
 ifneq ($(SOURCEBOOT_SFX_MUSIC_DEP),)

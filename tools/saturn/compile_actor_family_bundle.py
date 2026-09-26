@@ -199,9 +199,12 @@ def _require_fresh_publication(output_dir: Path) -> None:
 def validate_publication(
     output_dir: Path, *, root: Path | None = None, closure_path: Path | None = None,
     family_report_path: Path | None = None, model_ids_path: Path | None = None,
-    package_generation: int | None = None,
+    package_generation: int | None = None, first_proof: bool = False,
 ) -> dict[str, object]:
-    """Validate all four published sidecars and current resource semantics."""
+    """Validate all four published sidecars and current resource semantics.
+
+    first_proof must match the flag the publication was built with:
+    the current-inputs check below recompiles and compares byte for byte."""
     output_dir = Path(output_dir)
     expected_order = (BUNDLE_NAME, DEPENDENCY_NAME, HEADER_NAME, REPORT_NAME)
     paths = {name: output_dir / name for name in expected_order}
@@ -278,7 +281,8 @@ def validate_publication(
             current = Path(temporary) / "publication"
             compile_scene_bundle(
                 Path(root), Path(closure_path), Path(family_report_path),
-                Path(model_ids_path), int(package_generation), current)
+                Path(model_ids_path), int(package_generation), current,
+                first_proof=first_proof)
             for name in expected_order:
                 if paths[name].read_bytes() != (current / name).read_bytes():
                     raise ValueError(
@@ -354,11 +358,39 @@ def _require_runtime_upload_stage(root: Path, bank_rows) -> None:
         largest[0], f"boot upload stage ({largest[1]} {largest[2]})")
 
 
+def _first_proof_model_ids(model_ids: dict[str, int]) -> frozenset[int]:
+    """Model IDs a first proof of another level may admit.
+
+    BOB_DIRECT_TEXTURED_KEYS is positional -- (family ordinal in BOB's report,
+    model ID) -- so it cannot be applied to another level's report directly:
+    ordinals differ, and some IDs are level-local slots (0x36/0x37 are BOB's
+    chain-chomp gate and seesaw, and other levels' own models). Admit a BOB-
+    supported model ID only when exactly one model name defines it: a global
+    actor such as MODEL_YELLOW_COIN is the same geometry in every level, while
+    a shared level-local slot would admit the wrong family.
+    """
+    names_by_id: dict[int, set[str]] = {}
+    for name, value in model_ids.items():
+        names_by_id.setdefault(value, set()).add(name)
+    return frozenset(model_id for _, model_id in BOB_DIRECT_TEXTURED_KEYS
+                     if len(names_by_id.get(model_id, ())) == 1)
+
+
 def compile_scene_bundle(
     root: Path, closure_path: Path, family_report_path: Path,
     model_ids_path: Path, package_generation: int, output_dir: Path,
+    first_proof: bool = False,
 ) -> dict[str, object]:
-    """Build the real BOB bundle and publish all artifacts report-last."""
+    """Build the real BOB bundle and publish all artifacts report-last.
+
+    first_proof is the mode for the first boot of a level other than BOB
+    (PRODUCT_GOAL.md: unsupported objects may be skipped individually). A
+    family is admitted only if its model is one BOB already supports
+    (_first_proof_model_ids) and it compiles; every other object publishes as
+    an unsupported row and is skipped at runtime. The BOB-specific pins --
+    exactly 47 families, and a bank for every positional BOB key -- do not
+    apply. Default False keeps the real BOB bundle byte-identical.
+    """
     root = Path(root).resolve()
     _require_runtime_workspace(
         root, int(BOB_WORKSPACE_CAPACITY_BYTES))
@@ -375,11 +407,15 @@ def compile_scene_bundle(
             family_report.get("schema") != "sm64-saturn-actor-family-bank-v2":
         raise ValueError("closure/family report schema mismatch")
     families = family_report.get("families")
-    if not isinstance(families, list) or len(families) != 47:
+    if not isinstance(families, list) or \
+            (not first_proof and len(families) != 47):
         raise ValueError("real BOB family report must contain exactly 47 families")
     grouped = _family_records(closure)
     model_ids = parse_model_ids(model_ids_path.read_text(encoding="utf-8"))
-    supported = set(BOB_DIRECT_TEXTURED_KEYS)
+    # First proof: filled below with exactly the keys admitted and compiled,
+    # so the inventory checks after the loop stay meaningful.
+    supported = set() if first_proof else set(BOB_DIRECT_TEXTURED_KEYS)
+    first_proof_ids = _first_proof_model_ids(model_ids) if first_proof else frozenset()
     banks: dict[VariantKey, bytes] = {}
     bank_rows: list[dict[str, object]] = []
     family_documents: list[FamilyDocument] = []
@@ -402,6 +438,17 @@ def compile_scene_bundle(
         selected = key in supported
         unsupported_reason: str | None = None
         compiled = None
+        if first_proof and model_id in first_proof_ids:
+            # Trial compile decides admission; a failure degrades this one
+            # family to unsupported instead of rejecting the level.
+            try:
+                validate_actor_bank(
+                    compile_actor_variant(root, ordinal, model_id, records).payload)
+            except (ActorVariantError, ValueError) as error:
+                unsupported_reason = f"first proof: {error}"
+            else:
+                supported.add(key)
+                selected = True
         if selected:
             compiled = compile_actor_variant(root, ordinal, model_id, records)
             bank = validate_actor_bank(compiled.payload)
@@ -425,7 +472,11 @@ def compile_scene_bundle(
                     "draw_records_per_instance", "texture_commands_per_instance",
                     "gouraud_tables_per_instance")},
             })
-        if bool(raw_family.get("supported")):
+        # The diagnostic compile of every non-admitted variant is skipped in a
+        # first proof: it would compile each unfamiliar actor of the new level
+        # only to record why it is unsupported, and fail on formats the BOB
+        # material path never met.
+        if bool(raw_family.get("supported")) and not first_proof:
             variants = raw_family.get("model_variants")
             if not isinstance(variants, list):
                 raise ValueError("family model variants are invalid")
@@ -451,6 +502,8 @@ def compile_scene_bundle(
                 })
                 if unsupported_reason is None:
                     unsupported_reason = reason
+        if not selected and unsupported_reason is None and first_proof:
+            unsupported_reason = "first proof: model is not one BOB supports"
         if not selected and unsupported_reason is None:
             reasons = raw_family.get("unsupported")
             unsupported_reason = ",".join(str(item) for item in reasons) \
@@ -553,15 +606,21 @@ def main() -> int:
     parser.add_argument("--package-generation", required=True, type=int)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--verify-publication", action="store_true")
+    parser.add_argument("--first-proof", action="store_true",
+                        help="first proof of a non-BOB level: admit only "
+                             "families whose model BOB already supports; skip "
+                             "every other object individually")
     args = parser.parse_args()
     if args.verify_publication:
         validate_publication(
             args.output_dir, root=args.root, closure_path=args.closure,
             family_report_path=args.family_report, model_ids_path=args.model_ids,
-            package_generation=args.package_generation)
+            package_generation=args.package_generation,
+            first_proof=args.first_proof)
         return 0
     compile_scene_bundle(args.root, args.closure, args.family_report,
-                         args.model_ids, args.package_generation, args.output_dir)
+                         args.model_ids, args.package_generation, args.output_dir,
+                         first_proof=args.first_proof)
     return 0
 
 
