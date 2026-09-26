@@ -325,6 +325,27 @@ class SourcebootCatalogTests(unittest.TestCase):
             ["levels/ssl/collision.inc.c", "levels/ssl/trajectory.inc.c"],
         )
 
+    def test_command_line_exclusions_replace_the_bob_default(self) -> None:
+        """A cart booting WF passes its own exclusions; BOB must then be IN
+        the catalog. argparse's append-to-default kept "bob" excluded no
+        matter what was passed, and the WF link lost BOB's collision and
+        trajectories that shared behavior code references."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for level in ("bob", "wf"):
+                level_root = root / "levels" / level
+                level_root.mkdir(parents=True)
+                (level_root / "collision.inc.c").write_text("/* source */\n", encoding="utf-8")
+            output = root / "catalog.inc"
+            subprocess.run([
+                sys.executable,
+                str(Path(__file__).with_name("prepare_sourceboot_collision_catalog.py")),
+                "--root", str(root), "--output", str(output), "--exclude-level", "wf",
+            ], check=True)
+            text = output.read_text(encoding="utf-8")
+        self.assertIn("levels/bob/collision.inc.c", text)
+        self.assertNotIn("levels/wf/collision.inc.c", text)
+
 
 class QuadPairingTests(unittest.TestCase):
     def test_exact_matcher_prefers_cardinality_over_single_edge_quality(self) -> None:

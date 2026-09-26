@@ -131,10 +131,20 @@ def main() -> None:
                                args.payload_manifest, args.payload_root),
                            allow_provisional=args.allow_provisional)
     text = emit_header(package, args.symbol_prefix)
-    publications = [(args.output, text.encode("utf-8"))]
+    # One atomic set, with the level header LAST. publish_or_verify_set treats
+    # the last file as the set's ready marker. The ABI header is shared by
+    # every level and depends on no input, so it used to be appended last and
+    # became the marker: once any level had published it, every other level's
+    # first header publication was refused with "publication ready marker
+    # exists for an incomplete set". With the level header as the marker a
+    # new level proceeds (the existing ABI is verified identical), and a
+    # conflicting ABI still fails the whole set before anything is linked, so
+    # no header is ever left without its ABI.
+    publications = []
     if args.abi_output is not None:
         publications.append(
             (args.abi_output, emit_abi_header().encode("utf-8")))
+    publications.append((args.output, text.encode("utf-8")))
     publish_or_verify_set(publications)
 
 

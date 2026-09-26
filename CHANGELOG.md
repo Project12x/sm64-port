@@ -31,6 +31,55 @@
 
 ### Fixed
 
+- **Level pipeline bugs that only BOB's shape hid -- found by the first
+  build of another level (Whomp's Fortress).** Each was invisible on BOB
+  because BOB happened to satisfy the assumption; each now works for any
+  level.
+  - *Texture resolution* (`bake_bob_tiles.py`): the symbol -> PNG table was
+    hand-typed and named only BOB's generic bank and five BOB textures, so any
+    other level failed with "no exported BOB texture". It is now read from the
+    decomp's own `const Texture NAME[] = { #include "PATH.inc.c"` definitions
+    in `bin/*.c` and each `levels/*/texture.inc.c`: 898 textures, verified to
+    reproduce all 24 of BOB's old entries exactly.
+  - *Vertex-coloured faces* (`bake_bob_tiles.py`, `subdivide_terrain_ir.py`,
+    `bake_bob_bsp_fragments.py`): BOB's terrain had none; WF's does. All three
+    assumed every face had a texture tile and crashed (`KeyError:
+    'texture_tile'`, `no exported BOB texture for None`, `'NoneType' object is
+    not subscriptable`). Such faces now take the untextured path and are
+    counted in the tile manifest (`untextured_triangles`). Regression test
+    added for the refinement pass.
+  - *VDP1 partitions* (`bake_bob_tiles.py`): `main.c` uploads a FIXED
+    345,472-byte tile bank and a fixed 1,077-palette CLUT bank, so a smaller
+    level's banks were read past their end. Both are now zero-padded to their
+    partitions. **Found along the way: BOB's own CLUT bank is 1,175 palettes
+    (37,600 B) since the Task 1 UV refinement, but `main.c` DMAs 1,077 -- 98
+    terrain faces in the owner-approved BOB build sample past the uploaded
+    palettes.** Reported loudly and recorded (`clut_overflow_palettes`) rather
+    than failing the default build; the shared-texture bake removes per-face
+    palettes and the cause. Only 32 B of VDP1 texture VRAM is free, so the
+    partition cannot simply grow.
+  - *Scene-package publication* (`emit_scene_package_header.py`): the level
+    header and the shared, input-independent ABI header were one publication
+    set with the ABI header LAST, making it the set's ready marker -- so once
+    any level had published it, every other level's first publication was
+    refused ("ready marker exists for an incomplete set"). The level header is
+    now the marker; a conflicting ABI still fails the whole set before any
+    link, so no header is ever left without its ABI (the existing no-clobber
+    test still passes). Regression test added; it fails against the old code.
+  - *Collision catalog* (`prepare_sourceboot_collision_catalog.py`):
+    `--exclude-level` had `action="append", default=["bob"]`, and argparse
+    appends passed values to a list default -- BOB was excluded whatever the
+    Makefile passed, so a non-BOB cart lost `bob_seg7_collision_bridge`,
+    `bob_seg7_trajectory_koopa` and the metal-ball paths that shared behavior
+    code references. The caller's list is now authoritative. BOB's catalog is
+    byte-identical before and after; regression test fails against the old
+    code.
+  - *Actor identity registry* (`gen_actor_identity_registry.py`):
+    `model_ids.h` names level-local models as aliases of the generic
+    level-geometry slots (`#define MODEL_WF_GIANT_POLE
+    MODEL_LEVEL_GEOMETRY_0D`); the numeric-only parse rejected them as
+    "unknown model". Aliases now resolve to their target's number.
+
 - **Terrain lowering runs as ONE descriptor again (`DEMO_TERRAIN_LOWER_JOBS`
   4 -> 1): the 4-way split below raced.** Every `WORLD_LOWER` job begins with
   `demo_prepare_position_owners()`, which memsets the *shared*

@@ -53,6 +53,21 @@ def test_uv_repeat_splits_until_bakeable():
     assert max(repeats) <= 16.0, f"still unbakeable: max k={max(repeats)}"
 
 
+def test_untextured_face_is_left_alone():
+    """A vertex-coloured face has no texture_tile. WF's mesh contains such
+    faces (BOB's did not), and the refinement pass crashed on them with
+    KeyError: 'texture_tile'. It has no UV period, so it must be neither an
+    error nor a refinement candidate."""
+    positions = [[0, 0, 0], [4000, 0, 0], [0, 0, 4000]]
+    uvs = [[0, 0], [27648, 0], [0, 27648]]
+    tri = {"source": 0, "material": 0, "indices": [0, 1, 2]}
+    assert sub.triangle_uv_repeat(tri, uvs) == 0.0
+    document, _ = sub.subdivide(_doc(positions, uvs, [tri]),
+                               threshold=0.0, max_passes=6,
+                               uv_repeat_limit=16.0)
+    assert len(document["triangles"]) == 1, "untextured face was split"
+
+
 def test_no_t_junctions_across_a_shared_edge():
     """Two triangles sharing an edge must receive the SAME midpoint index
     when that edge is split, or the floor cracks along the seam."""

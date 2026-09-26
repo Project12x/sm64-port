@@ -29,6 +29,13 @@ from write_if_changed import write_text_if_changed
 MODEL_DEFINE_RE = re.compile(
     r"#define\s+(MODEL_[A-Z0-9_]+)\s+(0[xX][0-9A-Fa-f]+|\d+)"
 )
+# model_ids.h also names level-local models as aliases of the generic
+# level-geometry slots, e.g. `#define MODEL_WF_GIANT_POLE
+# MODEL_LEVEL_GEOMETRY_0D`. BOB placed none of these; WF does, and the
+# numeric-only parse rejected them as "unknown model".
+MODEL_ALIAS_RE = re.compile(
+    r"#define\s+(MODEL_[A-Z0-9_]+)\s+(MODEL_[A-Z0-9_]+)\b"
+)
 C_IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
@@ -52,6 +59,16 @@ def parse_model_ids(text: str) -> dict[str, int]:
     result = {name: int(value, 0) for name, value in MODEL_DEFINE_RE.findall(text)}
     if not result:
         raise ValueError("model ID header contains no numeric MODEL_* definitions")
+    # Resolve aliases to their target's number; repeat so an alias of an
+    # alias resolves too. An alias whose target never resolves stays absent
+    # and is still reported as unknown by the caller.
+    aliases = dict(MODEL_ALIAS_RE.findall(text))
+    while True:
+        resolved = {name: result[target] for name, target in aliases.items()
+                    if name not in result and target in result}
+        if not resolved:
+            break
+        result.update(resolved)
     return result
 
 

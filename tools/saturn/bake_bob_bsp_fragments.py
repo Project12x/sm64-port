@@ -59,10 +59,15 @@ def _fragment_bsp(root: object,
 
 
 def _primitive_tile_allowed(scene: dict[str, object], primitive: dict[str, object]) -> bool:
+    tiles = primitive.get("texture_tiles") or [None]
+    if tiles[0] is None:
+        # A vertex-coloured primitive has no tile to bake; it takes the
+        # untextured path. BOB's mesh had none, WF's does.
+        return False
     indices = [int(value) for value in primitive["indices"][:3]]
     uv = scene["vertex_attributes"]["uv"]
     points = [uv[index] for index in indices]
-    state = primitive["texture_tiles"][0]["state"]
+    state = tiles[0]["state"]
     span_s = max(point[0] for point in points) - min(point[0] for point in points)
     span_t = max(point[1] for point in points) - min(point[1] for point in points)
     tile_s = int(state["lrs"]) - int(state["uls"]) + 4

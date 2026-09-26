@@ -53,9 +53,16 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--exclude-level", action="append", default=["bob"])
+    # default=None, not ["bob"]: with action="append" argparse APPENDS passed
+    # values to a list default, so "bob" was excluded no matter what the
+    # caller passed. A cart booting another level then lost BOB's collision
+    # and trajectories, which shared behavior code still references
+    # (bob_seg7_collision_bridge, bob_seg7_trajectory_koopa, ...). The caller's
+    # list is now authoritative; bob stays the default only when none is given.
+    parser.add_argument("--exclude-level", action="append", default=None)
     args = parser.parse_args()
-    write_catalog(args.root.resolve(), args.output, tuple(args.exclude_level))
+    excluded = tuple(args.exclude_level) if args.exclude_level else ("bob",)
+    write_catalog(args.root.resolve(), args.output, excluded)
     return 0
 
 

@@ -789,6 +789,32 @@ class ScenePackageSchemaTest(unittest.TestCase):
                 publish_or_verify_set(((output, b"expected"),))
             self.assertEqual(foreign.read_bytes(), b"foreign")
 
+    def test_second_level_header_publishes_beside_existing_shared_abi(self) -> None:
+        """The first level to publish writes the shared ABI header. A second
+        level's first header publication must succeed beside it (WF after
+        BOB); it used to be refused as "publication ready marker exists for
+        an incomplete set" because the shared ABI was the set's last file."""
+        package = compile_package(9, 1, [], [])
+        with tempfile.TemporaryDirectory(prefix="s64p-shared-abi-") as temporary:
+            root = Path(temporary)
+            package_path = root / "scene.s64p"
+            package_path.write_bytes(package)
+            abi_path = root / "abi.h"
+
+            def emit(header_path: Path) -> subprocess.CompletedProcess:
+                return subprocess.run([
+                    sys.executable,
+                    str(Path(__file__).with_name("emit_scene_package_header.py")),
+                    "--input", str(package_path), "--output", str(header_path),
+                    "--abi-output", str(abi_path), "--symbol-prefix", "fixture",
+                ], text=True, capture_output=True, check=False)
+
+            first = emit(root / "first_level.h")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            second = emit(root / "second_level.h")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertTrue((root / "second_level.h").is_file())
+
     def test_validator_and_header_reports_never_clobber_drift(self) -> None:
         package = compile_package(9, 1, [], [])
         with tempfile.TemporaryDirectory(prefix="s64p-sidecar-no-clobber-") as temporary:

@@ -63,7 +63,13 @@ def triangle_uv_repeat(tri: dict, uvs: list) -> float:
     Fast3D UVs are s10.5; the tile extents are in quarter-texel units, and
     eight extent-ratios make one source-tile period.
     """
-    state = tri["texture_tile"]["state"]
+    tile = tri.get("texture_tile")
+    if tile is None:
+        # An untextured (vertex-coloured) face has no UV period: the baker
+        # never builds a tile for it, so there is nothing for UV refinement
+        # to fix. BOB's mesh happened to contain none; WF's does.
+        return 0.0
+    state = tile["state"]
     corners = [uvs[i] for i in tri["indices"]]
     span_s = max(c[0] for c in corners) - min(c[0] for c in corners)
     span_t = max(c[1] for c in corners) - min(c[1] for c in corners)

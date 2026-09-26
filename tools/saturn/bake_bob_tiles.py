@@ -12,6 +12,7 @@ import argparse
 import binascii
 import hashlib
 import json
+import re
 import struct
 import zlib
 from pathlib import Path
@@ -30,18 +31,38 @@ from write_if_changed import (write_bytes_if_changed,
 # the runtime drew a white quad instead.
 MAX_TILE_BYTES = 345_472
 MAX_VDP1_TEXTURE_BYTES = 446_432
-BOB_TEXTURES = {
-    **{f"generic_0900{offset:04X}": f"textures/generic/bob_textures.{offset:05X}.rgba16.png"
-       for offset in (0x1800, 0x2000, 0x2800, 0x3000, 0x3800, 0x4000,
-                      0x4800, 0x5000, 0x5800, 0x6000, 0x7000, 0x7800,
-                      0x8000, 0x8800, 0x9000, 0x9800, 0xA000, 0xA800)},
-    "generic_0900B000": "textures/generic/bob_textures.0B000.ia16.png",
-    "bob_seg7_texture_07000000": "levels/bob/0.rgba16.png",
-    "bob_seg7_texture_07000800": "levels/bob/1.rgba16.png",
-    "bob_seg7_texture_07001000": "levels/bob/2.rgba16.png",
-    "bob_seg7_texture_07001800": "levels/bob/3.rgba16.png",
-    "bob_seg7_texture_07002000": "levels/bob/4.rgba16.png",
-}
+# The terrain CLUT partition main.c DMAs to VRAM: SOURCEBOOT_BOB_CLUT_COUNT
+# (1077) palettes of 32 bytes (src/port/saturn/sourceboot/main.c:785, 2219).
+# Another hand-kept copy of a VDP1 boundary, like MAX_TILE_BYTES; the upload
+# length is fixed, so a bank larger than this is silently truncated on the
+# console and a smaller one is read past its end.
+MAX_CLUT_BYTES = 1077 * 32
+REPO_ROOT = Path(__file__).resolve().parents[2]
+_TEXTURE_DEFINITION = re.compile(
+    r'const\s+Texture\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*\]\s*=\s*\{\s*'
+    r'#include\s+"([^"]+)\.inc\.c"')
+
+
+def texture_sources(root: Path = REPO_ROOT) -> dict[str, str]:
+    """Map every Fast3D texture symbol the decomp defines to its PNG.
+
+    Read from the decomp's own definitions -- `const Texture NAME[] = {
+    #include "PATH.inc.c"` in the texture banks (bin/*.c) and each level's
+    texture.inc.c -- rather than a hand-kept table. The previous table named
+    only BOB's generic bank and five BOB textures, so any other level failed
+    with "no exported BOB texture". The PNG is the .inc.c's source image.
+    """
+    table: dict[str, str] = {}
+    for path in (*sorted(root.glob("bin/*.c")),
+                 *sorted(root.glob("levels/*/texture.inc.c"))):
+        for name, stem in _TEXTURE_DEFINITION.findall(
+                path.read_text(encoding="utf-8", errors="ignore")):
+            table[name] = f"{stem}.png"
+    return table
+
+
+# Kept under its historical name: bake_bob_bsp_fragments.py imports it.
+BOB_TEXTURES = texture_sources()
 
 
 def _png_pixels(path: Path) -> tuple[int, int, list[int]]:
@@ -144,7 +165,8 @@ def bake_bob(intake: dict[str, object], asset_root: Path,
             quad_uvs[source0] = tuple(tuple(int(v) for v in attributes[index])
                                      for index in indices)
     textures: dict[str, tuple[int, int, list[int], str, int]] = {}
-    for name in sorted({str(t["texture"]) for t in intake["triangles"]}):
+    for name in sorted({str(t["texture"]) for t in intake["triangles"]
+                        if t.get("texture") is not None}):
         relative = BOB_TEXTURES.get(name)
         if relative is None:
             raise ValueError(f"no exported BOB texture for {name}")
@@ -157,7 +179,14 @@ def bake_bob(intake: dict[str, object], asset_root: Path,
     clut = bytearray()
     entries: list[dict[str, object]] = []
     class_counts = {"16x16": 0, "32x32": 0, "gouraud": 0}
+    untextured = 0
     for source_index, triangle in enumerate(intake["triangles"]):
+        if triangle.get("texture") is None:
+            # A vertex-coloured face: nothing to tile. Like the gouraud class
+            # it gets no manifest entry, so the scene draws it untextured
+            # with its own colour. BOB had none; WF does.
+            untextured += 1
+            continue
         k = triangle_k(triangle)
         if k > 16:
             class_counts["gouraud"] += 1
@@ -217,6 +246,18 @@ def bake_bob(intake: dict[str, object], asset_root: Path,
               f"{class_counts} (drift allowed)")
     if len(bank) > MAX_TILE_BYTES:
         raise ValueError(f"tile bank exceeds budget: {len(bank)} > {MAX_TILE_BYTES}")
+    clut_overflow_palettes = max(0, (len(clut) - MAX_CLUT_BYTES) // 32)
+    if clut_overflow_palettes:
+        # main.c DMAs exactly MAX_CLUT_BYTES, so every palette past the
+        # partition never reaches VRAM and its faces draw with whatever
+        # follows. BOB's UV-refined bake is in this state (1175 palettes vs
+        # 1077) -- including the build the owner approved. Reported loudly and
+        # recorded in the manifest rather than failing the default build: the
+        # shared-texture bake replaces per-face palettes and removes the cause.
+        print(f"bob tiles: WARNING CLUT bank exceeds its VDP1 partition by "
+              f"{clut_overflow_palettes} palettes ({len(clut)} > "
+              f"{MAX_CLUT_BYTES} bytes); those faces sample past the "
+              f"uploaded palettes")
     if len(bank) + len(clut) > MAX_VDP1_TEXTURE_BYTES:
         raise ValueError("tile plus CLUT bank exceeds free VDP1 texture VRAM")
     manifest = {
@@ -226,6 +267,8 @@ def bake_bob(intake: dict[str, object], asset_root: Path,
         "source_version": intake["version"],
         "tile_format": "VDP1_CLUT16_4BPP",
         "coverage": class_counts,
+        "untextured_triangles": untextured,
+        "clut_overflow_palettes": clut_overflow_palettes,
         "source_triangles": len(intake["triangles"]),
         "texture_bytes": len(bank),
         "clut_bytes": len(clut),
@@ -235,6 +278,16 @@ def bake_bob(intake: dict[str, object], asset_root: Path,
         "entries": entries,
         "source_texture_sha256": {name: value[3] for name, value in sorted(textures.items())},
     }
+    # The banks are VDP1 partition images, not content blobs. main.c uploads a
+    # fixed length from each (SOURCEBOOT_BOB_TEXTURE_BYTES, SOURCEBOOT_BOB_CLUT_
+    # COUNT * 32) and places Mario's textures at the fixed end of the terrain
+    # partition, so a level whose content is smaller than the partition must
+    # still supply the whole partition or the upload reads past the end of the
+    # symbol. Zero fill is inert: no face indexes past its own content. The
+    # manifest above keeps the true content sizes. A no-op for a bank that
+    # already fills its partition, as BOB's tile bank does.
+    bank.extend(bytes(MAX_TILE_BYTES - len(bank)))
+    clut.extend(bytes(max(0, MAX_CLUT_BYTES - len(clut))))
     return bytes(bank), bytes(clut), manifest
 
 
